@@ -12,7 +12,6 @@ func SetupProtectedRoutes(router *gin.Engine, client *mongo.Client) {
 
 	// User routes
 	router.POST("/register", controller.RegisterUser(client))
-	router.POST("/login", controller.LoginUser(client))
 
 	// Category routes
 	router.GET("/categories", controller.GetCategories(client))
