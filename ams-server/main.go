@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	controller "github.com/maisarasherif/asset-management-system/ams-server/controllers"
 	databases "github.com/maisarasherif/asset-management-system/ams-server/database"
+	middleware "github.com/maisarasherif/asset-management-system/ams-server/middleware"
 	routes "github.com/maisarasherif/asset-management-system/ams-server/routes"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
@@ -13,6 +14,8 @@ import (
 func main() {
 
 	router := gin.Default()
+
+	router.Use(middleware.CORSMiddleware())
 
 	router.GET("/hello", func(c *gin.Context) {
 		c.String(200, "Hello, Asset Management System!")

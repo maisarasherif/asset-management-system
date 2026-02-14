@@ -11,6 +11,7 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func GetComponents(client *mongo.Client) gin.HandlerFunc {
@@ -138,6 +139,42 @@ func AddComponent(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
+		// Automatically update the asset to include this component in its components array
+		var assetCollection *mongo.Collection = database.OpenCollection("Assets", client)
+
+		// First, ensure the components field is an array (not null)
+		initData := bson.M{
+			"$set": bson.M{
+				"components": bson.A{},
+			},
+		}
+		assetCollection.UpdateOne(ctx, bson.M{
+			"asset_id":   component.AssetID,
+			"components": nil,
+		}, initData)
+
+		// Now push the component
+		updateData := bson.M{
+			"$push": bson.M{
+				"components": component,
+			},
+			"$set": bson.M{
+				"updated_at": time.Now(),
+			},
+		}
+
+		updateResult, err := assetCollection.UpdateOne(ctx, bson.M{"asset_id": component.AssetID}, updateData)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "component added but failed to update asset", "details": err.Error()})
+			return
+		}
+
+		if updateResult.MatchedCount == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component added but asset not found", "asset_id": component.AssetID})
+			return
+		}
+
 		c.JSON(http.StatusCreated, result)
 
 	}
@@ -173,6 +210,8 @@ func UpdateComponent(client *mongo.Client) gin.HandlerFunc {
 
 		component.UpdatedAt = time.Now()
 
+		var componentCollection *mongo.Collection = database.OpenCollection("Components", client)
+
 		updateData := bson.M{
 			"$set": bson.M{
 				"asset_id":      component.AssetID,
@@ -185,8 +224,6 @@ func UpdateComponent(client *mongo.Client) gin.HandlerFunc {
 			},
 		}
 
-		var componentCollection *mongo.Collection = database.OpenCollection("Components", client)
-
 		result, err := componentCollection.UpdateOne(ctx, bson.M{"component_id": componentID}, updateData)
 
 		if err != nil {
@@ -196,6 +233,33 @@ func UpdateComponent(client *mongo.Client) gin.HandlerFunc {
 
 		if result.MatchedCount == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
+		// Also update the component in the asset's components array in place
+		var assetCollection *mongo.Collection = database.OpenCollection("Assets", client)
+
+		assetUpdateData := bson.M{
+			"$set": bson.M{
+				"components.$[elem].name":          component.Name,
+				"components.$[elem].serial_number": component.SerialNumber,
+				"components.$[elem].manufacturer":  component.Manufacturer,
+				"components.$[elem].description":   component.Description,
+				"components.$[elem].updated_at":    component.UpdatedAt,
+				"updated_at":                       time.Now(),
+			},
+		}
+
+		arrayFilters := bson.A{
+			bson.M{"elem.component_id": componentID},
+		}
+
+		opts := options.UpdateOne().SetArrayFilters(arrayFilters)
+
+		_, err = assetCollection.UpdateOne(ctx, bson.M{"asset_id": component.AssetID}, assetUpdateData, opts)
+
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"message": "component updated successfully", "warning": "failed to sync with asset"})
 			return
 		}
 
@@ -227,6 +291,16 @@ func DeleteComponent(client *mongo.Client) gin.HandlerFunc {
 
 		var componentCollection *mongo.Collection = database.OpenCollection("Components", client)
 
+		// First, get the component to know which asset it belongs to
+		var component models.Component
+		err = componentCollection.FindOne(ctx, bson.M{"component_id": componentID}).Decode(&component)
+
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
+		// Delete from Components collection
 		result, err := componentCollection.DeleteOne(ctx, bson.M{"component_id": componentID})
 
 		if err != nil {
@@ -236,6 +310,25 @@ func DeleteComponent(client *mongo.Client) gin.HandlerFunc {
 
 		if result.DeletedCount == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
+		// Remove the component from the asset's components array
+		var assetCollection *mongo.Collection = database.OpenCollection("Assets", client)
+
+		pullData := bson.M{
+			"$pull": bson.M{
+				"components": bson.M{"component_id": componentID},
+			},
+			"$set": bson.M{
+				"updated_at": time.Now(),
+			},
+		}
+
+		_, err = assetCollection.UpdateOne(ctx, bson.M{"asset_id": component.AssetID}, pullData)
+
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"message": "component deleted successfully", "warning": "failed to sync with asset"})
 			return
 		}
 

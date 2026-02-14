@@ -8,6 +8,7 @@ import (
 )
 
 func SetupProtectedRoutes(router *gin.Engine, client *mongo.Client) {
+
 	router.Use(middleware.AuthMiddleware())
 
 	// User routes
@@ -26,6 +27,7 @@ func SetupProtectedRoutes(router *gin.Engine, client *mongo.Client) {
 	router.POST("/addasset", controller.AddAsset(client))
 	router.PUT("/updateasset/:asset_id", controller.UpdateAsset(client))
 	router.DELETE("/deleteasset/:asset_id", controller.DeleteAsset(client))
+	router.PATCH("/patchasset/:asset_id", controller.PatchAsset(client))
 
 	// Component routes
 	router.GET("/components", controller.GetComponents(client))

@@ -14,6 +14,7 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func GetCertificates(client *mongo.Client) gin.HandlerFunc {
@@ -124,15 +125,8 @@ func AddCertificate(client *mongo.Client) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
 		}
-		if err := validate.Struct(certificate); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed!", "details": err.Error()})
-			return
-		}
 
-		certificate.CreatedAt = time.Now()
-		certificate.UpdatedAt = time.Now()
-
-		// Determine status based on expiry date
+		// Determine status based on expiry date BEFORE validation
 		now := time.Now()
 		daysUntilExpiry := int(certificate.ExpiryDate.Sub(now).Hours() / 24)
 
@@ -144,6 +138,14 @@ func AddCertificate(client *mongo.Client) gin.HandlerFunc {
 			certificate.Status = "VALID"
 		}
 
+		certificate.CreatedAt = time.Now()
+		certificate.UpdatedAt = time.Now()
+
+		if err := validate.Struct(certificate); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed!", "details": err.Error()})
+			return
+		}
+
 		var certificateCollection *mongo.Collection = database.OpenCollection("Certificates", client)
 
 		result, err := certificateCollection.InsertOne(ctx, certificate)
@@ -151,6 +153,86 @@ func AddCertificate(client *mongo.Client) gin.HandlerFunc {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add certificate"})
 			return
+		}
+
+		// Automatically update the component to include this certificate in its certificates array
+		var componentCollection *mongo.Collection = database.OpenCollection("Components", client)
+
+		// First, ensure the certificates field is an array (not null)
+		initData := bson.M{
+			"$set": bson.M{
+				"certificates": bson.A{},
+			},
+		}
+		componentCollection.UpdateOne(ctx, bson.M{
+			"component_id": certificate.ComponentID,
+			"certificates": nil,
+		}, initData)
+
+		// Now push the certificate
+		updateData := bson.M{
+			"$push": bson.M{
+				"certificates": certificate,
+			},
+			"$set": bson.M{
+				"updated_at": time.Now(),
+			},
+		}
+
+		updateResult, err := componentCollection.UpdateOne(ctx, bson.M{"component_id": certificate.ComponentID}, updateData)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "certificate added but failed to update component", "details": err.Error()})
+			return
+		}
+
+		if updateResult.MatchedCount == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "certificate added but component not found", "component_id": certificate.ComponentID})
+			return
+		}
+
+		// Also update the component in the asset's components array
+		// First, get the component to know which asset it belongs to
+		var component models.Component
+		err = componentCollection.FindOne(ctx, bson.M{"component_id": certificate.ComponentID}).Decode(&component)
+
+		if err == nil && component.AssetID != "" {
+			var assetCollection *mongo.Collection = database.OpenCollection("Assets", client)
+
+			// Initialize certificates array in the component within asset if null
+			initAssetData := bson.M{
+				"$set": bson.M{
+					"components.$[elem].certificates": bson.A{},
+				},
+			}
+
+			arrayFiltersInit := bson.A{
+				bson.M{
+					"elem.component_id": certificate.ComponentID,
+					"elem.certificates": nil,
+				},
+			}
+
+			optsInit := options.UpdateOne().SetArrayFilters(arrayFiltersInit)
+			assetCollection.UpdateOne(ctx, bson.M{"asset_id": component.AssetID}, initAssetData, optsInit)
+
+			// Now push the certificate to the component's certificates array within the asset
+			assetUpdateData := bson.M{
+				"$push": bson.M{
+					"components.$[elem].certificates": certificate,
+				},
+				"$set": bson.M{
+					"updated_at": time.Now(),
+				},
+			}
+
+			arrayFilters := bson.A{
+				bson.M{"elem.component_id": certificate.ComponentID},
+			}
+
+			opts := options.UpdateOne().SetArrayFilters(arrayFilters)
+
+			assetCollection.UpdateOne(ctx, bson.M{"asset_id": component.AssetID}, assetUpdateData, opts)
 		}
 
 		c.JSON(http.StatusCreated, result)
@@ -200,6 +282,8 @@ func UpdateCertificate(client *mongo.Client) gin.HandlerFunc {
 			certificate.Status = "VALID"
 		}
 
+		var certificateCollection *mongo.Collection = database.OpenCollection("Certificates", client)
+
 		updateData := bson.M{
 			"$set": bson.M{
 				"component_id":      certificate.ComponentID,
@@ -213,8 +297,6 @@ func UpdateCertificate(client *mongo.Client) gin.HandlerFunc {
 			},
 		}
 
-		var certificateCollection *mongo.Collection = database.OpenCollection("Certificates", client)
-
 		result, err := certificateCollection.UpdateOne(ctx, bson.M{"certificate_id": certificateID}, updateData)
 
 		if err != nil {
@@ -225,6 +307,65 @@ func UpdateCertificate(client *mongo.Client) gin.HandlerFunc {
 		if result.MatchedCount == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
 			return
+		}
+
+		// Also update the certificate in the component's certificates array in place
+		var componentCollection *mongo.Collection = database.OpenCollection("Components", client)
+
+		componentUpdateData := bson.M{
+			"$set": bson.M{
+				"certificates.$[elem].certificate_name":  certificate.CertificateName,
+				"certificates.$[elem].issue_date":        certificate.IssueDate,
+				"certificates.$[elem].expiry_date":       certificate.ExpiryDate,
+				"certificates.$[elem].certificate_file":  certificate.CertificateFile,
+				"certificates.$[elem].issuing_authority": certificate.IssuingAuthority,
+				"certificates.$[elem].status":            certificate.Status,
+				"certificates.$[elem].updated_at":        certificate.UpdatedAt,
+				"updated_at":                             time.Now(),
+			},
+		}
+
+		arrayFilters := bson.A{
+			bson.M{"elem.certificate_id": certificateID},
+		}
+
+		opts := options.UpdateOne().SetArrayFilters(arrayFilters)
+
+		_, err = componentCollection.UpdateOne(ctx, bson.M{"component_id": certificate.ComponentID}, componentUpdateData, opts)
+
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"message": "certificate updated successfully", "warning": "failed to sync with component"})
+			return
+		}
+
+		// Also update the certificate in the asset's component's certificates array
+		var component models.Component
+		componentCollection.FindOne(ctx, bson.M{"component_id": certificate.ComponentID}).Decode(&component)
+
+		if component.AssetID != "" {
+			var assetCollection *mongo.Collection = database.OpenCollection("Assets", client)
+
+			assetUpdateData := bson.M{
+				"$set": bson.M{
+					"components.$[comp].certificates.$[cert].certificate_name":  certificate.CertificateName,
+					"components.$[comp].certificates.$[cert].issue_date":        certificate.IssueDate,
+					"components.$[comp].certificates.$[cert].expiry_date":       certificate.ExpiryDate,
+					"components.$[comp].certificates.$[cert].certificate_file":  certificate.CertificateFile,
+					"components.$[comp].certificates.$[cert].issuing_authority": certificate.IssuingAuthority,
+					"components.$[comp].certificates.$[cert].status":            certificate.Status,
+					"components.$[comp].certificates.$[cert].updated_at":        certificate.UpdatedAt,
+					"updated_at": time.Now(),
+				},
+			}
+
+			assetArrayFilters := bson.A{
+				bson.M{"comp.component_id": certificate.ComponentID},
+				bson.M{"cert.certificate_id": certificateID},
+			}
+
+			assetOpts := options.UpdateOne().SetArrayFilters(assetArrayFilters)
+
+			assetCollection.UpdateOne(ctx, bson.M{"asset_id": component.AssetID}, assetUpdateData, assetOpts)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "certificate updated successfully"})
@@ -255,6 +396,16 @@ func DeleteCertificate(client *mongo.Client) gin.HandlerFunc {
 
 		var certificateCollection *mongo.Collection = database.OpenCollection("Certificates", client)
 
+		// First, get the certificate to know which component it belongs to
+		var certificate models.Certificate
+		err = certificateCollection.FindOne(ctx, bson.M{"certificate_id": certificateID}).Decode(&certificate)
+
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+			return
+		}
+
+		// Delete from Certificates collection
 		result, err := certificateCollection.DeleteOne(ctx, bson.M{"certificate_id": certificateID})
 
 		if err != nil {
@@ -265,6 +416,50 @@ func DeleteCertificate(client *mongo.Client) gin.HandlerFunc {
 		if result.DeletedCount == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
 			return
+		}
+
+		// Remove the certificate from the component's certificates array
+		var componentCollection *mongo.Collection = database.OpenCollection("Components", client)
+
+		pullData := bson.M{
+			"$pull": bson.M{
+				"certificates": bson.M{"certificate_id": certificateID},
+			},
+			"$set": bson.M{
+				"updated_at": time.Now(),
+			},
+		}
+
+		_, err = componentCollection.UpdateOne(ctx, bson.M{"component_id": certificate.ComponentID}, pullData)
+
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"message": "certificate deleted successfully", "warning": "failed to sync with component"})
+			return
+		}
+
+		// Also remove the certificate from the asset's component's certificates array
+		var component models.Component
+		componentCollection.FindOne(ctx, bson.M{"component_id": certificate.ComponentID}).Decode(&component)
+
+		if component.AssetID != "" {
+			var assetCollection *mongo.Collection = database.OpenCollection("Assets", client)
+
+			assetPullData := bson.M{
+				"$pull": bson.M{
+					"components.$[elem].certificates": bson.M{"certificate_id": certificateID},
+				},
+				"$set": bson.M{
+					"updated_at": time.Now(),
+				},
+			}
+
+			assetArrayFilters := bson.A{
+				bson.M{"elem.component_id": certificate.ComponentID},
+			}
+
+			assetOpts := options.UpdateOne().SetArrayFilters(assetArrayFilters)
+
+			assetCollection.UpdateOne(ctx, bson.M{"asset_id": component.AssetID}, assetPullData, assetOpts)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "certificate deleted successfully"})

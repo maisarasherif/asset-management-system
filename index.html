@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Management System - MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+        }
+
+        /* Login Page */
+        .login-page {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #ffffff;
+        }
+
+        .login-box {
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .login-box h1 {
+            margin-bottom: 30px;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: #0056b3;
+        }
+
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        /* Assets Page */
+        .assets-page {
+            display: none;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .header h1 {
+            font-size: 24px;
+        }
+
+        .logout-btn {
+            padding: 8px 20px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .assets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .asset-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .asset-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .asset-card-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: #f0f0f0;
+        }
+
+        .asset-card-body {
+            padding: 15px;
+        }
+
+        .asset-card-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .asset-card-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-maintenance {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        /* Asset Detail Page */
+        .asset-detail-page {
+            display: none;
+            padding: 20px;
+        }
+
+        .back-btn {
+            padding: 8px 20px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .asset-header {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .asset-detail-image {
+            max-width: 300px;
+            height: auto;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .asset-detail-name {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .blocks-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .block {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .block h2 {
+            font-size: 20px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #007bff;
+        }
+
+        .detail-row {
+            display: flex;
+            margin-bottom: 12px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .detail-label {
+            font-weight: bold;
+            width: 150px;
+            color: #555;
+        }
+
+        .detail-value {
+            flex: 1;
+            color: #333;
+        }
+
+        .view-btn {
+            padding: 8px 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+        }
+
+        .view-btn:hover {
+            background: #218838;
+        }
+
+        .component-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .component-name {
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .component-details {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .no-data {
+            color: #999;
+            font-style: italic;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Page -->
+    <div class="login-page" id="loginPage">
+        <div class="login-box">
+            <h1>Asset Management System</h1>
+            <div class="error" id="loginError"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assets Page -->
+    <div class="assets-page" id="assetsPage">
+        <div class="header">
+            <h1>Assets</h1>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        <div class="loading" id="assetsLoading">Loading assets...</div>
+        <div class="assets-grid" id="assetsGrid"></div>
+    </div>
+
+    <!-- Asset Detail Page -->
+    <div class="asset-detail-page" id="assetDetailPage">
+        <button class="back-btn" onclick="showAssetsPage()">← Back to Assets</button>
+        
+        <div class="asset-header">
+            <img id="detailImage" class="asset-detail-image" src="" alt="">
+            <div class="asset-detail-name" id="detailName"></div>
+            <span id="detailStatus" class="asset-card-status"></span>
+        </div>
+
+        <div class="blocks-container">
+            <!-- Block A: Asset Details -->
+            <div class="block">
+                <h2>Asset Details</h2>
+                <div id="assetDetailsBlock"></div>
+            </div>
+
+            <!-- Block B: Datasheet -->
+            <div class="block">
+                <h2>Datasheet</h2>
+                <div id="datasheetBlock"></div>
+            </div>
+
+            <!-- Block C: Components -->
+            <div class="block">
+                <h2>Components</h2>
+                <div id="componentsBlock"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+        let authToken = localStorage.getItem('authToken');
+
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
+                    showAssetsPage();
+                } else {
+                    document.getElementById('loginError').textContent = data.error || 'Login failed';
+                    document.getElementById('loginError').style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = 'Connection error';
+                document.getElementById('loginError').style.display = 'block';
+            }
+        });
+
+        // Show Assets Page
+        async function showAssetsPage() {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('assetDetailPage').style.display = 'none';
+            document.getElementById('assetsPage').style.display = 'block';
+            
+            await loadAssets();
+        }
+
+        // Load Assets
+        async function loadAssets() {
+            document.getElementById('assetsLoading').style.display = 'block';
+            document.getElementById('assetsGrid').innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_BASE}/assets`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const assets = await response.json();
+                document.getElementById('assetsLoading').style.display = 'none';
+                
+                if (assets && assets.length > 0) {
+                    const grid = document.getElementById('assetsGrid');
+                    assets.forEach(asset => {
+                        const card = document.createElement('div');
+                        card.className = 'asset-card';
+                        card.onclick = () => showAssetDetail(asset.asset_id);
+                        
+                        const statusClass = `status-${asset.status.toLowerCase()}`;
+                        const photoUrl = asset.photo || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
+                        
+                        card.innerHTML = `
+                            <img src="${photoUrl}" class="asset-card-image" alt="${asset.name}">
+                            <div class="asset-card-body">
+                                <div class="asset-card-title">${asset.name}</div>
+                                <span class="asset-card-status ${statusClass}">${asset.status}</span>
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                }
+            } catch (error) {
+                document.getElementById('assetsLoading').textContent = 'Failed to load assets';
+            }
+        }
+
+        // Show Asset Detail
+        async function showAssetDetail(assetId) {
+            document.getElementById('assetsPage').style.display = 'none';
+            document.getElementById('assetDetailPage').style.display = 'block';
+            
+            try {
+                const response = await fetch(`${API_BASE}/asset/${assetId}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const asset = await response.json();
+                
+                // Header
+                const photoUrl = asset.photo || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="300"%3E%3Crect fill="%23ddd" width="300" height="300"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
+                document.getElementById('detailImage').src = photoUrl;
+                document.getElementById('detailName').textContent = asset.name;
+                
+                const statusClass = `status-${asset.status.toLowerCase()}`;
+                const statusEl = document.getElementById('detailStatus');
+                statusEl.textContent = asset.status;
+                statusEl.className = `asset-card-status ${statusClass}`;
+                
+                // Block A: Details
+                const detailsHtml = `
+                    <div class="detail-row">
+                        <div class="detail-label">Asset ID:</div>
+                        <div class="detail-value">${asset.asset_id}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Category ID:</div>
+                        <div class="detail-value">${asset.category_id}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Description:</div>
+                        <div class="detail-value">${asset.description || 'N/A'}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Created:</div>
+                        <div class="detail-value">${new Date(asset.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Updated:</div>
+                        <div class="detail-value">${new Date(asset.updated_at).toLocaleDateString()}</div>
+                    </div>
+                `;
+                document.getElementById('assetDetailsBlock').innerHTML = detailsHtml;
+                
+                // Block B: Datasheet
+                const datasheetHtml = asset.datasheet 
+                    ? `<a href="${asset.datasheet}" target="_blank" class="view-btn">View Datasheet</a>`
+                    : '<div class="no-data">No datasheet available</div>';
+                document.getElementById('datasheetBlock').innerHTML = datasheetHtml;
+                
+                // Block C: Components
+                let componentsHtml = '';
+                if (asset.components && asset.components.length > 0) {
+                    asset.components.forEach(component => {
+                        let certBtn = '';
+                        if (component.certificates && component.certificates.length > 0) {
+                            // If component has certificates, create buttons for each
+                            component.certificates.forEach(cert => {
+                                if (cert.certificate_file) {
+                                    certBtn += `<a href="${cert.certificate_file}" target="_blank" class="view-btn" style="margin-right: 5px; margin-bottom: 5px;">${cert.certificate_name}</a>`;
+                                }
+                            });
+                            if (!certBtn) {
+                                certBtn = '<span class="no-data">No certificate files</span>';
+                            }
+                        } else {
+                            certBtn = '<span class="no-data">No certificates</span>';
+                        }
+                        
+                        componentsHtml += `
+                            <div class="component-item">
+                                <div>
+                                    <div class="component-name">${component.name}</div>
+                                    <div class="component-details">
+                                        ${component.serial_number ? 'S/N: ' + component.serial_number : ''}
+                                        ${component.manufacturer ? ' | Mfr: ' + component.manufacturer : ''}
+                                    </div>
+                                </div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                                    ${certBtn}
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    componentsHtml = '<div class="no-data">No components</div>';
+                }
+                document.getElementById('componentsBlock').innerHTML = componentsHtml;
+                
+            } catch (error) {
+                alert('Failed to load asset details');
+            }
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('authToken');
+            authToken = null;
+            document.getElementById('assetsPage').style.display = 'none';
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('loginForm').reset();
+        }
+
+        // Check if already logged in
+        if (authToken) {
+            showAssetsPage();
+        }
+    </script>
+</body>
+</html>

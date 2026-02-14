@@ -213,3 +213,59 @@ func DeleteAsset(client *mongo.Client) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "asset deleted successfully"})
 	}
 }
+
+// Add this function to your assetController.go
+
+func PatchAsset(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, err := utils.GetRoleFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
+			return
+		}
+
+		if role != "ADMIN" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to update asset"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 100*time.Second)
+		defer cancel()
+
+		assetID := c.Param("asset_id")
+		if assetID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "asset id is required"})
+			return
+		}
+
+		// Accept any fields in the request
+		var updateFields map[string]interface{}
+		if err := c.ShouldBindJSON(&updateFields); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+
+		// Always update the updated_at field
+		updateFields["updated_at"] = time.Now()
+
+		updateData := bson.M{
+			"$set": updateFields,
+		}
+
+		var assetCollection *mongo.Collection = database.OpenCollection("Assets", client)
+
+		result, err := assetCollection.UpdateOne(ctx, bson.M{"asset_id": assetID}, updateData)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update asset"})
+			return
+		}
+
+		if result.MatchedCount == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "asset updated successfully"})
+	}
+}
