@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Management System - MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Login Page */
+        .login-page {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #ffffff;
+            width: 100%;
+        }
+
+        .login-box {
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .login-box h1 {
+            margin-bottom: 30px;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: #0056b3;
+        }
+
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        /* Main Layout */
+        .main-layout {
+            display: none;
+            width: 100%;
+            height: 100vh;
+        }
+
+        .main-layout.show {
+            display: flex;
+        }
+
+        /* Left Sidebar */
+        .left-sidebar {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-header h2 {
+            font-size: 20px;
+            margin: 0;
+        }
+
+        .asset-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .asset-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .asset-item:hover {
+            background: #f8f9fa;
+        }
+
+        .asset-item.active {
+            background: #e3f2fd;
+            border-left: 3px solid #007bff;
+        }
+
+        .asset-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .asset-item-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .asset-item-status {
+            font-size: 12px;
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .dropdown-arrow {
+            font-size: 18px;
+            transition: transform 0.3s;
+            color: #666;
+        }
+
+        .dropdown-arrow.open {
+            transform: rotate(180deg);
+        }
+
+        .component-dropdown {
+            margin-top: 10px;
+            padding-left: 15px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .component-dropdown.show {
+            max-height: 500px;
+        }
+
+        .component-link {
+            padding: 5px 0;
+            font-size: 13px;
+            color: #666;
+            display: block;
+        }
+
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            background: #f5f5f5;
+        }
+
+        /* Dashboard - PROFESSIONAL */
+        .dashboard {
+            display: none;
+            padding: 30px;
+        }
+
+        .dashboard.show {
+            display: block;
+        }
+
+        .dashboard-header {
+            background: #2c3e50;
+            padding: 40px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            color: white;
+        }
+
+        .dashboard-header h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .dashboard-subtitle {
+            font-size: 15px;
+            opacity: 0.9;
+            margin-top: 6px;
+        }
+
+        .dashboard-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .dashboard-section {
+            background: white;
+            padding: 32px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+            padding-bottom: 18px;
+            border-bottom: 2px solid #e8e8e8;
+        }
+
+        .section-header h3 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0;
+        }
+
+        .section-icon {
+            display: none;
+        }
+
+        .status-filter {
+            padding: 10px 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            background: white;
+            color: #333;
+            transition: border-color 0.2s;
+        }
+
+        .status-filter:hover {
+            border-color: #2c3e50;
+        }
+
+        .status-filter:focus {
+            outline: none;
+            border-color: #2c3e50;
+        }
+
+        .chart-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 300px;
+            padding: 20px 0;
+        }
+
+        .pie-chart {
+            position: relative;
+            width: 250px;
+            height: 250px;
+        }
+
+        .chart-legend {
+            margin-top: 28px;
+            padding-top: 28px;
+            border-top: 2px solid #e8e8e8;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .legend-item:hover {
+            background: #e9ecef;
+        }
+
+        .legend-left {
+            display: flex;
+            align-items: center;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            margin-right: 12px;
+        }
+
+        .legend-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .legend-count {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .expiring-list {
+            max-height: 480px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        .expiring-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .expiring-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .expiring-list::-webkit-scrollbar-thumb {
+            background: #2c3e50;
+            border-radius: 3px;
+        }
+
+        .cert-item {
+            padding: 18px;
+            margin-bottom: 12px;
+            border-radius: 6px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-left: 4px solid;
+            background: white;
+            border: 1px solid #e0e0e0;
+        }
+
+        .cert-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .cert-item.expiring {
+            border-left-color: #f39c12;
+            background: #fffbf5;
+        }
+
+        .cert-item.valid {
+            border-left-color: #27ae60;
+            background: #f7fcf9;
+        }
+
+        .cert-item.expired {
+            border-left-color: #e74c3c;
+            background: #fef8f8;
+        }
+
+        .expiring-component {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 6px;
+            color: #2c3e50;
+        }
+
+        .expiring-cert {
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 8px;
+        }
+
+        .expiring-date {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .expiring-date strong {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .logout-btn {
+            padding: 8px 20px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .asset-card-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-maintenance {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        /* Asset Detail Page - PROFESSIONAL */
+        .asset-detail-page {
+            display: none;
+            padding: 30px;
+            background: #f5f5f5;
+        }
+
+        .asset-detail-page.show {
+            display: block;
+        }
+
+        .back-btn {
+            padding: 10px 20px;
+            background: white;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #f8f9fa;
+            border-color: #2c3e50;
+            color: #2c3e50;
+        }
+
+        /* Main Info Card */
+        .asset-main-card {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+
+        .asset-main-content {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 40px;
+        }
+
+        .asset-image-section {
+            text-align: center;
+        }
+
+        .asset-detail-image {
+            width: 240px;
+            height: 240px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            background: white;
+        }
+
+        .asset-detail-image {
+            width: 240px;
+            height: 240px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            background: #f8f9fa;
+            display: block;
+        }
+
+        .asset-info-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .asset-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e8e8e8;
+        }
+
+        .asset-title-group h1 {
+            font-size: 32px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0 0 8px 0;
+        }
+
+        .asset-id {
+            font-size: 13px;
+            color: #666;
+            font-family: monospace;
+        }
+
+        .asset-status-badge {
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .asset-details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .detail-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #888;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .detail-value {
+            font-size: 15px;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .datasheet-section {
+            padding-top: 20px;
+            border-top: 1px solid #e8e8e8;
+        }
+
+        .datasheet-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: #2c3e50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .datasheet-btn:hover {
+            background: #34495e;
+        }
+
+        /* Components Table */
+        .components-section {
+            background: white;
+            padding: 32px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+
+        .components-header {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0 0 24px 0;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #e8e8e8;
+        }
+
+        .components-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .components-table thead th {
+            text-align: left;
+            padding: 12px 16px;
+            background: #2c3e50;
+            color: white;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #2c3e50;
+        }
+
+        .components-table thead th:first-child {
+            border-top-left-radius: 4px;
+        }
+
+        .components-table thead th:last-child {
+            border-top-right-radius: 4px;
+        }
+
+        .components-table tbody tr {
+            border-bottom: 1px solid #e8e8e8;
+            transition: background 0.2s;
+        }
+
+        .components-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .components-table tbody td {
+            padding: 16px;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .component-name-cell {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .cert-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .cert-link {
+            display: inline-block;
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid #27ae60;
+            color: #27ae60;
+            text-decoration: none;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .cert-link:hover {
+            background: #27ae60;
+            color: white;
+        }
+
+        .no-data {
+            color: #999;
+            font-style: italic;
+            font-size: 14px;
+        }
+
+        /* Remove old unused styles */
+        .asset-hero, .asset-hero-image, .asset-hero-content, .asset-hero-name,
+        .asset-hero-id, .asset-hero-status, .info-grid, .info-card, .info-card-title,
+        .info-card-value, .section-card, .section-card-header, .section-card-icon,
+        .section-card-title, .description-text, .components-grid, .component-card,
+        .component-card-header, .component-card-name, .component-card-meta, .cert-badges, .cert-badge {
+            display: none;
+        }
+
+        /* Remove old duplicate and unused styles */
+        .asset-header, .asset-detail-image, .asset-detail-name,
+        .blocks-container, .block, .detail-row, .detail-label, .detail-value,
+        .view-btn, .component-item, .component-name, .component-details {
+            display: none;
+        }
+
+        .no-data {
+            color: #999;
+            font-style: italic;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Page -->
+    <div class="login-page" id="loginPage">
+        <div class="login-box">
+            <h1>Asset Management System</h1>
+            <div class="error" id="loginError"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Layout (after login) -->
+    <div class="main-layout" id="mainLayout">
+        <!-- Left Sidebar -->
+        <div class="left-sidebar">
+            <div class="sidebar-header">
+                <h2>Assets</h2>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+            <div class="asset-list" id="assetList"></div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Dashboard -->
+            <div class="dashboard" id="dashboard">
+                <div class="dashboard-header">
+                    <div>
+                        <h1>Dashboard</h1>
+                        <div class="dashboard-subtitle">Certificate Status Overview</div>
+                    </div>
+                </div>
+                <div class="dashboard-sections">
+                    <!-- Left: Pie Chart -->
+                    <div class="dashboard-section">
+                        <div class="section-header">
+                            <h3>Certificate Status</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="pieChart" width="250" height="250"></canvas>
+                        </div>
+                        <div class="chart-legend" id="chartLegend"></div>
+                    </div>
+
+                    <!-- Right: Certificate List with Filter -->
+                    <div class="dashboard-section">
+                        <div class="section-header">
+                            <h3>Certificates</h3>
+                            <select id="statusFilter" onchange="filterCertificates()" class="status-filter">
+                                <option value="EXPIRING_SOON">Expiring Soon</option>
+                                <option value="VALID">Valid</option>
+                                <option value="EXPIRED">Expired</option>
+                            </select>
+                        </div>
+                        <div class="expiring-list" id="certificateList"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Asset Detail Page -->
+            <div class="asset-detail-page" id="assetDetailPage">
+        <button class="back-btn" onclick="showAssetsPage()">← Back to Assets</button>
+        
+        <div class="asset-header">
+            <img id="detailImage" class="asset-detail-image" src="" alt="">
+            <div class="asset-detail-name" id="detailName"></div>
+            <span id="detailStatus" class="asset-card-status"></span>
+        </div>
+
+        <div class="blocks-container">
+            <!-- Block A: Asset Details -->
+            <div class="block">
+                <h2>Asset Details</h2>
+                <div id="assetDetailsBlock"></div>
+            </div>
+
+            <!-- Block B: Datasheet -->
+            <div class="block">
+                <h2>Datasheet</h2>
+                <div id="datasheetBlock"></div>
+            </div>
+
+            <!-- Block C: Components -->
+            <div class="block">
+                <h2>Components</h2>
+                <div id="componentsBlock"></div>
+            </div>
+        </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+        let authToken = localStorage.getItem('authToken');
+        let allAssets = [];
+        let allCertificates = [];
+        let componentsMap = {};
+
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
+                    showMainLayout();
+                } else {
+                    document.getElementById('loginError').textContent = data.error || 'Login failed';
+                    document.getElementById('loginError').style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = 'Connection error';
+                document.getElementById('loginError').style.display = 'block';
+            }
+        });
+
+        // Show Main Layout
+        async function showMainLayout() {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('mainLayout').classList.add('show');
+            
+            await loadAssets();
+            showDashboard();
+        }
+
+        // Load Assets into Sidebar
+        async function loadAssets() {
+            try {
+                const response = await fetch(`${API_BASE}/assets`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                allAssets = await response.json();
+                renderAssetList();
+            } catch (error) {
+                console.error('Failed to load assets');
+            }
+        }
+
+        // Render Asset List in Sidebar
+        function renderAssetList() {
+            const assetList = document.getElementById('assetList');
+            assetList.innerHTML = '';
+            
+            allAssets.forEach(asset => {
+                const statusClass = `status-${asset.status.toLowerCase()}`;
+                
+                const assetItem = document.createElement('div');
+                assetItem.className = 'asset-item';
+                assetItem.innerHTML = `
+                    <div class="asset-item-header">
+                        <div>
+                            <div class="asset-item-name">${asset.name}</div>
+                            <span class="asset-card-status ${statusClass}">${asset.status}</span>
+                        </div>
+                        <span class="dropdown-arrow" id="arrow-${asset.asset_id}">▼</span>
+                    </div>
+                    <div class="component-dropdown" id="dropdown-${asset.asset_id}">
+                        ${asset.components && asset.components.length > 0 
+                            ? asset.components.map(c => `<div class="component-link">• ${c.name}</div>`).join('')
+                            : '<div class="component-link">No components</div>'
+                        }
+                    </div>
+                `;
+                
+                // Click on header to toggle dropdown
+                const header = assetItem.querySelector('.asset-item-header');
+                header.onclick = (e) => {
+                    e.stopPropagation();
+                    const dropdown = document.getElementById(`dropdown-${asset.asset_id}`);
+                    const arrow = document.getElementById(`arrow-${asset.asset_id}`);
+                    
+                    dropdown.classList.toggle('show');
+                    arrow.classList.toggle('open');
+                };
+                
+                // Click anywhere else on asset to view details
+                assetItem.onclick = (e) => {
+                    if (e.target.closest('.asset-item-header')) return;
+                    if (e.target.classList.contains('component-link')) return;
+                    
+                    document.querySelectorAll('.asset-item').forEach(a => a.classList.remove('active'));
+                    assetItem.classList.add('active');
+                    
+                    showAssetDetail(asset.asset_id);
+                };
+                
+                assetList.appendChild(assetItem);
+            });
+        }
+
+        // Show Dashboard
+        async function showDashboard() {
+            document.getElementById('dashboard').classList.add('show');
+            document.getElementById('assetDetailPage').classList.remove('show');
+            
+            await loadDashboardData();
+        }
+
+        // Load Dashboard Data
+        async function loadDashboardData() {
+            try {
+                const response = await fetch(`${API_BASE}/certificates`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                allCertificates = await response.json();
+                
+                // Build components map
+                componentsMap = {};
+                for (const asset of allAssets) {
+                    if (asset.components) {
+                        asset.components.forEach(comp => {
+                            componentsMap[comp.component_id] = {
+                                name: comp.name,
+                                assetName: asset.name
+                            };
+                        });
+                    }
+                }
+                
+                // Count certificate statuses
+                let valid = 0, expiringSoon = 0, expired = 0;
+                
+                allCertificates.forEach(cert => {
+                    if (cert.status === 'VALID') valid++;
+                    else if (cert.status === 'EXPIRING_SOON') expiringSoon++;
+                    else if (cert.status === 'EXPIRED') expired++;
+                });
+                
+                // Draw Pie Chart
+                drawPieChart(valid, expiringSoon, expired);
+                
+                // Show default filter (Expiring Soon)
+                filterCertificates();
+                
+            } catch (error) {
+                console.error('Failed to load dashboard data');
+            }
+        }
+
+        // Filter Certificates by Status
+        function filterCertificates() {
+            const status = document.getElementById('statusFilter').value;
+            const filtered = allCertificates.filter(cert => cert.status === status);
+            renderCertificateList(filtered, status);
+        }
+
+        // Render Certificate List
+        function renderCertificateList(certificates, status) {
+            const certificateList = document.getElementById('certificateList');
+            
+            if (certificates.length === 0) {
+                certificateList.innerHTML = '<div class="no-data" style="text-align: center; padding: 40px; color: #999;">No certificates with this status</div>';
+                return;
+            }
+            
+            const statusClass = status === 'VALID' ? 'valid' : status === 'EXPIRING_SOON' ? 'expiring' : 'expired';
+            
+            certificateList.innerHTML = certificates.map(cert => {
+                const component = componentsMap[cert.component_id] || { name: 'Unknown Component', assetName: 'Unknown Asset' };
+                return `
+                    <div class="cert-item ${statusClass}">
+                        <div class="expiring-component">${component.name}</div>
+                        <div class="expiring-cert">${cert.certificate_name}</div>
+                        <div class="expiring-date">
+                            <strong>Asset:</strong> ${component.assetName}<br>
+                            <strong>Expires:</strong> ${new Date(cert.expiry_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Draw Simple Pie Chart
+        function drawPieChart(valid, expiringSoon, expired) {
+            const canvas = document.getElementById('pieChart');
+            const ctx = canvas.getContext('2d');
+            const total = valid + expiringSoon + expired;
+            
+            if (total === 0) {
+                ctx.fillStyle = '#ddd';
+                ctx.fillRect(0, 0, 250, 250);
+                ctx.fillStyle = '#666';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('No certificates', 125, 125);
+                return;
+            }
+            
+            const centerX = 125;
+            const centerY = 125;
+            const radius = 100;
+            
+            const colors = {
+                valid: '#28a745',
+                expiring: '#ffc107',
+                expired: '#dc3545'
+            };
+            
+            let currentAngle = -0.5 * Math.PI;
+            
+            // Valid
+            const validAngle = (valid / total) * 2 * Math.PI;
+            ctx.fillStyle = colors.valid;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + validAngle);
+            ctx.closePath();
+            ctx.fill();
+            currentAngle += validAngle;
+            
+            // Expiring Soon
+            const expiringAngle = (expiringSoon / total) * 2 * Math.PI;
+            ctx.fillStyle = colors.expiring;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + expiringAngle);
+            ctx.closePath();
+            ctx.fill();
+            currentAngle += expiringAngle;
+            
+            // Expired
+            const expiredAngle = (expired / total) * 2 * Math.PI;
+            ctx.fillStyle = colors.expired;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + expiredAngle);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Legend
+            const legend = document.getElementById('chartLegend');
+            legend.innerHTML = `
+                <div class="legend-item">
+                    <div class="legend-left">
+                        <div class="legend-color" style="background: ${colors.valid}"></div>
+                        <span class="legend-label">Valid</span>
+                    </div>
+                    <span class="legend-count">${valid}</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-left">
+                        <div class="legend-color" style="background: ${colors.expiring}"></div>
+                        <span class="legend-label">Expiring Soon</span>
+                    </div>
+                    <span class="legend-count">${expiringSoon}</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-left">
+                        <div class="legend-color" style="background: ${colors.expired}"></div>
+                        <span class="legend-label">Expired</span>
+                    </div>
+                    <span class="legend-count">${expired}</span>
+                </div>
+            `;
+        }
+
+        // Show Asset Detail
+        async function showAssetDetail(assetId) {
+            document.getElementById('dashboard').classList.remove('show');
+            document.getElementById('assetDetailPage').classList.add('show');
+            
+            try {
+                const response = await fetch(`${API_BASE}/asset/${assetId}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const asset = await response.json();
+                
+                const photoUrl = asset.photo || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="240" height="240"%3E%3Crect fill="%232c3e50" width="240" height="240"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="80" font-weight="bold"%3E${asset.name.charAt(0)}%3C/text%3E%3C/svg%3E';
+                const statusClass = `status-${asset.status.toLowerCase()}`;
+                
+                // Build components table
+                let componentsTableHtml = '';
+                if (asset.components && asset.components.length > 0) {
+                    const rows = asset.components.map(component => {
+                        let certLinks = '';
+                        if (component.certificates && component.certificates.length > 0) {
+                            certLinks = component.certificates
+                                .filter(cert => cert.certificate_file)
+                                .map(cert => `<a href="${cert.certificate_file}" target="_blank" class="cert-link">${cert.certificate_name}</a>`)
+                                .join('');
+                            
+                            if (!certLinks) {
+                                certLinks = '<span class="no-data">No files</span>';
+                            }
+                        } else {
+                            certLinks = '<span class="no-data">None</span>';
+                        }
+                        
+                        return `
+                            <tr>
+                                <td class="component-name-cell">${component.name}</td>
+                                <td>${component.equipment_type || '<span class="no-data">N/A</span>'}</td>
+                                <td>${component.structure || '<span class="no-data">N/A</span>'}</td>
+                                <td>${component.model || '<span class="no-data">N/A</span>'}</td>
+                                <td>${component.serial_number || '<span class="no-data">N/A</span>'}</td>
+                                <td>${component.class || '<span class="no-data">N/A</span>'}</td>
+                                <td>${component.class_code || '<span class="no-data">N/A</span>'}</td>
+                                <td>${component.safety_critical ? '<strong style="color: #e74c3c;">YES</strong>' : '<span style="color: #27ae60;">No</span>'}</td>
+                                <td>
+                                    <div class="cert-links">
+                                        ${certLinks}
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                    
+                    componentsTableHtml = `
+                        <table class="components-table">
+                            <thead>
+                                <tr>
+                                    <th>Component Name</th>
+                                    <th>Equipment Type</th>
+                                    <th>Structure</th>
+                                    <th>Model</th>
+                                    <th>Serial Number</th>
+                                    <th>Class</th>
+                                    <th>Class Code</th>
+                                    <th>Safety Critical</th>
+                                    <th>Certificates</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows}
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    componentsTableHtml = '<p class="no-data">No components assigned to this asset</p>';
+                }
+                
+                document.getElementById('assetDetailPage').innerHTML = `
+                    <button class="back-btn" onclick="showDashboard()">← Back to Dashboard</button>
+                    
+                    <!-- Main Info Card -->
+                    <div class="asset-main-card">
+                        <div class="asset-main-content">
+                            <!-- Image Section -->
+                            <div class="asset-image-section">
+                                <img src="${photoUrl}" class="asset-detail-image" alt="${asset.name}">
+                            </div>
+                            
+                            <!-- Info Section -->
+                            <div class="asset-info-section">
+                                <!-- Header Row -->
+                                <div class="asset-header-row">
+                                    <div class="asset-title-group">
+                                        <h1>${asset.name}</h1>
+                                        <div class="asset-id">ID: ${asset.asset_id}</div>
+                                    </div>
+                                    <span class="asset-status-badge ${statusClass}">${asset.status}</span>
+                                </div>
+                                
+                                <!-- Details Grid -->
+                                <div class="asset-details-grid">
+                                    <div class="detail-item">
+                                        <div class="detail-label">Category</div>
+                                        <div class="detail-value">${asset.category_id}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Components</div>
+                                        <div class="detail-value">${asset.components ? asset.components.length : 0}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Location</div>
+                                        <div class="detail-value">${asset.location || '<span class="no-data">Not set</span>'}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Assigned Project</div>
+                                        <div class="detail-value">${asset.assigned_project || '<span class="no-data">Not assigned</span>'}</div>
+                                    </div>
+                                </div>
+                                
+                                ${asset.description ? `
+                                    <div class="detail-item">
+                                        <div class="detail-label">Description</div>
+                                        <div class="detail-value">${asset.description}</div>
+                                    </div>
+                                ` : ''}
+                                
+                                <!-- Datasheet -->
+                                ${asset.datasheet ? `
+                                    <div class="datasheet-section">
+                                        <div class="detail-label" style="margin-bottom: 10px;">Documentation</div>
+                                        <a href="${asset.datasheet}" target="_blank" class="datasheet-btn">View Datasheet →</a>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Components Table -->
+                    <div class="components-section">
+                        <h2 class="components-header">Components</h2>
+                        ${componentsTableHtml}
+                    </div>
+                `;
+                
+            } catch (error) {
+                alert('Failed to load asset details');
+            }
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('authToken');
+            authToken = null;
+            document.getElementById('mainLayout').classList.remove('show');
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('loginForm').reset();
+        }
+
+        // Check if already logged in
+        if (authToken) {
+            showMainLayout();
+        }
+    </script>
+</body>
+</html>
