@@ -1,0 +1,27 @@
+-- name: GetAllCertificates :many
+SELECT * FROM certificates ORDER BY created_at DESC;
+
+-- name: GetCertificateByID :one
+SELECT * FROM certificates WHERE certificate_id = $1 LIMIT 1;
+
+-- name: GetCertificatesByComponentID :many
+SELECT * FROM certificates WHERE component_id = $1 ORDER BY created_at DESC;
+
+-- name: CreateCertificate :one
+INSERT INTO certificates (certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+RETURNING *;
+
+-- name: UpdateCertificate :execrows
+UPDATE certificates
+SET component_id = $1, certificate_name = $2, issue_date = $3, expiry_date = $4,
+    certificate_file = $5, issuing_authority = $6, status = $7, updated_at = NOW()
+WHERE certificate_id = $8;
+
+-- name: DeleteCertificate :execrows
+DELETE FROM certificates WHERE certificate_id = $1;
+
+-- name: GetExpiringCertificates :many
+SELECT * FROM certificates
+WHERE expiry_date <= $1 AND expiry_date >= NOW()
+ORDER BY expiry_date ASC;
