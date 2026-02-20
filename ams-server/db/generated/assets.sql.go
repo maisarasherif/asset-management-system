@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createAsset = `-- name: CreateAsset :one
@@ -18,15 +16,15 @@ RETURNING id, asset_id, name, category_id, photo, datasheet, description, status
 `
 
 type CreateAssetParams struct {
-	AssetID         string      `json:"asset_id"`
-	Name            string      `json:"name"`
-	CategoryID      string      `json:"category_id"`
-	Photo           pgtype.Text `json:"photo"`
-	Datasheet       pgtype.Text `json:"datasheet"`
-	Description     pgtype.Text `json:"description"`
-	Status          string      `json:"status"`
-	Location        pgtype.Text `json:"location"`
-	AssignedProject pgtype.Text `json:"assigned_project"`
+	AssetID         string `json:"asset_id"`
+	Name            string `json:"name"`
+	CategoryID      string `json:"category_id"`
+	Photo           string `json:"photo"`
+	Datasheet       string `json:"datasheet"`
+	Description     string `json:"description"`
+	Status          string `json:"status"`
+	Location        string `json:"location"`
+	AssignedProject string `json:"assigned_project"`
 }
 
 func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset, error) {
@@ -140,15 +138,15 @@ WHERE asset_id = $9
 `
 
 type UpdateAssetParams struct {
-	Name            string      `json:"name"`
-	CategoryID      string      `json:"category_id"`
-	Photo           pgtype.Text `json:"photo"`
-	Datasheet       pgtype.Text `json:"datasheet"`
-	Description     pgtype.Text `json:"description"`
-	Status          string      `json:"status"`
-	Location        pgtype.Text `json:"location"`
-	AssignedProject pgtype.Text `json:"assigned_project"`
-	AssetID         string      `json:"asset_id"`
+	Name            string `json:"name"`
+	CategoryID      string `json:"category_id"`
+	Photo           string `json:"photo"`
+	Datasheet       string `json:"datasheet"`
+	Description     string `json:"description"`
+	Status          string `json:"status"`
+	Location        string `json:"location"`
+	AssignedProject string `json:"assigned_project"`
+	AssetID         string `json:"asset_id"`
 }
 
 func (q *Queries) UpdateAsset(ctx context.Context, arg UpdateAssetParams) (int64, error) {

@@ -6,161 +6,133 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	//"github.com/go-playground/validator/v10"
-	database "github.com/maisarasherif/asset-management-system/ams-server/database"
-	"github.com/maisarasherif/asset-management-system/ams-server/models"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
-	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-//var validate = validator.New()
+type CategoryInput struct {
+	CategoryName string `json:"category_name" validate:"required,min=2,max=100"`
+	Description  string `json:"description"`
+}
 
-func GetCategories(client *mongo.Client) gin.HandlerFunc {
+func GetCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 100*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		var categoryCollection *mongo.Collection = database.OpenCollection("Categories", client)
+		queries := db.New(pool)
 
-		var categories []models.Category
-
-		cursor, err := categoryCollection.Find(ctx, bson.M{})
-
+		categories, err := queries.GetAllCategories(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch categories."})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch categories"})
 			return
-		}
-		defer cursor.Close(ctx)
-
-		if err = cursor.All(ctx, &categories); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode categories."})
-			return
-
 		}
 
 		c.JSON(http.StatusOK, categories)
 	}
 }
 
-func GetCategory(client *mongo.Client) gin.HandlerFunc {
+func GetCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 100*time.Second)
-		defer cancel()
-
 		categoryID := c.Param("category_id")
 
-		if categoryID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "category id is required"})
-			return
-		}
-		var categoryStruct models.Category
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
 
-		var categoryCollection *mongo.Collection = database.OpenCollection("Categories", client)
+		queries := db.New(pool)
 
-		err := categoryCollection.FindOne(ctx, bson.M{"category_id": categoryID}).Decode(&categoryStruct)
-
+		category, err := queries.GetCategoryByID(ctx, categoryID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
 			return
 		}
 
-		c.JSON(http.StatusOK, categoryStruct)
+		c.JSON(http.StatusOK, category)
 	}
 }
 
-func AddCategory(client *mongo.Client) gin.HandlerFunc {
+func AddCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		role, err := utils.GetRoleFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
 			return
 		}
-
 		if role != "ADMIN" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to add category"})
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 100*time.Second)
-		defer cancel()
-
-		var category models.Category
-		if err := c.ShouldBindJSON(&category); err != nil {
+		var input CategoryInput
+		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
 		}
-		if err := validate.Struct(category); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed!", "details": err.Error()})
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
 			return
 		}
 
-		category.CreatedAt = time.Now()
-		category.UpdatedAt = time.Now()
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
 
-		var categoryCollection *mongo.Collection = database.OpenCollection("Categories", client)
+		queries := db.New(pool)
 
-		result, err := categoryCollection.InsertOne(ctx, category)
-
+		category, err := queries.CreateCategory(ctx, db.CreateCategoryParams{
+			CategoryID:   uuid.New().String(),
+			CategoryName: input.CategoryName,
+			Description:  input.Description,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add category"})
 			return
 		}
 
-		c.JSON(http.StatusCreated, result)
-
+		c.JSON(http.StatusCreated, category)
 	}
 }
 
-func UpdateCategory(client *mongo.Client) gin.HandlerFunc {
+func UpdateCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, err := utils.GetRoleFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
 			return
 		}
-
 		if role != "ADMIN" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to update category"})
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 100*time.Second)
-		defer cancel()
-
 		categoryID := c.Param("category_id")
-		if categoryID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "category id is required"})
-			return
-		}
 
-		var category models.Category
-		if err := c.ShouldBindJSON(&category); err != nil {
+		var input CategoryInput
+		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
 		}
-
-		category.UpdatedAt = time.Now()
-
-		updateData := bson.M{
-			"$set": bson.M{
-				"category_name": category.CategoryName,
-				"description":   category.Description,
-				"updated_at":    category.UpdatedAt,
-			},
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
 		}
 
-		var categoryCollection *mongo.Collection = database.OpenCollection("Categories", client)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
 
-		result, err := categoryCollection.UpdateOne(ctx, bson.M{"category_id": categoryID}, updateData)
+		queries := db.New(pool)
 
+		rows, err := queries.UpdateCategory(ctx, db.UpdateCategoryParams{
+			CategoryName: input.CategoryName,
+			Description:  input.Description,
+			CategoryID:   categoryID,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update category"})
 			return
 		}
-
-		if result.MatchedCount == 0 {
+		if rows == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
 			return
 		}
@@ -169,38 +141,31 @@ func UpdateCategory(client *mongo.Client) gin.HandlerFunc {
 	}
 }
 
-func DeleteCategory(client *mongo.Client) gin.HandlerFunc {
+func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, err := utils.GetRoleFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
 			return
 		}
-
 		if role != "ADMIN" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to delete category"})
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 100*time.Second)
+		categoryID := c.Param("category_id")
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		categoryID := c.Param("category_id")
-		if categoryID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "category id is required"})
-			return
-		}
+		queries := db.New(pool)
 
-		var categoryCollection *mongo.Collection = database.OpenCollection("Categories", client)
-
-		result, err := categoryCollection.DeleteOne(ctx, bson.M{"category_id": categoryID})
-
+		rows, err := queries.DeleteCategory(ctx, categoryID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete category"})
 			return
 		}
-
-		if result.DeletedCount == 0 {
+		if rows == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
 			return
 		}

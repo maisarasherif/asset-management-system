@@ -7,8 +7,7 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
 )
 
 const createCertificate = `-- name: CreateCertificate :one
@@ -18,14 +17,14 @@ RETURNING id, certificate_id, component_id, certificate_name, issue_date, expiry
 `
 
 type CreateCertificateParams struct {
-	CertificateID    string             `json:"certificate_id"`
-	ComponentID      string             `json:"component_id"`
-	CertificateName  string             `json:"certificate_name"`
-	IssueDate        pgtype.Timestamptz `json:"issue_date"`
-	ExpiryDate       pgtype.Timestamptz `json:"expiry_date"`
-	CertificateFile  pgtype.Text        `json:"certificate_file"`
-	IssuingAuthority string             `json:"issuing_authority"`
-	Status           string             `json:"status"`
+	CertificateID    string    `json:"certificate_id"`
+	ComponentID      string    `json:"component_id"`
+	CertificateName  string    `json:"certificate_name"`
+	IssueDate        time.Time `json:"issue_date"`
+	ExpiryDate       time.Time `json:"expiry_date"`
+	CertificateFile  string    `json:"certificate_file"`
+	IssuingAuthority string    `json:"issuing_authority"`
+	Status           string    `json:"status"`
 }
 
 func (q *Queries) CreateCertificate(ctx context.Context, arg CreateCertificateParams) (Certificate, error) {
@@ -169,7 +168,7 @@ WHERE expiry_date <= $1 AND expiry_date >= NOW()
 ORDER BY expiry_date ASC
 `
 
-func (q *Queries) GetExpiringCertificates(ctx context.Context, expiryDate pgtype.Timestamptz) ([]Certificate, error) {
+func (q *Queries) GetExpiringCertificates(ctx context.Context, expiryDate time.Time) ([]Certificate, error) {
 	rows, err := q.db.Query(ctx, getExpiringCertificates, expiryDate)
 	if err != nil {
 		return nil, err
@@ -209,14 +208,14 @@ WHERE certificate_id = $8
 `
 
 type UpdateCertificateParams struct {
-	ComponentID      string             `json:"component_id"`
-	CertificateName  string             `json:"certificate_name"`
-	IssueDate        pgtype.Timestamptz `json:"issue_date"`
-	ExpiryDate       pgtype.Timestamptz `json:"expiry_date"`
-	CertificateFile  pgtype.Text        `json:"certificate_file"`
-	IssuingAuthority string             `json:"issuing_authority"`
-	Status           string             `json:"status"`
-	CertificateID    string             `json:"certificate_id"`
+	ComponentID      string    `json:"component_id"`
+	CertificateName  string    `json:"certificate_name"`
+	IssueDate        time.Time `json:"issue_date"`
+	ExpiryDate       time.Time `json:"expiry_date"`
+	CertificateFile  string    `json:"certificate_file"`
+	IssuingAuthority string    `json:"issuing_authority"`
+	Status           string    `json:"status"`
+	CertificateID    string    `json:"certificate_id"`
 }
 
 func (q *Queries) UpdateCertificate(ctx context.Context, arg UpdateCertificateParams) (int64, error) {

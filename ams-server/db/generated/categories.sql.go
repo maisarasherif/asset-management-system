@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createCategory = `-- name: CreateCategory :one
@@ -18,9 +16,9 @@ RETURNING id, category_id, category_name, description, created_at, updated_at
 `
 
 type CreateCategoryParams struct {
-	CategoryID   string      `json:"category_id"`
-	CategoryName string      `json:"category_name"`
-	Description  pgtype.Text `json:"description"`
+	CategoryID   string `json:"category_id"`
+	CategoryName string `json:"category_name"`
+	Description  string `json:"description"`
 }
 
 func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error) {
@@ -105,9 +103,9 @@ WHERE category_id = $3
 `
 
 type UpdateCategoryParams struct {
-	CategoryName string      `json:"category_name"`
-	Description  pgtype.Text `json:"description"`
-	CategoryID   string      `json:"category_id"`
+	CategoryName string `json:"category_name"`
+	Description  string `json:"description"`
+	CategoryID   string `json:"category_id"`
 }
 
 func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (int64, error) {

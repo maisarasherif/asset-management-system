@@ -37,3 +37,15 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func AdminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, err := utils.GetRoleFromContext(c)
+		if err != nil || role != "ADMIN" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}

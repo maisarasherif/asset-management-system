@@ -5,75 +5,75 @@
 package db
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
 )
 
 type Asset struct {
-	ID              int32              `json:"id"`
-	AssetID         string             `json:"asset_id"`
-	Name            string             `json:"name"`
-	CategoryID      string             `json:"category_id"`
-	Photo           pgtype.Text        `json:"photo"`
-	Datasheet       pgtype.Text        `json:"datasheet"`
-	Description     pgtype.Text        `json:"description"`
-	Status          string             `json:"status"`
-	Location        pgtype.Text        `json:"location"`
-	AssignedProject pgtype.Text        `json:"assigned_project"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ID              int32     `json:"id"`
+	AssetID         string    `json:"asset_id"`
+	Name            string    `json:"name"`
+	CategoryID      string    `json:"category_id"`
+	Photo           string    `json:"photo"`
+	Datasheet       string    `json:"datasheet"`
+	Description     string    `json:"description"`
+	Status          string    `json:"status"`
+	Location        string    `json:"location"`
+	AssignedProject string    `json:"assigned_project"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type Category struct {
-	ID           int32              `json:"id"`
-	CategoryID   string             `json:"category_id"`
-	CategoryName string             `json:"category_name"`
-	Description  pgtype.Text        `json:"description"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID           int32     `json:"id"`
+	CategoryID   string    `json:"category_id"`
+	CategoryName string    `json:"category_name"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type Certificate struct {
-	ID               int32              `json:"id"`
-	CertificateID    string             `json:"certificate_id"`
-	ComponentID      string             `json:"component_id"`
-	CertificateName  string             `json:"certificate_name"`
-	IssueDate        pgtype.Timestamptz `json:"issue_date"`
-	ExpiryDate       pgtype.Timestamptz `json:"expiry_date"`
-	CertificateFile  pgtype.Text        `json:"certificate_file"`
-	IssuingAuthority string             `json:"issuing_authority"`
-	Status           string             `json:"status"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	ID               int32     `json:"id"`
+	CertificateID    string    `json:"certificate_id"`
+	ComponentID      string    `json:"component_id"`
+	CertificateName  string    `json:"certificate_name"`
+	IssueDate        time.Time `json:"issue_date"`
+	ExpiryDate       time.Time `json:"expiry_date"`
+	CertificateFile  string    `json:"certificate_file"`
+	IssuingAuthority string    `json:"issuing_authority"`
+	Status           string    `json:"status"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type Component struct {
-	ID             int32              `json:"id"`
-	ComponentID    string             `json:"component_id"`
-	AssetID        string             `json:"asset_id"`
-	Name           string             `json:"name"`
-	SerialNumber   pgtype.Text        `json:"serial_number"`
-	Manufacturer   pgtype.Text        `json:"manufacturer"`
-	Description    pgtype.Text        `json:"description"`
-	EquipmentType  pgtype.Text        `json:"equipment_type"`
-	Structure      pgtype.Text        `json:"structure"`
-	Model          pgtype.Text        `json:"model"`
-	Class          pgtype.Text        `json:"class"`
-	ClassCode      pgtype.Text        `json:"class_code"`
-	SafetyCritical pgtype.Bool        `json:"safety_critical"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID             int32     `json:"id"`
+	ComponentID    string    `json:"component_id"`
+	AssetID        string    `json:"asset_id"`
+	Name           string    `json:"name"`
+	SerialNumber   string    `json:"serial_number"`
+	Manufacturer   string    `json:"manufacturer"`
+	Description    string    `json:"description"`
+	EquipmentType  string    `json:"equipment_type"`
+	Structure      string    `json:"structure"`
+	Model          string    `json:"model"`
+	Class          string    `json:"class"`
+	ClassCode      string    `json:"class_code"`
+	SafetyCritical string    `json:"safety_critical"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type User struct {
-	ID           int32              `json:"id"`
-	UserID       string             `json:"user_id"`
-	FirstName    string             `json:"first_name"`
-	LastName     string             `json:"last_name"`
-	Email        string             `json:"email"`
-	Password     string             `json:"password"`
-	Role         string             `json:"role"`
-	Token        pgtype.Text        `json:"token"`
-	RefreshToken pgtype.Text        `json:"refresh_token"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID           int32     `json:"id"`
+	UserID       string    `json:"user_id"`
+	FirstName    string    `json:"first_name"`
+	LastName     string    `json:"last_name"`
+	Email        string    `json:"email"`
+	Password     string    `json:"password"`
+	Role         string    `json:"role"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }

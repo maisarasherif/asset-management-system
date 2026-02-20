@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countUsers = `-- name: CountUsers :one
@@ -103,9 +101,9 @@ WHERE user_id = $3
 `
 
 type UpdateUserTokensParams struct {
-	Token        pgtype.Text `json:"token"`
-	RefreshToken pgtype.Text `json:"refresh_token"`
-	UserID       string      `json:"user_id"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+	UserID       string `json:"user_id"`
 }
 
 func (q *Queries) UpdateUserTokens(ctx context.Context, arg UpdateUserTokensParams) error {

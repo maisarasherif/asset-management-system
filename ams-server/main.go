@@ -1,34 +1,32 @@
 package main
 
 import (
-	"fmt"
+	"log"
 
 	"github.com/gin-gonic/gin"
 	controller "github.com/maisarasherif/asset-management-system/ams-server/controllers"
 	databases "github.com/maisarasherif/asset-management-system/ams-server/database"
 	middleware "github.com/maisarasherif/asset-management-system/ams-server/middleware"
 	routes "github.com/maisarasherif/asset-management-system/ams-server/routes"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 func main() {
+	pool := databases.Connect()
+	defer pool.Close()
 
 	router := gin.Default()
-
 	router.Use(middleware.CORSMiddleware())
 
 	router.GET("/hello", func(c *gin.Context) {
 		c.String(200, "Hello, Asset Management System!")
 	})
 
-	var client *mongo.Client = databases.Connect()
+	controller.SeedAdminUser(pool)
 
-	controller.SeedAdminUser(client)
-
-	routes.SetupUnprotectedRoutes(router, client)
-	routes.SetupProtectedRoutes(router, client)
+	routes.SetupUnprotectedRoutes(router, pool)
+	routes.SetupProtectedRoutes(router, pool)
 
 	if err := router.Run(":8080"); err != nil {
-		fmt.Println("Failed to start server", err)
+		log.Fatal("Failed to start server: ", err)
 	}
 }

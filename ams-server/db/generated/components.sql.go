@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createComponent = `-- name: CreateComponent :one
@@ -18,18 +16,18 @@ RETURNING id, component_id, asset_id, name, serial_number, manufacturer, descrip
 `
 
 type CreateComponentParams struct {
-	ComponentID    string      `json:"component_id"`
-	AssetID        string      `json:"asset_id"`
-	Name           string      `json:"name"`
-	SerialNumber   pgtype.Text `json:"serial_number"`
-	Manufacturer   pgtype.Text `json:"manufacturer"`
-	Description    pgtype.Text `json:"description"`
-	EquipmentType  pgtype.Text `json:"equipment_type"`
-	Structure      pgtype.Text `json:"structure"`
-	Model          pgtype.Text `json:"model"`
-	Class          pgtype.Text `json:"class"`
-	ClassCode      pgtype.Text `json:"class_code"`
-	SafetyCritical pgtype.Bool `json:"safety_critical"`
+	ComponentID    string `json:"component_id"`
+	AssetID        string `json:"asset_id"`
+	Name           string `json:"name"`
+	SerialNumber   string `json:"serial_number"`
+	Manufacturer   string `json:"manufacturer"`
+	Description    string `json:"description"`
+	EquipmentType  string `json:"equipment_type"`
+	Structure      string `json:"structure"`
+	Model          string `json:"model"`
+	Class          string `json:"class"`
+	ClassCode      string `json:"class_code"`
+	SafetyCritical string `json:"safety_critical"`
 }
 
 func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams) (Component, error) {
@@ -196,17 +194,17 @@ WHERE component_id = $11
 `
 
 type UpdateComponentParams struct {
-	Name           string      `json:"name"`
-	SerialNumber   pgtype.Text `json:"serial_number"`
-	Manufacturer   pgtype.Text `json:"manufacturer"`
-	Description    pgtype.Text `json:"description"`
-	EquipmentType  pgtype.Text `json:"equipment_type"`
-	Structure      pgtype.Text `json:"structure"`
-	Model          pgtype.Text `json:"model"`
-	Class          pgtype.Text `json:"class"`
-	ClassCode      pgtype.Text `json:"class_code"`
-	SafetyCritical pgtype.Bool `json:"safety_critical"`
-	ComponentID    string      `json:"component_id"`
+	Name           string `json:"name"`
+	SerialNumber   string `json:"serial_number"`
+	Manufacturer   string `json:"manufacturer"`
+	Description    string `json:"description"`
+	EquipmentType  string `json:"equipment_type"`
+	Structure      string `json:"structure"`
+	Model          string `json:"model"`
+	Class          string `json:"class"`
+	ClassCode      string `json:"class_code"`
+	SafetyCritical string `json:"safety_critical"`
+	ComponentID    string `json:"component_id"`
 }
 
 func (q *Queries) UpdateComponent(ctx context.Context, arg UpdateComponentParams) (int64, error) {

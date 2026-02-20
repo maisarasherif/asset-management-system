@@ -2,12 +2,12 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 	controller "github.com/maisarasherif/asset-management-system/ams-server/controllers"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-func SetupUnprotectedRoutes(router *gin.Engine, client *mongo.Client) {
+func SetupUnprotectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 
-	router.POST("/login", controller.LoginUser(client))
+	router.POST("/login", controller.LoginUser(pool))
 
 }
