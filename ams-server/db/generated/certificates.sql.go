@@ -200,6 +200,63 @@ func (q *Queries) GetExpiringCertificates(ctx context.Context, expiryDate time.T
 	return items, nil
 }
 
+const getExpiringCertificatesWithContext = `-- name: GetExpiringCertificatesWithContext :many
+SELECT 
+    cert.certificate_id,
+    cert.certificate_name,
+    cert.expiry_date,
+    cert.status,
+    comp.component_id,
+    comp.name AS component_name,
+    asset.asset_id,
+    asset.name AS asset_name
+FROM certificates cert
+JOIN components comp ON comp.component_id = cert.component_id
+JOIN assets asset ON asset.asset_id = comp.asset_id
+WHERE cert.expiry_date <= $1 AND cert.expiry_date >= NOW()
+ORDER BY cert.expiry_date ASC
+`
+
+type GetExpiringCertificatesWithContextRow struct {
+	CertificateID   string    `json:"certificate_id"`
+	CertificateName string    `json:"certificate_name"`
+	ExpiryDate      time.Time `json:"expiry_date"`
+	Status          string    `json:"status"`
+	ComponentID     string    `json:"component_id"`
+	ComponentName   string    `json:"component_name"`
+	AssetID         string    `json:"asset_id"`
+	AssetName       string    `json:"asset_name"`
+}
+
+func (q *Queries) GetExpiringCertificatesWithContext(ctx context.Context, expiryDate time.Time) ([]GetExpiringCertificatesWithContextRow, error) {
+	rows, err := q.db.Query(ctx, getExpiringCertificatesWithContext, expiryDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetExpiringCertificatesWithContextRow
+	for rows.Next() {
+		var i GetExpiringCertificatesWithContextRow
+		if err := rows.Scan(
+			&i.CertificateID,
+			&i.CertificateName,
+			&i.ExpiryDate,
+			&i.Status,
+			&i.ComponentID,
+			&i.ComponentName,
+			&i.AssetID,
+			&i.AssetName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateCertificate = `-- name: UpdateCertificate :execrows
 UPDATE certificates
 SET component_id = $1, certificate_name = $2, issue_date = $3, expiry_date = $4,

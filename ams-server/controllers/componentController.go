@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
-	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
 type ComponentInput struct {
@@ -96,15 +95,6 @@ func GetComponentsByAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, err := utils.GetRoleFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
-			return
-		}
-		if role != "ADMIN" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to add component"})
-			return
-		}
 
 		var input ComponentInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -122,7 +112,7 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		queries := db.New(pool)
 
 		// Verify the asset exists before adding a component to it
-		_, err = queries.GetAssetByID(ctx, input.AssetID)
+		_, err := queries.GetAssetByID(ctx, input.AssetID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
 			return
@@ -153,15 +143,6 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, err := utils.GetRoleFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
-			return
-		}
-		if role != "ADMIN" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to update component"})
-			return
-		}
 
 		componentID := c.Param("component_id")
 
@@ -208,15 +189,6 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, err := utils.GetRoleFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
-			return
-		}
-		if role != "ADMIN" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to delete component"})
-			return
-		}
 
 		componentID := c.Param("component_id")
 

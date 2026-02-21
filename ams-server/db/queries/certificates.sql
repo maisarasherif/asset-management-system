@@ -25,3 +25,19 @@ DELETE FROM certificates WHERE certificate_id = $1;
 SELECT * FROM certificates
 WHERE expiry_date <= $1 AND expiry_date >= NOW()
 ORDER BY expiry_date ASC;
+
+-- name: GetExpiringCertificatesWithContext :many
+SELECT 
+    cert.certificate_id,
+    cert.certificate_name,
+    cert.expiry_date,
+    cert.status,
+    comp.component_id,
+    comp.name AS component_name,
+    asset.asset_id,
+    asset.name AS asset_name
+FROM certificates cert
+JOIN components comp ON comp.component_id = cert.component_id
+JOIN assets asset ON asset.asset_id = comp.asset_id
+WHERE cert.expiry_date <= $1 AND cert.expiry_date >= NOW()
+ORDER BY cert.expiry_date ASC;

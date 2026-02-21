@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
-	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
 type CategoryInput struct {
@@ -55,15 +54,6 @@ func GetCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func AddCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, err := utils.GetRoleFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
-			return
-		}
-		if role != "ADMIN" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to add category"})
-			return
-		}
 
 		var input CategoryInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -96,15 +86,6 @@ func AddCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, err := utils.GetRoleFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
-			return
-		}
-		if role != "ADMIN" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to update category"})
-			return
-		}
 
 		categoryID := c.Param("category_id")
 
@@ -143,15 +124,6 @@ func UpdateCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, err := utils.GetRoleFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
-			return
-		}
-		if role != "ADMIN" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to delete category"})
-			return
-		}
 
 		categoryID := c.Param("category_id")
 

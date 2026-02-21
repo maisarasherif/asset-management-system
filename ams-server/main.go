@@ -14,6 +14,8 @@ func main() {
 	pool := databases.Connect()
 	defer pool.Close()
 
+	//utils.StartExpiryScheduler(pool)
+
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
 

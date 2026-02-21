@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
-	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
 type AssetInput struct {
@@ -75,15 +74,6 @@ func GetAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, err := utils.GetRoleFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
-			return
-		}
-		if role != "ADMIN" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to add asset"})
-			return
-		}
 
 		var input AssetInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -122,15 +112,6 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, err := utils.GetRoleFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
-			return
-		}
-		if role != "ADMIN" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to update asset"})
-			return
-		}
 
 		assetID := c.Param("asset_id")
 
@@ -175,15 +156,6 @@ func UpdateAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, err := utils.GetRoleFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
-			return
-		}
-		if role != "ADMIN" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to delete asset"})
-			return
-		}
 
 		assetID := c.Param("asset_id")
 
@@ -208,15 +180,6 @@ func DeleteAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func PatchAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, err := utils.GetRoleFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "role not found in context"})
-			return
-		}
-		if role != "ADMIN" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed to update asset"})
-			return
-		}
 
 		assetID := c.Param("asset_id")
 

@@ -21,6 +21,10 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 
 	// User Routes
 	admin.POST("/register", controller.RegisterUser(pool))
+	admin.PUT("/updateuser/:user_id", controller.UpdateUser(pool))
+	admin.PUT("/updatepassword/:user_id", controller.UpdatePassword(pool))
+	admin.DELETE("/deleteuser/:user_id", controller.DeleteUser(pool))
+	admin.GET("/users", controller.GetUsers(pool))
 
 	// Component Routes
 	admin.POST("/addcomponent", controller.AddComponent(pool))
@@ -59,4 +63,7 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	// Category routes
 	protected.GET("/categories", controller.GetCategories(pool))
 	protected.GET("/category/:category_id", controller.GetCategory(pool))
+
+	// User routes
+	protected.GET("/user/:user_id", controller.GetUser(pool))
 }

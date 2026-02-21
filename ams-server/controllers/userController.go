@@ -8,36 +8,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
+	"github.com/maisarasherif/asset-management-system/ams-server/dto"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 	"golang.org/x/crypto/bcrypt"
 )
-
-type RegisterInput struct {
-	FirstName string `json:"first_name" validate:"required,min=2,max=100"`
-	LastName  string `json:"last_name" validate:"required,min=2,max=100"`
-	Email     string `json:"email" validate:"required,email"`
-	Password  string `json:"password" validate:"required,min=6"`
-	Role      string `json:"role" validate:"required,oneof=ADMIN USER"`
-}
-
-type LoginInput struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=6"`
-}
-
-type UserResponse struct {
-	UserID       string `json:"user_id"`
-	FirstName    string `json:"first_name"`
-	LastName     string `json:"last_name"`
-	Email        string `json:"email"`
-	Role         string `json:"role"`
-	Token        string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
-}
 
 func HashPassword(password string) (string, error) {
 	hashPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -47,16 +24,71 @@ func HashPassword(password string) (string, error) {
 	return string(hashPassword), nil
 }
 
+func GetUsers(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		users, err := queries.GetAllUsers(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch users"})
+			return
+		}
+
+		response := make([]dto.UserResponse, len(users))
+		for i, u := range users {
+			response[i] = dto.UserResponse{
+				UserID:    u.UserID,
+				FirstName: u.FirstName,
+				LastName:  u.LastName,
+				Email:     u.Email,
+				Role:      u.Role,
+				CreatedAt: u.CreatedAt,
+				UpdatedAt: u.UpdatedAt,
+			}
+		}
+
+		c.JSON(http.StatusOK, response)
+	}
+}
+
+func GetUser(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.Param("user_id")
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		user, err := queries.GetUserByID(ctx, userID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.UserResponse{
+			UserID:    user.UserID,
+			FirstName: user.FirstName,
+			LastName:  user.LastName,
+			Email:     user.Email,
+			Role:      user.Role,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+		})
+	}
+}
+
 func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var input RegisterInput
+		var input dto.RegisterInput
 
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input data"})
 			return
 		}
-
-		validate := validator.New()
 		if err := validate.Struct(input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
 			return
@@ -96,13 +128,165 @@ func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"user_id": user.UserID})
+		c.JSON(http.StatusCreated, dto.UserResponse{
+			UserID:    user.UserID,
+			FirstName: user.FirstName,
+			LastName:  user.LastName,
+			Email:     user.Email,
+			Role:      user.Role,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+		})
+	}
+}
+
+func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.Param("user_id")
+
+		var input dto.UpdateUserInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		// Check email isn't taken by a different user
+		count, err := queries.CountUsersByEmailExcluding(ctx, db.CountUsersByEmailExcludingParams{
+			Email:  input.Email,
+			UserID: userID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate email"})
+			return
+		}
+		if count > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "email already in use by another user"})
+			return
+		}
+
+		rows, err := queries.UpdateUser(ctx, db.UpdateUserParams{
+			FirstName: input.FirstName,
+			LastName:  input.LastName,
+			Email:     input.Email,
+			Role:      input.Role,
+			UserID:    userID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "user updated successfully"})
+	}
+}
+
+func UpdatePassword(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.Param("user_id")
+
+		var input dto.UpdatePasswordInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		// Need full user record to verify current password
+		// GetUserByEmail requires email — store it in token claims
+		// so we pull it from context
+		email := c.GetString("email")
+		existingUser, err := queries.GetUserByEmail(ctx, email)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		if err = bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(input.CurrentPassword)); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
+			return
+		}
+
+		hashedPassword, err := HashPassword(input.NewPassword)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "hashing password failed"})
+			return
+		}
+
+		rows, err := queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+			Password: hashedPassword,
+			UserID:   userID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
+	}
+}
+
+func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.Param("user_id")
+
+		// Prevent admin from deleting themselves
+		requestingUserID, err := utils.GetUserIdFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "could not identify requesting user"})
+			return
+		}
+		if requestingUserID == userID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete your own account"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		rows, err := queries.DeleteUser(ctx, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "user deleted successfully"})
 	}
 }
 
 func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var input LoginInput
+		var input dto.LoginInput
 
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input data"})
@@ -142,7 +326,7 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, UserResponse{
+		c.JSON(http.StatusOK, dto.LoginResponse{
 			UserID:       foundUser.UserID,
 			FirstName:    foundUser.FirstName,
 			LastName:     foundUser.LastName,
@@ -171,7 +355,7 @@ func SeedAdminUser(pool *pgxpool.Pool) {
 
 	fmt.Println("No users found. Creating default admin...")
 
-	hashedPassword, err := HashPassword("Admin@123")
+	hashedPassword, err := HashPassword("ADMIN_PASSWORD")
 	if err != nil {
 		log.Fatal("Failed to hash admin password:", err)
 	}

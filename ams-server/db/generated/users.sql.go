@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 )
 
 const countUsers = `-- name: CountUsers :one
@@ -26,6 +27,22 @@ SELECT COUNT(*) FROM users WHERE email = $1
 
 func (q *Queries) CountUsersByEmail(ctx context.Context, email string) (int64, error) {
 	row := q.db.QueryRow(ctx, countUsersByEmail, email)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countUsersByEmailExcluding = `-- name: CountUsersByEmailExcluding :one
+SELECT COUNT(*) FROM users WHERE email = $1 AND user_id != $2
+`
+
+type CountUsersByEmailExcludingParams struct {
+	Email  string `json:"email"`
+	UserID string `json:"user_id"`
+}
+
+func (q *Queries) CountUsersByEmailExcluding(ctx context.Context, arg CountUsersByEmailExcludingParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsersByEmailExcluding, arg.Email, arg.UserID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -72,6 +89,61 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteUser = `-- name: DeleteUser :execrows
+DELETE FROM users WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, userID string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getAllUsers = `-- name: GetAllUsers :many
+SELECT user_id, first_name, last_name, email, role, created_at, updated_at
+FROM users ORDER BY created_at DESC
+`
+
+type GetAllUsersRow struct {
+	UserID    string    `json:"user_id"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error) {
+	rows, err := q.db.Query(ctx, getAllUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAllUsersRow
+	for rows.Next() {
+		var i GetAllUsersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Email,
+			&i.Role,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, user_id, first_name, last_name, email, password, role, token, refresh_token, created_at, updated_at FROM users WHERE email = $1 LIMIT 1
 `
@@ -93,6 +165,83 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT user_id, first_name, last_name, email, role, created_at, updated_at
+FROM users WHERE user_id = $1 LIMIT 1
+`
+
+type GetUserByIDRow struct {
+	UserID    string    `json:"user_id"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, userID string) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, userID)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.UserID,
+		&i.FirstName,
+		&i.LastName,
+		&i.Email,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUser = `-- name: UpdateUser :execrows
+UPDATE users
+SET first_name = $1, last_name = $2, email = $3, role = $4, updated_at = NOW()
+WHERE user_id = $5
+`
+
+type UpdateUserParams struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	UserID    string `json:"user_id"`
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateUser,
+		arg.FirstName,
+		arg.LastName,
+		arg.Email,
+		arg.Role,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :execrows
+UPDATE users
+SET password = $1, updated_at = NOW()
+WHERE user_id = $2
+`
+
+type UpdateUserPasswordParams struct {
+	Password string `json:"password"`
+	UserID   string `json:"user_id"`
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateUserPassword, arg.Password, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateUserTokens = `-- name: UpdateUserTokens :exec
