@@ -64,6 +64,15 @@ type Component struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+type ScheduledTask struct {
+	ID            int32     `json:"id"`
+	TaskID        string    `json:"task_id"`
+	CertificateID string    `json:"certificate_id"`
+	Type          string    `json:"type"`
+	Status        string    `json:"status"`
+	SentAt        time.Time `json:"sent_at"`
+}
+
 type User struct {
 	ID           int32     `json:"id"`
 	UserID       string    `json:"user_id"`

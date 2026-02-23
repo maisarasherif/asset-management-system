@@ -9,6 +9,17 @@ import (
 	"context"
 )
 
+const countCategories = `-- name: CountCategories :one
+SELECT COUNT(*) FROM categories
+`
+
+func (q *Queries) CountCategories(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countCategories)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCategory = `-- name: CreateCategory :one
 INSERT INTO categories (category_id, category_name, description, created_at, updated_at)
 VALUES ($1, $2, $3, NOW(), NOW())
@@ -47,12 +58,19 @@ func (q *Queries) DeleteCategory(ctx context.Context, categoryID string) (int64,
 	return result.RowsAffected(), nil
 }
 
-const getAllCategories = `-- name: GetAllCategories :many
-SELECT id, category_id, category_name, description, created_at, updated_at FROM categories ORDER BY created_at DESC
+const getAllCategoriesPaginated = `-- name: GetAllCategoriesPaginated :many
+SELECT id, category_id, category_name, description, created_at, updated_at FROM categories
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
 `
 
-func (q *Queries) GetAllCategories(ctx context.Context) ([]Category, error) {
-	rows, err := q.db.Query(ctx, getAllCategories)
+type GetAllCategoriesPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) GetAllCategoriesPaginated(ctx context.Context, arg GetAllCategoriesPaginatedParams) ([]Category, error) {
+	rows, err := q.db.Query(ctx, getAllCategoriesPaginated, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

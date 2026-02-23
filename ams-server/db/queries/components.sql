@@ -1,11 +1,22 @@
--- name: GetAllComponents :many
-SELECT * FROM components ORDER BY created_at DESC;
+-- name: GetAllComponentsPaginated :many
+SELECT * FROM components
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountComponents :one
+SELECT COUNT(*) FROM components;
+
+-- name: GetComponentsByAssetIDPaginated :many
+SELECT * FROM components
+WHERE asset_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountComponentsByAssetID :one
+SELECT COUNT(*) FROM components WHERE asset_id = $1;
 
 -- name: GetComponentByID :one
 SELECT * FROM components WHERE component_id = $1 LIMIT 1;
-
--- name: GetComponentsByAssetID :many
-SELECT * FROM components WHERE asset_id = $1 ORDER BY created_at DESC;
 
 -- name: CreateComponent :one
 INSERT INTO components (component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at)

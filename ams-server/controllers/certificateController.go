@@ -11,16 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
+	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
-
-type CertificateInput struct {
-	ComponentID      string    `json:"component_id" validate:"required"`
-	CertificateName  string    `json:"certificate_name" validate:"required,min=2,max=200"`
-	IssueDate        time.Time `json:"issue_date" validate:"required"`
-	ExpiryDate       time.Time `json:"expiry_date" validate:"required"`
-	CertificateFile  string    `json:"certificate_file" validate:"omitempty,url"`
-	IssuingAuthority string    `json:"issuing_authority" validate:"required,min=2,max=200"`
-}
 
 func computeCertificateStatus(expiryDate time.Time) string {
 	daysUntilExpiry := int(time.Until(expiryDate).Hours() / 24)
@@ -37,15 +30,29 @@ func GetCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
+		limit, offset, query := utils.ParsePagination(c)
+
 		queries := db.New(pool)
 
-		certificates, err := queries.GetAllCertificates(ctx)
+		certificates, err := queries.GetAllCertificatesPaginated(ctx, db.GetAllCertificatesPaginatedParams{
+			Limit:  limit,
+			Offset: offset,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
 			return
 		}
 
-		c.JSON(http.StatusOK, certificates)
+		total, err := queries.CountCertificates(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificates"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: certificates,
+			Meta: utils.BuildMeta(query, total),
+		})
 	}
 }
 
@@ -75,21 +82,36 @@ func GetCertificatesByComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
+		limit, offset, query := utils.ParsePagination(c)
+
 		queries := db.New(pool)
 
-		certificates, err := queries.GetCertificatesByComponentID(ctx, componentID)
+		certificates, err := queries.GetCertificatesByComponentIDPaginated(ctx, db.GetCertificatesByComponentIDPaginatedParams{
+			ComponentID: componentID,
+			Limit:       limit,
+			Offset:      offset,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
 			return
 		}
 
-		c.JSON(http.StatusOK, certificates)
+		total, err := queries.CountCertificatesByComponentID(ctx, componentID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificates"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: certificates,
+			Meta: utils.BuildMeta(query, total),
+		})
 	}
 }
 
 func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var input CertificateInput
+		var input dto.CertificateInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
@@ -109,7 +131,6 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		// Verify the component exists before adding a certificate to it
 		_, err := queries.GetComponentByID(ctx, input.ComponentID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
@@ -139,7 +160,7 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		certificateID := c.Param("certificate_id")
 
-		var input CertificateInput
+		var input dto.CertificateInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return

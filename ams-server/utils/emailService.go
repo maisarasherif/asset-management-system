@@ -7,13 +7,15 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
+	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/robfig/cron/v3"
 	"gopkg.in/gomail.v2"
 )
 
-func sendCertificateExpiryEmail(recipientEmail, recipientName, assetName, componentName, certificateName, expiryDate string) error {
+func sendEmail(recipientEmail, recipientName, assetName, componentName, certificateName, expiryDate string) error {
 	smtpHost := os.Getenv("SMTP_HOST")
 	smtpPortStr := os.Getenv("SMTP_PORT")
 	smtpUser := os.Getenv("SMTP_USER")
@@ -63,12 +65,105 @@ func sendCertificateExpiryEmail(recipientEmail, recipientName, assetName, compon
 	return nil
 }
 
+// notifyExpiring handles all notification channels for a single expiring certificate.
+// Each channel is independent — failure in one does not affect the other.
+func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiringCertificatesWithContextRow, recipientEmail, recipientName string) {
+	queries := db.New(pool)
+	expiryDateStr := cert.ExpiryDate.Format("2006-01-02")
+
+	// ── EMAIL ────────────────────────────────────────────────────────────────
+	emailSent, err := queries.HasRecentScheduledTask(ctx, db.HasRecentScheduledTaskParams{
+		CertificateID: cert.CertificateID,
+		Type:          "EMAIL",
+	})
+	if err != nil {
+		logger.Log.Error().Err(err).
+			Str("certificate", cert.CertificateName).
+			Msg("failed to check email scheduled task")
+	} else if emailSent > 0 {
+		logger.Log.Info().
+			Str("certificate", cert.CertificateName).
+			Msg("email already sent within 6 months, skipping")
+	} else {
+		err = sendEmail(recipientEmail, recipientName, cert.AssetName, cert.ComponentName, cert.CertificateName, expiryDateStr)
+		status := "SENT"
+		if err != nil {
+			status = "FAILED"
+			logger.Log.Error().Err(err).
+				Str("certificate", cert.CertificateName).
+				Msg("failed to send expiry email")
+		} else {
+			logger.Log.Info().
+				Str("certificate", cert.CertificateName).
+				Str("expiry_date", expiryDateStr).
+				Msg("sent expiry email")
+		}
+
+		_, recordErr := queries.CreateScheduledTask(ctx, db.CreateScheduledTaskParams{
+			TaskID:        uuid.New().String(),
+			CertificateID: cert.CertificateID,
+			Type:          "EMAIL",
+			Status:        status,
+		})
+		if recordErr != nil {
+			logger.Log.Error().Err(recordErr).
+				Str("certificate", cert.CertificateName).
+				Msg("failed to record email scheduled task")
+		}
+	}
+
+	// ── CLICKUP ──────────────────────────────────────────────────────────────
+	clickupSent, err := queries.HasRecentScheduledTask(ctx, db.HasRecentScheduledTaskParams{
+		CertificateID: cert.CertificateID,
+		Type:          "CLICKUP",
+	})
+	if err != nil {
+		logger.Log.Error().Err(err).
+			Str("certificate", cert.CertificateName).
+			Msg("failed to check ClickUp scheduled task")
+	} else if clickupSent > 0 {
+		logger.Log.Info().
+			Str("certificate", cert.CertificateName).
+			Msg("ClickUp task already created within 6 months, skipping")
+	} else {
+		clickUpTaskID, err := CreateClickUpTask(cert.CertificateName, cert.AssetName, cert.ComponentName, cert.ExpiryDate)
+		status := "SENT"
+		taskID := uuid.New().String() // fallback task_id if ClickUp fails
+
+		if err != nil {
+			status = "FAILED"
+			logger.Log.Error().Err(err).
+				Str("certificate", cert.CertificateName).
+				Msg("failed to create ClickUp task")
+		} else {
+			taskID = clickUpTaskID
+			logger.Log.Info().
+				Str("certificate", cert.CertificateName).
+				Str("clickup_task_id", clickUpTaskID).
+				Str("expiry_date", expiryDateStr).
+				Msg("created ClickUp task")
+		}
+
+		_, recordErr := queries.CreateScheduledTask(ctx, db.CreateScheduledTaskParams{
+			TaskID:        taskID,
+			CertificateID: cert.CertificateID,
+			Type:          "CLICKUP",
+			Status:        status,
+		})
+		if recordErr != nil {
+			logger.Log.Error().Err(recordErr).
+				Str("certificate", cert.CertificateName).
+				Msg("failed to record ClickUp scheduled task")
+		}
+	}
+}
+
 func runExpiryCheck(pool *pgxpool.Pool) {
 	recipientEmail := os.Getenv("ALERT_RECIPIENT_EMAIL")
 	recipientName := os.Getenv("ALERT_RECIPIENT_NAME")
 
 	if recipientEmail == "" {
-		fmt.Println("[scheduler] ALERT_RECIPIENT_EMAIL not set, skipping expiry check")
+		logger.Log.Warn().Msg("ALERT_RECIPIENT_EMAIL not set, skipping expiry check")
 		return
 	}
 
@@ -81,65 +176,50 @@ func runExpiryCheck(pool *pgxpool.Pool) {
 
 	thresholdDate := time.Now().AddDate(0, 0, daysThreshold)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	queries := db.New(pool)
 
 	certificates, err := queries.GetExpiringCertificatesWithContext(ctx, thresholdDate)
 	if err != nil {
-		fmt.Printf("[scheduler] failed to fetch expiring certificates: %v\n", err)
+		logger.Log.Error().Err(err).Msg("failed to fetch expiring certificates")
 		return
 	}
 
 	if len(certificates) == 0 {
-		fmt.Println("[scheduler] no expiring certificates found")
+		logger.Log.Info().Msg("no expiring certificates found")
 		return
 	}
 
-	fmt.Printf("[scheduler] found %d expiring certificates, sending alerts\n", len(certificates))
+	logger.Log.Info().
+		Int("count", len(certificates)).
+		Msg("found expiring certificates, processing notifications")
 
 	for _, cert := range certificates {
-		expiryDateStr := cert.ExpiryDate.Format("2006-01-02")
-
-		err := sendCertificateExpiryEmail(
-			recipientEmail,
-			recipientName,
-			cert.AssetName,
-			cert.ComponentName,
-			cert.CertificateName,
-			expiryDateStr,
-		)
-		if err != nil {
-			fmt.Printf("[scheduler] failed to send email for certificate %s: %v\n", cert.CertificateName, err)
-			continue
-		}
-
-		fmt.Printf("[scheduler] sent expiry alert for certificate: %s\n", cert.CertificateName)
+		notifyExpiring(ctx, pool, cert, recipientEmail, recipientName)
 	}
 }
 
 func StartExpiryScheduler(pool *pgxpool.Pool) {
-	// Run once immediately on startup so you don't wait 24h for first check
 	go runExpiryCheck(pool)
 
 	c := cron.New()
 
-	// Run daily at 8:00 AM — adjust via ALERT_CRON_SCHEDULE env var if needed
 	schedule := os.Getenv("ALERT_CRON_SCHEDULE")
 	if schedule == "" {
 		schedule = "0 8 * * *"
 	}
 
 	_, err := c.AddFunc(schedule, func() {
-		fmt.Println("[scheduler] running daily certificate expiry check")
+		logger.Log.Info().Msg("running daily certificate expiry check")
 		runExpiryCheck(pool)
 	})
 	if err != nil {
-		fmt.Printf("[scheduler] failed to register cron job: %v\n", err)
+		logger.Log.Error().Err(err).Msg("failed to register cron job")
 		return
 	}
 
 	c.Start()
-	fmt.Println("[scheduler] certificate expiry scheduler started")
+	logger.Log.Info().Str("schedule", schedule).Msg("certificate expiry scheduler started")
 }

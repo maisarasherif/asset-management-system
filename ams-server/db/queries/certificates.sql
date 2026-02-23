@@ -1,11 +1,22 @@
--- name: GetAllCertificates :many
-SELECT * FROM certificates ORDER BY created_at DESC;
+-- name: GetAllCertificatesPaginated :many
+SELECT * FROM certificates
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountCertificates :one
+SELECT COUNT(*) FROM certificates;
+
+-- name: GetCertificatesByComponentIDPaginated :many
+SELECT * FROM certificates
+WHERE component_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountCertificatesByComponentID :one
+SELECT COUNT(*) FROM certificates WHERE component_id = $1;
 
 -- name: GetCertificateByID :one
 SELECT * FROM certificates WHERE certificate_id = $1 LIMIT 1;
-
--- name: GetCertificatesByComponentID :many
-SELECT * FROM certificates WHERE component_id = $1 ORDER BY created_at DESC;
 
 -- name: CreateCertificate :one
 INSERT INTO certificates (certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, created_at, updated_at)
@@ -27,7 +38,7 @@ WHERE expiry_date <= $1 AND expiry_date >= NOW()
 ORDER BY expiry_date ASC;
 
 -- name: GetExpiringCertificatesWithContext :many
-SELECT 
+SELECT
     cert.certificate_id,
     cert.certificate_name,
     cert.expiry_date,

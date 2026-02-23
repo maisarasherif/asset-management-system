@@ -9,27 +9,38 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
+	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
-
-type CategoryInput struct {
-	CategoryName string `json:"category_name" validate:"required,min=2,max=100"`
-	Description  string `json:"description"`
-}
 
 func GetCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
+		limit, offset, query := utils.ParsePagination(c)
+
 		queries := db.New(pool)
 
-		categories, err := queries.GetAllCategories(ctx)
+		categories, err := queries.GetAllCategoriesPaginated(ctx, db.GetAllCategoriesPaginatedParams{
+			Limit:  limit,
+			Offset: offset,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch categories"})
 			return
 		}
 
-		c.JSON(http.StatusOK, categories)
+		total, err := queries.CountCategories(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count categories"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: categories,
+			Meta: utils.BuildMeta(query, total),
+		})
 	}
 }
 
@@ -54,8 +65,7 @@ func GetCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func AddCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
-		var input CategoryInput
+		var input dto.CategoryInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
@@ -86,10 +96,9 @@ func AddCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		categoryID := c.Param("category_id")
 
-		var input CategoryInput
+		var input dto.CategoryInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
@@ -124,7 +133,6 @@ func UpdateCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		categoryID := c.Param("category_id")
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)

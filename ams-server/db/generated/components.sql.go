@@ -9,6 +9,28 @@ import (
 	"context"
 )
 
+const countComponents = `-- name: CountComponents :one
+SELECT COUNT(*) FROM components
+`
+
+func (q *Queries) CountComponents(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countComponents)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countComponentsByAssetID = `-- name: CountComponentsByAssetID :one
+SELECT COUNT(*) FROM components WHERE asset_id = $1
+`
+
+func (q *Queries) CountComponentsByAssetID(ctx context.Context, assetID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countComponentsByAssetID, assetID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createComponent = `-- name: CreateComponent :one
 INSERT INTO components (component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
@@ -78,12 +100,19 @@ func (q *Queries) DeleteComponent(ctx context.Context, componentID string) (int6
 	return result.RowsAffected(), nil
 }
 
-const getAllComponents = `-- name: GetAllComponents :many
-SELECT id, component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at FROM components ORDER BY created_at DESC
+const getAllComponentsPaginated = `-- name: GetAllComponentsPaginated :many
+SELECT id, component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at FROM components
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
 `
 
-func (q *Queries) GetAllComponents(ctx context.Context) ([]Component, error) {
-	rows, err := q.db.Query(ctx, getAllComponents)
+type GetAllComponentsPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllComponentsPaginatedParams) ([]Component, error) {
+	rows, err := q.db.Query(ctx, getAllComponentsPaginated, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -145,12 +174,21 @@ func (q *Queries) GetComponentByID(ctx context.Context, componentID string) (Com
 	return i, err
 }
 
-const getComponentsByAssetID = `-- name: GetComponentsByAssetID :many
-SELECT id, component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at FROM components WHERE asset_id = $1 ORDER BY created_at DESC
+const getComponentsByAssetIDPaginated = `-- name: GetComponentsByAssetIDPaginated :many
+SELECT id, component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at FROM components
+WHERE asset_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
 
-func (q *Queries) GetComponentsByAssetID(ctx context.Context, assetID string) ([]Component, error) {
-	rows, err := q.db.Query(ctx, getComponentsByAssetID, assetID)
+type GetComponentsByAssetIDPaginatedParams struct {
+	AssetID string `json:"asset_id"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
+}
+
+func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetComponentsByAssetIDPaginatedParams) ([]Component, error) {
+	rows, err := q.db.Query(ctx, getComponentsByAssetIDPaginated, arg.AssetID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

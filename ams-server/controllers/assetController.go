@@ -10,29 +10,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
+	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
-
-type AssetInput struct {
-	Name            string `json:"name" validate:"required,min=2,max=200"`
-	CategoryID      string `json:"category_id" validate:"required"`
-	Photo           string `json:"photo" validate:"omitempty,url"`
-	Datasheet       string `json:"datasheet" validate:"omitempty,url"`
-	Description     string `json:"description"`
-	Status          string `json:"status" validate:"required,oneof=ACTIVE INACTIVE MAINTENANCE"`
-	Location        string `json:"location"`
-	AssignedProject string `json:"assigned_project"`
-}
-
-type PatchAssetInput struct {
-	Name            *string `json:"name" validate:"omitempty,min=2,max=200"`
-	CategoryID      *string `json:"category_id"`
-	Photo           *string `json:"photo" validate:"omitempty,url"`
-	Datasheet       *string `json:"datasheet" validate:"omitempty,url"`
-	Description     *string `json:"description"`
-	Status          *string `json:"status" validate:"omitempty,oneof=ACTIVE INACTIVE MAINTENANCE"`
-	Location        *string `json:"location"`
-	AssignedProject *string `json:"assigned_project"`
-}
 
 var validate = validator.New()
 
@@ -41,15 +21,29 @@ func GetAssets(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
+		limit, offset, query := utils.ParsePagination(c)
+
 		queries := db.New(pool)
 
-		assets, err := queries.GetAllAssets(ctx)
+		assets, err := queries.GetAllAssetsPaginated(ctx, db.GetAllAssetsPaginatedParams{
+			Limit:  limit,
+			Offset: offset,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch assets"})
 			return
 		}
 
-		c.JSON(http.StatusOK, assets)
+		total, err := queries.CountAssets(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count assets"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: assets,
+			Meta: utils.BuildMeta(query, total),
+		})
 	}
 }
 
@@ -74,8 +68,7 @@ func GetAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
-		var input AssetInput
+		var input dto.AssetInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
@@ -112,10 +105,9 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		assetID := c.Param("asset_id")
 
-		var input AssetInput
+		var input dto.AssetInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
@@ -156,7 +148,6 @@ func UpdateAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		assetID := c.Param("asset_id")
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -180,10 +171,9 @@ func DeleteAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func PatchAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		assetID := c.Param("asset_id")
 
-		var input PatchAssetInput
+		var input dto.PatchAssetInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
@@ -204,7 +194,6 @@ func PatchAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		// Merge patch fields over existing values
 		name := existing.Name
 		categoryID := existing.CategoryID
 		photo := existing.Photo

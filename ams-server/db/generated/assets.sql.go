@@ -9,6 +9,17 @@ import (
 	"context"
 )
 
+const countAssets = `-- name: CountAssets :one
+SELECT COUNT(*) FROM assets
+`
+
+func (q *Queries) CountAssets(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAssets)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAsset = `-- name: CreateAsset :one
 INSERT INTO assets (asset_id, name, category_id, photo, datasheet, description, status, location, assigned_project, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
@@ -69,12 +80,19 @@ func (q *Queries) DeleteAsset(ctx context.Context, assetID string) (int64, error
 	return result.RowsAffected(), nil
 }
 
-const getAllAssets = `-- name: GetAllAssets :many
-SELECT id, asset_id, name, category_id, photo, datasheet, description, status, location, assigned_project, created_at, updated_at FROM assets ORDER BY created_at DESC
+const getAllAssetsPaginated = `-- name: GetAllAssetsPaginated :many
+SELECT id, asset_id, name, category_id, photo, datasheet, description, status, location, assigned_project, created_at, updated_at FROM assets
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
 `
 
-func (q *Queries) GetAllAssets(ctx context.Context) ([]Asset, error) {
-	rows, err := q.db.Query(ctx, getAllAssets)
+type GetAllAssetsPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) GetAllAssetsPaginated(ctx context.Context, arg GetAllAssetsPaginatedParams) ([]Asset, error) {
+	rows, err := q.db.Query(ctx, getAllAssetsPaginated, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

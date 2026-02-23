@@ -34,3 +34,5 @@ sql:
             go_type: "time.Time"
           - column: "users.updated_at"
             go_type: "time.Time"
+          - column: "scheduled_tasks.sent_at"
+            go_type: "time.Time"

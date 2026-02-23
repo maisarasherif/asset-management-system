@@ -66,4 +66,5 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 
 	// User routes
 	protected.GET("/user/:user_id", controller.GetUser(pool))
+	protected.POST("/logout", controller.LogoutUser(pool))
 }

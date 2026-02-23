@@ -10,6 +10,28 @@ import (
 	"time"
 )
 
+const countCertificates = `-- name: CountCertificates :one
+SELECT COUNT(*) FROM certificates
+`
+
+func (q *Queries) CountCertificates(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificates)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countCertificatesByComponentID = `-- name: CountCertificatesByComponentID :one
+SELECT COUNT(*) FROM certificates WHERE component_id = $1
+`
+
+func (q *Queries) CountCertificatesByComponentID(ctx context.Context, componentID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificatesByComponentID, componentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCertificate = `-- name: CreateCertificate :one
 INSERT INTO certificates (certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
@@ -67,12 +89,19 @@ func (q *Queries) DeleteCertificate(ctx context.Context, certificateID string) (
 	return result.RowsAffected(), nil
 }
 
-const getAllCertificates = `-- name: GetAllCertificates :many
-SELECT id, certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, created_at, updated_at FROM certificates ORDER BY created_at DESC
+const getAllCertificatesPaginated = `-- name: GetAllCertificatesPaginated :many
+SELECT id, certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, created_at, updated_at FROM certificates
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
 `
 
-func (q *Queries) GetAllCertificates(ctx context.Context) ([]Certificate, error) {
-	rows, err := q.db.Query(ctx, getAllCertificates)
+type GetAllCertificatesPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) GetAllCertificatesPaginated(ctx context.Context, arg GetAllCertificatesPaginatedParams) ([]Certificate, error) {
+	rows, err := q.db.Query(ctx, getAllCertificatesPaginated, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -126,12 +155,21 @@ func (q *Queries) GetCertificateByID(ctx context.Context, certificateID string) 
 	return i, err
 }
 
-const getCertificatesByComponentID = `-- name: GetCertificatesByComponentID :many
-SELECT id, certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, created_at, updated_at FROM certificates WHERE component_id = $1 ORDER BY created_at DESC
+const getCertificatesByComponentIDPaginated = `-- name: GetCertificatesByComponentIDPaginated :many
+SELECT id, certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, created_at, updated_at FROM certificates
+WHERE component_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
 
-func (q *Queries) GetCertificatesByComponentID(ctx context.Context, componentID string) ([]Certificate, error) {
-	rows, err := q.db.Query(ctx, getCertificatesByComponentID, componentID)
+type GetCertificatesByComponentIDPaginatedParams struct {
+	ComponentID string `json:"component_id"`
+	Limit       int32  `json:"limit"`
+	Offset      int32  `json:"offset"`
+}
+
+func (q *Queries) GetCertificatesByComponentIDPaginated(ctx context.Context, arg GetCertificatesByComponentIDPaginatedParams) ([]Certificate, error) {
+	rows, err := q.db.Query(ctx, getCertificatesByComponentIDPaginated, arg.ComponentID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +239,7 @@ func (q *Queries) GetExpiringCertificates(ctx context.Context, expiryDate time.T
 }
 
 const getExpiringCertificatesWithContext = `-- name: GetExpiringCertificatesWithContext :many
-SELECT 
+SELECT
     cert.certificate_id,
     cert.certificate_name,
     cert.expiry_date,

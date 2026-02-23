@@ -1,5 +1,10 @@
--- name: GetAllCategories :many
-SELECT * FROM categories ORDER BY created_at DESC;
+-- name: GetAllCategoriesPaginated :many
+SELECT * FROM categories
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountCategories :one
+SELECT COUNT(*) FROM categories;
 
 -- name: GetCategoryByID :one
 SELECT * FROM categories WHERE category_id = $1 LIMIT 1;

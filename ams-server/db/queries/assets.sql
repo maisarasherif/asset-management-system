@@ -1,5 +1,10 @@
--- name: GetAllAssets :many
-SELECT * FROM assets ORDER BY created_at DESC;
+-- name: GetAllAssetsPaginated :many
+SELECT * FROM assets
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountAssets :one
+SELECT COUNT(*) FROM assets;
 
 -- name: GetAssetByID :one
 SELECT * FROM assets WHERE asset_id = $1 LIMIT 1;

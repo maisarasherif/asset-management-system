@@ -9,49 +9,38 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
+	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
-
-type ComponentInput struct {
-	AssetID        string `json:"asset_id" validate:"required"`
-	Name           string `json:"name" validate:"required,min=2,max=200"`
-	SerialNumber   string `json:"serial_number"`
-	Manufacturer   string `json:"manufacturer"`
-	Description    string `json:"description"`
-	EquipmentType  string `json:"equipment_type"`
-	Structure      string `json:"structure"`
-	Model          string `json:"model"`
-	Class          string `json:"class"`
-	ClassCode      string `json:"class_code"`
-	SafetyCritical string `json:"safety_critical" validate:"required,oneof=YES NO"`
-}
-
-type PatchComponentInput struct {
-	Name           *string `json:"name" validate:"omitempty,min=2,max=200"`
-	SerialNumber   *string `json:"serial_number"`
-	Manufacturer   *string `json:"manufacturer"`
-	Description    *string `json:"description"`
-	EquipmentType  *string `json:"equipment_type"`
-	Structure      *string `json:"structure"`
-	Model          *string `json:"model"`
-	Class          *string `json:"class"`
-	ClassCode      *string `json:"class_code"`
-	SafetyCritical *string `json:"safety_critical" validate:"omitempty,oneof=YES NO"`
-}
 
 func GetComponents(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
+		limit, offset, query := utils.ParsePagination(c)
+
 		queries := db.New(pool)
 
-		components, err := queries.GetAllComponents(ctx)
+		components, err := queries.GetAllComponentsPaginated(ctx, db.GetAllComponentsPaginatedParams{
+			Limit:  limit,
+			Offset: offset,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch components"})
 			return
 		}
 
-		c.JSON(http.StatusOK, components)
+		total, err := queries.CountComponents(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count components"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: components,
+			Meta: utils.BuildMeta(query, total),
+		})
 	}
 }
 
@@ -81,22 +70,36 @@ func GetComponentsByAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
+		limit, offset, query := utils.ParsePagination(c)
+
 		queries := db.New(pool)
 
-		components, err := queries.GetComponentsByAssetID(ctx, assetID)
+		components, err := queries.GetComponentsByAssetIDPaginated(ctx, db.GetComponentsByAssetIDPaginatedParams{
+			AssetID: assetID,
+			Limit:   limit,
+			Offset:  offset,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch components"})
 			return
 		}
 
-		c.JSON(http.StatusOK, components)
+		total, err := queries.CountComponentsByAssetID(ctx, assetID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count components"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: components,
+			Meta: utils.BuildMeta(query, total),
+		})
 	}
 }
 
 func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
-		var input ComponentInput
+		var input dto.ComponentInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
@@ -111,7 +114,6 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		// Verify the asset exists before adding a component to it
 		_, err := queries.GetAssetByID(ctx, input.AssetID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
@@ -143,10 +145,9 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		componentID := c.Param("component_id")
 
-		var input ComponentInput
+		var input dto.ComponentInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
@@ -189,7 +190,6 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		componentID := c.Param("component_id")
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)

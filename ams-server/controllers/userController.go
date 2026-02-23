@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -29,11 +29,22 @@ func GetUsers(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
+		limit, offset, query := utils.ParsePagination(c)
+
 		queries := db.New(pool)
 
-		users, err := queries.GetAllUsers(ctx)
+		users, err := queries.GetAllUsersPaginated(ctx, db.GetAllUsersPaginatedParams{
+			Limit:  limit,
+			Offset: offset,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch users"})
+			return
+		}
+
+		total, err := queries.CountUsers(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count users"})
 			return
 		}
 
@@ -50,7 +61,10 @@ func GetUsers(pool *pgxpool.Pool) gin.HandlerFunc {
 			}
 		}
 
-		c.JSON(http.StatusOK, response)
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: response,
+			Meta: utils.BuildMeta(query, total),
+		})
 	}
 }
 
@@ -159,7 +173,6 @@ func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		// Check email isn't taken by a different user
 		count, err := queries.CountUsersByEmailExcluding(ctx, db.CountUsersByEmailExcludingParams{
 			Email:  input.Email,
 			UserID: userID,
@@ -212,9 +225,6 @@ func UpdatePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		// Need full user record to verify current password
-		// GetUserByEmail requires email — store it in token claims
-		// so we pull it from context
 		email := c.GetString("email")
 		existingUser, err := queries.GetUserByEmail(ctx, email)
 		if err != nil {
@@ -254,7 +264,6 @@ func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.Param("user_id")
 
-		// Prevent admin from deleting themselves
 		requestingUserID, err := utils.GetUserIdFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "could not identify requesting user"})
@@ -338,6 +347,24 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
+func LogoutUser(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := utils.GetUserIdFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "could not identify requesting user"})
+			return
+		}
+
+		if err = utils.UpdateAllTokens(pool, userID, "", ""); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to logout user"})
+			return
+		}
+
+		logger.Log.Info().Str("user_id", userID).Msg("user logged out successfully")
+		c.JSON(http.StatusOK, gin.H{"message": "user logged out successfully"})
+	}
+}
+
 func SeedAdminUser(pool *pgxpool.Pool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -346,18 +373,18 @@ func SeedAdminUser(pool *pgxpool.Pool) {
 
 	count, err := queries.CountUsers(ctx)
 	if err != nil {
-		log.Fatal("Could not check for existing users:", err)
+		logger.Log.Fatal().Err(err).Msg("could not check for existing users")
 	}
 
 	if count > 0 {
 		return
 	}
 
-	fmt.Println("No users found. Creating default admin...")
+	logger.Log.Info().Msg("no users found, creating default admin")
 
-	hashedPassword, err := HashPassword("ADMIN_PASSWORD")
+	hashedPassword, err := HashPassword("Admin@123")
 	if err != nil {
-		log.Fatal("Failed to hash admin password:", err)
+		logger.Log.Fatal().Err(err).Msg("failed to hash admin password")
 	}
 
 	_, err = queries.CreateUser(ctx, db.CreateUserParams{
@@ -369,7 +396,7 @@ func SeedAdminUser(pool *pgxpool.Pool) {
 		Role:      "ADMIN",
 	})
 	if err != nil {
-		log.Fatal("Failed to seed admin user:", err)
+		logger.Log.Fatal().Err(err).Msg("failed to seed admin user")
 	}
 
 	fmt.Println("Default admin created")

@@ -101,12 +101,19 @@ func (q *Queries) DeleteUser(ctx context.Context, userID string) (int64, error) 
 	return result.RowsAffected(), nil
 }
 
-const getAllUsers = `-- name: GetAllUsers :many
+const getAllUsersPaginated = `-- name: GetAllUsersPaginated :many
 SELECT user_id, first_name, last_name, email, role, created_at, updated_at
-FROM users ORDER BY created_at DESC
+FROM users
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
 `
 
-type GetAllUsersRow struct {
+type GetAllUsersPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type GetAllUsersPaginatedRow struct {
 	UserID    string    `json:"user_id"`
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
@@ -116,15 +123,15 @@ type GetAllUsersRow struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-func (q *Queries) GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error) {
-	rows, err := q.db.Query(ctx, getAllUsers)
+func (q *Queries) GetAllUsersPaginated(ctx context.Context, arg GetAllUsersPaginatedParams) ([]GetAllUsersPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, getAllUsersPaginated, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetAllUsersRow
+	var items []GetAllUsersPaginatedRow
 	for rows.Next() {
-		var i GetAllUsersRow
+		var i GetAllUsersPaginatedRow
 		if err := rows.Scan(
 			&i.UserID,
 			&i.FirstName,
