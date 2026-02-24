@@ -197,6 +197,12 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		_, err = queries.GetComponentByID(ctx, input.ComponentID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
 		newStatus := computeCertificateStatus(input.ExpiryDate)
 
 		rows, err := queries.UpdateCertificate(ctx, db.UpdateCertificateParams{

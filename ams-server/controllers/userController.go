@@ -472,6 +472,13 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		logger.Log.Info().
+			Str("user_id", foundUser.UserID).
+			Str("email", foundUser.Email).
+			Str("role", foundUser.Role).
+			Str("ip", c.ClientIP()).
+			Msg("user logged in")
+
 		c.JSON(http.StatusOK, dto.LoginResponse{
 			UserID:       foundUser.UserID,
 			FirstName:    foundUser.FirstName,
