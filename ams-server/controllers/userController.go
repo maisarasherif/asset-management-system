@@ -142,6 +142,14 @@ func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		adminID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Info().
+			Str("new_user_id", user.UserID).
+			Str("email", user.Email).
+			Str("role", user.Role).
+			Str("created_by", adminID).
+			Msg("new user registered")
+
 		c.JSON(http.StatusCreated, dto.UserResponse{
 			UserID:    user.UserID,
 			FirstName: user.FirstName,
@@ -173,6 +181,12 @@ func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
+		existingUser, err := queries.GetUserByID(ctx, userID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
 		count, err := queries.CountUsersByEmailExcluding(ctx, db.CountUsersByEmailExcludingParams{
 			Email:  input.Email,
 			UserID: userID,
@@ -200,6 +214,16 @@ func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
 		if rows == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
+		}
+
+		if existingUser.Role != input.Role {
+			adminID, _ := utils.GetUserIdFromContext(c)
+			logger.Log.Warn().
+				Str("user_id", userID).
+				Str("old_role", existingUser.Role).
+				Str("new_role", input.Role).
+				Str("changed_by", adminID).
+				Msg("user role changed")
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "user updated successfully"})
@@ -233,6 +257,9 @@ func UpdatePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		if err = bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(input.CurrentPassword)); err != nil {
+			logger.Log.Warn().
+				Str("user_id", userID).
+				Msg("failed password update attempt: incorrect current password")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
 			return
 		}
@@ -255,6 +282,10 @@ func UpdatePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
+
+		logger.Log.Info().
+			Str("user_id", userID).
+			Msg("password updated successfully")
 
 		c.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
 	}
@@ -279,6 +310,12 @@ func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
+		targetUser, err := queries.GetUserByID(ctx, userID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
 		rows, err := queries.DeleteUser(ctx, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
@@ -288,6 +325,12 @@ func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
+
+		logger.Log.Warn().
+			Str("deleted_user_id", userID).
+			Str("deleted_email", targetUser.Email).
+			Str("deleted_by", requestingUserID).
+			Msg("user deleted")
 
 		c.JSON(http.StatusOK, gin.H{"message": "user deleted successfully"})
 	}
@@ -309,11 +352,19 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		foundUser, err := queries.GetUserByEmail(ctx, input.Email)
 		if err != nil {
+			logger.Log.Warn().
+				Str("email", input.Email).
+				Str("ip", c.ClientIP()).
+				Msg("failed login attempt: email not found")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 			return
 		}
 
 		if err = bcrypt.CompareHashAndPassword([]byte(foundUser.Password), []byte(input.Password)); err != nil {
+			logger.Log.Warn().
+				Str("email", input.Email).
+				Str("ip", c.ClientIP()).
+				Msg("failed login attempt: incorrect password")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 			return
 		}
@@ -344,6 +395,7 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			Token:        token,
 			RefreshToken: refreshToken,
 		})
+
 	}
 }
 

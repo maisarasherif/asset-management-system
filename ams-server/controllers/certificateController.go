@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
@@ -152,6 +153,16 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		userID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Info().
+			Str("certificate_id", certificate.CertificateID).
+			Str("certificate_name", certificate.CertificateName).
+			Str("component_id", certificate.ComponentID).
+			Str("status", certificate.Status).
+			Str("expiry_date", certificate.ExpiryDate.Format("2006-01-02")).
+			Str("created_by", userID).
+			Msg("certificate added successfully")
+
 		c.JSON(http.StatusCreated, certificate)
 	}
 }
@@ -180,6 +191,14 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
+		existing, err := queries.GetCertificateByID(ctx, certificateID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+			return
+		}
+
+		newStatus := computeCertificateStatus(input.ExpiryDate)
+
 		rows, err := queries.UpdateCertificate(ctx, db.UpdateCertificateParams{
 			ComponentID:      input.ComponentID,
 			CertificateName:  input.CertificateName,
@@ -187,7 +206,7 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			ExpiryDate:       input.ExpiryDate,
 			CertificateFile:  input.CertificateFile,
 			IssuingAuthority: input.IssuingAuthority,
-			Status:           computeCertificateStatus(input.ExpiryDate),
+			Status:           newStatus,
 			CertificateID:    certificateID,
 		})
 		if err != nil {
@@ -198,6 +217,15 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
 			return
 		}
+
+		userID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Info().
+			Str("certificate_id", certificateID).
+			Str("certificate_name", existing.CertificateName).
+			Str("old_status", existing.Status).
+			Str("new_status", newStatus).
+			Str("updated_by", userID).
+			Msg("certificate updated")
 
 		c.JSON(http.StatusOK, gin.H{"message": "certificate updated successfully"})
 	}
@@ -212,6 +240,12 @@ func DeleteCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
+		existing, err := queries.GetCertificateByID(ctx, certificateID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+			return
+		}
+
 		rows, err := queries.DeleteCertificate(ctx, certificateID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete certificate"})
@@ -221,6 +255,14 @@ func DeleteCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
 			return
 		}
+
+		userID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Warn().
+			Str("certificate_id", certificateID).
+			Str("certificate_name", existing.CertificateName).
+			Str("component_id", existing.ComponentID).
+			Str("deleted_by", userID).
+			Msg("certificate deleted")
 
 		c.JSON(http.StatusOK, gin.H{"message": "certificate deleted successfully"})
 	}
