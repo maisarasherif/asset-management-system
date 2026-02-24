@@ -153,3 +153,56 @@ func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "category deleted successfully"})
 	}
 }
+
+func PatchCategory(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		categoryID := c.Param("category_id")
+
+		var input dto.PatchCategoryInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		existing, err := queries.GetCategoryByID(ctx, categoryID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
+			return
+		}
+
+		categoryName := existing.CategoryName
+		description := existing.Description
+
+		if input.CategoryName != nil {
+			categoryName = *input.CategoryName
+		}
+		if input.Description != nil {
+			description = *input.Description
+		}
+
+		rows, err := queries.UpdateCategory(ctx, db.UpdateCategoryParams{
+			CategoryName: categoryName,
+			Description:  description,
+			CategoryID:   categoryID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update category"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "category updated successfully"})
+	}
+}

@@ -293,3 +293,99 @@ func GetExpiringCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 		c.JSON(http.StatusOK, certificates)
 	}
 }
+
+func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		certificateID := c.Param("certificate_id")
+
+		var input dto.PatchCertificateInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		existing, err := queries.GetCertificateByID(ctx, certificateID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+			return
+		}
+
+		componentID := existing.ComponentID
+		certificateName := existing.CertificateName
+		issueDate := existing.IssueDate
+		expiryDate := existing.ExpiryDate
+		certificateFile := existing.CertificateFile
+		issuingAuthority := existing.IssuingAuthority
+
+		if input.ComponentID != nil {
+			componentID = *input.ComponentID
+		}
+		if input.CertificateName != nil {
+			certificateName = *input.CertificateName
+		}
+		if input.IssueDate != nil {
+			issueDate = *input.IssueDate
+		}
+		if input.ExpiryDate != nil {
+			expiryDate = *input.ExpiryDate
+		}
+		if input.CertificateFile != nil {
+			certificateFile = *input.CertificateFile
+		}
+		if input.IssuingAuthority != nil {
+			issuingAuthority = *input.IssuingAuthority
+		}
+
+		if expiryDate.Before(issueDate) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "expiry date must be after issue date"})
+			return
+		}
+
+		_, err = queries.GetComponentByID(ctx, componentID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
+		newStatus := computeCertificateStatus(expiryDate)
+
+		rows, err := queries.UpdateCertificate(ctx, db.UpdateCertificateParams{
+			ComponentID:      componentID,
+			CertificateName:  certificateName,
+			IssueDate:        issueDate,
+			ExpiryDate:       expiryDate,
+			CertificateFile:  certificateFile,
+			IssuingAuthority: issuingAuthority,
+			Status:           newStatus,
+			CertificateID:    certificateID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update certificate"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+			return
+		}
+
+		userID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Info().
+			Str("certificate_id", certificateID).
+			Str("certificate_name", existing.CertificateName).
+			Str("old_status", existing.Status).
+			Str("new_status", newStatus).
+			Str("updated_by", userID).
+			Msg("certificate patched")
+
+		c.JSON(http.StatusOK, gin.H{"message": "certificate updated successfully"})
+	}
+}

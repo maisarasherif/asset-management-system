@@ -43,6 +43,13 @@ type UpdateUserInput struct {
 	Role      string `json:"role" validate:"required,oneof=ADMIN USER"`
 }
 
+type PatchUserInput struct {
+	FirstName *string `json:"first_name" validate:"omitempty,min=2,max=100"`
+	LastName  *string `json:"last_name" validate:"omitempty,min=2,max=100"`
+	Email     *string `json:"email" validate:"omitempty,email"`
+	Role      *string `json:"role" validate:"omitempty,oneof=ADMIN USER"`
+}
+
 type UpdatePasswordInput struct {
 	CurrentPassword string `json:"current_password" validate:"required,min=6"`
 	NewPassword     string `json:"new_password" validate:"required,min=6"`
@@ -73,6 +80,11 @@ type LoginResponse struct {
 type CategoryInput struct {
 	CategoryName string `json:"category_name" validate:"required,min=2,max=100"`
 	Description  string `json:"description"`
+}
+
+type PatchCategoryInput struct {
+	CategoryName *string `json:"category_name" validate:"omitempty,min=2,max=100"`
+	Description  *string `json:"description"`
 }
 
 // ==================== Asset DTOs ====================
@@ -137,4 +149,13 @@ type CertificateInput struct {
 	ExpiryDate       time.Time `json:"expiry_date" validate:"required"`
 	CertificateFile  string    `json:"certificate_file" validate:"omitempty,url"`
 	IssuingAuthority string    `json:"issuing_authority" validate:"required,min=2,max=200"`
+}
+
+type PatchCertificateInput struct {
+	ComponentID      *string    `json:"component_id"`
+	CertificateName  *string    `json:"certificate_name" validate:"omitempty,min=2,max=200"`
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	CertificateFile  *string    `json:"certificate_file" validate:"omitempty,url"`
+	IssuingAuthority *string    `json:"issuing_authority" validate:"omitempty,min=2,max=200"`
 }

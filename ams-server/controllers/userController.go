@@ -336,6 +336,92 @@ func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
+func PatchUser(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.Param("user_id")
+
+		var input dto.PatchUserInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		existingUser, err := queries.GetUserByID(ctx, userID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		firstName := existingUser.FirstName
+		lastName := existingUser.LastName
+		email := existingUser.Email
+		role := existingUser.Role
+
+		if input.FirstName != nil {
+			firstName = *input.FirstName
+		}
+		if input.LastName != nil {
+			lastName = *input.LastName
+		}
+		if input.Email != nil {
+			email = *input.Email
+		}
+		if input.Role != nil {
+			role = *input.Role
+		}
+
+		count, err := queries.CountUsersByEmailExcluding(ctx, db.CountUsersByEmailExcludingParams{
+			Email:  email,
+			UserID: userID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate email"})
+			return
+		}
+		if count > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "email already in use by another user"})
+			return
+		}
+
+		rows, err := queries.UpdateUser(ctx, db.UpdateUserParams{
+			FirstName: firstName,
+			LastName:  lastName,
+			Email:     email,
+			Role:      role,
+			UserID:    userID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		if existingUser.Role != role {
+			adminID, _ := utils.GetUserIdFromContext(c)
+			logger.Log.Warn().
+				Str("user_id", userID).
+				Str("old_role", existingUser.Role).
+				Str("new_role", role).
+				Str("changed_by", adminID).
+				Msg("user role changed")
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "user updated successfully"})
+	}
+}
+
 func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input dto.LoginInput

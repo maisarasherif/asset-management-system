@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
@@ -197,6 +198,12 @@ func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
+		existing, err := queries.GetComponentByID(ctx, componentID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
 		rows, err := queries.DeleteComponent(ctx, componentID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete component"})
@@ -207,6 +214,107 @@ func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		userID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Warn().
+			Str("component_id", componentID).
+			Str("component_name", existing.Name).
+			Str("asset_id", existing.AssetID).
+			Str("deleted_by", userID).
+			Msg("component deleted")
+
 		c.JSON(http.StatusOK, gin.H{"message": "component deleted successfully"})
+	}
+}
+
+func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		componentID := c.Param("component_id")
+
+		var input dto.PatchComponentInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		existing, err := queries.GetComponentByID(ctx, componentID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
+		name := existing.Name
+		serialNumber := existing.SerialNumber
+		manufacturer := existing.Manufacturer
+		description := existing.Description
+		equipmentType := existing.EquipmentType
+		structure := existing.Structure
+		model := existing.Model
+		class := existing.Class
+		classCode := existing.ClassCode
+		safetyCritical := existing.SafetyCritical
+
+		if input.Name != nil {
+			name = *input.Name
+		}
+		if input.SerialNumber != nil {
+			serialNumber = *input.SerialNumber
+		}
+		if input.Manufacturer != nil {
+			manufacturer = *input.Manufacturer
+		}
+		if input.Description != nil {
+			description = *input.Description
+		}
+		if input.EquipmentType != nil {
+			equipmentType = *input.EquipmentType
+		}
+		if input.Structure != nil {
+			structure = *input.Structure
+		}
+		if input.Model != nil {
+			model = *input.Model
+		}
+		if input.Class != nil {
+			class = *input.Class
+		}
+		if input.ClassCode != nil {
+			classCode = *input.ClassCode
+		}
+		if input.SafetyCritical != nil {
+			safetyCritical = *input.SafetyCritical
+		}
+
+		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
+			Name:           name,
+			SerialNumber:   serialNumber,
+			Manufacturer:   manufacturer,
+			Description:    description,
+			EquipmentType:  equipmentType,
+			Structure:      structure,
+			Model:          model,
+			Class:          class,
+			ClassCode:      classCode,
+			SafetyCritical: safetyCritical,
+			ComponentID:    componentID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update component"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "component updated successfully"})
 	}
 }

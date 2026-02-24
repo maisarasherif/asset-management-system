@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
@@ -43,6 +44,13 @@ func AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, err := utils.GetRoleFromContext(c)
 		if err != nil || role != "ADMIN" {
+			userID, _ := utils.GetUserIdFromContext(c)
+			logger.Log.Warn().
+				Str("user_id", userID).
+				Str("route", c.FullPath()).
+				Str("method", c.Request.Method).
+				Str("ip", c.ClientIP()).
+				Msg("unauthorized admin access attempt")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed"})
 			c.Abort()
 			return

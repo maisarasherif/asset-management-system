@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
@@ -155,6 +156,12 @@ func DeleteAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
+		existing, err := queries.GetAssetByID(ctx, assetID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+			return
+		}
+
 		rows, err := queries.DeleteAsset(ctx, assetID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete asset"})
@@ -164,6 +171,13 @@ func DeleteAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
 			return
 		}
+
+		userID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Warn().
+			Str("asset_id", assetID).
+			Str("asset_name", existing.Name).
+			Str("deleted_by", userID).
+			Msg("asset deleted")
 
 		c.JSON(http.StatusOK, gin.H{"message": "asset deleted successfully"})
 	}

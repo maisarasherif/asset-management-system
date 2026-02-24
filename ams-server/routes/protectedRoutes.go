@@ -22,6 +22,7 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	// User Routes
 	admin.POST("/register", controller.RegisterUser(pool))
 	admin.PUT("/updateuser/:user_id", controller.UpdateUser(pool))
+	admin.PATCH("/patchuser/:user_id", controller.PatchUser(pool))
 	admin.PUT("/updatepassword/:user_id", controller.UpdatePassword(pool))
 	admin.DELETE("/deleteuser/:user_id", controller.DeleteUser(pool))
 	admin.GET("/users", controller.GetUsers(pool))
@@ -29,16 +30,19 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	// Component Routes
 	admin.POST("/addcomponent", controller.AddComponent(pool))
 	admin.PUT("/updatecomponent/:component_id", controller.UpdateComponent(pool))
+	admin.PATCH("/patchcomponent/:component_id", controller.PatchComponent(pool))
 	admin.DELETE("/deletecomponent/:component_id", controller.DeleteComponent(pool))
 
 	// Certificate Routes
 	admin.POST("/addcertificate", controller.AddCertificate(pool))
 	admin.PUT("/updatecertificate/:certificate_id", controller.UpdateCertificate(pool))
+	admin.PATCH("/patchcertificate/:certificate_id", controller.PatchCertificate(pool))
 	admin.DELETE("/deletecertificate/:certificate_id", controller.DeleteCertificate(pool))
 
 	// Category Routes
 	admin.POST("/addcategory", controller.AddCategory(pool))
 	admin.PUT("/updatecategory/:category_id", controller.UpdateCategory(pool))
+	admin.PATCH("/patchcategory/:category_id", controller.PatchCategory(pool))
 	admin.DELETE("/deletecategory/:category_id", controller.DeleteCategory(pool))
 
 	// ===================Protected Routes======================================================
