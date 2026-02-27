@@ -1,13 +1,17 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	controller "github.com/maisarasherif/asset-management-system/ams-server/controllers"
+	"github.com/maisarasherif/asset-management-system/ams-server/middleware"
 )
 
 func SetupUnprotectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 
-	router.POST("/login", controller.LoginUser(pool))
+	loginRateLimit := middleware.RateLimitMiddleware(10, time.Minute)
+	router.POST("/login", loginRateLimit, controller.LoginUser(pool))
 
 }
