@@ -9,6 +9,48 @@ import (
 	"context"
 )
 
+const createTestType = `-- name: CreateTestType :one
+INSERT INTO test_types (test_id, test_name, validity_duration, description)
+VALUES ($1, $2, $3, $4)
+RETURNING test_id, test_name, validity_duration, description
+`
+
+type CreateTestTypeParams struct {
+	TestID           string `json:"test_id"`
+	TestName         string `json:"test_name"`
+	ValidityDuration int32  `json:"validity_duration"`
+	Description      string `json:"description"`
+}
+
+func (q *Queries) CreateTestType(ctx context.Context, arg CreateTestTypeParams) (TestType, error) {
+	row := q.db.QueryRow(ctx, createTestType,
+		arg.TestID,
+		arg.TestName,
+		arg.ValidityDuration,
+		arg.Description,
+	)
+	var i TestType
+	err := row.Scan(
+		&i.TestID,
+		&i.TestName,
+		&i.ValidityDuration,
+		&i.Description,
+	)
+	return i, err
+}
+
+const deleteTestType = `-- name: DeleteTestType :execrows
+DELETE FROM test_types WHERE test_id = $1
+`
+
+func (q *Queries) DeleteTestType(ctx context.Context, testID string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteTestType, testID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getAllTestTypes = `-- name: GetAllTestTypes :many
 SELECT test_id, test_name, validity_duration, description FROM test_types
 ORDER BY test_name ASC
@@ -55,4 +97,30 @@ func (q *Queries) GetTestTypeByID(ctx context.Context, testID string) (TestType,
 		&i.Description,
 	)
 	return i, err
+}
+
+const updateTestType = `-- name: UpdateTestType :execrows
+UPDATE test_types
+SET test_name = $1, validity_duration = $2, description = $3
+WHERE test_id = $4
+`
+
+type UpdateTestTypeParams struct {
+	TestName         string `json:"test_name"`
+	ValidityDuration int32  `json:"validity_duration"`
+	Description      string `json:"description"`
+	TestID           string `json:"test_id"`
+}
+
+func (q *Queries) UpdateTestType(ctx context.Context, arg UpdateTestTypeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateTestType,
+		arg.TestName,
+		arg.ValidityDuration,
+		arg.Description,
+		arg.TestID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

@@ -140,6 +140,22 @@ func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
+		_, err := queries.GetCategoryByID(ctx, categoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch category"})
+			return
+		}
+
+		count, err := queries.CountComponentsByCategoryID(ctx, categoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check components"})
+			return
+		}
+		if count > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "category has components assigned to it"})
+			return
+		}
+
 		rows, err := queries.DeleteCategory(ctx, categoryID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete category"})

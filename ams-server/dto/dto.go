@@ -167,3 +167,18 @@ type PatchCertificateInput struct {
 	IMCAD018         *string    `json:"imca_d018"`
 	MaintenanceNotes *string    `json:"maintenance_notes"`
 }
+
+// ==================== Test Type DTOs ====================
+
+type TestTypeInput struct {
+    TestID           string `json:"test_id" validate:"required"`
+    TestName         string `json:"test_name" validate:"required,min=2,max=100"`
+    ValidityDuration int32  `json:"validity_duration" validate:"required,min=1"`
+    Description      string `json:"description"`
+}
+
+type PatchTestTypeInput struct {
+    TestName         *string `json:"test_name" validate:"omitempty,min=2,max=100"`
+    ValidityDuration *int32  `json:"validity_duration" validate:"omitempty,min=1"`
+    Description      *string `json:"description"`
+}

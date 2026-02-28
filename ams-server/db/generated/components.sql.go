@@ -31,10 +31,21 @@ func (q *Queries) CountComponentsByAssetID(ctx context.Context, assetID string) 
 	return count, err
 }
 
+const countComponentsByCategoryID = `-- name: CountComponentsByCategoryID :one
+SELECT COUNT(*) FROM components WHERE category_id = $1
+`
+
+func (q *Queries) CountComponentsByCategoryID(ctx context.Context, categoryID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countComponentsByCategoryID, categoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createComponent = `-- name: CreateComponent :one
 INSERT INTO components (component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
-RETURNING id, component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, category_id
+RETURNING id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at
 `
 
 type CreateComponentParams struct {
@@ -74,6 +85,7 @@ func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams
 		&i.ID,
 		&i.ComponentID,
 		&i.AssetID,
+		&i.CategoryID,
 		&i.Name,
 		&i.SerialNumber,
 		&i.Manufacturer,
@@ -86,7 +98,6 @@ func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams
 		&i.SafetyCritical,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.CategoryID,
 	)
 	return i, err
 }
@@ -104,7 +115,7 @@ func (q *Queries) DeleteComponent(ctx context.Context, componentID string) (int6
 }
 
 const getAllComponentsPaginated = `-- name: GetAllComponentsPaginated :many
-SELECT id, component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, category_id FROM components
+SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at FROM components
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -127,6 +138,7 @@ func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllCompo
 			&i.ID,
 			&i.ComponentID,
 			&i.AssetID,
+			&i.CategoryID,
 			&i.Name,
 			&i.SerialNumber,
 			&i.Manufacturer,
@@ -139,7 +151,6 @@ func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllCompo
 			&i.SafetyCritical,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -152,7 +163,7 @@ func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllCompo
 }
 
 const getComponentByID = `-- name: GetComponentByID :one
-SELECT id, component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, category_id FROM components WHERE component_id = $1 LIMIT 1
+SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at FROM components WHERE component_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetComponentByID(ctx context.Context, componentID string) (Component, error) {
@@ -162,6 +173,7 @@ func (q *Queries) GetComponentByID(ctx context.Context, componentID string) (Com
 		&i.ID,
 		&i.ComponentID,
 		&i.AssetID,
+		&i.CategoryID,
 		&i.Name,
 		&i.SerialNumber,
 		&i.Manufacturer,
@@ -174,13 +186,12 @@ func (q *Queries) GetComponentByID(ctx context.Context, componentID string) (Com
 		&i.SafetyCritical,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.CategoryID,
 	)
 	return i, err
 }
 
 const getComponentsByAssetIDPaginated = `-- name: GetComponentsByAssetIDPaginated :many
-SELECT id, component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, category_id FROM components
+SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at FROM components
 WHERE asset_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -205,6 +216,7 @@ func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetCo
 			&i.ID,
 			&i.ComponentID,
 			&i.AssetID,
+			&i.CategoryID,
 			&i.Name,
 			&i.SerialNumber,
 			&i.Manufacturer,
@@ -217,7 +229,6 @@ func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetCo
 			&i.SafetyCritical,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}

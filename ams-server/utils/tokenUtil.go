@@ -21,8 +21,13 @@ type SignedDetails struct {
 	jwt.RegisteredClaims
 }
 
-var SECRET_KEY = os.Getenv("SECRET_KEY")
-var SECRET_REFRESH_KEY = os.Getenv("SECRET_REFRESH_KEY")
+func getSecretKey() []byte {
+	return []byte(os.Getenv("SECRET_KEY"))
+}
+
+func getSecretRefreshKey() []byte {
+	return []byte(os.Getenv("SECRET_REFRESH_KEY"))
+}
 
 func GenerateAllTokens(email, firstName, lastName, role, userId string) (string, string, error) {
 	claims := &SignedDetails{
@@ -39,7 +44,7 @@ func GenerateAllTokens(email, firstName, lastName, role, userId string) (string,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signedToken, err := token.SignedString([]byte(SECRET_KEY))
+	signedToken, err := token.SignedString(getSecretKey())
 	if err != nil {
 		return "", "", err
 	}
@@ -58,7 +63,7 @@ func GenerateAllTokens(email, firstName, lastName, role, userId string) (string,
 	}
 
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
-	signedRefreshToken, err := refreshToken.SignedString([]byte(SECRET_REFRESH_KEY))
+	signedRefreshToken, err := refreshToken.SignedString(getSecretRefreshKey())
 	if err != nil {
 		return "", "", err
 	}
@@ -91,7 +96,7 @@ func ValidateToken(tokenString string) (*SignedDetails, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
-		return []byte(SECRET_KEY), nil
+		return getSecretKey(), nil
 	})
 	if err != nil {
 		return nil, err

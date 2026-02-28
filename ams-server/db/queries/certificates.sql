@@ -15,6 +15,9 @@ LIMIT $2 OFFSET $3;
 -- name: CountCertificatesByComponentID :one
 SELECT COUNT(*) FROM certificates WHERE component_id = $1;
 
+-- name: CountCertificatesByTestID :one
+SELECT COUNT(*) FROM certificates WHERE test_id = $1;
+
 -- name: GetCertificateByID :one
 SELECT * FROM certificates WHERE certificate_id = $1 LIMIT 1;
 
@@ -29,6 +32,11 @@ SET component_id = $1, certificate_name = $2, issue_date = $3, expiry_date = $4,
     certificate_file = $5, issuing_authority = $6, status = $7, test_id = $8,
     imca_ref = $9, imca_d018 = $10, maintenance_notes = $11, updated_at = NOW()
 WHERE certificate_id = $12;
+
+-- name: UpdateCertificateFile :execrows
+UPDATE certificates
+SET certificate_file = $1, updated_at = NOW()
+WHERE certificate_id = $2;
 
 -- name: DeleteCertificate :execrows
 DELETE FROM certificates WHERE certificate_id = $1;

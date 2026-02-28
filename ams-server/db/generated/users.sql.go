@@ -204,6 +204,17 @@ func (q *Queries) GetUserByID(ctx context.Context, userID string) (GetUserByIDRo
 	return i, err
 }
 
+const getUserPasswordByID = `-- name: GetUserPasswordByID :one
+SELECT password FROM users WHERE user_id = $1 LIMIT 1
+`
+
+func (q *Queries) GetUserPasswordByID(ctx context.Context, userID string) (string, error) {
+	row := q.db.QueryRow(ctx, getUserPasswordByID, userID)
+	var password string
+	err := row.Scan(&password)
+	return password, err
+}
+
 const updateUser = `-- name: UpdateUser :execrows
 UPDATE users
 SET first_name = $1, last_name = $2, email = $3, role = $4, updated_at = NOW()

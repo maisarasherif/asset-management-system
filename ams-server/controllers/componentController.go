@@ -2,10 +2,12 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
@@ -73,6 +75,16 @@ func GetComponentsByAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 
 		queries := db.New(pool)
+
+		_, err := queries.GetAssetByID(ctx, assetID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch asset"})
+			return
+		}
 
 		components, err := queries.GetComponentsByAssetIDPaginated(ctx, db.GetComponentsByAssetIDPaginatedParams{
 			AssetID: assetID,
@@ -173,6 +185,12 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 
 		queries := db.New(pool)
+
+		_, err := queries.GetCategoryByID(ctx, input.CategoryID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
+			return
+		}
 
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
 			CategoryID:     input.CategoryID,

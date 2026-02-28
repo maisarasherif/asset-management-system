@@ -18,6 +18,9 @@ SELECT COUNT(*) FROM components WHERE asset_id = $1;
 -- name: GetComponentByID :one
 SELECT * FROM components WHERE component_id = $1 LIMIT 1;
 
+-- name: CountComponentsByCategoryID :one
+SELECT COUNT(*) FROM components WHERE category_id = $1;
+
 -- name: CreateComponent :one
 INSERT INTO components (component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())

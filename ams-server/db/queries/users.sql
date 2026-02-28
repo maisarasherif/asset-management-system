@@ -25,6 +25,9 @@ SELECT * FROM users WHERE email = $1 LIMIT 1;
 SELECT user_id, first_name, last_name, email, role, created_at, updated_at
 FROM users WHERE user_id = $1 LIMIT 1;
 
+-- name: GetUserPasswordByID :one
+SELECT password FROM users WHERE user_id = $1 LIMIT 1;
+
 -- name: UpdateUser :execrows
 UPDATE users
 SET first_name = $1, last_name = $2, email = $3, role = $4, updated_at = NOW()

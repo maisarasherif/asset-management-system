@@ -2,8 +2,8 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -232,8 +232,6 @@ func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdatePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.Param("user_id")
-
 		var input dto.UpdatePasswordInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
@@ -249,14 +247,19 @@ func UpdatePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		email := c.GetString("email")
-		existingUser, err := queries.GetUserByEmail(ctx, email)
+		userID, err := utils.GetUserIdFromContext(c)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
 
-		if err = bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(input.CurrentPassword)); err != nil {
+		existingPassword, err := queries.GetUserPasswordByID(ctx, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch user password"})
+			return
+		}
+
+		if err = bcrypt.CompareHashAndPassword([]byte(existingPassword), []byte(input.CurrentPassword)); err != nil {
 			logger.Log.Warn().
 				Str("user_id", userID).
 				Msg("failed password update attempt: incorrect current password")
@@ -525,9 +528,16 @@ func SeedAdminUser(pool *pgxpool.Pool) {
 		return
 	}
 
+	email := os.Getenv("SEED_ADMIN_EMAIL")
+	password := os.Getenv("SEED_ADMIN_PASSWORD")
+
+	if email == "" || password == "" {
+		logger.Log.Fatal().Msg("SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be set")
+	}
+
 	logger.Log.Info().Msg("no users found, creating default admin")
 
-	hashedPassword, err := HashPassword("Admin@123")
+	hashedPassword, err := HashPassword(password)
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to hash admin password")
 	}
@@ -536,7 +546,7 @@ func SeedAdminUser(pool *pgxpool.Pool) {
 		UserID:    uuid.New().String(),
 		FirstName: "Super",
 		LastName:  "Admin",
-		Email:     "maisara.sherif.ms@gmail.com",
+		Email:     email,
 		Password:  hashedPassword,
 		Role:      "ADMIN",
 	})
@@ -544,5 +554,5 @@ func SeedAdminUser(pool *pgxpool.Pool) {
 		logger.Log.Fatal().Err(err).Msg("failed to seed admin user")
 	}
 
-	fmt.Println("Default admin created")
+	logger.Log.Info().Str("email", email).Msg("default admin created")
 }

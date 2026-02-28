@@ -6,8 +6,6 @@ package db
 
 import (
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Asset struct {
@@ -34,27 +32,28 @@ type Category struct {
 }
 
 type Certificate struct {
-	ID               int32       `json:"id"`
-	CertificateID    string      `json:"certificate_id"`
-	ComponentID      string      `json:"component_id"`
-	CertificateName  string      `json:"certificate_name"`
-	IssueDate        time.Time   `json:"issue_date"`
-	ExpiryDate       time.Time   `json:"expiry_date"`
-	CertificateFile  string      `json:"certificate_file"`
-	IssuingAuthority string      `json:"issuing_authority"`
-	Status           string      `json:"status"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
-	TestID           pgtype.Text `json:"test_id"`
-	ImcaRef          string      `json:"imca_ref"`
-	ImcaD018         string      `json:"imca_d018"`
-	MaintenanceNotes string      `json:"maintenance_notes"`
+	ID               int32     `json:"id"`
+	CertificateID    string    `json:"certificate_id"`
+	ComponentID      string    `json:"component_id"`
+	CertificateName  string    `json:"certificate_name"`
+	IssueDate        time.Time `json:"issue_date"`
+	ExpiryDate       time.Time `json:"expiry_date"`
+	CertificateFile  string    `json:"certificate_file"`
+	IssuingAuthority string    `json:"issuing_authority"`
+	Status           string    `json:"status"`
+	TestID           string    `json:"test_id"`
+	ImcaRef          string    `json:"imca_ref"`
+	ImcaD018         string    `json:"imca_d018"`
+	MaintenanceNotes string    `json:"maintenance_notes"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type Component struct {
 	ID             int32     `json:"id"`
 	ComponentID    string    `json:"component_id"`
 	AssetID        string    `json:"asset_id"`
+	CategoryID     string    `json:"category_id"`
 	Name           string    `json:"name"`
 	SerialNumber   string    `json:"serial_number"`
 	Manufacturer   string    `json:"manufacturer"`
@@ -67,7 +66,6 @@ type Component struct {
 	SafetyCritical string    `json:"safety_critical"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
-	CategoryID     string    `json:"category_id"`
 }
 
 type ScheduledTask struct {
