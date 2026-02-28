@@ -19,16 +19,16 @@ SELECT COUNT(*) FROM components WHERE asset_id = $1;
 SELECT * FROM components WHERE component_id = $1 LIMIT 1;
 
 -- name: CreateComponent :one
-INSERT INTO components (component_id, asset_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+INSERT INTO components (component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
 RETURNING *;
 
 -- name: UpdateComponent :execrows
 UPDATE components
-SET name = $1, serial_number = $2, manufacturer = $3, description = $4,
-    equipment_type = $5, structure = $6, model = $7, class = $8,
-    class_code = $9, safety_critical = $10, updated_at = NOW()
-WHERE component_id = $11;
+SET category_id = $1, name = $2, serial_number = $3, manufacturer = $4, description = $5,
+    equipment_type = $6, structure = $7, model = $8, class = $9,
+    class_code = $10, safety_critical = $11, updated_at = NOW()
+WHERE component_id = $12;
 
 -- name: DeleteComponent :execrows
 DELETE FROM components WHERE component_id = $1;

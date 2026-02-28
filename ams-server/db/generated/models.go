@@ -6,13 +6,14 @@ package db
 
 import (
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Asset struct {
 	ID              int32     `json:"id"`
 	AssetID         string    `json:"asset_id"`
 	Name            string    `json:"name"`
-	CategoryID      string    `json:"category_id"`
 	Photo           string    `json:"photo"`
 	Datasheet       string    `json:"datasheet"`
 	Description     string    `json:"description"`
@@ -33,17 +34,21 @@ type Category struct {
 }
 
 type Certificate struct {
-	ID               int32     `json:"id"`
-	CertificateID    string    `json:"certificate_id"`
-	ComponentID      string    `json:"component_id"`
-	CertificateName  string    `json:"certificate_name"`
-	IssueDate        time.Time `json:"issue_date"`
-	ExpiryDate       time.Time `json:"expiry_date"`
-	CertificateFile  string    `json:"certificate_file"`
-	IssuingAuthority string    `json:"issuing_authority"`
-	Status           string    `json:"status"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               int32       `json:"id"`
+	CertificateID    string      `json:"certificate_id"`
+	ComponentID      string      `json:"component_id"`
+	CertificateName  string      `json:"certificate_name"`
+	IssueDate        time.Time   `json:"issue_date"`
+	ExpiryDate       time.Time   `json:"expiry_date"`
+	CertificateFile  string      `json:"certificate_file"`
+	IssuingAuthority string      `json:"issuing_authority"`
+	Status           string      `json:"status"`
+	CreatedAt        time.Time   `json:"created_at"`
+	UpdatedAt        time.Time   `json:"updated_at"`
+	TestID           pgtype.Text `json:"test_id"`
+	ImcaRef          string      `json:"imca_ref"`
+	ImcaD018         string      `json:"imca_d018"`
+	MaintenanceNotes string      `json:"maintenance_notes"`
 }
 
 type Component struct {
@@ -62,6 +67,7 @@ type Component struct {
 	SafetyCritical string    `json:"safety_critical"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+	CategoryID     string    `json:"category_id"`
 }
 
 type ScheduledTask struct {
@@ -71,6 +77,13 @@ type ScheduledTask struct {
 	Type          string    `json:"type"`
 	Status        string    `json:"status"`
 	SentAt        time.Time `json:"sent_at"`
+}
+
+type TestType struct {
+	TestID           string `json:"test_id"`
+	TestName         string `json:"test_name"`
+	ValidityDuration int32  `json:"validity_duration"`
+	Description      string `json:"description"`
 }
 
 type User struct {

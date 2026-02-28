@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
@@ -84,10 +83,15 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
+		assetID, err := generateAssetID(ctx, queries)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate asset id"})
+			return
+		}
+
 		asset, err := queries.CreateAsset(ctx, db.CreateAssetParams{
-			AssetID:         uuid.New().String(),
+			AssetID:         assetID,
 			Name:            input.Name,
-			CategoryID:      input.CategoryID,
 			Photo:           input.Photo,
 			Datasheet:       input.Datasheet,
 			Description:     input.Description,
@@ -125,7 +129,6 @@ func UpdateAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		rows, err := queries.UpdateAsset(ctx, db.UpdateAssetParams{
 			Name:            input.Name,
-			CategoryID:      input.CategoryID,
 			Photo:           input.Photo,
 			Datasheet:       input.Datasheet,
 			Description:     input.Description,
@@ -209,7 +212,6 @@ func PatchAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		name := existing.Name
-		categoryID := existing.CategoryID
 		photo := existing.Photo
 		datasheet := existing.Datasheet
 		description := existing.Description
@@ -219,9 +221,6 @@ func PatchAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		if input.Name != nil {
 			name = *input.Name
-		}
-		if input.CategoryID != nil {
-			categoryID = *input.CategoryID
 		}
 		if input.Photo != nil {
 			photo = *input.Photo
@@ -244,7 +243,6 @@ func PatchAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		rows, err := queries.UpdateAsset(ctx, db.UpdateAssetParams{
 			Name:            name,
-			CategoryID:      categoryID,
 			Photo:           photo,
 			Datasheet:       datasheet,
 			Description:     description,

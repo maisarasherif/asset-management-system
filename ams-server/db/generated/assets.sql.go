@@ -21,15 +21,14 @@ func (q *Queries) CountAssets(ctx context.Context) (int64, error) {
 }
 
 const createAsset = `-- name: CreateAsset :one
-INSERT INTO assets (asset_id, name, category_id, photo, datasheet, description, status, location, assigned_project, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
-RETURNING id, asset_id, name, category_id, photo, datasheet, description, status, location, assigned_project, created_at, updated_at
+INSERT INTO assets (asset_id, name, photo, datasheet, description, status, location, assigned_project, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+RETURNING id, asset_id, name, photo, datasheet, description, status, location, assigned_project, created_at, updated_at
 `
 
 type CreateAssetParams struct {
 	AssetID         string `json:"asset_id"`
 	Name            string `json:"name"`
-	CategoryID      string `json:"category_id"`
 	Photo           string `json:"photo"`
 	Datasheet       string `json:"datasheet"`
 	Description     string `json:"description"`
@@ -42,7 +41,6 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset
 	row := q.db.QueryRow(ctx, createAsset,
 		arg.AssetID,
 		arg.Name,
-		arg.CategoryID,
 		arg.Photo,
 		arg.Datasheet,
 		arg.Description,
@@ -55,7 +53,6 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset
 		&i.ID,
 		&i.AssetID,
 		&i.Name,
-		&i.CategoryID,
 		&i.Photo,
 		&i.Datasheet,
 		&i.Description,
@@ -81,7 +78,7 @@ func (q *Queries) DeleteAsset(ctx context.Context, assetID string) (int64, error
 }
 
 const getAllAssetsPaginated = `-- name: GetAllAssetsPaginated :many
-SELECT id, asset_id, name, category_id, photo, datasheet, description, status, location, assigned_project, created_at, updated_at FROM assets
+SELECT id, asset_id, name, photo, datasheet, description, status, location, assigned_project, created_at, updated_at FROM assets
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -104,7 +101,6 @@ func (q *Queries) GetAllAssetsPaginated(ctx context.Context, arg GetAllAssetsPag
 			&i.ID,
 			&i.AssetID,
 			&i.Name,
-			&i.CategoryID,
 			&i.Photo,
 			&i.Datasheet,
 			&i.Description,
@@ -125,7 +121,7 @@ func (q *Queries) GetAllAssetsPaginated(ctx context.Context, arg GetAllAssetsPag
 }
 
 const getAssetByID = `-- name: GetAssetByID :one
-SELECT id, asset_id, name, category_id, photo, datasheet, description, status, location, assigned_project, created_at, updated_at FROM assets WHERE asset_id = $1 LIMIT 1
+SELECT id, asset_id, name, photo, datasheet, description, status, location, assigned_project, created_at, updated_at FROM assets WHERE asset_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetAssetByID(ctx context.Context, assetID string) (Asset, error) {
@@ -135,7 +131,6 @@ func (q *Queries) GetAssetByID(ctx context.Context, assetID string) (Asset, erro
 		&i.ID,
 		&i.AssetID,
 		&i.Name,
-		&i.CategoryID,
 		&i.Photo,
 		&i.Datasheet,
 		&i.Description,
@@ -150,14 +145,13 @@ func (q *Queries) GetAssetByID(ctx context.Context, assetID string) (Asset, erro
 
 const updateAsset = `-- name: UpdateAsset :execrows
 UPDATE assets
-SET name = $1, category_id = $2, photo = $3, datasheet = $4,
-    description = $5, status = $6, location = $7, assigned_project = $8, updated_at = NOW()
-WHERE asset_id = $9
+SET name = $1, photo = $2, datasheet = $3,
+    description = $4, status = $5, location = $6, assigned_project = $7, updated_at = NOW()
+WHERE asset_id = $8
 `
 
 type UpdateAssetParams struct {
 	Name            string `json:"name"`
-	CategoryID      string `json:"category_id"`
 	Photo           string `json:"photo"`
 	Datasheet       string `json:"datasheet"`
 	Description     string `json:"description"`
@@ -170,7 +164,6 @@ type UpdateAssetParams struct {
 func (q *Queries) UpdateAsset(ctx context.Context, arg UpdateAssetParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateAsset,
 		arg.Name,
-		arg.CategoryID,
 		arg.Photo,
 		arg.Datasheet,
 		arg.Description,

@@ -19,15 +19,16 @@ SELECT COUNT(*) FROM certificates WHERE component_id = $1;
 SELECT * FROM certificates WHERE certificate_id = $1 LIMIT 1;
 
 -- name: CreateCertificate :one
-INSERT INTO certificates (certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+INSERT INTO certificates (certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
 RETURNING *;
 
 -- name: UpdateCertificate :execrows
 UPDATE certificates
 SET component_id = $1, certificate_name = $2, issue_date = $3, expiry_date = $4,
-    certificate_file = $5, issuing_authority = $6, status = $7, updated_at = NOW()
-WHERE certificate_id = $8;
+    certificate_file = $5, issuing_authority = $6, status = $7, test_id = $8,
+    imca_ref = $9, imca_d018 = $10, maintenance_notes = $11, updated_at = NOW()
+WHERE certificate_id = $12;
 
 -- name: DeleteCertificate :execrows
 DELETE FROM certificates WHERE certificate_id = $1;

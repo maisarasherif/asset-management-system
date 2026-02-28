@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
@@ -120,10 +119,22 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
 			return
 		}
+		_, err = queries.GetCategoryByID(ctx, input.CategoryID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
+			return
+		}
+
+		componentID, err := generateComponentID(ctx, queries, input.AssetID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate component id"})
+			return
+		}
 
 		component, err := queries.CreateComponent(ctx, db.CreateComponentParams{
-			ComponentID:    uuid.New().String(),
+			ComponentID:    componentID,
 			AssetID:        input.AssetID,
+			CategoryID:     input.CategoryID,
 			Name:           input.Name,
 			SerialNumber:   input.SerialNumber,
 			Manufacturer:   input.Manufacturer,
@@ -164,6 +175,7 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		queries := db.New(pool)
 
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
+			CategoryID:     input.CategoryID,
 			Name:           input.Name,
 			SerialNumber:   input.SerialNumber,
 			Manufacturer:   input.Manufacturer,
@@ -252,6 +264,7 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		name := existing.Name
+		categoryID := existing.CategoryID
 		serialNumber := existing.SerialNumber
 		manufacturer := existing.Manufacturer
 		description := existing.Description
@@ -262,6 +275,9 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		classCode := existing.ClassCode
 		safetyCritical := existing.SafetyCritical
 
+		if input.CategoryID != nil {
+			categoryID = *input.CategoryID
+		}
 		if input.Name != nil {
 			name = *input.Name
 		}
@@ -293,7 +309,14 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			safetyCritical = *input.SafetyCritical
 		}
 
+		_, err = queries.GetCategoryByID(ctx, categoryID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
+			return
+		}
+
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
+			CategoryID:     categoryID,
 			Name:           name,
 			SerialNumber:   serialNumber,
 			Manufacturer:   manufacturer,

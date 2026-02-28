@@ -91,7 +91,6 @@ type PatchCategoryInput struct {
 
 type AssetInput struct {
 	Name            string `json:"name" validate:"required,min=2,max=200"`
-	CategoryID      string `json:"category_id" validate:"required"`
 	Photo           string `json:"photo" validate:"omitempty,url"`
 	Datasheet       string `json:"datasheet" validate:"omitempty,url"`
 	Description     string `json:"description"`
@@ -102,7 +101,6 @@ type AssetInput struct {
 
 type PatchAssetInput struct {
 	Name            *string `json:"name" validate:"omitempty,min=2,max=200"`
-	CategoryID      *string `json:"category_id"`
 	Photo           *string `json:"photo" validate:"omitempty,url"`
 	Datasheet       *string `json:"datasheet" validate:"omitempty,url"`
 	Description     *string `json:"description"`
@@ -115,6 +113,7 @@ type PatchAssetInput struct {
 
 type ComponentInput struct {
 	AssetID        string `json:"asset_id" validate:"required"`
+	CategoryID     string `json:"category_id" validate:"required"`
 	Name           string `json:"name" validate:"required,min=2,max=200"`
 	SerialNumber   string `json:"serial_number"`
 	Manufacturer   string `json:"manufacturer"`
@@ -128,6 +127,7 @@ type ComponentInput struct {
 }
 
 type PatchComponentInput struct {
+	CategoryID     *string `json:"category_id"`
 	Name           *string `json:"name" validate:"omitempty,min=2,max=200"`
 	SerialNumber   *string `json:"serial_number"`
 	Manufacturer   *string `json:"manufacturer"`
@@ -149,6 +149,10 @@ type CertificateInput struct {
 	ExpiryDate       time.Time `json:"expiry_date" validate:"required"`
 	CertificateFile  string    `json:"certificate_file" validate:"omitempty,url"`
 	IssuingAuthority string    `json:"issuing_authority" validate:"required,min=2,max=200"`
+	TestID           string    `json:"test_id" validate:"required"`
+	IMCARef          string    `json:"imca_ref"`
+	IMCAD018         string    `json:"imca_d018"`
+	MaintenanceNotes string    `json:"maintenance_notes"`
 }
 
 type PatchCertificateInput struct {
@@ -158,4 +162,8 @@ type PatchCertificateInput struct {
 	ExpiryDate       *time.Time `json:"expiry_date"`
 	CertificateFile  *string    `json:"certificate_file" validate:"omitempty,url"`
 	IssuingAuthority *string    `json:"issuing_authority" validate:"omitempty,min=2,max=200"`
+	TestID           *string    `json:"test_id"`
+	IMCARef          *string    `json:"imca_ref"`
+	IMCAD018         *string    `json:"imca_d018"`
+	MaintenanceNotes *string    `json:"maintenance_notes"`
 }
