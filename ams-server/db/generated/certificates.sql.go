@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+const countAllCertificatesWithContext = `-- name: CountAllCertificatesWithContext :one
+SELECT COUNT(*) FROM certificates
+`
+
+func (q *Queries) CountAllCertificatesWithContext(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAllCertificatesWithContext)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countCertificates = `-- name: CountCertificates :one
 SELECT COUNT(*) FROM certificates
 `
@@ -148,6 +159,89 @@ func (q *Queries) GetAllCertificatesPaginated(ctx context.Context, arg GetAllCer
 			&i.MaintenanceNotes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllCertificatesWithContextPaginated = `-- name: GetAllCertificatesWithContextPaginated :many
+SELECT
+    cert.certificate_id,
+    cert.certificate_name,
+    cert.issue_date,
+    cert.expiry_date,
+    cert.status,
+    cert.issuing_authority,
+    cert.test_id,
+    cert.imca_ref,
+    cert.imca_d018,
+    cert.maintenance_notes,
+    cert.certificate_file,
+    comp.component_id,
+    comp.name AS component_name,
+    asset.asset_id,
+    asset.name AS asset_name
+FROM certificates cert
+JOIN components comp ON comp.component_id = cert.component_id
+JOIN assets asset ON asset.asset_id = comp.asset_id
+ORDER BY cert.expiry_date ASC
+LIMIT $1 OFFSET $2
+`
+
+type GetAllCertificatesWithContextPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type GetAllCertificatesWithContextPaginatedRow struct {
+	CertificateID    string    `json:"certificate_id"`
+	CertificateName  string    `json:"certificate_name"`
+	IssueDate        time.Time `json:"issue_date"`
+	ExpiryDate       time.Time `json:"expiry_date"`
+	Status           string    `json:"status"`
+	IssuingAuthority string    `json:"issuing_authority"`
+	TestID           string    `json:"test_id"`
+	ImcaRef          string    `json:"imca_ref"`
+	ImcaD018         string    `json:"imca_d018"`
+	MaintenanceNotes string    `json:"maintenance_notes"`
+	CertificateFile  string    `json:"certificate_file"`
+	ComponentID      string    `json:"component_id"`
+	ComponentName    string    `json:"component_name"`
+	AssetID          string    `json:"asset_id"`
+	AssetName        string    `json:"asset_name"`
+}
+
+func (q *Queries) GetAllCertificatesWithContextPaginated(ctx context.Context, arg GetAllCertificatesWithContextPaginatedParams) ([]GetAllCertificatesWithContextPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, getAllCertificatesWithContextPaginated, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAllCertificatesWithContextPaginatedRow
+	for rows.Next() {
+		var i GetAllCertificatesWithContextPaginatedRow
+		if err := rows.Scan(
+			&i.CertificateID,
+			&i.CertificateName,
+			&i.IssueDate,
+			&i.ExpiryDate,
+			&i.Status,
+			&i.IssuingAuthority,
+			&i.TestID,
+			&i.ImcaRef,
+			&i.ImcaD018,
+			&i.MaintenanceNotes,
+			&i.CertificateFile,
+			&i.ComponentID,
+			&i.ComponentName,
+			&i.AssetID,
+			&i.AssetName,
 		); err != nil {
 			return nil, err
 		}

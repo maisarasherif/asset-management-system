@@ -57,7 +57,11 @@ func GetComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		component, err := queries.GetComponentByID(ctx, componentID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch component"})
 			return
 		}
 

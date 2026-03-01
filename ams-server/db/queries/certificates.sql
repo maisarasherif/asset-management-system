@@ -61,3 +61,30 @@ JOIN components comp ON comp.component_id = cert.component_id
 JOIN assets asset ON asset.asset_id = comp.asset_id
 WHERE cert.expiry_date <= $1 AND cert.expiry_date >= NOW()
 ORDER BY cert.expiry_date ASC;
+
+
+-- name: GetAllCertificatesWithContextPaginated :many
+SELECT
+    cert.certificate_id,
+    cert.certificate_name,
+    cert.issue_date,
+    cert.expiry_date,
+    cert.status,
+    cert.issuing_authority,
+    cert.test_id,
+    cert.imca_ref,
+    cert.imca_d018,
+    cert.maintenance_notes,
+    cert.certificate_file,
+    comp.component_id,
+    comp.name AS component_name,
+    asset.asset_id,
+    asset.name AS asset_name
+FROM certificates cert
+JOIN components comp ON comp.component_id = cert.component_id
+JOIN assets asset ON asset.asset_id = comp.asset_id
+ORDER BY cert.expiry_date ASC
+LIMIT $1 OFFSET $2;
+
+-- name: CountAllCertificatesWithContext :one
+SELECT COUNT(*) FROM certificates;

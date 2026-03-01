@@ -71,6 +71,7 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	protected.GET("/expiring-certificates", controller.GetExpiringCertificates(pool))
 	protected.GET("/test-types", controller.GetTestTypes(pool))
 	protected.GET("/certificate/:certificate_id/file", controller.GetCertificateFile(pool))
+	protected.GET("/certificates/dashboard", controller.GetCertificatesWithContext(pool))
 
 	// Category routes
 	protected.GET("/categories", controller.GetCategories(pool))

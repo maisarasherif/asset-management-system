@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
@@ -58,7 +60,11 @@ func GetAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		asset, err := queries.GetAssetByID(ctx, assetID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch asset"})
 			return
 		}
 

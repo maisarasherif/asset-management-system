@@ -69,7 +69,11 @@ func GetCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		certificate, err := queries.GetCertificateByID(ctx, certificateID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificate"})
 			return
 		}
 
@@ -517,9 +521,26 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		defer file.Close()
 
+		const maxFileSize = 10 * 1024 * 1024 // 10 MB
+		if header.Size > maxFileSize {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "file too large, maximum size is 10MB"})
+			return
+		}
+
+		allowedTypes := map[string]bool{
+			"application/pdf": true,
+			"image/jpeg":      true,
+			"image/png":       true,
+			"image/webp":      true,
+		}
+		contentType := header.Header.Get("Content-Type")
+		if !allowedTypes[contentType] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file type, only PDF, JPEG, PNG, and WEBP are allowed"})
+			return
+		}
+
 		key, err := utils.UploadFile(ctx, file, header, certificateID)
 		if err != nil {
-			logger.Log.Error().Err(err).Msg("failed to upload certificate file")
 			logger.Log.Error().Err(err).Msg("failed to upload certificate file")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload file"})
 			return
@@ -579,5 +600,36 @@ func GetCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"url": signedURL})
+	}
+}
+
+func GetCertificatesWithContext(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		limit, offset, query := utils.ParsePagination(c)
+
+		queries := db.New(pool)
+
+		certificates, err := queries.GetAllCertificatesWithContextPaginated(ctx, db.GetAllCertificatesWithContextPaginatedParams{
+			Limit:  limit,
+			Offset: offset,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
+			return
+		}
+
+		total, err := queries.CountAllCertificatesWithContext(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificates"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: certificates,
+			Meta: utils.BuildMeta(query, total),
+		})
 	}
 }
