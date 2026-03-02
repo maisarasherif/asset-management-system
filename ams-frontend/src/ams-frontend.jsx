@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
+import { Component, useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -78,6 +78,15 @@ const CSS = `
 // ─── AUTH CONTEXT ─────────────────────────────────────────────────────────────
 const AuthContext = createContext(null);
 const useAuth = () => useContext(AuthContext);
+const AppFeedbackContext = createContext({ notifyError: () => {}, notifyInfo: () => {} });
+const ConfirmContext = createContext(async () => false);
+const RequestStateContext = createContext({ pending: 0, beginRequest: () => {}, endRequest: () => {} });
+const useFeedback = () => useContext(AppFeedbackContext);
+const useConfirm = () => useContext(ConfirmContext);
+const useRequestState = () => useContext(RequestStateContext);
+
+const API_INFLIGHT_GET = new Map();
+const API_CACHE_GET = new Map();
 
 function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -97,46 +106,225 @@ function AuthProvider({ children }) {
   return <AuthContext.Provider value={{ user, login, logout, isAdmin: user?.role === "ADMIN" }}>{children}</AuthContext.Provider>;
 }
 
+function ToastStack({ toasts, onDismiss }) {
+  if (toasts.length === 0) return null;
+  return createPortal(
+    <div style={{ position: "fixed", top: 14, right: 14, zIndex: 2000, display: "flex", flexDirection: "column", gap: 8 }}>
+      {toasts.map(t => (
+        <div key={t.id} style={{
+          minWidth: 240, maxWidth: 420, background: "var(--bg-1)", border: "1px solid var(--border-bright)",
+          borderLeft: `3px solid ${t.kind === "error" ? "var(--red)" : "var(--amber)"}`, borderRadius: 4, padding: "10px 12px",
+          boxShadow: "0 8px 18px rgba(0,0,0,0.3)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 11, color: t.kind === "error" ? "var(--red)" : "var(--amber)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              {t.kind}
+            </span>
+            <button onClick={() => onDismiss(t.id)} style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--text-2)", fontSize: 16, lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ marginTop: 4, fontSize: 12, color: "var(--text-0)" }}>{t.message}</div>
+        </div>
+      ))}
+    </div>,
+    document.body
+  );
+}
+
+function TopProgressBar() {
+  const { pending } = useRequestState();
+  return createPortal(
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 2,
+      zIndex: 2100,
+      opacity: pending > 0 ? 1 : 0,
+      transition: "opacity 0.2s ease",
+      background: "linear-gradient(90deg, var(--amber) 0%, var(--blue) 50%, var(--amber) 100%)",
+      backgroundSize: "200% 100%",
+      animation: "shimmer 0.9s linear infinite",
+      pointerEvents: "none",
+    }} />,
+    document.body
+  );
+}
+
+function AppFeedbackProvider({ children }) {
+  const [toasts, setToasts] = useState([]);
+  const [confirmState, setConfirmState] = useState(null);
+  const [pending, setPending] = useState(0);
+
+  const dismissToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const pushToast = useCallback((kind, message) => {
+    if (!message) return;
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setToasts(prev => [...prev, { id, kind, message }]);
+    window.setTimeout(() => dismissToast(id), 3500);
+  }, [dismissToast]);
+
+  const notifyError = useCallback((message) => pushToast("error", message), [pushToast]);
+  const notifyInfo = useCallback((message) => pushToast("info", message), [pushToast]);
+  const beginRequest = useCallback(() => setPending(p => p + 1), []);
+  const endRequest = useCallback(() => setPending(p => (p > 0 ? p - 1 : 0)), []);
+
+  const confirm = useCallback((message) => new Promise((resolve) => {
+    setConfirmState({ message, resolve });
+  }), []);
+
+  const resolveConfirm = useCallback((ok) => {
+    setConfirmState(current => {
+      current?.resolve(ok);
+      return null;
+    });
+  }, []);
+
+  return (
+    <RequestStateContext.Provider value={{ pending, beginRequest, endRequest }}>
+      <AppFeedbackContext.Provider value={{ notifyError, notifyInfo }}>
+        <ConfirmContext.Provider value={confirm}>
+          {children}
+          <TopProgressBar />
+          <ToastStack toasts={toasts} onDismiss={dismissToast} />
+          {confirmState && (
+            <Modal title="Confirm Action" onClose={() => resolveConfirm(false)} width={420}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ color: "var(--text-1)", fontSize: 12 }}>{confirmState.message || "Are you sure?"}</div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <Button onClick={() => resolveConfirm(false)}>Cancel</Button>
+                  <Button variant="danger" onClick={() => resolveConfirm(true)}>Confirm</Button>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </ConfirmContext.Provider>
+      </AppFeedbackContext.Provider>
+    </RequestStateContext.Provider>
+  );
+}
+
+class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    console.error("Unhandled UI error:", error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, background: "var(--bg-0)" }}>
+          <Card style={{ width: 520, maxWidth: "95vw", padding: 24 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 20, marginBottom: 6 }}>Something went wrong</div>
+            <div style={{ color: "var(--text-1)", fontSize: 12, marginBottom: 16 }}>
+              The app hit an unexpected error. Reload to recover.
+            </div>
+            <Button variant="primary" onClick={() => window.location.reload()}>Reload</Button>
+          </Card>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── API LAYER ────────────────────────────────────────────────────────────────
 const BASE = "http://localhost:8080";
 
 function useApi() {
   const { user, logout } = useAuth();
+  const { notifyError } = useFeedback();
+  const { beginRequest, endRequest } = useRequestState();
 
-  const req = useCallback(async (method, path, body) => {
+  const req = useCallback(async (method, path, body, options = {}) => {
+    const cacheTTL = options.cacheTTL ?? 0;
     const headers = { "Content-Type": "application/json" };
     if (user?.token) headers["Authorization"] = `Bearer ${user.token}`;
 
-    const res = await fetch(`${BASE}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-
-    if (res.status === 401) {
-      logout();
-      throw new Error("Session expired. Please log in again.");
+    const cacheKey = method === "GET" ? `${path}::${user?.token || ""}` : null;
+    if (method === "GET" && cacheTTL > 0) {
+      const cached = API_CACHE_GET.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) return cached.data;
+      API_CACHE_GET.delete(cacheKey);
+    }
+    if (method === "GET" && API_INFLIGHT_GET.has(cacheKey)) {
+      return API_INFLIGHT_GET.get(cacheKey);
     }
 
-    let data = null;
-    const contentType = res.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      data = await res.json();
-    } else if (res.status !== 204) {
-      const text = await res.text();
-      data = text ? { message: text } : null;
+    const run = async () => {
+      if (options.trackLoading !== false) beginRequest();
+      try {
+        const res = await fetch(`${BASE}${path}`, {
+          method,
+          headers,
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+          signal: options.signal,
+        });
+
+        if (res.status === 401 && options.handle401 !== false) {
+          logout();
+          throw new Error("Session expired. Please log in again.");
+        }
+
+        let data = null;
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          data = await res.json();
+        } else if (res.status !== 204) {
+          const text = await res.text();
+          data = text ? { message: text } : null;
+        }
+
+        if (!res.ok) throw new Error(data?.error || data?.message || `Request failed (${res.status})`);
+
+        if (method === "GET" && cacheTTL > 0) {
+          API_CACHE_GET.set(cacheKey, { data, expiresAt: Date.now() + cacheTTL });
+        } else if (method !== "GET") {
+          API_CACHE_GET.clear();
+        }
+
+        return data;
+      } catch (error) {
+        if (error?.name === "AbortError") throw error;
+        if (!options.silentError) notifyError(error?.message || "Request failed");
+        throw error;
+      } finally {
+        if (options.trackLoading !== false) endRequest();
+      }
+    };
+
+    if (method === "GET") {
+      const promise = run().finally(() => {
+        API_INFLIGHT_GET.delete(cacheKey);
+      });
+      API_INFLIGHT_GET.set(cacheKey, promise);
+      return promise;
     }
 
-    if (!res.ok) throw new Error(data?.error || data?.message || `Request failed (${res.status})`);
-    return data;
-  }, [user, logout]);
+    try {
+      return await run();
+    } finally {
+      if (method === "GET") API_INFLIGHT_GET.delete(cacheKey);
+    }
+  }, [user, logout, notifyError, beginRequest, endRequest]);
 
   return useMemo(() => ({
-    get: (p) => req("GET", p),
-    post: (p, b) => req("POST", p, b),
-    put: (p, b) => req("PUT", p, b),
-    patch: (p, b) => req("PATCH", p, b),
-    del: (p) => req("DELETE", p),
+    get: (p, opts) => req("GET", p, undefined, opts),
+    post: (p, b, opts) => req("POST", p, b, opts),
+    put: (p, b, opts) => req("PUT", p, b, opts),
+    patch: (p, b, opts) => req("PATCH", p, b, opts),
+    del: (p, opts) => req("DELETE", p, undefined, opts),
   }), [req]);
 }
 
@@ -273,7 +461,7 @@ function Modal({ title, onClose, children, width = 540 }) {
   return createPortal(modalNode, document.body);
 }
 
-function Table({ columns, data, onRowClick, loading, emptyMsg = "No records found." }) {
+function Table({ columns, data, onRowClick, loading, emptyMsg = "No records found.", rowKey }) {
   if (loading) return (
     <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
       {[...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: 38 }} />)}
@@ -293,7 +481,7 @@ function Table({ columns, data, onRowClick, loading, emptyMsg = "No records foun
           {data.length === 0 ? (
             <tr><td colSpan={columns.length} style={{ padding: 32, textAlign: "center", color: "var(--text-2)" }}>{emptyMsg}</td></tr>
           ) : data.map((row, i) => (
-            <tr key={i} onClick={() => onRowClick?.(row)} style={{
+            <tr key={rowKey?.(row, i) ?? row?.id ?? row?.asset_id ?? row?.component_id ?? row?.certificate_id ?? row?.category_id ?? row?.test_id ?? row?.user_id ?? i} onClick={() => onRowClick?.(row)} style={{
               borderBottom: "1px solid var(--border)", cursor: onRowClick ? "pointer" : "default",
               transition: "background 0.1s",
             }}
@@ -336,8 +524,15 @@ function StatCard({ label, value, sub, accent }) {
   );
 }
 
+function formatDate(value) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleDateString();
+}
+
 // ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
 function LoginPage() {
+  const api = useApi();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -347,13 +542,7 @@ function LoginPage() {
   const handleSubmit = async () => {
     setError(""); setLoading(true);
     try {
-      const res = await fetch(`${BASE}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Login failed");
+      const data = await api.post("/login", { email, password }, { handle401: false, silentError: true });
       login(data);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
@@ -463,20 +652,25 @@ function Dashboard() {
   const [expiring, setExpiring] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(() => {
+  const load = useCallback(async (signal) => {
     Promise.all([
-      api.get("/assets?limit=1"),
-      api.get("/components?limit=1"),
-      api.get("/certificates?limit=1"),
-      api.get("/expiring-certificates"),
+      api.get("/assets?limit=1", { signal }),
+      api.get("/components?limit=1", { signal }),
+      api.get("/certificates?limit=1", { signal }),
+      api.get("/expiring-certificates", { signal }),
     ]).then(([a, c, cert, exp]) => {
+      if (signal?.aborted) return;
       setStats({ assets: a?.meta?.total || 0, components: c?.meta?.total || 0, certificates: cert?.meta?.total || 0 });
       setExpiring(exp || []);
-    }).finally(() => setLoading(false));
+    }).catch((e) => {
+      if (e?.name !== "AbortError") console.error(e);
+    }).finally(() => { if (!signal?.aborted) setLoading(false); });
   }, [api]);
 
   useEffect(() => {
-    load();
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   const expired = expiring.filter(c => c.status === "EXPIRED").length;
@@ -506,7 +700,7 @@ function Dashboard() {
               { key: "certificate_name", label: "Certificate" },
               { key: "component_name", label: "Component" },
               { key: "asset_name", label: "Asset" },
-              { key: "expiry_date", label: "Expires", render: v => <span style={{ color: "var(--amber)", fontWeight: 600 }}>{new Date(v).toLocaleDateString()}</span> },
+              { key: "expiry_date", label: "Expires", render: v => <span style={{ color: "var(--amber)", fontWeight: 600 }}>{formatDate(v)}</span> },
               { key: "status", label: "Status", render: v => <StatusBadge status={v} /> },
             ]}
             data={expiring}
@@ -527,7 +721,7 @@ function Dashboard() {
 }
 
 // ─── ASSETS PAGE ──────────────────────────────────────────────────────────────
-function AssetForm({ initial, onSubmit, onClose }) {
+function AssetForm({ initial, onSubmit, onClose, submitting = false }) {
   const [form, setForm] = useState(initial || { name: "", description: "", status: "ACTIVE", location: "", assigned_project: "", photo: "", datasheet: "" });
   const f = (k) => (v) => setForm(p => ({ ...p, [k]: v }));
   return (
@@ -544,8 +738,10 @@ function AssetForm({ initial, onSubmit, onClose }) {
         <Input label="Datasheet URL" value={form.datasheet} onChange={f("datasheet")} />
       </div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" onClick={() => onSubmit(form)}>Save Asset</Button>
+        <Button onClick={onClose} disabled={submitting}>Cancel</Button>
+        <Button variant="primary" onClick={() => onSubmit(form)} disabled={submitting}>
+          {submitting ? "Saving..." : "Save Asset"}
+        </Button>
       </div>
     </div>
   );
@@ -554,31 +750,55 @@ function AssetForm({ initial, onSubmit, onClose }) {
 function AssetsPage() {
   const api = useApi();
   const { isAdmin } = useAuth();
+  const confirmAction = useConfirm();
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
 
-  const load = useCallback(async (p = 1) => {
+  const load = useCallback(async (p = 1, opts = {}) => {
     setLoading(true);
     try {
-      const res = await api.get(`/assets?page=${p}&limit=20`);
+      const res = await api.get(`/assets?page=${p}&limit=20`, { signal: opts.signal });
+      if (opts.signal?.aborted) return;
       setData(res.data || []); setMeta(res.meta);
-    } finally { setLoading(false); }
+    } catch (e) {
+      if (e?.name !== "AbortError") throw e;
+    } finally { if (!opts.signal?.aborted) setLoading(false); }
   }, [api]);
 
-  useEffect(() => { load(page); }, [page, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(page, { signal: controller.signal });
+    return () => controller.abort();
+  }, [page, load]);
 
   const handleCreate = async (form) => {
-    await api.post("/addasset", form); setModal(null); load(page);
+    setSubmitting(true);
+    try {
+      await api.post("/addasset", form);
+      setModal(null);
+      load(page);
+    } finally {
+      setSubmitting(false);
+    }
   };
   const handleUpdate = async (form) => {
-    await api.put(`/updateasset/${selected.asset_id}`, form); setModal(null); setSelected(null); load(page);
+    setSubmitting(true);
+    try {
+      await api.put(`/updateasset/${selected.asset_id}`, form);
+      setModal(null);
+      setSelected(null);
+      load(page);
+    } finally {
+      setSubmitting(false);
+    }
   };
   const handleDelete = async (id) => {
-    if (!confirm("Delete this asset?")) return;
+    if (!(await confirmAction("Delete this asset?"))) return;
     await api.del(`/deleteasset/${id}`); load(page);
   };
 
@@ -594,7 +814,7 @@ function AssetsPage() {
             { key: "status", label: "Status", render: v => <StatusBadge status={v} /> },
             { key: "location", label: "Location" },
             { key: "assigned_project", label: "Project" },
-            { key: "created_at", label: "Created", render: v => new Date(v).toLocaleDateString() },
+            { key: "created_at", label: "Created", render: v => formatDate(v) },
             isAdmin ? { key: "asset_id", label: "", render: (v, row) => (
               <div style={{ display: "flex", gap: 6 }}>
                 <Button size="sm" onClick={e => { e.stopPropagation(); setSelected(row); setModal("edit"); }}>Edit</Button>
@@ -603,21 +823,21 @@ function AssetsPage() {
             )} : null
           ].filter(Boolean)}
         />
-        <Pagination meta={meta} onPage={p => { setPage(p); load(p); }} />
+        <Pagination meta={meta} onPage={setPage} />
       </Card>
 
       {modal === "create" && <Modal title="New Asset" onClose={() => setModal(null)}>
-        <AssetForm onSubmit={handleCreate} onClose={() => setModal(null)} />
+        <AssetForm onSubmit={handleCreate} onClose={() => setModal(null)} submitting={submitting} />
       </Modal>}
       {modal === "edit" && selected && <Modal title="Edit Asset" onClose={() => { setModal(null); setSelected(null); }}>
-        <AssetForm initial={selected} onSubmit={handleUpdate} onClose={() => { setModal(null); setSelected(null); }} />
+        <AssetForm initial={selected} onSubmit={handleUpdate} onClose={() => { setModal(null); setSelected(null); }} submitting={submitting} />
       </Modal>}
     </div>
   );
 }
 
 // ─── COMPONENTS PAGE ─────────────────────────────────────────────────────────
-function ComponentForm({ initial, assets, categories, onSubmit, onClose }) {
+function ComponentForm({ initial, assets, categories, onSubmit, onClose, submitting = false }) {
   const [form, setForm] = useState(initial || { asset_id: "", category_id: "", name: "", serial_number: "", manufacturer: "", description: "", equipment_type: "", structure: "", model: "", class: "", class_code: "", safety_critical: "NO" });
   const f = (k) => (v) => setForm(p => ({ ...p, [k]: v }));
   return (
@@ -645,8 +865,10 @@ function ComponentForm({ initial, assets, categories, onSubmit, onClose }) {
       </div>
       <Input label="Description" type="textarea" value={form.description} onChange={f("description")} />
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" onClick={() => onSubmit(form)}>Save Component</Button>
+        <Button onClick={onClose} disabled={submitting}>Cancel</Button>
+        <Button variant="primary" onClick={() => onSubmit(form)} disabled={submitting}>
+          {submitting ? "Saving..." : "Save Component"}
+        </Button>
       </div>
     </div>
   );
@@ -655,35 +877,74 @@ function ComponentForm({ initial, assets, categories, onSubmit, onClose }) {
 function ComponentsPage() {
   const api = useApi();
   const { isAdmin } = useAuth();
+  const confirmAction = useConfirm();
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [assets, setAssets] = useState([]);
   const [categories, setCategories] = useState([]);
 
-  const load = useCallback(async (p = 1) => {
+  const load = useCallback(async (p = 1, opts = {}) => {
     setLoading(true);
     try {
-      const res = await api.get(`/components?page=${p}&limit=20`);
+      const res = await api.get(`/components?page=${p}&limit=20`, { signal: opts.signal });
+      if (opts.signal?.aborted) return;
       setData(res.data || []); setMeta(res.meta);
-    } finally { setLoading(false); }
+    } catch (e) {
+      if (e?.name !== "AbortError") throw e;
+    } finally { if (!opts.signal?.aborted) setLoading(false); }
   }, [api]);
 
   useEffect(() => {
-    load(page);
+    const controller = new AbortController();
+    load(page, { signal: controller.signal });
+    return () => controller.abort();
   }, [page, load]);
 
   useEffect(() => {
-    api.get("/assets?limit=100").then(r => setAssets(r?.data || []));
-    api.get("/categories?limit=100").then(r => setCategories(r?.data || []));
+    const controller = new AbortController();
+    Promise.all([
+      api.get("/assets?limit=100", { signal: controller.signal }),
+      api.get("/categories?limit=100", { signal: controller.signal }),
+    ]).then(([assetsRes, categoriesRes]) => {
+      if (controller.signal.aborted) return;
+      setAssets(assetsRes?.data || []);
+      setCategories(categoriesRes?.data || []);
+    }).catch((e) => {
+      if (e?.name !== "AbortError") console.error(e);
+    });
+    return () => controller.abort();
   }, [api]);
 
-  const handleCreate = async (form) => { await api.post("/addcomponent", form); setModal(null); load(page); };
-  const handleUpdate = async (form) => { await api.put(`/updatecomponent/${selected.component_id}`, form); setModal(null); load(page); };
-  const handleDelete = async (id) => { if (!confirm("Delete this component?")) return; await api.del(`/deletecomponent/${id}`); load(page); };
+  const handleCreate = async (form) => {
+    setSubmitting(true);
+    try {
+      await api.post("/addcomponent", form);
+      setModal(null);
+      load(page);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  const handleUpdate = async (form) => {
+    setSubmitting(true);
+    try {
+      await api.put(`/updatecomponent/${selected.component_id}`, form);
+      setModal(null);
+      load(page);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  const handleDelete = async (id) => {
+    if (!(await confirmAction("Delete this component?"))) return;
+    await api.del(`/deletecomponent/${id}`);
+    load(page);
+  };
 
   return (
     <div className="fade-in">
@@ -706,13 +967,13 @@ function ComponentsPage() {
             )} : null
           ].filter(Boolean)}
         />
-        <Pagination meta={meta} onPage={p => { setPage(p); load(p); }} />
+        <Pagination meta={meta} onPage={setPage} />
       </Card>
       {modal === "create" && <Modal title="New Component" onClose={() => setModal(null)} width={640}>
-        <ComponentForm assets={assets} categories={categories} onSubmit={handleCreate} onClose={() => setModal(null)} />
+        <ComponentForm assets={assets} categories={categories} onSubmit={handleCreate} onClose={() => setModal(null)} submitting={submitting} />
       </Modal>}
       {modal === "edit" && selected && <Modal title="Edit Component" onClose={() => { setModal(null); setSelected(null); }} width={640}>
-        <ComponentForm initial={selected} assets={assets} categories={categories} onSubmit={handleUpdate} onClose={() => { setModal(null); setSelected(null); }} />
+        <ComponentForm initial={selected} assets={assets} categories={categories} onSubmit={handleUpdate} onClose={() => { setModal(null); setSelected(null); }} submitting={submitting} />
       </Modal>}
     </div>
   );
@@ -763,6 +1024,7 @@ function CertificateForm({ initial, components, testTypes, onSubmit, onClose, su
 function CertificatesPage() {
   const api = useApi();
   const { isAdmin } = useAuth();
+  const confirmAction = useConfirm();
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState(null);
   const [page, setPage] = useState(1);
@@ -776,31 +1038,51 @@ function CertificatesPage() {
   const [testTypes, setTestTypes] = useState([]);
 
   const deriveStatusFromExpiry = useCallback((expiryDateValue) => {
-    const days = Math.floor((new Date(expiryDateValue).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (!expiryDateValue) return "VALID";
+    const parsed = new Date(expiryDateValue);
+    if (Number.isNaN(parsed.getTime())) return "VALID";
+    const days = Math.floor((parsed.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     if (days < 0) return "EXPIRED";
     if (days <= 30) return "EXPIRING_SOON";
     return "VALID";
   }, []);
 
-  const load = useCallback(async (p = 1, opts = { silent: false }) => {
+  const load = useCallback(async (p = 1, opts = { silent: false, signal: null }) => {
     if (opts.silent) setRefreshing(true);
     else setLoading(true);
     try {
-      const res = await api.get(`/certificates?page=${p}&limit=20`);
+      const res = await api.get(`/certificates?page=${p}&limit=20`, { signal: opts.signal });
+      if (opts.signal?.aborted) return;
       setData(res.data || []); setMeta(res.meta);
+    } catch (e) {
+      if (e?.name !== "AbortError") throw e;
     } finally {
-      if (opts.silent) setRefreshing(false);
-      else setLoading(false);
+      if (!opts.signal?.aborted) {
+        if (opts.silent) setRefreshing(false);
+        else setLoading(false);
+      }
     }
   }, [api]);
 
   useEffect(() => {
-    load(page);
+    const controller = new AbortController();
+    load(page, { signal: controller.signal });
+    return () => controller.abort();
   }, [page, load]);
 
   useEffect(() => {
-    api.get("/components?limit=200").then(r => setComponents(r?.data || []));
-    api.get("/test-types").then(r => setTestTypes(r || []));
+    const controller = new AbortController();
+    Promise.all([
+      api.get("/components?limit=200", { signal: controller.signal }),
+      api.get("/test-types", { signal: controller.signal }),
+    ]).then(([componentsRes, testTypesRes]) => {
+      if (controller.signal.aborted) return;
+      setComponents(componentsRes?.data || []);
+      setTestTypes(testTypesRes?.data || testTypesRes || []);
+    }).catch((e) => {
+      if (e?.name !== "AbortError") console.error(e);
+    });
+    return () => controller.abort();
   }, [api]);
 
   const handleCreate = async (form) => {
@@ -819,7 +1101,10 @@ function CertificatesPage() {
     // Close immediately so the action feels responsive.
     setModal(null);
     setData(prev => [optimistic, ...prev.filter(r => r.certificate_id !== tempId)].slice(0, 20));
-    setMeta(prev => prev ? { ...prev, total: (prev.total || 0) + 1 } : prev);
+    setMeta(prev => prev
+      ? { ...prev, total: (prev.total || 0) + 1 }
+      : { page, total_pages: 1, total: 1 }
+    );
 
     try {
       const payload = { ...form, issue_date: new Date(form.issue_date).toISOString(), expiry_date: new Date(form.expiry_date).toISOString() };
@@ -848,7 +1133,7 @@ function CertificatesPage() {
   };
   const handleDelete = async (id) => {
     setActionError("");
-    if (!confirm("Delete this certificate?")) return;
+    if (!(await confirmAction("Delete this certificate?"))) return;
     try {
       await api.del(`/deletecertificate/${id}`);
       load(page, { silent: true });
@@ -870,7 +1155,7 @@ function CertificatesPage() {
             { key: "certificate_name", label: "Certificate", render: v => <span style={{ fontWeight: 500 }}>{v}</span> },
             { key: "component_id", label: "Component" },
             { key: "issuing_authority", label: "Authority" },
-            { key: "expiry_date", label: "Expiry", render: v => <span style={{ fontFamily: "var(--font-mono)" }}>{new Date(v).toLocaleDateString()}</span> },
+            { key: "expiry_date", label: "Expiry", render: v => <span style={{ fontFamily: "var(--font-mono)" }}>{formatDate(v)}</span> },
             { key: "status", label: "Status", render: v => <StatusBadge status={v} /> },
             isAdmin ? { key: "certificate_id", label: "", render: (v, row) => (
               <div style={{ display: "flex", gap: 6 }}>
@@ -880,7 +1165,7 @@ function CertificatesPage() {
             )} : null
           ].filter(Boolean)}
         />
-        <Pagination meta={meta} onPage={p => { setPage(p); load(p); }} />
+        <Pagination meta={meta} onPage={setPage} />
       </Card>
       {modal === "create" && <Modal title="New Certificate" onClose={() => setModal(null)} width={600}>
         <CertificateForm components={components} testTypes={testTypes} onSubmit={handleCreate} onClose={() => setModal(null)} submitting={submitting} />
@@ -896,30 +1181,51 @@ function CertificatesPage() {
 function CategoriesPage() {
   const api = useApi();
   const { isAdmin } = useAuth();
+  const confirmAction = useConfirm();
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState({ category_name: "", description: "" });
 
-  const load = useCallback(async (p = 1) => {
+  const load = useCallback(async (p = 1, opts = {}) => {
     setLoading(true);
-    try { const res = await api.get(`/categories?page=${p}&limit=20`); setData(res.data || []); setMeta(res.meta); }
-    finally { setLoading(false); }
+    try {
+      const res = await api.get(`/categories?page=${p}&limit=20`, { signal: opts.signal });
+      if (opts.signal?.aborted) return;
+      setData(res.data || []); setMeta(res.meta);
+    } catch (e) {
+      if (e?.name !== "AbortError") throw e;
+    } finally { if (!opts.signal?.aborted) setLoading(false); }
   }, [api]);
 
-  useEffect(() => { load(page); }, [page, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(page, { signal: controller.signal });
+    return () => controller.abort();
+  }, [page, load]);
 
   const openCreate = () => { setForm({ category_name: "", description: "" }); setModal("create"); };
   const openEdit = (row) => { setSelected(row); setForm({ category_name: row.category_name, description: row.description }); setModal("edit"); };
   const handleSave = async () => {
-    if (modal === "create") await api.post("/addcategory", form);
-    else await api.put(`/updatecategory/${selected.category_id}`, form);
-    setModal(null); load(page);
+    setSubmitting(true);
+    try {
+      if (modal === "create") await api.post("/addcategory", form);
+      else await api.put(`/updatecategory/${selected.category_id}`, form);
+      setModal(null);
+      load(page);
+    } finally {
+      setSubmitting(false);
+    }
   };
-  const handleDelete = async (id) => { if (!confirm("Delete this category?")) return; await api.del(`/deletecategory/${id}`); load(page); };
+  const handleDelete = async (id) => {
+    if (!(await confirmAction("Delete this category?"))) return;
+    await api.del(`/deletecategory/${id}`);
+    load(page);
+  };
 
   return (
     <div className="fade-in">
@@ -928,10 +1234,10 @@ function CategoriesPage() {
       <Card>
         <Table loading={loading} data={data}
           columns={[
-            { key: "category_id", label: "ID", render: v => <span style={{ color: "var(--text-2)" }}>{v.slice(0,8)}…</span> },
+            { key: "category_id", label: "ID", render: v => <span style={{ color: "var(--text-2)" }}>{v ? `${v.slice(0,8)}…` : "—"}</span> },
             { key: "category_name", label: "Name", render: v => <span style={{ fontWeight: 500 }}>{v}</span> },
             { key: "description", label: "Description" },
-            { key: "created_at", label: "Created", render: v => new Date(v).toLocaleDateString() },
+            { key: "created_at", label: "Created", render: v => formatDate(v) },
             isAdmin ? { key: "category_id", label: "", render: (v, row) => (
               <div style={{ display: "flex", gap: 6 }}>
                 <Button size="sm" onClick={e => { e.stopPropagation(); openEdit(row); }}>Edit</Button>
@@ -940,15 +1246,17 @@ function CategoriesPage() {
             )} : null
           ].filter(Boolean)}
         />
-        <Pagination meta={meta} onPage={p => { setPage(p); load(p); }} />
+        <Pagination meta={meta} onPage={setPage} />
       </Card>
       {modal && <Modal title={modal === "create" ? "New Category" : "Edit Category"} onClose={() => setModal(null)}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <Input label="Category Name" value={form.category_name} onChange={v => setForm(p => ({ ...p, category_name: v }))} required />
           <Input label="Description" type="textarea" value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} />
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <Button onClick={() => setModal(null)}>Cancel</Button>
-            <Button variant="primary" onClick={handleSave}>Save</Button>
+            <Button onClick={() => setModal(null)} disabled={submitting}>Cancel</Button>
+            <Button variant="primary" onClick={handleSave} disabled={submitting}>
+              {submitting ? "Saving..." : "Save"}
+            </Button>
           </div>
         </div>
       </Modal>}
@@ -960,29 +1268,50 @@ function CategoriesPage() {
 function TestTypesPage() {
   const api = useApi();
   const { isAdmin } = useAuth();
+  const confirmAction = useConfirm();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState({ test_id: "", test_name: "", validity_duration: "", description: "" });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts = {}) => {
     setLoading(true);
-    try { const res = await api.get("/test-types"); setData(res || []); }
-    finally { setLoading(false); }
+    try {
+      const res = await api.get("/test-types", { signal: opts.signal });
+      if (opts.signal?.aborted) return;
+      setData(res?.data || res || []);
+    } catch (e) {
+      if (e?.name !== "AbortError") throw e;
+    } finally { if (!opts.signal?.aborted) setLoading(false); }
   }, [api]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load({ signal: controller.signal });
+    return () => controller.abort();
+  }, [load]);
 
   const openCreate = () => { setForm({ test_id: "", test_name: "", validity_duration: "", description: "" }); setModal("create"); };
   const openEdit = (row) => { setSelected(row); setForm({ test_id: row.test_id, test_name: row.test_name, validity_duration: row.validity_duration, description: row.description }); setModal("edit"); };
   const handleSave = async () => {
     const payload = { ...form, validity_duration: parseInt(form.validity_duration) };
-    if (modal === "create") await api.post("/addtesttype", payload);
-    else await api.put(`/updatetesttype/${selected.test_id}`, payload);
-    setModal(null); load();
+    setSubmitting(true);
+    try {
+      if (modal === "create") await api.post("/addtesttype", payload);
+      else await api.put(`/updatetesttype/${selected.test_id}`, payload);
+      setModal(null);
+      load();
+    } finally {
+      setSubmitting(false);
+    }
   };
-  const handleDelete = async (id) => { if (!confirm("Delete this test type?")) return; await api.del(`/deletetesttype/${id}`); load(); };
+  const handleDelete = async (id) => {
+    if (!(await confirmAction("Delete this test type?"))) return;
+    await api.del(`/deletetesttype/${id}`);
+    load();
+  };
 
   return (
     <div className="fade-in">
@@ -1011,8 +1340,10 @@ function TestTypesPage() {
           <Input label="Validity Duration (days)" type="number" value={String(form.validity_duration)} onChange={v => setForm(p => ({ ...p, validity_duration: v }))} required />
           <Input label="Description" type="textarea" value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} />
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <Button onClick={() => setModal(null)}>Cancel</Button>
-            <Button variant="primary" onClick={handleSave}>Save</Button>
+            <Button onClick={() => setModal(null)} disabled={submitting}>Cancel</Button>
+            <Button variant="primary" onClick={handleSave} disabled={submitting}>
+              {submitting ? "Saving..." : "Save"}
+            </Button>
           </div>
         </div>
       </Modal>}
@@ -1023,30 +1354,51 @@ function TestTypesPage() {
 // ─── USERS PAGE ───────────────────────────────────────────────────────────────
 function UsersPage() {
   const api = useApi();
+  const confirmAction = useConfirm();
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", password: "", role: "USER" });
 
-  const load = useCallback(async (p = 1) => {
+  const load = useCallback(async (p = 1, opts = {}) => {
     setLoading(true);
-    try { const res = await api.get(`/users?page=${p}&limit=20`); setData(res.data || []); setMeta(res.meta); }
-    finally { setLoading(false); }
+    try {
+      const res = await api.get(`/users?page=${p}&limit=20`, { signal: opts.signal });
+      if (opts.signal?.aborted) return;
+      setData(res.data || []); setMeta(res.meta);
+    } catch (e) {
+      if (e?.name !== "AbortError") throw e;
+    } finally { if (!opts.signal?.aborted) setLoading(false); }
   }, [api]);
 
-  useEffect(() => { load(page); }, [page, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(page, { signal: controller.signal });
+    return () => controller.abort();
+  }, [page, load]);
 
   const openCreate = () => { setForm({ first_name: "", last_name: "", email: "", password: "", role: "USER" }); setModal("create"); };
   const openEdit = (row) => { setSelected(row); setForm({ first_name: row.first_name, last_name: row.last_name, email: row.email, role: row.role }); setModal("edit"); };
   const handleSave = async () => {
-    if (modal === "create") await api.post("/register", form);
-    else await api.put(`/updateuser/${selected.user_id}`, form);
-    setModal(null); load(page);
+    setSubmitting(true);
+    try {
+      if (modal === "create") await api.post("/register", form);
+      else await api.put(`/updateuser/${selected.user_id}`, form);
+      setModal(null);
+      load(page);
+    } finally {
+      setSubmitting(false);
+    }
   };
-  const handleDelete = async (id) => { if (!confirm("Delete this user?")) return; await api.del(`/deleteuser/${id}`); load(page); };
+  const handleDelete = async (id) => {
+    if (!(await confirmAction("Delete this user?"))) return;
+    await api.del(`/deleteuser/${id}`);
+    load(page);
+  };
 
   return (
     <div className="fade-in">
@@ -1055,12 +1407,12 @@ function UsersPage() {
       <Card>
         <Table loading={loading} data={data}
           columns={[
-            { key: "user_id", label: "ID", render: v => <span style={{ color: "var(--text-2)", fontSize: 11 }}>{v.slice(0,8)}…</span> },
+            { key: "user_id", label: "ID", render: v => <span style={{ color: "var(--text-2)", fontSize: 11 }}>{v ? `${v.slice(0,8)}…` : "—"}</span> },
             { key: "first_name", label: "First Name" },
             { key: "last_name", label: "Last Name" },
             { key: "email", label: "Email" },
             { key: "role", label: "Role", render: v => <StatusBadge status={v} /> },
-            { key: "created_at", label: "Joined", render: v => new Date(v).toLocaleDateString() },
+            { key: "created_at", label: "Joined", render: v => formatDate(v) },
             { key: "user_id", label: "", render: (v, row) => (
               <div style={{ display: "flex", gap: 6 }}>
                 <Button size="sm" onClick={e => { e.stopPropagation(); openEdit(row); }}>Edit</Button>
@@ -1069,7 +1421,7 @@ function UsersPage() {
             )}
           ]}
         />
-        <Pagination meta={meta} onPage={p => { setPage(p); load(p); }} />
+        <Pagination meta={meta} onPage={setPage} />
       </Card>
       {modal && <Modal title={modal === "create" ? "Register User" : "Edit User"} onClose={() => setModal(null)}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1081,8 +1433,10 @@ function UsersPage() {
           {modal === "create" && <Input label="Password" type="password" value={form.password} onChange={v => setForm(p => ({ ...p, password: v }))} required />}
           <Input label="Role" value={form.role} onChange={v => setForm(p => ({ ...p, role: v }))} options={[{value:"ADMIN",label:"Admin"},{value:"USER",label:"User"}]} required />
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <Button onClick={() => setModal(null)}>Cancel</Button>
-            <Button variant="primary" onClick={handleSave}>{modal === "create" ? "Register" : "Save"}</Button>
+            <Button onClick={() => setModal(null)} disabled={submitting}>Cancel</Button>
+            <Button variant="primary" onClick={handleSave} disabled={submitting}>
+              {submitting ? "Saving..." : (modal === "create" ? "Register" : "Save")}
+            </Button>
           </div>
         </div>
       </Modal>}
@@ -1117,13 +1471,15 @@ function AppShell() {
 export default function App() {
   return (
     <AuthProvider>
-      <style>{CSS}</style>
-      <Inner />
+      <AppFeedbackProvider>
+        <style>{CSS}</style>
+        <Inner />
+      </AppFeedbackProvider>
     </AuthProvider>
   );
 }
 
 function Inner() {
   const { user } = useAuth();
-  return user ? <AppShell /> : <LoginPage />;
+  return user ? <AppErrorBoundary><AppShell /></AppErrorBoundary> : <LoginPage />;
 }
