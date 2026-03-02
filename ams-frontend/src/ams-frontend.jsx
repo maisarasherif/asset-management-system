@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, createContext, useContext, useReducer } from "react";
+import { useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
+import { createPortal } from "react-dom";
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const CSS = `
@@ -105,20 +106,38 @@ function useApi() {
   const req = useCallback(async (method, path, body) => {
     const headers = { "Content-Type": "application/json" };
     if (user?.token) headers["Authorization"] = `Bearer ${user.token}`;
-    const res = await fetch(`${BASE}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
-    if (res.status === 401) { logout(); return; }
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Request failed");
+
+    const res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+    if (res.status === 401) {
+      logout();
+      throw new Error("Session expired. Please log in again.");
+    }
+
+    let data = null;
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      data = await res.json();
+    } else if (res.status !== 204) {
+      const text = await res.text();
+      data = text ? { message: text } : null;
+    }
+
+    if (!res.ok) throw new Error(data?.error || data?.message || `Request failed (${res.status})`);
     return data;
   }, [user, logout]);
 
-  return {
+  return useMemo(() => ({
     get: (p) => req("GET", p),
     post: (p, b) => req("POST", p, b),
     put: (p, b) => req("PUT", p, b),
     patch: (p, b) => req("PATCH", p, b),
     del: (p) => req("DELETE", p),
-  };
+  }), [req]);
 }
 
 // ─── DESIGN COMPONENTS ───────────────────────────────────────────────────────
@@ -227,10 +246,10 @@ function Card({ children, style }) {
 }
 
 function Modal({ title, onClose, children, width = 540 }) {
-  return (
+  const modalNode = (
     <div style={{
       position: "fixed", inset: 0, zIndex: 1000,
-      background: "rgba(0,0,0,0.75)", backdropFilter: "blur(3px)",
+      background: "rgba(0,0,0,0.78)",
     }}>
       <div style={{
         position: "absolute", inset: 0, overflowY: "auto",
@@ -250,6 +269,8 @@ function Modal({ title, onClose, children, width = 540 }) {
       </div>
     </div>
   );
+
+  return createPortal(modalNode, document.body);
 }
 
 function Table({ columns, data, onRowClick, loading, emptyMsg = "No records found." }) {
@@ -442,7 +463,7 @@ function Dashboard() {
   const [expiring, setExpiring] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     Promise.all([
       api.get("/assets?limit=1"),
       api.get("/components?limit=1"),
@@ -452,7 +473,11 @@ function Dashboard() {
       setStats({ assets: a?.meta?.total || 0, components: c?.meta?.total || 0, certificates: cert?.meta?.total || 0 });
       setExpiring(exp || []);
     }).finally(() => setLoading(false));
-  }, []);
+  }, [api]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const expired = expiring.filter(c => c.status === "EXPIRED").length;
   const expiringSoon = expiring.filter(c => c.status === "EXPIRING_SOON").length;
@@ -544,7 +569,7 @@ function AssetsPage() {
     } finally { setLoading(false); }
   }, [api]);
 
-  useEffect(() => { load(page); }, [page]);
+  useEffect(() => { load(page); }, [page, load]);
 
   const handleCreate = async (form) => {
     await api.post("/addasset", form); setModal(null); load(page);
@@ -649,9 +674,12 @@ function ComponentsPage() {
 
   useEffect(() => {
     load(page);
+  }, [page, load]);
+
+  useEffect(() => {
     api.get("/assets?limit=100").then(r => setAssets(r?.data || []));
     api.get("/categories?limit=100").then(r => setCategories(r?.data || []));
-  }, []);
+  }, [api]);
 
   const handleCreate = async (form) => { await api.post("/addcomponent", form); setModal(null); load(page); };
   const handleUpdate = async (form) => { await api.put(`/updatecomponent/${selected.component_id}`, form); setModal(null); load(page); };
@@ -691,17 +719,25 @@ function ComponentsPage() {
 }
 
 // ─── CERTIFICATES PAGE ────────────────────────────────────────────────────────
-function CertificateForm({ initial, components, testTypes, onSubmit, onClose }) {
+function CertificateForm({ initial, components, testTypes, onSubmit, onClose, submitting = false }) {
   const [form, setForm] = useState(initial || {
     component_id: "", certificate_name: "", issue_date: "", expiry_date: "",
     issuing_authority: "", test_id: "", imca_ref: "", imca_d018: "", maintenance_notes: ""
   });
+  const componentOptions = useMemo(
+    () => components.map(c => ({ value: c.component_id, label: c.name })),
+    [components]
+  );
+  const testTypeOptions = useMemo(
+    () => testTypes.map(t => ({ value: t.test_id, label: t.test_name })),
+    [testTypes]
+  );
   const f = (k) => (v) => setForm(p => ({ ...p, [k]: v }));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Input label="Component" value={form.component_id} onChange={f("component_id")} options={components.map(c => ({ value: c.component_id, label: c.name }))} required />
-        <Input label="Test Type" value={form.test_id} onChange={f("test_id")} options={testTypes.map(t => ({ value: t.test_id, label: t.test_name }))} required />
+        <Input label="Component" value={form.component_id} onChange={f("component_id")} options={componentOptions} required />
+        <Input label="Test Type" value={form.test_id} onChange={f("test_id")} options={testTypeOptions} required />
       </div>
       <Input label="Certificate Name" value={form.certificate_name} onChange={f("certificate_name")} required />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -715,8 +751,10 @@ function CertificateForm({ initial, components, testTypes, onSubmit, onClose }) 
       </div>
       <Input label="Maintenance Notes" type="textarea" value={form.maintenance_notes} onChange={f("maintenance_notes")} />
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" onClick={() => onSubmit(form)}>Save Certificate</Button>
+        <Button onClick={onClose} disabled={submitting}>Cancel</Button>
+        <Button variant="primary" onClick={() => onSubmit(form)} disabled={submitting}>
+          {submitting ? "Saving..." : "Save Certificate"}
+        </Button>
       </div>
     </div>
   );
@@ -729,39 +767,102 @@ function CertificatesPage() {
   const [meta, setMeta] = useState(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [actionError, setActionError] = useState("");
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [components, setComponents] = useState([]);
   const [testTypes, setTestTypes] = useState([]);
 
-  const load = useCallback(async (p = 1) => {
-    setLoading(true);
+  const deriveStatusFromExpiry = useCallback((expiryDateValue) => {
+    const days = Math.floor((new Date(expiryDateValue).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (days < 0) return "EXPIRED";
+    if (days <= 30) return "EXPIRING_SOON";
+    return "VALID";
+  }, []);
+
+  const load = useCallback(async (p = 1, opts = { silent: false }) => {
+    if (opts.silent) setRefreshing(true);
+    else setLoading(true);
     try {
       const res = await api.get(`/certificates?page=${p}&limit=20`);
       setData(res.data || []); setMeta(res.meta);
-    } finally { setLoading(false); }
+    } finally {
+      if (opts.silent) setRefreshing(false);
+      else setLoading(false);
+    }
   }, [api]);
 
   useEffect(() => {
     load(page);
+  }, [page, load]);
+
+  useEffect(() => {
     api.get("/components?limit=200").then(r => setComponents(r?.data || []));
     api.get("/test-types").then(r => setTestTypes(r || []));
-  }, []);
+  }, [api]);
 
   const handleCreate = async (form) => {
-    const payload = { ...form, issue_date: new Date(form.issue_date).toISOString(), expiry_date: new Date(form.expiry_date).toISOString() };
-    await api.post("/addcertificate", payload); setModal(null); load(page);
+    setActionError("");
+    setSubmitting(true);
+    const tempId = `temp-${Date.now()}`;
+    const optimistic = {
+      certificate_id: tempId,
+      component_id: form.component_id,
+      certificate_name: form.certificate_name,
+      issuing_authority: form.issuing_authority,
+      expiry_date: new Date(form.expiry_date).toISOString(),
+      status: deriveStatusFromExpiry(form.expiry_date),
+    };
+
+    // Close immediately so the action feels responsive.
+    setModal(null);
+    setData(prev => [optimistic, ...prev.filter(r => r.certificate_id !== tempId)].slice(0, 20));
+    setMeta(prev => prev ? { ...prev, total: (prev.total || 0) + 1 } : prev);
+
+    try {
+      const payload = { ...form, issue_date: new Date(form.issue_date).toISOString(), expiry_date: new Date(form.expiry_date).toISOString() };
+      const created = await api.post("/addcertificate", payload);
+      setData(prev => [created, ...prev.filter(r => r.certificate_id !== tempId && r.certificate_id !== created?.certificate_id)].slice(0, 20));
+    } catch (e) {
+      setData(prev => prev.filter(r => r.certificate_id !== tempId));
+      setMeta(prev => prev ? { ...prev, total: Math.max(0, (prev.total || 1) - 1) } : prev);
+      setActionError(e?.message || "Failed to add certificate.");
+    } finally {
+      setSubmitting(false);
+      load(page, { silent: true });
+    }
   };
   const handleUpdate = async (form) => {
-    const payload = { ...form, issue_date: new Date(form.issue_date).toISOString(), expiry_date: new Date(form.expiry_date).toISOString() };
-    await api.put(`/updatecertificate/${selected.certificate_id}`, payload); setModal(null); load(page);
+    setActionError("");
+    setSubmitting(true);
+    try {
+      const payload = { ...form, issue_date: new Date(form.issue_date).toISOString(), expiry_date: new Date(form.expiry_date).toISOString() };
+      await api.put(`/updatecertificate/${selected.certificate_id}`, payload);
+      setModal(null);
+      load(page, { silent: true });
+    } finally {
+      setSubmitting(false);
+    }
   };
-  const handleDelete = async (id) => { if (!confirm("Delete this certificate?")) return; await api.del(`/deletecertificate/${id}`); load(page); };
+  const handleDelete = async (id) => {
+    setActionError("");
+    if (!confirm("Delete this certificate?")) return;
+    try {
+      await api.del(`/deletecertificate/${id}`);
+      load(page, { silent: true });
+    } catch (e) {
+      setActionError(e?.message || "Failed to delete certificate.");
+    }
+  };
 
   return (
     <div className="fade-in">
       <PageHeader title="Certificates" subtitle={`${meta?.total || 0} compliance certificates`}
         action={isAdmin && <Button variant="primary" onClick={() => setModal("create")}>+ New Certificate</Button>} />
+      {actionError && <div style={{ marginBottom: 10, fontSize: 11, color: "var(--red)" }}>{actionError}</div>}
+      {refreshing && <div style={{ marginBottom: 10, fontSize: 11, color: "var(--text-2)" }}>Refreshing list...</div>}
       <Card>
         <Table loading={loading} data={data}
           columns={[
@@ -782,10 +883,10 @@ function CertificatesPage() {
         <Pagination meta={meta} onPage={p => { setPage(p); load(p); }} />
       </Card>
       {modal === "create" && <Modal title="New Certificate" onClose={() => setModal(null)} width={600}>
-        <CertificateForm components={components} testTypes={testTypes} onSubmit={handleCreate} onClose={() => setModal(null)} />
+        <CertificateForm components={components} testTypes={testTypes} onSubmit={handleCreate} onClose={() => setModal(null)} submitting={submitting} />
       </Modal>}
       {modal === "edit" && selected && <Modal title="Edit Certificate" onClose={() => { setModal(null); setSelected(null); }} width={600}>
-        <CertificateForm initial={{ ...selected, issue_date: selected.issue_date?.slice(0,10), expiry_date: selected.expiry_date?.slice(0,10) }} components={components} testTypes={testTypes} onSubmit={handleUpdate} onClose={() => { setModal(null); setSelected(null); }} />
+        <CertificateForm initial={{ ...selected, issue_date: selected.issue_date?.slice(0,10), expiry_date: selected.expiry_date?.slice(0,10) }} components={components} testTypes={testTypes} onSubmit={handleUpdate} onClose={() => { setModal(null); setSelected(null); }} submitting={submitting} />
       </Modal>}
     </div>
   );
@@ -809,7 +910,7 @@ function CategoriesPage() {
     finally { setLoading(false); }
   }, [api]);
 
-  useEffect(() => { load(page); }, [page]);
+  useEffect(() => { load(page); }, [page, load]);
 
   const openCreate = () => { setForm({ category_name: "", description: "" }); setModal("create"); };
   const openEdit = (row) => { setSelected(row); setForm({ category_name: row.category_name, description: row.description }); setModal("edit"); };
@@ -871,7 +972,7 @@ function TestTypesPage() {
     finally { setLoading(false); }
   }, [api]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const openCreate = () => { setForm({ test_id: "", test_name: "", validity_duration: "", description: "" }); setModal("create"); };
   const openEdit = (row) => { setSelected(row); setForm({ test_id: row.test_id, test_name: row.test_name, validity_duration: row.validity_duration, description: row.description }); setModal("edit"); };
@@ -936,7 +1037,7 @@ function UsersPage() {
     finally { setLoading(false); }
   }, [api]);
 
-  useEffect(() => { load(page); }, [page]);
+  useEffect(() => { load(page); }, [page, load]);
 
   const openCreate = () => { setForm({ first_name: "", last_name: "", email: "", password: "", role: "USER" }); setModal("create"); };
   const openEdit = (row) => { setSelected(row); setForm({ first_name: row.first_name, last_name: row.last_name, email: row.email, role: row.role }); setModal("edit"); };
