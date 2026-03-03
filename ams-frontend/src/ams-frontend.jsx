@@ -1,5 +1,6 @@
 import { Component, useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
+import { Fragment } from "react";
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const CSS = `
@@ -461,7 +462,7 @@ function Modal({ title, onClose, children, width = 540 }) {
   return createPortal(modalNode, document.body);
 }
 
-function Table({ columns, data, onRowClick, loading, emptyMsg = "No records found.", rowKey }) {
+function Table({ columns, data, onRowClick, loading, emptyMsg = "No records found.", rowKey, expandedRowKey = null, renderExpandedRow = null }) {
   if (loading) return (
     <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
       {[...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: 38 }} />)}
@@ -480,21 +481,34 @@ function Table({ columns, data, onRowClick, loading, emptyMsg = "No records foun
         <tbody>
           {data.length === 0 ? (
             <tr><td colSpan={columns.length} style={{ padding: 32, textAlign: "center", color: "var(--text-2)" }}>{emptyMsg}</td></tr>
-          ) : data.map((row, i) => (
-            <tr key={rowKey?.(row, i) ?? row?.id ?? row?.asset_id ?? row?.component_id ?? row?.certificate_id ?? row?.category_id ?? row?.test_id ?? row?.user_id ?? i} onClick={() => onRowClick?.(row)} style={{
-              borderBottom: "1px solid var(--border)", cursor: onRowClick ? "pointer" : "default",
-              transition: "background 0.1s",
-            }}
-            onMouseEnter={e => { if(onRowClick) e.currentTarget.style.background = "var(--bg-2)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = ""; }}
-            >
-              {columns.map(c => (
-                <td key={c.key} style={{ padding: "9px 12px", color: "var(--text-0)", ...c.style }}>
-                  {c.render ? c.render(row[c.key], row) : row[c.key] ?? <span style={{ color: "var(--text-2)" }}>—</span>}
-                </td>
-              ))}
-            </tr>
-          ))}
+          ) : data.map((row, i) => {
+            const key = rowKey?.(row, i) ?? row?.id ?? row?.asset_id ?? row?.component_id ?? row?.certificate_id ?? row?.category_id ?? row?.test_id ?? row?.user_id ?? i;
+            const isExpanded = expandedRowKey !== null && key === expandedRowKey;
+            return (
+              <Fragment key={key}>
+                <tr onClick={() => onRowClick?.(row)} style={{
+                  borderBottom: "1px solid var(--border)", cursor: onRowClick ? "pointer" : "default",
+                  transition: "background 0.1s",
+                }}
+                onMouseEnter={e => { if(onRowClick) e.currentTarget.style.background = "var(--bg-2)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = ""; }}
+                >
+                  {columns.map(c => (
+                    <td key={c.key} style={{ padding: "9px 12px", color: "var(--text-0)", ...c.style }}>
+                      {c.render ? c.render(row[c.key], row) : row[c.key] ?? <span style={{ color: "var(--text-2)" }}>—</span>}
+                    </td>
+                  ))}
+                </tr>
+                {isExpanded && renderExpandedRow && (
+                  <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td colSpan={columns.length} style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
+                      {renderExpandedRow(row)}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -586,7 +600,6 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: "◈" },
   { id: "assets", label: "Assets", icon: "◻" },
   { id: "components", label: "Components", icon: "◈" },
-  { id: "certificates", label: "Certificates", icon: "▣" },
   { id: "categories", label: "Categories", icon: "◫" },
   { id: "test-types", label: "Test Types", icon: "◎" },
   { id: "users", label: "Users", icon: "◉", adminOnly: true },
@@ -887,6 +900,12 @@ function ComponentsPage() {
   const [selected, setSelected] = useState(null);
   const [assets, setAssets] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [testTypes, setTestTypes] = useState([]);
+  const [expandedComponentId, setExpandedComponentId] = useState(null);
+  const [expandedCertificateByComponent, setExpandedCertificateByComponent] = useState({});
+  const [certificatesByComponent, setCertificatesByComponent] = useState({});
+  const [certificatesLoadingByComponent, setCertificatesLoadingByComponent] = useState({});
+  const [certificatesErrorByComponent, setCertificatesErrorByComponent] = useState({});
 
   const load = useCallback(async (p = 1, opts = {}) => {
     setLoading(true);
@@ -910,10 +929,12 @@ function ComponentsPage() {
     Promise.all([
       api.get("/assets?limit=100", { signal: controller.signal }),
       api.get("/categories?limit=100", { signal: controller.signal }),
-    ]).then(([assetsRes, categoriesRes]) => {
+      api.get("/test-types", { signal: controller.signal }),
+    ]).then(([assetsRes, categoriesRes, testTypesRes]) => {
       if (controller.signal.aborted) return;
       setAssets(assetsRes?.data || []);
       setCategories(categoriesRes?.data || []);
+      setTestTypes(testTypesRes?.data || testTypesRes || []);
     }).catch((e) => {
       if (e?.name !== "AbortError") console.error(e);
     });
@@ -946,13 +967,201 @@ function ComponentsPage() {
     load(page);
   };
 
+  const loadCertificatesForComponent = useCallback(async (componentID) => {
+    setCertificatesLoadingByComponent(prev => ({ ...prev, [componentID]: true }));
+    setCertificatesErrorByComponent(prev => ({ ...prev, [componentID]: "" }));
+    try {
+      const res = await api.get(`/certificates/component/${componentID}?page=1&limit=100`);
+      setCertificatesByComponent(prev => ({ ...prev, [componentID]: res?.data || [] }));
+    } catch (e) {
+      setCertificatesErrorByComponent(prev => ({ ...prev, [componentID]: e?.message || "Failed to load certificates." }));
+    } finally {
+      setCertificatesLoadingByComponent(prev => ({ ...prev, [componentID]: false }));
+    }
+  }, [api]);
+
+  const handleComponentRowClick = useCallback((row) => {
+    const componentID = row.component_id;
+    if (expandedComponentId === componentID) {
+      setExpandedComponentId(null);
+      return;
+    }
+    setExpandedComponentId(componentID);
+    if (!certificatesByComponent[componentID] && !certificatesLoadingByComponent[componentID]) {
+      loadCertificatesForComponent(componentID);
+    }
+  }, [expandedComponentId, certificatesByComponent, certificatesLoadingByComponent, loadCertificatesForComponent]);
+
+  const handleCertificateRowClick = useCallback((componentID, certificateID) => {
+    setExpandedCertificateByComponent(prev => ({
+      ...prev,
+      [componentID]: prev[componentID] === certificateID ? null : certificateID,
+    }));
+  }, []);
+
+  const getTestTypeName = useCallback((testID) => {
+    if (!testID) return "—";
+    const found = testTypes.find(t => t.test_id === testID);
+    return found?.test_name || testID;
+  }, [testTypes]);
+
   return (
     <div className="fade-in">
       <PageHeader title="Components" subtitle={`${meta?.total || 0} components across all assets`}
         action={isAdmin && <Button variant="primary" onClick={() => setModal("create")}>+ New Component</Button>} />
       <Card>
-        <Table loading={loading} data={data}
+        <Table
+          loading={loading}
+          data={data}
+          rowKey={row => row.component_id}
+          onRowClick={handleComponentRowClick}
+          expandedRowKey={expandedComponentId}
+          renderExpandedRow={(row) => {
+            const componentID = row.component_id;
+            const certificates = certificatesByComponent[componentID] || [];
+            const rowLoading = certificatesLoadingByComponent[componentID];
+            const rowError = certificatesErrorByComponent[componentID];
+
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                  <div style={{ fontSize: 11, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    Certificates for {row.name}
+                  </div>
+                  <span style={{ fontSize: 11, color: "var(--text-2)" }}>{certificates.length} record(s)</span>
+                </div>
+
+                {rowLoading && <div style={{ fontSize: 11, color: "var(--text-2)" }}>Loading certificates...</div>}
+                {rowError && <div style={{ fontSize: 11, color: "var(--red)" }}>{rowError}</div>}
+
+                {!rowLoading && !rowError && certificates.length === 0 && (
+                  <div style={{ fontSize: 11, color: "var(--text-2)" }}>No certificates found for this component.</div>
+                )}
+
+                {!rowLoading && !rowError && certificates.length > 0 && (
+                  <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 3 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                          <th style={{ width: 26 }} />
+                          <th style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-2)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Certificate</th>
+                          <th style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-2)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Test</th>
+                          <th style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-2)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Authority</th>
+                          <th style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-2)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Expiry</th>
+                          <th style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-2)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                                                {certificates.map((certificateItem) => {
+                          const certificateID = certificateItem.certificate_id;
+                          const isCertExpanded = expandedCertificateByComponent[componentID] === certificateID;
+
+                          const expiryDate = certificateItem.expiry_date ? new Date(certificateItem.expiry_date) : null;
+                          const validExpiry = expiryDate && !Number.isNaN(expiryDate.getTime());
+                          const today = new Date();
+                          const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                          const expiryStart = validExpiry
+                            ? new Date(expiryDate.getFullYear(), expiryDate.getMonth(), expiryDate.getDate())
+                            : null;
+                          const daysToExpiry = expiryStart
+                            ? Math.ceil((expiryStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24))
+                            : null;
+
+                          let expiryTone = { label: "No Expiry Date", color: "var(--text-2)", border: "var(--border)" };
+                          if (typeof daysToExpiry === "number") {
+                            if (daysToExpiry < 0) expiryTone = { label: "Expired", color: "var(--red)", border: "var(--red-dim)" };
+                            else if (daysToExpiry <= 30) expiryTone = { label: `Due in ${daysToExpiry} day(s)`, color: "var(--amber)", border: "var(--amber-dim)" };
+                            else expiryTone = { label: `Valid for ${daysToExpiry} day(s)`, color: "var(--green)", border: "var(--green-dim)" };
+                          }
+
+                          return (
+                            <Fragment key={certificateID}>
+                              <tr
+                                style={{ borderBottom: "1px solid var(--border)", cursor: "pointer", background: isCertExpanded ? "var(--bg-2)" : "transparent" }}
+                                onClick={() => handleCertificateRowClick(componentID, certificateID)}
+                              >
+                                <td style={{ padding: "8px 10px", color: "var(--text-2)" }}>{isCertExpanded ? "v" : ">"}</td>
+                                <td style={{ padding: "8px 10px", color: "var(--text-0)", fontWeight: 500 }}>{certificateItem.certificate_name || "�"}</td>
+                                <td style={{ padding: "8px 10px", color: "var(--text-1)" }}>{getTestTypeName(certificateItem.test_id)}</td>
+                                <td style={{ padding: "8px 10px", color: "var(--text-1)" }}>{certificateItem.issuing_authority || "�"}</td>
+                                <td style={{ padding: "8px 10px", color: "var(--text-1)" }}>{formatDate(certificateItem.expiry_date)}</td>
+                                <td style={{ padding: "8px 10px" }}><StatusBadge status={certificateItem.status} /></td>
+                              </tr>
+                              {isCertExpanded && (
+                                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                                  <td colSpan={6} style={{ padding: "12px", background: "var(--bg-1)" }}>
+                                    <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
+                                        <Card style={{ padding: "9px 10px", background: "var(--bg-2)" }}>
+                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>Certificate ID</div>
+                                          <div style={{ color: "var(--text-0)", fontSize: 12, fontWeight: 500, wordBreak: "break-word" }}>{certificateItem.certificate_id || "�"}</div>
+                                        </Card>
+                                        <Card style={{ padding: "9px 10px", background: "var(--bg-2)" }}>
+                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>Component ID</div>
+                                          <div style={{ color: "var(--text-0)", fontSize: 12, fontWeight: 500, wordBreak: "break-word" }}>{certificateItem.component_id || "�"}</div>
+                                        </Card>
+                                        <Card style={{ padding: "9px 10px", background: "var(--bg-2)", borderColor: expiryTone.border }}>
+                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>Expiry Window</div>
+                                          <div style={{ color: expiryTone.color, fontSize: 12, fontWeight: 600 }}>{expiryTone.label}</div>
+                                        </Card>
+                                      </div>
+
+                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8 }}>
+                                        <Card style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
+                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Validity</div>
+                                          <div style={{ display: "grid", gap: 4 }}>
+                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>Issue Date: <span style={{ color: "var(--text-0)" }}>{formatDate(certificateItem.issue_date)}</span></div>
+                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>Expiry Date: <span style={{ color: "var(--text-0)" }}>{formatDate(certificateItem.expiry_date)}</span></div>
+                                          </div>
+                                        </Card>
+                                        <Card style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
+                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Authority and Test</div>
+                                          <div style={{ display: "grid", gap: 4 }}>
+                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>Test Type: <span style={{ color: "var(--text-0)" }}>{getTestTypeName(certificateItem.test_id)}</span></div>
+                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>Authority: <span style={{ color: "var(--text-0)" }}>{certificateItem.issuing_authority || "�"}</span></div>
+                                          </div>
+                                        </Card>
+                                        <Card style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
+                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Compliance</div>
+                                          <div style={{ display: "grid", gap: 4 }}>
+                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>IMCA Ref: <span style={{ color: "var(--text-0)", wordBreak: "break-word" }}>{certificateItem.imca_ref || "�"}</span></div>
+                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>IMCA D018: <span style={{ color: "var(--text-0)", wordBreak: "break-word" }}>{certificateItem.imca_d018 || "�"}</span></div>
+                                          </div>
+                                        </Card>
+                                      </div>
+
+                                      <Card style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
+                                        <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Certificate File</div>
+                                        <div style={{ color: "var(--text-0)", fontSize: 12, wordBreak: "break-word" }}>{certificateItem.certificate_file || "No file linked."}</div>
+                                      </Card>
+
+                                      <Card style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
+                                        <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Maintenance Notes</div>
+                                        <div style={{ color: "var(--text-0)", fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                                          {certificateItem.maintenance_notes || "No maintenance notes recorded."}
+                                        </div>
+                                      </Card>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          }}
           columns={[
+            {
+              key: "_expand",
+              label: "",
+              render: (_, row) => <span style={{ color: "var(--text-2)", fontSize: 11 }}>{expandedComponentId === row.component_id ? "▼" : "▶"}</span>,
+              style: { width: 22 },
+            },
             { key: "component_id", label: "ID", render: v => <span style={{ color: "var(--text-2)" }}>{v}</span> },
             { key: "name", label: "Name", render: v => <span style={{ fontWeight: 500 }}>{v}</span> },
             { key: "asset_id", label: "Asset" },
@@ -1178,6 +1387,140 @@ function CertificatesPage() {
 }
 
 // ─── CATEGORIES PAGE ──────────────────────────────────────────────────────────
+function CertificateDetailsPage({ certificateId, onBack }) {
+  const api = useApi();
+  const [certificate, setCertificate] = useState(null);
+  const [testTypes, setTestTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!certificateId) return;
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    api.get(`/certificate/${certificateId}`, { signal: controller.signal })
+      .then((res) => {
+        if (controller.signal.aborted) return;
+        setCertificate(res || null);
+      })
+      .catch((e) => {
+        if (e?.name !== "AbortError") setError(e?.message || "Failed to load certificate.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [api, certificateId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api.get("/test-types", { signal: controller.signal })
+      .then((res) => {
+        if (controller.signal.aborted) return;
+        setTestTypes(res?.data || res || []);
+      })
+      .catch((e) => {
+        if (e?.name !== "AbortError") console.error(e);
+      });
+    return () => controller.abort();
+  }, [api]);
+
+  const testTypeName = useMemo(() => {
+    if (!certificate?.test_id) return "-";
+    const found = testTypes.find(t => t.test_id === certificate.test_id);
+    return found?.test_name || certificate.test_id;
+  }, [certificate?.test_id, testTypes]);
+
+  const details = [
+    { label: "Certificate ID", value: certificate?.certificate_id },
+    { label: "Component ID", value: certificate?.component_id },
+    { label: "Test Type ID", value: certificate?.test_id },
+    { label: "Issue Date", value: formatDate(certificate?.issue_date) },
+    { label: "Expiry Date", value: formatDate(certificate?.expiry_date) },
+    { label: "Issuing Authority", value: certificate?.issuing_authority },
+    { label: "IMCA Ref", value: certificate?.imca_ref },
+    { label: "IMCA D018", value: certificate?.imca_d018 },
+    { label: "Certificate File", value: certificate?.certificate_file },
+    { label: "Created At", value: formatDate(certificate?.created_at) },
+    { label: "Updated At", value: formatDate(certificate?.updated_at) },
+  ];
+
+  return (
+    <div className="fade-in">
+      <PageHeader
+        title={certificate?.certificate_name || "Certificate Details"}
+        subtitle={certificateId ? `Record: ${certificateId}` : "No certificate selected"}
+        action={<Button onClick={onBack}>Back to Components</Button>}
+      />
+      {loading && (
+        <Card style={{ padding: 16, color: "var(--text-2)", fontSize: 12 }}>Loading certificate...</Card>
+      )}
+      {!loading && error && (
+        <Card style={{ padding: 16, color: "var(--red)", fontSize: 12 }}>{error}</Card>
+      )}
+      {!loading && !error && certificate && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <Card style={{ padding: 18, borderColor: "var(--border-bright)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 16, alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>
+                  Test Type
+                </div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 26, lineHeight: 1.2 }}>
+                  {testTypeName}
+                </div>
+                <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-1)" }}>
+                  {certificate?.certificate_name || "-"}
+                </div>
+              </div>
+              <div style={{ justifySelf: "end", minWidth: 180, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+                <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                  Certificate Status
+                </div>
+                <StatusBadge status={certificate?.status || "VALID"} />
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", fontSize: 11, color: "var(--text-2)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Certificate Details
+            </div>
+            <div style={{ padding: "6px 14px 10px" }}>
+              {details.map((item) => (
+                <div key={item.label} style={{
+                  display: "grid",
+                  gridTemplateColumns: "220px minmax(0, 1fr)",
+                  gap: 12,
+                  padding: "11px 0",
+                  borderBottom: "1px solid var(--border)",
+                }}>
+                  <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    {item.label}
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--text-0)", wordBreak: "break-word" }}>
+                    {item.value || "-"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", fontSize: 11, color: "var(--text-2)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Maintenance Notes
+            </div>
+            <div style={{ padding: "14px", fontSize: 13, lineHeight: 1.55, color: "var(--text-0)", minHeight: 90, whiteSpace: "pre-wrap" }}>
+              {certificate?.maintenance_notes || "-"}
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CategoriesPage() {
   const api = useApi();
   const { isAdmin } = useAuth();
@@ -1447,11 +1790,11 @@ function UsersPage() {
 // ─── APP SHELL ────────────────────────────────────────────────────────────────
 function AppShell() {
   const [page, setPage] = useState("dashboard");
+
   const pages = {
     dashboard: <Dashboard />,
     assets: <AssetsPage />,
     components: <ComponentsPage />,
-    certificates: <CertificatesPage />,
     categories: <CategoriesPage />,
     "test-types": <TestTypesPage />,
     users: <UsersPage />,
@@ -1483,3 +1826,5 @@ function Inner() {
   const { user } = useAuth();
   return user ? <AppErrorBoundary><AppShell /></AppErrorBoundary> : <LoginPage />;
 }
+
+
