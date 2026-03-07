@@ -560,12 +560,55 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		userID, _ := utils.GetUserIdFromContext(c)
+		_, err = pool.Exec(ctx, `
+				INSERT INTO certificate_upload_audit (certificate_id, file_key, file_name, uploaded_by, uploaded_at)
+				VALUES ($1, $2, $3, $4, NOW())
+			`, certificateID, key, header.Filename, userID)
+		if err != nil {
+			logger.Log.Error().Err(err).Msg("failed to write certificate upload audit log")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write upload audit log"})
+			return
+		}
+
 		logger.Log.Info().
 			Str("certificate_id", certificateID).
 			Str("file_key", key).
 			Str("uploaded_by", userID).
 			Msg("certificate file uploaded")
 		c.JSON(http.StatusOK, gin.H{"message": "file uploaded successfully"})
+	}
+}
+
+func GetCertificateUploadAudit(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		certificateID := c.Param("certificate_id")
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		limit, offset, query := utils.ParsePagination(c)
+		queries := db.New(pool)
+
+		auditEntries, err := queries.GetCertificateUploadAuditByCertificateIDPaginated(ctx, db.GetCertificateUploadAuditByCertificateIDPaginatedParams{
+			CertificateID: certificateID,
+			Limit:         limit,
+			Offset:        offset,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificate upload audit"})
+			return
+		}
+
+		total, err := queries.CountCertificateUploadAuditByCertificateID(ctx, certificateID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificate upload audit"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: auditEntries,
+			Meta: utils.BuildMeta(query, total),
+		})
 	}
 }
 

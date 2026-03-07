@@ -88,3 +88,15 @@ LIMIT $1 OFFSET $2;
 
 -- name: CountAllCertificatesWithContext :one
 SELECT COUNT(*) FROM certificates;
+
+-- name: GetCertificateUploadAuditByCertificateIDPaginated :many
+SELECT certificate_id, file_key, file_name, uploaded_by, uploaded_at
+FROM certificate_upload_audit
+WHERE certificate_id = $1
+ORDER BY uploaded_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountCertificateUploadAuditByCertificateID :one
+SELECT COUNT(*)
+FROM certificate_upload_audit
+WHERE certificate_id = $1;

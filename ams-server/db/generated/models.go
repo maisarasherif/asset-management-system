@@ -6,6 +6,8 @@ package db
 
 import (
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Asset struct {
@@ -47,6 +49,15 @@ type Certificate struct {
 	MaintenanceNotes string    `json:"maintenance_notes"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type CertificateUploadAudit struct {
+	ID            int32              `json:"id"`
+	CertificateID string             `json:"certificate_id"`
+	FileKey       string             `json:"file_key"`
+	FileName      string             `json:"file_name"`
+	UploadedBy    string             `json:"uploaded_by"`
+	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
 }
 
 type Component struct {

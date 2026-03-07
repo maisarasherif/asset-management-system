@@ -8,6 +8,8 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countAllCertificatesWithContext = `-- name: CountAllCertificatesWithContext :one
@@ -16,6 +18,19 @@ SELECT COUNT(*) FROM certificates
 
 func (q *Queries) CountAllCertificatesWithContext(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, countAllCertificatesWithContext)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countCertificateUploadAuditByCertificateID = `-- name: CountCertificateUploadAuditByCertificateID :one
+SELECT COUNT(*)
+FROM certificate_upload_audit
+WHERE certificate_id = $1
+`
+
+func (q *Queries) CountCertificateUploadAuditByCertificateID(ctx context.Context, certificateID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificateUploadAuditByCertificateID, certificateID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -278,6 +293,54 @@ func (q *Queries) GetCertificateByID(ctx context.Context, certificateID string) 
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getCertificateUploadAuditByCertificateIDPaginated = `-- name: GetCertificateUploadAuditByCertificateIDPaginated :many
+SELECT certificate_id, file_key, file_name, uploaded_by, uploaded_at
+FROM certificate_upload_audit
+WHERE certificate_id = $1
+ORDER BY uploaded_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type GetCertificateUploadAuditByCertificateIDPaginatedParams struct {
+	CertificateID string `json:"certificate_id"`
+	Limit         int32  `json:"limit"`
+	Offset        int32  `json:"offset"`
+}
+
+type GetCertificateUploadAuditByCertificateIDPaginatedRow struct {
+	CertificateID string             `json:"certificate_id"`
+	FileKey       string             `json:"file_key"`
+	FileName      string             `json:"file_name"`
+	UploadedBy    string             `json:"uploaded_by"`
+	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
+}
+
+func (q *Queries) GetCertificateUploadAuditByCertificateIDPaginated(ctx context.Context, arg GetCertificateUploadAuditByCertificateIDPaginatedParams) ([]GetCertificateUploadAuditByCertificateIDPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, getCertificateUploadAuditByCertificateIDPaginated, arg.CertificateID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCertificateUploadAuditByCertificateIDPaginatedRow
+	for rows.Next() {
+		var i GetCertificateUploadAuditByCertificateIDPaginatedRow
+		if err := rows.Scan(
+			&i.CertificateID,
+			&i.FileKey,
+			&i.FileName,
+			&i.UploadedBy,
+			&i.UploadedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getCertificatesByComponentIDPaginated = `-- name: GetCertificatesByComponentIDPaginated :many

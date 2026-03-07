@@ -1,48 +1,110 @@
-import { Component, useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
+﻿import { Component, useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import { Fragment } from "react";
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
-// ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ DESIGN TOKENS Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Karla:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=Space+Mono:wght@400;700&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg-0: #0a0a0b;
-    --bg-1: #111113;
-    --bg-2: #18181b;
-    --bg-3: #222226;
-    --bg-4: #2a2a2f;
-    --border: #2e2e34;
-    --border-bright: #3e3e46;
-    --text-0: #f4f4f5;
-    --text-1: #a1a1aa;
-    --text-2: #71717a;
-    --amber: #f59e0b;
-    --amber-dim: #78490a;
-    --amber-glow: rgba(245,158,11,0.15);
-    --red: #ef4444;
-    --red-dim: #7f1d1d;
-    --red-glow: rgba(239,68,68,0.15);
-    --green: #22c55e;
-    --green-dim: #14532d;
-    --green-glow: rgba(34,197,94,0.12);
-    --blue: #3b82f6;
-    --blue-dim: #1e3a5f;
+    --font-serif: 'Instrument Serif', Georgia, serif;
+    --font-sans: 'Karla', system-ui, sans-serif;
+    --font-mono: 'Space Mono', 'Courier New', monospace;
+
+    --bg: #f9f7f3;
+    --bg-sidebar: #f2ede4;
+    --surface: #ffffff;
+    --surface2: #f5f1ea;
+    --surface3: #ede8de;
+    --border: rgba(30,20,10,0.08);
+    --border-mid: rgba(30,20,10,0.14);
+    --border-strong: rgba(30,20,10,0.24);
+
+    --ink: #1a1208;
+    --ink-mid: #4a3f30;
+    --ink-dim: #8a7a65;
+    --ink-faint: #c4b8a4;
+
+    --red: #b91c1c;
+    --red-bg: rgba(185,28,28,0.07);
+    --red-border: rgba(185,28,28,0.22);
+    --amber: #b45309;
+    --amber-bg: rgba(180,83,9,0.07);
+    --amber-border: rgba(180,83,9,0.22);
+    --green: #15803d;
+    --green-bg: rgba(21,128,61,0.07);
+    --green-border: rgba(21,128,61,0.22);
+    --blue: #1d4ed8;
+    --blue-bg: rgba(29,78,216,0.07);
+    --blue-border: rgba(29,78,216,0.2);
+
+    --sidebar-w: 252px;
+
+    /* Backward-compatible aliases used across existing inline styles */
+    --bg-0: var(--bg);
+    --bg-1: var(--surface);
+    --bg-2: var(--surface2);
+    --bg-3: var(--surface3);
+    --bg-4: #ded6c8;
+    --border-bright: var(--border-strong);
+    --text-0: var(--ink);
+    --text-1: var(--ink-mid);
+    --text-2: var(--ink-dim);
+    --amber-dim: var(--amber);
+    --amber-glow: var(--amber-bg);
+    --red-dim: var(--red);
+    --red-glow: var(--red-bg);
+    --green-dim: var(--green);
+    --green-glow: var(--green-bg);
+    --blue-dim: var(--blue);
     --radius: 4px;
-    --font-display: 'Syne', sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    --font-display: var(--font-serif);
   }
 
-  html, body, #root { height: 100%; background: var(--bg-0); color: var(--text-0); font-family: var(--font-mono); }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111009;
+      --bg-sidebar: #161309;
+      --surface: #1c190f;
+      --surface2: #231f13;
+      --surface3: #2b2618;
+      --border: rgba(255,240,200,0.07);
+      --border-mid: rgba(255,240,200,0.12);
+      --border-strong: rgba(255,240,200,0.20);
+
+      --ink: #f0e8d8;
+      --ink-mid: #bdb09a;
+      --ink-dim: #7a6f5c;
+      --ink-faint: #403a2c;
+
+      --red: #fca5a5;
+      --red-bg: rgba(252,165,165,0.08);
+      --red-border: rgba(252,165,165,0.22);
+      --amber: #fcd34d;
+      --amber-bg: rgba(252,211,77,0.08);
+      --amber-border: rgba(252,211,77,0.22);
+      --green: #86efac;
+      --green-bg: rgba(134,239,172,0.08);
+      --green-border: rgba(134,239,172,0.2);
+      --blue: #93c5fd;
+      --blue-bg: rgba(147,197,253,0.08);
+      --blue-border: rgba(147,197,253,0.18);
+
+      --bg-4: #3a3324;
+    }
+  }
+
+  html, body, #root { height: 100%; background: var(--bg-0); color: var(--text-0); font-family: var(--font-sans); }
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: var(--bg-1); }
   ::-webkit-scrollbar-thumb { background: var(--bg-4); border-radius: 3px; }
 
-  button { cursor: pointer; font-family: var(--font-mono); }
-  input, select, textarea { font-family: var(--font-mono); }
+  button { cursor: pointer; font-family: var(--font-sans); }
+  input, select, textarea { font-family: var(--font-sans); }
 
   @keyframes pulse-amber {
     0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.4); }
@@ -74,9 +136,558 @@ const CSS = `
     animation: shimmer 1.4s infinite;
     border-radius: var(--radius);
   }
+
+  .topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    height: 48px;
+    background: var(--ink);
+    border-bottom: 1px solid rgba(255, 240, 200, 0.12);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 0 24px;
+  }
+
+  .topbar-brand {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    color: var(--bg);
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+
+  .topbar-brand em {
+    font-style: italic;
+    color: rgba(240, 232, 216, 0.58);
+  }
+
+  .topbar-divider {
+    width: 1px;
+    height: 16px;
+    background: rgba(255, 240, 200, 0.22);
+  }
+
+  .topbar-nav {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .topbar-nav button {
+    border: none;
+    background: transparent;
+    color: rgba(240, 232, 216, 0.6);
+    font-size: 11px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 3px;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .topbar-nav button:hover {
+    color: var(--bg);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .topbar-nav button.active {
+    color: var(--bg);
+  }
+
+  .topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .topbar-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.12);
+    display: grid;
+    place-items: center;
+    color: var(--bg);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .topbar-username {
+    color: rgba(240, 232, 216, 0.65);
+    font-size: 11px;
+    letter-spacing: 0.2px;
+  }
+
+  .shell {
+    display: block;
+    min-height: 100vh;
+    padding-top: 48px;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 48px;
+    height: calc(100vh - 48px);
+    overflow-y: auto;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-mid);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar-asset-hero {
+    padding: 22px 18px 18px;
+    border-bottom: 1px solid var(--border-mid);
+  }
+
+  .sidebar-asset-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    color: var(--text-2);
+    margin-bottom: 6px;
+  }
+
+  .sidebar-asset-name {
+    font-family: var(--font-serif);
+    font-size: 21px;
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+
+  .sidebar-asset-tags {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+
+  .sidebar-tag {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 2px;
+    border: 1px solid var(--border-mid);
+    background: var(--bg-3);
+    color: var(--text-2);
+  }
+
+  .sidebar-tag.active {
+    color: var(--green);
+    background: var(--green-bg);
+    border-color: var(--green-border);
+  }
+
+  .sidebar-section-label {
+    padding: 14px 18px 6px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    border: none;
+    border-left: 2px solid transparent;
+    background: transparent;
+    color: var(--text-1);
+    text-align: left;
+    padding: 8px 18px;
+    font-size: 12px;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+
+  .sidebar-item:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
+  .sidebar-item.active {
+    border-left-color: var(--red);
+    background: var(--bg-2);
+    color: var(--text-0);
+    font-weight: 600;
+  }
+
+  .sidebar-item-badge {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 0.5px;
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+
+  .badge-red { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+  .badge-green { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+  .badge-dim { background: var(--bg-3); color: var(--text-2); border: 1px solid var(--border-mid); }
+
+  .main {
+    min-width: 0;
+    padding: 34px 40px 72px;
+    background: var(--bg-0);
+  }
+
+  .comp-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 18px;
+  }
+
+  .comp-nav {
+    border: 1px solid var(--border-mid);
+    background: var(--bg-sidebar);
+    border-radius: 4px;
+    overflow: hidden;
+    height: fit-content;
+  }
+
+  .comp-nav-hero {
+    padding: 18px 16px;
+    border-bottom: 1px solid var(--border-mid);
+  }
+
+  .comp-nav-title {
+    font-family: var(--font-serif);
+    font-size: 30px;
+    line-height: 1.04;
+    margin-bottom: 8px;
+  }
+
+  .comp-nav-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .comp-nav-tag {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    border: 1px solid var(--border-mid);
+    border-radius: 10px;
+    padding: 2px 8px;
+    background: var(--bg-2);
+    color: var(--text-2);
+  }
+
+  .comp-asset-select {
+    width: 100%;
+    border: 1px solid var(--border-mid);
+    border-radius: 3px;
+    background: var(--bg-1);
+    color: var(--text-0);
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .comp-nav-list {
+    padding: 8px 0;
+  }
+
+  .comp-nav-item {
+    width: 100%;
+    border: none;
+    border-left: 2px solid transparent;
+    background: transparent;
+    color: var(--text-1);
+    text-align: left;
+    padding: 9px 12px 9px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .comp-nav-item:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
+  .comp-nav-item.active {
+    border-left-color: var(--red);
+    background: var(--bg-2);
+    color: var(--text-0);
+    font-weight: 600;
+  }
+
+  .comp-badge {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    border-radius: 10px;
+    padding: 2px 7px;
+    border: 1px solid;
+  }
+
+  .comp-badge.red { color: var(--red); background: var(--red-bg); border-color: var(--red-border); }
+  .comp-badge.amber { color: var(--amber); background: var(--amber-bg); border-color: var(--amber-border); }
+  .comp-badge.green { color: var(--green); background: var(--green-bg); border-color: var(--green-border); }
+  .comp-badge.dim { color: var(--text-2); background: var(--bg-3); border-color: var(--border-mid); }
+
+  .comp-content {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .comp-head {
+    border-bottom: 2px solid var(--text-0);
+    padding-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .comp-head-title {
+    font-family: var(--font-serif);
+    font-size: 34px;
+    line-height: 1.05;
+    margin-bottom: 3px;
+  }
+
+  .comp-head-sub {
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
+  .comp-meta {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .comp-meta-cell {
+    border-right: 1px solid var(--border);
+    padding: 10px 12px;
+  }
+
+  .comp-meta-cell:nth-child(3n) {
+    border-right: none;
+  }
+
+  .comp-meta-label {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--text-2);
+    margin-bottom: 4px;
+  }
+
+  .comp-meta-value {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .comp-meta-value.warning { color: var(--amber); }
+  .comp-meta-value.expired { color: var(--red); }
+
+  .cert-editorial-card {
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--bg-1);
+  }
+
+  .cert-editorial-header {
+    background: var(--ink);
+    color: var(--bg);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cert-editorial-title {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    margin-right: auto;
+  }
+
+  .btn-upload-editorial {
+    background: var(--red);
+    color: #fff;
+    border: 1px solid var(--red);
+    font-size: 11px;
+    padding: 7px 12px;
+    border-radius: 2px;
+  }
+
+  .btn-view-editorial {
+    background: transparent;
+    color: rgba(240,232,216,0.78);
+    border: 1px solid rgba(255,255,255,0.28);
+    font-size: 11px;
+    padding: 7px 12px;
+    border-radius: 2px;
+  }
+
+  .btn-view-editorial:hover {
+    color: #fff;
+    border-color: rgba(255,255,255,0.58);
+    background: rgba(255,255,255,0.08);
+  }
+
+  .cert-editorial-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+    border-top: 1px solid var(--border);
+  }
+
+  .cert-editorial-row {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cert-editorial-row:last-child {
+    border-bottom: none;
+  }
+
+  .cert-editorial-label {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--text-2);
+    margin-bottom: 4px;
+  }
+
+  .cert-editorial-value {
+    font-size: 13px;
+    color: var(--text-0);
+    font-weight: 500;
+    word-break: break-word;
+  }
+
+  .cert-editorial-value.expired { color: var(--red); }
+  .cert-editorial-value.warning { color: var(--amber); }
+
+  .audit-editorial {
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+  }
+
+  .audit-editorial-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .audit-editorial-title {
+    margin-right: auto;
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--text-1);
+    font-size: 15px;
+  }
+
+  .audit-editorial-count {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--text-2);
+  }
+
+  .audit-editorial-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .audit-editorial-table th {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 1.3px;
+    text-transform: uppercase;
+    color: var(--text-2);
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border-mid);
+  }
+
+  .audit-editorial-table td {
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-1);
+  }
+
+  .audit-editorial-table tbody tr:hover td {
+    background: var(--bg-3);
+  }
+
+  .audit-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 7px;
+    background: var(--green);
+  }
+
+  .audit-pill {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-radius: 2px;
+    border: 1px solid var(--green-border);
+    color: var(--green);
+    background: var(--green-bg);
+    padding: 2px 7px;
+  }
+
+  .audit-mono {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-0);
+  }
+
+  .cert-accordion-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.28s ease;
+    overflow: hidden;
+  }
+  .cert-accordion-body.open {
+    grid-template-rows: 1fr;
+  }
+  .cert-accordion-inner {
+    overflow: hidden;
+  }
+
+  @media (max-width: 1100px) {
+    .comp-layout {
+      grid-template-columns: 1fr;
+    }
+  }
 `;
 
-// ─── AUTH CONTEXT ─────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ AUTH CONTEXT Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const AuthContext = createContext(null);
 const useAuth = () => useContext(AuthContext);
 const AppFeedbackContext = createContext({ notifyError: () => {}, notifyInfo: () => {} });
@@ -240,7 +851,7 @@ class AppErrorBoundary extends Component {
   }
 }
 
-// ─── API LAYER ────────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ API LAYER Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const BASE = "http://localhost:8080";
 
 function useApi() {
@@ -329,7 +940,7 @@ function useApi() {
   }), [req]);
 }
 
-// ─── DESIGN COMPONENTS ───────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ DESIGN COMPONENTS Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 function StatusBadge({ status }) {
   const cfg = {
@@ -360,31 +971,6 @@ function StatusBadge({ status }) {
   );
 }
 
-function Btn({ children, variant = "default", size = "md", onClick, disabled, style }) {
-  const styles = {
-    default: { bg: "var(--bg-3)", color: "var(--text-0)", border: "var(--border)" },
-    primary: { bg: "var(--amber)", color: "#000", border: "var(--amber)" },
-    danger:  { bg: "transparent", color: "var(--red)", border: "var(--red)" },
-    ghost:   { bg: "transparent", color: "var(--text-1)", border: "transparent" },
-  }[variant];
-  const pad = size === "sm" ? "4px 10px" : size === "lg" ? "10px 20px" : "6px 14px";
-  const fs = size === "sm" ? 11 : size === "lg" ? 13 : 12;
-
-  return (
-    <button onClick={onClick} disabled={disabled} style={{
-      padding: pad, fontSize: fs, fontWeight: 500, letterSpacing: "0.04em",
-      background: styles.bg, color: styles.color,
-      border: `1px solid ${styles.border}`, borderRadius: 3,
-      transition: "all 0.15s", opacity: disabled ? 0.5 : 1,
-      ...style
-    }}
-    onMouseEnter={e => { if (!disabled) e.target.style.opacity = "0.8"; }}
-    onMouseLeave={e => { if (!disabled) e.target.style.opacity = "1"; }}
-    >{children}</button>
-  );
-}
-
-// Fix the Btn style issue
 function Button({ children, variant = "default", size = "md", onClick, disabled, style }) {
   const styles = {
     default: { background: "var(--bg-3)", color: "var(--text-0)", borderColor: "var(--border)" },
@@ -405,7 +991,7 @@ function Button({ children, variant = "default", size = "md", onClick, disabled,
   );
 }
 
-function Input({ label, value, onChange, type = "text", placeholder, required, options }) {
+function Input({ label, value, onChange, type = "text", placeholder, required, options, onKeyDown }) {
   const base = {
     width: "100%", background: "var(--bg-2)", border: "1px solid var(--border)",
     borderRadius: 3, padding: "7px 10px", color: "var(--text-0)", fontSize: 12,
@@ -424,7 +1010,7 @@ function Input({ label, value, onChange, type = "text", placeholder, required, o
           style={{ ...base, resize: "vertical" }} />
       ) : (
         <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-          style={base} />
+          onKeyDown={onKeyDown} style={base} />
       )}
     </div>
   );
@@ -528,23 +1114,13 @@ function Pagination({ meta, onPage }) {
   );
 }
 
-function StatCard({ label, value, sub, accent }) {
-  return (
-    <Card style={{ padding: 18, display: "flex", flexDirection: "column", gap: 6 }}>
-      <span style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
-      <span style={{ fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 800, color: accent || "var(--text-0)", lineHeight: 1 }}>{value}</span>
-      {sub && <span style={{ fontSize: 10, color: "var(--text-2)" }}>{sub}</span>}
-    </Card>
-  );
-}
-
 function formatDate(value) {
   if (!value) return "—";
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleDateString();
 }
 
-// ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ LOGIN PAGE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function LoginPage() {
   const api = useApi();
   const [email, setEmail] = useState("");
@@ -578,8 +1154,8 @@ function LoginPage() {
 
         <Card style={{ padding: 28 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <Input label="Email" type="email" value={email} onChange={setEmail} placeholder="ops@company.com" required />
-            <Input label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••" required />
+            <Input label="Email" type="email" value={email} onChange={setEmail} placeholder="ops@company.com" required onKeyDown={e => e.key === "Enter" && handleSubmit()} />
+            <Input label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••" required onKeyDown={e => e.key === "Enter" && handleSubmit()} />
             {error && <div style={{ padding: "8px 12px", background: "var(--red-glow)", border: "1px solid var(--red)30", borderRadius: 3, color: "var(--red)", fontSize: 11 }}>{error}</div>}
             <Button variant="primary" size="lg" onClick={handleSubmit} disabled={loading || !email || !password} style={{ width: "100%", marginTop: 4 }}>
               {loading ? "Authenticating..." : "Sign In →"}
@@ -595,57 +1171,48 @@ function LoginPage() {
   );
 }
 
-// ─── SIDEBAR ──────────────────────────────────────────────────────────────────
-const NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: "◈" },
-  { id: "assets", label: "Assets", icon: "◻" },
-  { id: "components", label: "Components", icon: "◈" },
-  { id: "categories", label: "Categories", icon: "◫" },
-  { id: "test-types", label: "Test Types", icon: "◎" },
-  { id: "users", label: "Users", icon: "◉", adminOnly: true },
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ SIDEBAR Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+const TOP_NAV_ITEMS = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "assets", label: "Assets", adminOnly: true },
+  { id: "users", label: "Users", adminOnly: true },
 ];
 
-function Sidebar({ active, onNav }) {
-  const { user, logout, isAdmin } = useAuth();
-  return (
-    <aside style={{
-      width: 220, background: "var(--bg-1)", borderRight: "1px solid var(--border)",
-      display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 100,
-    }}>
-      <div style={{ padding: "20px 18px 16px", borderBottom: "1px solid var(--border)" }}>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em" }}>
-          <span style={{ color: "var(--amber)" }}>AMS</span>
-          <span style={{ color: "var(--text-2)", fontSize: 10, fontWeight: 400, marginLeft: 8, letterSpacing: "0.08em", fontFamily: "var(--font-mono)" }}>v1</span>
-        </div>
-      </div>
+function TopBar({ active, onNav }) {
+  const { user, isAdmin, logout } = useAuth();
+  const visible = TOP_NAV_ITEMS.filter(n => !n.adminOnly || isAdmin);
+  const initials = `${user?.first_name?.[0] || ""}${user?.last_name?.[0] || ""}`.toUpperCase() || "US";
 
-      <nav style={{ flex: 1, padding: "12px 0", overflowY: "auto" }}>
-        {NAV_ITEMS.filter(n => !n.adminOnly || isAdmin).map(item => (
-          <button key={item.id} onClick={() => onNav(item.id)} style={{
-            width: "100%", padding: "9px 18px", display: "flex", alignItems: "center", gap: 10,
-            background: active === item.id ? "var(--bg-3)" : "transparent",
-            color: active === item.id ? "var(--text-0)" : "var(--text-2)",
-            border: "none", borderLeft: `2px solid ${active === item.id ? "var(--amber)" : "transparent"}`,
-            fontSize: 12, letterSpacing: "0.03em", transition: "all 0.15s", textAlign: "left", cursor: "pointer",
-          }}>
-            <span style={{ fontSize: 14, opacity: 0.8 }}>{item.icon}</span>
+  return (
+    <header className="topbar">
+      <span className="topbar-brand">Asset Management <em>System</em></span>
+      <div className="topbar-divider" />
+      <nav className="topbar-nav">
+        {visible.map(item => (
+          <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => onNav(item.id)}>
             {item.label}
           </button>
         ))}
       </nav>
-
-      <div style={{ padding: "14px 18px", borderTop: "1px solid var(--border)" }}>
-        <div style={{ fontSize: 11, color: "var(--text-1)", marginBottom: 4, fontWeight: 500 }}>{user?.first_name} {user?.last_name}</div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <StatusBadge status={user?.role} />
-          <button onClick={logout} style={{ fontSize: 10, color: "var(--text-2)", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.06em" }}>SIGN OUT</button>
-        </div>
+      <div className="topbar-right">
+        <div className="topbar-avatar">{initials}</div>
+        <span className="topbar-username">{user?.first_name} {user?.last_name}</span>
+        <div className="topbar-divider" />
+        <button onClick={logout} style={{
+          border: "1px solid rgba(255,240,200,0.18)", background: "transparent",
+          color: "rgba(240,232,216,0.6)", fontSize: 11, letterSpacing: "0.08em",
+          textTransform: "uppercase", padding: "4px 10px", borderRadius: 3, cursor: "pointer",
+          transition: "all 0.15s",
+        }}
+        onMouseEnter={e => { e.target.style.color = "var(--bg)"; e.target.style.borderColor = "rgba(255,240,200,0.45)"; }}
+        onMouseLeave={e => { e.target.style.color = "rgba(240,232,216,0.6)"; e.target.style.borderColor = "rgba(255,240,200,0.18)"; }}
+        >Sign Out</button>
       </div>
-    </aside>
+    </header>
   );
 }
 
-// ─── PAGE HEADER ──────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ PAGE HEADER Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function PageHeader({ title, subtitle, action }) {
   return (
     <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -658,23 +1225,77 @@ function PageHeader({ title, subtitle, action }) {
   );
 }
 
-// ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard() {
+
+// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+function CertDonut({ certs, loading }) {
+
+  const valid    = certs.filter(c => c.status === "VALID").length;
+  const expiring = certs.filter(c => c.status === "EXPIRING_SOON").length;
+  const expired  = certs.filter(c => c.status === "EXPIRED").length;
+  const total    = valid + expiring + expired;
+
+  const data = [
+    { name: "Valid",    value: valid,    color: "#15803d" },
+    { name: "Expiring", value: expiring, color: "#b45309" },
+    { name: "Expired",  value: expired,  color: "#b91c1c" },
+  ].filter(d => d.value > 0);
+
+  if (loading) return (
+    <div style={{ height: 220, display: "grid", placeItems: "center" }}>
+      <div className="skeleton" style={{ width: 160, height: 160, borderRadius: "50%" }} />
+    </div>
+  );
+
+  if (total === 0) return (
+    <div style={{ height: 220, display: "grid", placeItems: "center" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ color: "var(--green)", fontSize: 32, marginBottom: 6 }}>✓</div>
+        <div style={{ fontSize: 11, color: "var(--text-2)" }}>No certificates</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ position: "relative", height: 220 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie data={data} cx="50%" cy="50%" innerRadius={64} outerRadius={88}
+            paddingAngle={2} dataKey="value" strokeWidth={0}>
+            {data.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+          </Pie>
+          <Tooltip
+            contentStyle={{ background: "var(--surface)", border: "1px solid var(--border-mid)", borderRadius: 3, fontSize: 11, fontFamily: "var(--font-mono)" }}
+            formatter={(value, name) => [value, name]}
+          />
+          <Legend iconType="circle" iconSize={7}
+            formatter={(value) => <span style={{ fontSize: 10, color: "var(--ink-mid)", fontFamily: "var(--font-mono)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{value}</span>}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -74%)", textAlign: "center", pointerEvents: "none" }}>
+        <div style={{ fontFamily: "var(--font-serif)", fontSize: 28, lineHeight: 1, color: "var(--ink)" }}>{total}</div>
+        <div style={{ fontSize: 9, color: "var(--ink-dim)", letterSpacing: "1.2px", textTransform: "uppercase", fontFamily: "var(--font-mono)" }}>certs</div>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ onOpenAsset, onOpenComponent }) {
   const api = useApi();
-  const [stats, setStats] = useState({ assets: 0, components: 0, certificates: 0 });
-  const [expiring, setExpiring] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [allCerts, setAllCerts]     = useState([]);
+  const [assets, setAssets]         = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [selectedAssetId, setSelectedAssetId] = useState(null);
+  const [certFilter, setCertFilter] = useState("ALL");
 
   const load = useCallback(async (signal) => {
     Promise.all([
-      api.get("/assets?limit=1", { signal }),
-      api.get("/components?limit=1", { signal }),
-      api.get("/certificates?limit=1", { signal }),
-      api.get("/expiring-certificates", { signal }),
-    ]).then(([a, c, cert, exp]) => {
+      api.get("/assets?limit=200", { signal }),
+      api.get("/certificates/dashboard?limit=1000", { signal }),
+    ]).then(([a, d]) => {
       if (signal?.aborted) return;
-      setStats({ assets: a?.meta?.total || 0, components: c?.meta?.total || 0, certificates: cert?.meta?.total || 0 });
-      setExpiring(exp || []);
+      setAssets(a?.data || []);
+      setAllCerts(d?.data || []);
     }).catch((e) => {
       if (e?.name !== "AbortError") console.error(e);
     }).finally(() => { if (!signal?.aborted) setLoading(false); });
@@ -686,54 +1307,140 @@ function Dashboard() {
     return () => controller.abort();
   }, [load]);
 
-  const expired = expiring.filter(c => c.status === "EXPIRED").length;
-  const expiringSoon = expiring.filter(c => c.status === "EXPIRING_SOON").length;
+  const visibleCerts = useMemo(() => {
+    if (selectedAssetId) return allCerts.filter(c => c.asset_id === selectedAssetId);
+    return allCerts;
+  }, [allCerts, selectedAssetId]);
+
+  const alertCerts = useMemo(() => {
+    const base = visibleCerts.filter(c => c.status === "EXPIRED" || c.status === "EXPIRING_SOON");
+    if (certFilter === "ALL") return base;
+    return base.filter(c => c.status === certFilter);
+  }, [visibleCerts, certFilter]);
+
+  const selectedAsset = useMemo(() => assets.find(a => a.asset_id === selectedAssetId) || null, [assets, selectedAssetId]);
+
+  const getAssetBadge = useCallback((assetId) => {
+    const certs = allCerts.filter(c => c.asset_id === assetId);
+    if (certs.some(c => c.status === "EXPIRED"))       return { cls: "red",   label: "!" };
+    if (certs.some(c => c.status === "EXPIRING_SOON")) return { cls: "amber", label: "~" };
+    if (certs.length > 0)                              return { cls: "green", label: "✓" };
+    return { cls: "dim", label: "—" };
+  }, [allCerts]);
 
   return (
     <div className="fade-in">
-      <PageHeader title="Operations Dashboard" subtitle="Real-time asset & compliance overview" />
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 28 }}>
-        <StatCard label="Total Assets" value={loading ? "—" : stats.assets} />
-        <StatCard label="Components" value={loading ? "—" : stats.components} />
-        <StatCard label="Certificates" value={loading ? "—" : stats.certificates} />
-        <StatCard label="Expiring Soon" value={loading ? "—" : expiringSoon} accent="var(--amber)" sub="within 30 days" />
-        <StatCard label="Expired" value={loading ? "—" : expired} accent="var(--red)" sub="require immediate action" />
-      </div>
-
-      {expiring.length > 0 && (
-        <Card style={{ marginBottom: 20 }}>
-          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ color: "var(--amber)", fontSize: 14 }}>⚠</span>
-            <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700 }}>Certificate Alerts</span>
-            <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-2)" }}>{expiring.length} REQUIRING ATTENTION</span>
+      <PageHeader
+        title={selectedAsset ? selectedAsset.name : "Operations Dashboard"}
+        subtitle={selectedAsset ? `Asset dashboard · ${visibleCerts.length} certificates` : "Real-time compliance overview"}
+      />
+      <div className="comp-layout">
+        <aside className="comp-nav">
+          <div className="comp-nav-hero">
+            <div className="comp-nav-title">Assets</div>
+            <div className="comp-nav-tags">
+              <span className="comp-nav-tag">{loading ? "..." : `${assets.length} Total`}</span>
+            </div>
           </div>
-          <Table
-            columns={[
-              { key: "certificate_name", label: "Certificate" },
-              { key: "component_name", label: "Component" },
-              { key: "asset_name", label: "Asset" },
-              { key: "expiry_date", label: "Expires", render: v => <span style={{ color: "var(--amber)", fontWeight: 600 }}>{formatDate(v)}</span> },
-              { key: "status", label: "Status", render: v => <StatusBadge status={v} /> },
-            ]}
-            data={expiring}
-            loading={loading}
-          />
-        </Card>
-      )}
+          <div className="comp-nav-list">
+            <button
+              className={`comp-nav-item ${selectedAssetId === null ? "active" : ""}`}
+              onClick={() => setSelectedAssetId(null)}
+            >
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>All Assets</span>
+              <span className="comp-badge dim">Overview</span>
+            </button>
+            {loading && <div style={{ padding: "10px 14px", color: "var(--text-2)", fontSize: 12 }}>Loading...</div>}
+            {!loading && assets.map(asset => {
+              const badge = getAssetBadge(asset.asset_id);
+              const isActive = selectedAssetId === asset.asset_id;
+              return (
+                <div key={asset.asset_id} style={{ display: "flex", alignItems: "center", borderLeft: isActive ? "2px solid var(--red)" : "2px solid transparent", background: isActive ? "var(--bg-2)" : "transparent" }}>
+                  <button
+                    style={{ flex: 1, border: "none", background: "transparent", color: isActive ? "var(--text-0)" : "var(--text-1)", textAlign: "left", padding: "8px 8px 8px 14px", fontSize: 12, fontWeight: isActive ? 600 : 400, display: "flex", alignItems: "center", gap: 8, overflow: "hidden", cursor: "pointer" }}
+                    onClick={() => setSelectedAssetId(asset.asset_id)}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{asset.name}</span>
+                    <span className={`comp-badge ${badge.cls}`} style={{ flexShrink: 0 }}>{badge.label}</span>
+                  </button>
+                  <button
+                    title="Open Components"
+                    onClick={() => onOpenAsset(asset.asset_id)}
+                    style={{ flexShrink: 0, border: "none", background: "transparent", color: "var(--ink-dim)", padding: "8px 12px", fontSize: 13, cursor: "pointer" }}
+                  >→</button>
+                </div>
+              );
+            })}
+            {!loading && assets.length === 0 && <div style={{ padding: "10px 14px", color: "var(--text-2)", fontSize: 12 }}>No assets found.</div>}
+          </div>
+        </aside>
 
-      {expiring.length === 0 && !loading && (
-        <Card style={{ padding: 32, textAlign: "center" }}>
-          <div style={{ color: "var(--green)", fontSize: 28, marginBottom: 8 }}>✓</div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>All Certificates Valid</div>
-          <div style={{ fontSize: 11, color: "var(--text-2)" }}>No certificates expiring within the next 30 days.</div>
-        </Card>
-      )}
+        <section className="comp-content">
+          {selectedAsset && (
+            <Card style={{ marginBottom: 16 }}>
+              <div className="comp-meta">
+                <div className="comp-meta-cell"><div className="comp-meta-label">Status</div><div className="comp-meta-value"><StatusBadge status={selectedAsset.status} /></div></div>
+                <div className="comp-meta-cell"><div className="comp-meta-label">Location</div><div className="comp-meta-value">{selectedAsset.location || "—"}</div></div>
+                <div className="comp-meta-cell"><div className="comp-meta-label">Project</div><div className="comp-meta-value">{selectedAsset.assigned_project || "—"}</div></div>
+                <div className="comp-meta-cell"><div className="comp-meta-label">Added</div><div className="comp-meta-value">{formatDate(selectedAsset.created_at)}</div></div>
+                {selectedAsset.description && <div className="comp-meta-cell" style={{ gridColumn: "1 / -1" }}><div className="comp-meta-label">Description</div><div className="comp-meta-value">{selectedAsset.description}</div></div>}
+              </div>
+            </Card>
+          )}
+
+          <Card style={{ marginBottom: 16 }}>
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700 }}>Certificate Status</span>
+            </div>
+            <div style={{ padding: "8px 16px 16px" }}>
+              <CertDonut certs={visibleCerts} loading={loading} />
+            </div>
+          </Card>
+
+          <Card>
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ color: "var(--amber)", fontSize: 14 }}>⚠</span>
+              <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700 }}>Certificate Alerts</span>
+              <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-2)" }}>{alertCerts.length} ITEMS</span>
+              <select
+                value={certFilter}
+                onChange={e => setCertFilter(e.target.value)}
+                style={{ fontSize: 10, fontFamily: "var(--font-mono)", background: "var(--bg-2)", border: "1px solid var(--border-mid)", borderRadius: 3, color: "var(--text-0)", padding: "3px 7px" }}
+              >
+                <option value="ALL">All Alerts</option>
+                <option value="EXPIRING_SOON">Expiring Soon</option>
+                <option value="EXPIRED">Expired</option>
+              </select>
+            </div>
+            {alertCerts.length === 0 && !loading ? (
+              <div style={{ padding: 32, textAlign: "center" }}>
+                <div style={{ color: "var(--green)", fontSize: 28, marginBottom: 8 }}>✓</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>All Clear</div>
+                <div style={{ fontSize: 11, color: "var(--text-2)" }}>No certificates require attention.</div>
+              </div>
+            ) : (
+              <Table
+                loading={loading}
+                data={alertCerts}
+                onRowClick={row => onOpenComponent(row.asset_id, row.component_id)}
+                columns={[
+                  { key: "certificate_name", label: "Certificate" },
+                  { key: "component_name",   label: "Component" },
+                  { key: "asset_name",       label: "Asset" },
+                  { key: "expiry_date",      label: "Expires", render: v => <span style={{ color: "var(--amber)", fontWeight: 600 }}>{formatDate(v)}</span> },
+                  { key: "status",           label: "Status",  render: v => <StatusBadge status={v} /> },
+                ]}
+              />
+            )}
+          </Card>
+        </section>
+      </div>
     </div>
   );
 }
 
-// ─── ASSETS PAGE ──────────────────────────────────────────────────────────────
+
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ ASSETS PAGE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function AssetForm({ initial, onSubmit, onClose, submitting = false }) {
   const [form, setForm] = useState(initial || { name: "", description: "", status: "ACTIVE", location: "", assigned_project: "", photo: "", datasheet: "" });
   const f = (k) => (v) => setForm(p => ({ ...p, [k]: v }));
@@ -849,9 +1556,10 @@ function AssetsPage() {
   );
 }
 
-// ─── COMPONENTS PAGE ─────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ COMPONENTS PAGE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function ComponentForm({ initial, assets, categories, onSubmit, onClose, submitting = false }) {
-  const [form, setForm] = useState(initial || { asset_id: "", category_id: "", name: "", serial_number: "", manufacturer: "", description: "", equipment_type: "", structure: "", model: "", class: "", class_code: "", safety_critical: "NO" });
+  const baseForm = { asset_id: "", category_id: "", name: "", serial_number: "", manufacturer: "", description: "", equipment_type: "", structure: "", model: "", class: "", class_code: "", safety_critical: "NO" };
+  const [form, setForm] = useState({ ...baseForm, ...(initial || {}) });
   const f = (k) => (v) => setForm(p => ({ ...p, [k]: v }));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -887,32 +1595,93 @@ function ComponentForm({ initial, assets, categories, onSubmit, onClose, submitt
   );
 }
 
-function ComponentsPage() {
+function ComponentsAssetPicker({ onOpenAsset }) {
   const api = useApi();
-  const { isAdmin } = useAuth();
+  const [assets, setAssets] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    api.get("/assets?limit=500", { signal: controller.signal })
+      .then((res) => { if (!controller.signal.aborted) setAssets(res?.data || []); })
+      .catch((e) => { if (e?.name !== "AbortError") console.error(e); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [api]);
+
+  return (
+    <div className="fade-in">
+      <PageHeader title="Assets" subtitle="Select an asset to open its components" />
+      <div className="comp-layout">
+        <aside className="comp-nav">
+          <div className="comp-nav-hero">
+            <div className="comp-nav-title">Assets</div>
+            <div className="comp-nav-tags">
+              <span className="comp-nav-tag">{assets.length} Total</span>
+            </div>
+          </div>
+          <div className="comp-nav-list">
+            {loading && <div style={{ padding: "10px 14px", color: "var(--text-2)", fontSize: 12 }}>Loading assets...</div>}
+            {!loading && assets.map(asset => (
+              <button key={asset.asset_id} className="comp-nav-item" onClick={() => onOpenAsset(asset.asset_id)}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{asset.name}</span>
+                <span className="comp-badge dim">Open</span>
+              </button>
+            ))}
+            {!loading && assets.length === 0 && <div style={{ padding: "10px 14px", color: "var(--text-2)", fontSize: 12 }}>No assets found.</div>}
+          </div>
+        </aside>
+        <section className="comp-content">
+          <Card style={{ padding: 18, color: "var(--text-2)", fontSize: 12 }}>
+            Choose an asset from the left pane to open its component page.
+          </Card>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function ComponentsPage({ selectedAssetId, initialComponentId, onBackToAssets }) {
+  const api = useApi();
+  const { user, isAdmin } = useAuth();
   const confirmAction = useConfirm();
+  const { notifyInfo, notifyError } = useFeedback();
   const [data, setData] = useState([]);
-  const [meta, setMeta] = useState(null);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [assets, setAssets] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [testTypes, setTestTypes] = useState([]);
-  const [expandedComponentId, setExpandedComponentId] = useState(null);
-  const [expandedCertificateByComponent, setExpandedCertificateByComponent] = useState({});
   const [certificatesByComponent, setCertificatesByComponent] = useState({});
   const [certificatesLoadingByComponent, setCertificatesLoadingByComponent] = useState({});
   const [certificatesErrorByComponent, setCertificatesErrorByComponent] = useState({});
+  const [uploadBusyByCertificate, setUploadBusyByCertificate] = useState({});
+  const [uploadAuditByCertificate, setUploadAuditByCertificate] = useState({});
+  const [uploadAuditLoadingByCertificate, setUploadAuditLoadingByCertificate] = useState({});
+  const [uploadAuditErrorByCertificate, setUploadAuditErrorByCertificate] = useState({});
+  const [selectedComponentId, setSelectedComponentId] = useState("");
+  const [certModal, setCertModal] = useState(null); // "add"
+  const [testTypes, setTestTypes] = useState([]);
+  const [expandedCertId, setExpandedCertId] = useState(null);
 
-  const load = useCallback(async (p = 1, opts = {}) => {
+  const load = useCallback(async (opts = {}) => {
     setLoading(true);
     try {
-      const res = await api.get(`/components?page=${p}&limit=20`, { signal: opts.signal });
+      const [componentsRes, assetsRes, categoriesRes, testTypesRes] = await Promise.all([
+        api.get("/components?page=1&limit=500", { signal: opts.signal }),
+        api.get("/assets?limit=200", { signal: opts.signal }),
+        api.get("/categories?limit=200", { signal: opts.signal }),
+        api.get("/test-types", { signal: opts.signal }),
+      ]);
       if (opts.signal?.aborted) return;
-      setData(res.data || []); setMeta(res.meta);
+      const componentsData = componentsRes?.data || [];
+      const assetsData = assetsRes?.data || [];
+      setData(componentsData);
+      setAssets(assetsData);
+      setCategories(categoriesRes?.data || []);
+      setTestTypes(testTypesRes?.data || testTypesRes || []);
     } catch (e) {
       if (e?.name !== "AbortError") throw e;
     } finally { if (!opts.signal?.aborted) setLoading(false); }
@@ -920,24 +1689,7 @@ function ComponentsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    load(page, { signal: controller.signal });
-    return () => controller.abort();
-  }, [page, load]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    Promise.all([
-      api.get("/assets?limit=100", { signal: controller.signal }),
-      api.get("/categories?limit=100", { signal: controller.signal }),
-      api.get("/test-types", { signal: controller.signal }),
-    ]).then(([assetsRes, categoriesRes, testTypesRes]) => {
-      if (controller.signal.aborted) return;
-      setAssets(assetsRes?.data || []);
-      setCategories(categoriesRes?.data || []);
-      setTestTypes(testTypesRes?.data || testTypesRes || []);
-    }).catch((e) => {
-      if (e?.name !== "AbortError") console.error(e);
-    });
+    load({ signal: controller.signal });
     return () => controller.abort();
   }, [api]);
 
@@ -946,7 +1698,7 @@ function ComponentsPage() {
     try {
       await api.post("/addcomponent", form);
       setModal(null);
-      load(page);
+      load();
     } finally {
       setSubmitting(false);
     }
@@ -956,15 +1708,16 @@ function ComponentsPage() {
     try {
       await api.put(`/updatecomponent/${selected.component_id}`, form);
       setModal(null);
-      load(page);
+      load();
     } finally {
       setSubmitting(false);
     }
   };
-  const handleDelete = async (id) => {
+  const handleDelete = async (id, clearSelection = false) => {
     if (!(await confirmAction("Delete this component?"))) return;
     await api.del(`/deletecomponent/${id}`);
-    load(page);
+    if (clearSelection) setSelectedComponentId("");
+    load();
   };
 
   const loadCertificatesForComponent = useCallback(async (componentID) => {
@@ -980,215 +1733,385 @@ function ComponentsPage() {
     }
   }, [api]);
 
-  const handleComponentRowClick = useCallback((row) => {
-    const componentID = row.component_id;
-    if (expandedComponentId === componentID) {
-      setExpandedComponentId(null);
+  const loadCertificateUploadAudit = useCallback(async (certificateID) => {
+    setUploadAuditLoadingByCertificate(prev => ({ ...prev, [certificateID]: true }));
+    setUploadAuditErrorByCertificate(prev => ({ ...prev, [certificateID]: "" }));
+    try {
+      const res = await api.get(`/certificate/${certificateID}/uploads?page=1&limit=25`);
+      setUploadAuditByCertificate(prev => ({ ...prev, [certificateID]: res?.data || [] }));
+    } catch (e) {
+      setUploadAuditErrorByCertificate(prev => ({ ...prev, [certificateID]: e?.message || "Failed to load upload audit log." }));
+    } finally {
+      setUploadAuditLoadingByCertificate(prev => ({ ...prev, [certificateID]: false }));
+    }
+  }, [api]);
+
+  const handleCertCreate = async (form) => {
+    setSubmitting(true);
+    try {
+      const payload = { ...form, issue_date: new Date(form.issue_date).toISOString(), expiry_date: new Date(form.expiry_date).toISOString() };
+      await api.post("/addcertificate", payload);
+      setCertModal(null);
+      setCertificatesByComponent(prev => { const n = { ...prev }; delete n[selectedComponentId]; return n; });
+      loadCertificatesForComponent(selectedComponentId);
+    } catch (e) {
+      // error already toasted by api layer
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const componentsForAsset = useMemo(
+    () => data.filter(c => c.asset_id === selectedAssetId),
+    [data, selectedAssetId]
+  );
+
+  useEffect(() => {
+    if (!selectedAssetId) return;
+    if (componentsForAsset.length === 0) {
+      setSelectedComponentId("");
       return;
     }
-    setExpandedComponentId(componentID);
-    if (!certificatesByComponent[componentID] && !certificatesLoadingByComponent[componentID]) {
-      loadCertificatesForComponent(componentID);
+    const exists = componentsForAsset.some(c => c.component_id === selectedComponentId);
+    if (!exists) {
+      const preferred = initialComponentId && componentsForAsset.some(c => c.component_id === initialComponentId)
+        ? initialComponentId
+        : componentsForAsset[0].component_id;
+      setSelectedComponentId(preferred);
+      setExpandedCertId(null);
     }
-  }, [expandedComponentId, certificatesByComponent, certificatesLoadingByComponent, loadCertificatesForComponent]);
+  }, [selectedAssetId, componentsForAsset, selectedComponentId, initialComponentId]);
 
-  const handleCertificateRowClick = useCallback((componentID, certificateID) => {
-    setExpandedCertificateByComponent(prev => ({
-      ...prev,
-      [componentID]: prev[componentID] === certificateID ? null : certificateID,
-    }));
+  useEffect(() => {
+    if (!selectedComponentId) return;
+    if (!certificatesByComponent[selectedComponentId] && !certificatesLoadingByComponent[selectedComponentId]) {
+      loadCertificatesForComponent(selectedComponentId);
+    }
+  }, [selectedComponentId, certificatesByComponent, certificatesLoadingByComponent, loadCertificatesForComponent]);
+
+  useEffect(() => {
+    if (componentsForAsset.length === 0) return;
+    componentsForAsset.forEach(c => {
+      if (!certificatesByComponent[c.component_id] && !certificatesLoadingByComponent[c.component_id]) {
+        loadCertificatesForComponent(c.component_id);
+      }
+    });
+  }, [componentsForAsset, certificatesByComponent, certificatesLoadingByComponent, loadCertificatesForComponent]);
+
+  const selectedAsset = useMemo(
+    () => assets.find(a => a.asset_id === selectedAssetId) || null,
+    [assets, selectedAssetId]
+  );
+
+  const selectedComponent = useMemo(
+    () => componentsForAsset.find(c => c.component_id === selectedComponentId) || null,
+    [componentsForAsset, selectedComponentId]
+  );
+
+  const currentCertificates = useMemo(
+    () => certificatesByComponent[selectedComponentId] || [],
+    [certificatesByComponent, selectedComponentId]
+  );
+
+  // Load audit for ALL certificates of this component
+  useEffect(() => {
+    currentCertificates.forEach(cert => {
+      const certID = cert.certificate_id;
+      if (!certID) return;
+      if (!uploadAuditByCertificate[certID] && !uploadAuditLoadingByCertificate[certID]) {
+        loadCertificateUploadAudit(certID);
+      }
+    });
+    // Auto-expand first cert if nothing is expanded yet
+    if (currentCertificates.length > 0 && !expandedCertId) {
+      setExpandedCertId(currentCertificates[0].certificate_id);
+    }
+  }, [currentCertificates, uploadAuditByCertificate, uploadAuditLoadingByCertificate, loadCertificateUploadAudit]);
+
+  const getComponentBadge = useCallback((componentID) => {
+    const certs = certificatesByComponent[componentID] || [];
+    const latest = certs[0];
+    if (!latest) return { label: "No Cert", cls: "dim" };
+    if (latest.status === "EXPIRED") return { label: "Expired", cls: "red" };
+    if (latest.status === "EXPIRING_SOON") return { label: "Due Soon", cls: "amber" };
+    if (latest.status === "VALID") return { label: "OK", cls: "green" };
+    return { label: "No Cert", cls: "dim" };
+  }, [certificatesByComponent]);
+
+  const expiryToneClass = useCallback((cert) => {
+    if (!cert?.expiry_date) return "";
+    const expiryDate = new Date(cert.expiry_date);
+    if (Number.isNaN(expiryDate.getTime())) return "";
+    const days = Math.floor((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (days < 0) return "expired";
+    if (days <= 30) return "warning";
+    return "";
   }, []);
 
-  const getTestTypeName = useCallback((testID) => {
-    if (!testID) return "—";
-    const found = testTypes.find(t => t.test_id === testID);
-    return found?.test_name || testID;
-  }, [testTypes]);
+  const viewCertificateFile = useCallback(async (certificateID) => {
+    try {
+      const res = await api.get(`/certificate/${certificateID}/file`);
+      if (res?.url) {
+        window.open(res.url, "_blank", "noopener,noreferrer");
+      } else {
+        notifyError("Certificate file URL is not available.");
+      }
+    } catch (e) {
+      notifyError(e?.message || "Failed to open certificate file.");
+    }
+  }, [api, notifyError]);
+
+  const uploadCertificateFile = useCallback(async (componentID, certificateID, file) => {
+    if (!file) return;
+
+    if (!user?.token) {
+      notifyError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setUploadBusyByCertificate(prev => ({ ...prev, [certificateID]: true }));
+    try {
+      const response = await fetch(`${BASE}/certificate/${certificateID}/file`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${user.token}` },
+        body: formData,
+      });
+
+      let payload = null;
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.error || payload?.message || `Upload failed (${response.status})`);
+      }
+
+      notifyInfo(payload?.message || "Certificate file uploaded.");
+      await Promise.all([
+        loadCertificatesForComponent(componentID),
+        loadCertificateUploadAudit(certificateID),
+      ]);
+    } catch (e) {
+      notifyError(e?.message || "Failed to upload certificate file.");
+    } finally {
+      setUploadBusyByCertificate(prev => ({ ...prev, [certificateID]: false }));
+    }
+  }, [user?.token, notifyError, notifyInfo, loadCertificatesForComponent, loadCertificateUploadAudit]);
+
+  const handleCertificateUploadClick = useCallback((componentID, certificateID) => {
+    if (!isAdmin) return;
+    if (!certificateID) {
+      notifyError("No certificate record found for this component.");
+      return;
+    }
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf,image/jpeg,image/png,image/webp";
+    input.onchange = () => {
+      const selectedFile = input.files?.[0];
+      if (selectedFile) uploadCertificateFile(componentID, certificateID, selectedFile);
+    };
+    input.click();
+  }, [isAdmin, uploadCertificateFile, notifyError]);
 
   return (
     <div className="fade-in">
-      <PageHeader title="Components" subtitle={`${meta?.total || 0} components across all assets`}
-        action={isAdmin && <Button variant="primary" onClick={() => setModal("create")}>+ New Component</Button>} />
-      <Card>
-        <Table
-          loading={loading}
-          data={data}
-          rowKey={row => row.component_id}
-          onRowClick={handleComponentRowClick}
-          expandedRowKey={expandedComponentId}
-          renderExpandedRow={(row) => {
-            const componentID = row.component_id;
-            const certificates = certificatesByComponent[componentID] || [];
-            const rowLoading = certificatesLoadingByComponent[componentID];
-            const rowError = certificatesErrorByComponent[componentID];
+      <PageHeader
+        title="Components"
+        subtitle={selectedAsset ? `${componentsForAsset.length || 0} components in ${selectedAsset.name}` : "Select an asset"}
+        action={
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button onClick={onBackToAssets}>All Assets</Button>
+            {isAdmin && <Button variant="primary" onClick={() => setModal("create")}>+ New Component</Button>}
+          </div>
+        }
+      />
+      {loading && <Card style={{ padding: 20, color: "var(--text-2)", fontSize: 12 }}>Loading components...</Card>}
+      {!loading && (
+        <div className="comp-layout">
+          <aside className="comp-nav">
+            <div className="comp-nav-hero">
+              <div className="comp-nav-title">{selectedAsset?.name || "No Asset"}</div>
+              <div className="comp-nav-tags">
+                <span className="comp-nav-tag">{selectedAsset?.status || "N/A"}</span>
+                {selectedAsset?.location && <span className="comp-nav-tag">{selectedAsset.location}</span>}
+                {selectedAsset?.assigned_project && <span className="comp-nav-tag">{selectedAsset.assigned_project}</span>}
+              </div>
+            </div>
+            <div className="comp-nav-list">
+              {componentsForAsset.map(component => {
+                const badge = getComponentBadge(component.component_id);
+                return (
+                  <button key={component.component_id} className={`comp-nav-item ${selectedComponentId === component.component_id ? "active" : ""}`} onClick={() => setSelectedComponentId(component.component_id)}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{component.name}</span>
+                    <span className={`comp-badge ${badge.cls}`}>{badge.label}</span>
+                  </button>
+                );
+              })}
+              {componentsForAsset.length === 0 && <div style={{ padding: "10px 14px", color: "var(--text-2)", fontSize: 12 }}>No components in this asset.</div>}
+            </div>
+          </aside>
 
-            return (
-              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                  <div style={{ fontSize: 11, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                    Certificates for {row.name}
+          <section className="comp-content">
+            {certificatesErrorByComponent[selectedComponentId] && (
+              <Card style={{ padding: 10, color: "var(--red)", fontSize: 11 }}>
+                {certificatesErrorByComponent[selectedComponentId]}
+              </Card>
+            )}
+            {!selectedComponent && <Card style={{ padding: 18, color: "var(--text-2)", fontSize: 12 }}>Select a component from the left pane.</Card>}
+            {selectedComponent && (
+              <>
+                <div className="comp-head">
+                  <div>
+                    <div className="comp-head-title">{selectedComponent.name}</div>
+                    <div className="comp-head-sub">{selectedComponent.manufacturer || "Unknown manufacturer"} · {selectedComponent.model || "Unknown model"} · {selectedComponent.class || "No class"}</div>
                   </div>
-                  <span style={{ fontSize: 11, color: "var(--text-2)" }}>{certificates.length} record(s)</span>
+                  {isAdmin && <div style={{ display: "flex", gap: 8 }}>
+                    <Button variant="primary" onClick={() => setCertModal("add")}>+ Add Certificate</Button>
+                    <Button onClick={() => { setSelected(selectedComponent); setModal("edit"); }}>Edit Component</Button>
+                    <Button variant="danger" onClick={() => handleDelete(selectedComponent.component_id, true)}>Delete</Button>
+                  </div>}
                 </div>
 
-                {rowLoading && <div style={{ fontSize: 11, color: "var(--text-2)" }}>Loading certificates...</div>}
-                {rowError && <div style={{ fontSize: 11, color: "var(--red)" }}>{rowError}</div>}
+                <div className="comp-meta">
+                  <div className="comp-meta-cell"><div className="comp-meta-label">Component ID</div><div className="comp-meta-value">{selectedComponent.component_id}</div></div>
+                  <div className="comp-meta-cell"><div className="comp-meta-label">Serial</div><div className="comp-meta-value">{selectedComponent.serial_number || "—"}</div></div>
+                  <div className="comp-meta-cell"><div className="comp-meta-label">Safety Critical</div><div className="comp-meta-value">{selectedComponent.safety_critical || "—"}</div></div>
+                  <div className="comp-meta-cell"><div className="comp-meta-label">Equipment Type</div><div className="comp-meta-value">{selectedComponent.equipment_type || "—"}</div></div>
+                  <div className="comp-meta-cell"><div className="comp-meta-label">Structure</div><div className="comp-meta-value">{selectedComponent.structure || "—"}</div></div>
+                  <div className="comp-meta-cell"><div className="comp-meta-label">Last Inspection</div><div className="comp-meta-value warning">{currentCertificates[0] ? formatDate(currentCertificates[0].issue_date) : "—"}</div></div>
+                </div>
 
-                {!rowLoading && !rowError && certificates.length === 0 && (
-                  <div style={{ fontSize: 11, color: "var(--text-2)" }}>No certificates found for this component.</div>
+                {certificatesLoadingByComponent[selectedComponentId] && (
+                  <Card style={{ padding: 12, color: "var(--text-2)", fontSize: 12 }}>Loading certificates...</Card>
                 )}
 
-                {!rowLoading && !rowError && certificates.length > 0 && (
-                  <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 3 }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                          <th style={{ width: 26 }} />
-                          <th style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-2)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Certificate</th>
-                          <th style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-2)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Test</th>
-                          <th style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-2)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Authority</th>
-                          <th style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-2)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Expiry</th>
-                          <th style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-2)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                                                {certificates.map((certificateItem) => {
-                          const certificateID = certificateItem.certificate_id;
-                          const isCertExpanded = expandedCertificateByComponent[componentID] === certificateID;
+                {!certificatesLoadingByComponent[selectedComponentId] && currentCertificates.length === 0 && (
+                  <Card style={{ padding: 18, color: "var(--text-2)", fontSize: 12, textAlign: "center" }}>
+                    No certificates linked to this component.
+                    {isAdmin && <span> Use <strong>+ Add Certificate</strong> above to add one.</span>}
+                  </Card>
+                )}
 
-                          const expiryDate = certificateItem.expiry_date ? new Date(certificateItem.expiry_date) : null;
-                          const validExpiry = expiryDate && !Number.isNaN(expiryDate.getTime());
-                          const today = new Date();
-                          const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                          const expiryStart = validExpiry
-                            ? new Date(expiryDate.getFullYear(), expiryDate.getMonth(), expiryDate.getDate())
-                            : null;
-                          const daysToExpiry = expiryStart
-                            ? Math.ceil((expiryStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24))
-                            : null;
-
-                          let expiryTone = { label: "No Expiry Date", color: "var(--text-2)", border: "var(--border)" };
-                          if (typeof daysToExpiry === "number") {
-                            if (daysToExpiry < 0) expiryTone = { label: "Expired", color: "var(--red)", border: "var(--red-dim)" };
-                            else if (daysToExpiry <= 30) expiryTone = { label: `Due in ${daysToExpiry} day(s)`, color: "var(--amber)", border: "var(--amber-dim)" };
-                            else expiryTone = { label: `Valid for ${daysToExpiry} day(s)`, color: "var(--green)", border: "var(--green-dim)" };
-                          }
-
-                          return (
-                            <Fragment key={certificateID}>
-                              <tr
-                                style={{ borderBottom: "1px solid var(--border)", cursor: "pointer", background: isCertExpanded ? "var(--bg-2)" : "transparent" }}
-                                onClick={() => handleCertificateRowClick(componentID, certificateID)}
+                {currentCertificates.length > 0 && (
+                  <div className="cert-editorial-card">
+                    {currentCertificates.map((cert, idx) => {
+                      const isOpen = expandedCertId === cert.certificate_id;
+                      return (
+                        <div key={cert.certificate_id} style={{ borderBottom: idx < currentCertificates.length - 1 ? "1px solid var(--border)" : "none" }}>
+                          {/* Accordion header — always visible */}
+                          <div
+                            className="cert-editorial-header"
+                            style={{ cursor: "pointer", userSelect: "none" }}
+                            onClick={() => setExpandedCertId(isOpen ? null : cert.certificate_id)}
+                          >
+                            <span style={{
+                              fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "1px",
+                              textTransform: "uppercase", padding: "1px 6px", borderRadius: 2,
+                              border: "1px solid", marginRight: 6,
+                              ...(cert.status === "EXPIRED" ? { color: "var(--red)", borderColor: "var(--red-border)", background: "var(--red-bg)" }
+                                : cert.status === "EXPIRING_SOON" ? { color: "var(--amber)", borderColor: "var(--amber-border)", background: "var(--amber-bg)" }
+                                : { color: "var(--green)", borderColor: "var(--green-border)", background: "var(--green-bg)" })
+                            }}>{cert.status || "VALID"}</span>
+                            <span className="cert-editorial-title" style={{ flex: 1 }}>
+                              {cert.certificate_name || "Unnamed Certificate"}
+                              <span style={{ fontSize: 11, color: "rgba(240,232,216,0.45)", fontFamily: "var(--font-sans)", marginLeft: 8 }}>
+                                · expires {formatDate(cert.expiry_date)}
+                              </span>
+                            </span>
+                            {isAdmin && (
+                              <button
+                                className="btn-upload-editorial"
+                                onClick={e => { e.stopPropagation(); handleCertificateUploadClick(selectedComponent.component_id, cert.certificate_id); }}
+                                disabled={!!uploadBusyByCertificate[cert.certificate_id]}
                               >
-                                <td style={{ padding: "8px 10px", color: "var(--text-2)" }}>{isCertExpanded ? "v" : ">"}</td>
-                                <td style={{ padding: "8px 10px", color: "var(--text-0)", fontWeight: 500 }}>{certificateItem.certificate_name || "�"}</td>
-                                <td style={{ padding: "8px 10px", color: "var(--text-1)" }}>{getTestTypeName(certificateItem.test_id)}</td>
-                                <td style={{ padding: "8px 10px", color: "var(--text-1)" }}>{certificateItem.issuing_authority || "�"}</td>
-                                <td style={{ padding: "8px 10px", color: "var(--text-1)" }}>{formatDate(certificateItem.expiry_date)}</td>
-                                <td style={{ padding: "8px 10px" }}><StatusBadge status={certificateItem.status} /></td>
-                              </tr>
-                              {isCertExpanded && (
-                                <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                                  <td colSpan={6} style={{ padding: "12px", background: "var(--bg-1)" }}>
-                                    <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
-                                        <Card style={{ padding: "9px 10px", background: "var(--bg-2)" }}>
-                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>Certificate ID</div>
-                                          <div style={{ color: "var(--text-0)", fontSize: 12, fontWeight: 500, wordBreak: "break-word" }}>{certificateItem.certificate_id || "�"}</div>
-                                        </Card>
-                                        <Card style={{ padding: "9px 10px", background: "var(--bg-2)" }}>
-                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>Component ID</div>
-                                          <div style={{ color: "var(--text-0)", fontSize: 12, fontWeight: 500, wordBreak: "break-word" }}>{certificateItem.component_id || "�"}</div>
-                                        </Card>
-                                        <Card style={{ padding: "9px 10px", background: "var(--bg-2)", borderColor: expiryTone.border }}>
-                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>Expiry Window</div>
-                                          <div style={{ color: expiryTone.color, fontSize: 12, fontWeight: 600 }}>{expiryTone.label}</div>
-                                        </Card>
-                                      </div>
+                                {uploadBusyByCertificate[cert.certificate_id] ? "Uploading..." : "Upload File"}
+                              </button>
+                            )}
+                            <button
+                              className="btn-view-editorial"
+                              onClick={e => { e.stopPropagation(); viewCertificateFile(cert.certificate_id); }}
+                              disabled={!cert.certificate_file}
+                            >View File</button>
+                            <span style={{ color: "rgba(240,232,216,0.45)", fontSize: 14, marginLeft: 8, transition: "transform 0.25s", display: "inline-block", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+                          </div>
 
-                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8 }}>
-                                        <Card style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
-                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Validity</div>
-                                          <div style={{ display: "grid", gap: 4 }}>
-                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>Issue Date: <span style={{ color: "var(--text-0)" }}>{formatDate(certificateItem.issue_date)}</span></div>
-                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>Expiry Date: <span style={{ color: "var(--text-0)" }}>{formatDate(certificateItem.expiry_date)}</span></div>
-                                          </div>
-                                        </Card>
-                                        <Card style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
-                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Authority and Test</div>
-                                          <div style={{ display: "grid", gap: 4 }}>
-                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>Test Type: <span style={{ color: "var(--text-0)" }}>{getTestTypeName(certificateItem.test_id)}</span></div>
-                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>Authority: <span style={{ color: "var(--text-0)" }}>{certificateItem.issuing_authority || "�"}</span></div>
-                                          </div>
-                                        </Card>
-                                        <Card style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
-                                          <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Compliance</div>
-                                          <div style={{ display: "grid", gap: 4 }}>
-                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>IMCA Ref: <span style={{ color: "var(--text-0)", wordBreak: "break-word" }}>{certificateItem.imca_ref || "�"}</span></div>
-                                            <div style={{ color: "var(--text-1)", fontSize: 11 }}>IMCA D018: <span style={{ color: "var(--text-0)", wordBreak: "break-word" }}>{certificateItem.imca_d018 || "�"}</span></div>
-                                          </div>
-                                        </Card>
-                                      </div>
-
-                                      <Card style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
-                                        <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Certificate File</div>
-                                        <div style={{ color: "var(--text-0)", fontSize: 12, wordBreak: "break-word" }}>{certificateItem.certificate_file || "No file linked."}</div>
-                                      </Card>
-
-                                      <Card style={{ padding: "10px 12px", background: "var(--bg-2)" }}>
-                                        <div style={{ fontSize: 10, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Maintenance Notes</div>
-                                        <div style={{ color: "var(--text-0)", fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-                                          {certificateItem.maintenance_notes || "No maintenance notes recorded."}
-                                        </div>
-                                      </Card>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                          {/* Accordion body — slides open/closed */}
+                          <div className={`cert-accordion-body${isOpen ? " open" : ""}`}>
+                            <div className="cert-accordion-inner">
+                              <div className="cert-editorial-fields">
+                                <div className="cert-editorial-row"><div className="cert-editorial-label">Issued By</div><div className="cert-editorial-value">{cert.issuing_authority || "—"}</div></div>
+                                <div className="cert-editorial-row"><div className="cert-editorial-label">Certificate No.</div><div className="cert-editorial-value">{cert.certificate_id || "—"}</div></div>
+                                <div className="cert-editorial-row"><div className="cert-editorial-label">Issue Date</div><div className="cert-editorial-value">{formatDate(cert.issue_date)}</div></div>
+                                <div className="cert-editorial-row"><div className="cert-editorial-label">Expiry Date</div><div className={`cert-editorial-value ${expiryToneClass(cert)}`}>{formatDate(cert.expiry_date)}</div></div>
+                                <div className="cert-editorial-row"><div className="cert-editorial-label">File</div><div className="cert-editorial-value">{cert.certificate_file || "No file linked."}</div></div>
+                              </div>
+                              <div className="audit-editorial">
+                                <div className="audit-editorial-head"><span className="audit-editorial-title">Upload history</span><span className="audit-editorial-count">{(uploadAuditByCertificate[cert.certificate_id] || []).length} entries</span></div>
+                                {uploadAuditLoadingByCertificate[cert.certificate_id] && <div style={{ padding: "10px 16px", fontSize: 11, color: "var(--text-2)" }}>Loading audit log...</div>}
+                                {uploadAuditErrorByCertificate[cert.certificate_id] && <div style={{ padding: "10px 16px", fontSize: 11, color: "var(--red)" }}>{uploadAuditErrorByCertificate[cert.certificate_id]}</div>}
+                                {!uploadAuditLoadingByCertificate[cert.certificate_id] && !uploadAuditErrorByCertificate[cert.certificate_id] && (
+                                  <table className="audit-editorial-table">
+                                    <thead><tr><th>Date & Time</th><th>User</th><th>Action</th><th>File</th></tr></thead>
+                                    <tbody>
+                                      {(uploadAuditByCertificate[cert.certificate_id] || []).map((entry, i) => (
+                                        <tr key={`${entry.uploaded_at || "u"}-${i}`}>
+                                          <td className="audit-mono">{entry.uploaded_at ? new Date(entry.uploaded_at).toLocaleString() : "—"}</td>
+                                          <td>{entry.uploaded_by || "Unknown"}</td>
+                                          <td><span className="audit-dot" /><span className="audit-pill">Uploaded</span></td>
+                                          <td className="audit-mono">{entry.file_name || entry.file_key || "(unknown file)"}</td>
+                                        </tr>
+                                      ))}
+                                      {(uploadAuditByCertificate[cert.certificate_id] || []).length === 0 && <tr><td colSpan={4} style={{ color: "var(--text-2)" }}>No upload history recorded yet.</td></tr>}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-              </div>
-            );
-          }}
-          columns={[
-            {
-              key: "_expand",
-              label: "",
-              render: (_, row) => <span style={{ color: "var(--text-2)", fontSize: 11 }}>{expandedComponentId === row.component_id ? "▼" : "▶"}</span>,
-              style: { width: 22 },
-            },
-            { key: "component_id", label: "ID", render: v => <span style={{ color: "var(--text-2)" }}>{v}</span> },
-            { key: "name", label: "Name", render: v => <span style={{ fontWeight: 500 }}>{v}</span> },
-            { key: "asset_id", label: "Asset" },
-            { key: "manufacturer", label: "Manufacturer" },
-            { key: "model", label: "Model" },
-            { key: "safety_critical", label: "Safety", render: v => <StatusBadge status={v} /> },
-            isAdmin ? { key: "component_id", label: "", render: (v, row) => (
-              <div style={{ display: "flex", gap: 6 }}>
-                <Button size="sm" onClick={e => { e.stopPropagation(); setSelected(row); setModal("edit"); }}>Edit</Button>
-                <Button size="sm" variant="danger" onClick={e => { e.stopPropagation(); handleDelete(v); }}>Del</Button>
-              </div>
-            )} : null
-          ].filter(Boolean)}
-        />
-        <Pagination meta={meta} onPage={setPage} />
-      </Card>
+              </>
+            )}
+          </section>
+        </div>
+      )}
       {modal === "create" && <Modal title="New Component" onClose={() => setModal(null)} width={640}>
-        <ComponentForm assets={assets} categories={categories} onSubmit={handleCreate} onClose={() => setModal(null)} submitting={submitting} />
+        <ComponentForm
+          initial={selectedAssetId ? { asset_id: selectedAssetId, safety_critical: "NO" } : undefined}
+          assets={assets}
+          categories={categories}
+          onSubmit={handleCreate}
+          onClose={() => setModal(null)}
+          submitting={submitting}
+        />
       </Modal>}
       {modal === "edit" && selected && <Modal title="Edit Component" onClose={() => { setModal(null); setSelected(null); }} width={640}>
         <ComponentForm initial={selected} assets={assets} categories={categories} onSubmit={handleUpdate} onClose={() => { setModal(null); setSelected(null); }} submitting={submitting} />
       </Modal>}
+      {certModal === "add" && selectedComponent && (
+        <Modal title={`Add Certificate — ${selectedComponent.name}`} onClose={() => setCertModal(null)} width={620}>
+          <CertificateForm
+            initial={{ component_id: selectedComponentId, certificate_name: "", issue_date: "", expiry_date: "", issuing_authority: "", test_id: "", imca_ref: "", imca_d018: "", maintenance_notes: "" }}
+            components={data}
+            testTypes={testTypes}
+            onSubmit={handleCertCreate}
+            onClose={() => setCertModal(null)}
+            submitting={submitting}
+          />
+        </Modal>
+      )}
     </div>
   );
 }
 
-// ─── CERTIFICATES PAGE ────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ CERTIFICATES PAGE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function CertificateForm({ initial, components, testTypes, onSubmit, onClose, submitting = false }) {
   const [form, setForm] = useState(initial || {
     component_id: "", certificate_name: "", issue_date: "", expiry_date: "",
@@ -1386,7 +2309,7 @@ function CertificatesPage() {
   );
 }
 
-// ─── CATEGORIES PAGE ──────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ CATEGORIES PAGE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function CertificateDetailsPage({ certificateId, onBack }) {
   const api = useApi();
   const [certificate, setCertificate] = useState(null);
@@ -1607,7 +2530,7 @@ function CategoriesPage() {
   );
 }
 
-// ─── TEST TYPES PAGE ──────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ TEST TYPES PAGE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function TestTypesPage() {
   const api = useApi();
   const { isAdmin } = useAuth();
@@ -1694,7 +2617,7 @@ function TestTypesPage() {
   );
 }
 
-// ─── USERS PAGE ───────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ USERS PAGE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function UsersPage() {
   const api = useApi();
   const confirmAction = useConfirm();
@@ -1787,30 +2710,69 @@ function UsersPage() {
   );
 }
 
-// ─── APP SHELL ────────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ APP SHELL Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function AppShell() {
-  const [page, setPage] = useState("dashboard");
+  const [page, setPage] = useState(() => {
+    const sp = new URLSearchParams(window.location.search);
+    return sp.get("page") || "dashboard";
+  });
+  const [selectedAssetId, setSelectedAssetId] = useState(() => {
+    const sp = new URLSearchParams(window.location.search);
+    return sp.get("assetId") || "";
+  });
+  const [initialComponentId, setInitialComponentId] = useState(() => {
+    const sp = new URLSearchParams(window.location.search);
+    return sp.get("componentId") || "";
+  });
+
+  const navigate = useCallback((newPage, newAssetId = "", newComponentId = "") => {
+    const params = new URLSearchParams();
+    params.set("page", newPage);
+    if (newAssetId) params.set("assetId", newAssetId);
+    if (newComponentId) params.set("componentId", newComponentId);
+    window.history.pushState({ page: newPage, assetId: newAssetId, componentId: newComponentId }, "", `?${params.toString()}`);
+    setPage(newPage);
+    setSelectedAssetId(newAssetId);
+    setInitialComponentId(newComponentId);
+  }, []);
+
+  useEffect(() => {
+    const onPop = (e) => {
+      const state = e.state || {};
+      const sp = new URLSearchParams(window.location.search);
+      setPage(state.page || sp.get("page") || "dashboard");
+      setSelectedAssetId(state.assetId || sp.get("assetId") || "");
+      setInitialComponentId(state.componentId || sp.get("componentId") || "");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const topPage = ["users", "assets"].includes(page) ? page : "dashboard";
 
   const pages = {
-    dashboard: <Dashboard />,
+    dashboard: <Dashboard
+      onOpenAsset={(assetID) => navigate("components", assetID)}
+      onOpenComponent={(assetID, componentID) => navigate("components", assetID, componentID)}
+    />,
     assets: <AssetsPage />,
-    components: <ComponentsPage />,
-    categories: <CategoriesPage />,
-    "test-types": <TestTypesPage />,
+    components: <ComponentsPage selectedAssetId={selectedAssetId} initialComponentId={initialComponentId} onBackToAssets={() => navigate("dashboard")} />,
     users: <UsersPage />,
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar active={page} onNav={setPage} />
-      <main style={{ marginLeft: 220, flex: 1, padding: "28px 32px", minHeight: "100vh", background: "var(--bg-0)" }}>
-        {pages[page] || <Dashboard />}
-      </main>
-    </div>
+    <>
+      <TopBar active={topPage} onNav={(p) => navigate(p)} />
+      <div className="shell">
+        <main className="main">
+          {pages[page] || pages.dashboard}
+        </main>
+      </div>
+    </>
   );
 }
 
-// ─── ROOT ─────────────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ ROOT Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 export default function App() {
   return (
     <AuthProvider>
@@ -1826,5 +2788,3 @@ function Inner() {
   const { user } = useAuth();
   return user ? <AppErrorBoundary><AppShell /></AppErrorBoundary> : <LoginPage />;
 }
-
-
