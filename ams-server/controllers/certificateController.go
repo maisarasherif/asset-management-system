@@ -3,6 +3,8 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -674,5 +676,71 @@ func GetCertificatesWithContext(pool *pgxpool.Pool) gin.HandlerFunc {
 			Data: certificates,
 			Meta: utils.BuildMeta(query, total),
 		})
+	}
+}
+
+func GetCertificatesReportPDF(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		total, err := queries.CountAllCertificatesWithContext(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificates"})
+			return
+		}
+
+		var certificates []db.GetAllCertificatesWithContextPaginatedRow
+		if total > 0 {
+			limit := int32(total)
+			if total > math.MaxInt32 {
+				limit = math.MaxInt32
+			}
+
+			certificates, err = queries.GetAllCertificatesWithContextPaginated(ctx, db.GetAllCertificatesWithContextPaginatedParams{
+				Limit:  limit,
+				Offset: 0,
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
+				return
+			}
+		}
+
+		generatedAt := time.Now()
+		reportRows := make([]utils.CertificateReportRow, 0, len(certificates))
+		for _, certificate := range certificates {
+			reportRows = append(reportRows, utils.CertificateReportRow{
+				CertificateName:    certificate.CertificateName,
+				CertificateID:      certificate.CertificateID,
+				ComponentName:      certificate.ComponentName,
+				ComponentID:        certificate.ComponentID,
+				AssetName:          certificate.AssetName,
+				AssetID:            certificate.AssetID,
+				LastInspectionDate: certificate.IssueDate.Format("2006-01-02"),
+				NextInspectionDate: certificate.ExpiryDate.Format("2006-01-02"),
+				Status:             certificate.Status,
+				IssuingAuthority:   certificate.IssuingAuthority,
+			})
+		}
+
+		pdfBytes, err := utils.BuildCertificateReportPDF(generatedAt, reportRows)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate certificate report"})
+			return
+		}
+
+		userID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Info().
+			Str("generated_by", userID).
+			Int("certificate_count", len(certificates)).
+			Msg("certificate report generated")
+
+		filename := fmt.Sprintf("certificate-report-%s.pdf", generatedAt.Format("20060102-150405"))
+		c.Header("Content-Type", "application/pdf")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		c.Data(http.StatusOK, "application/pdf", pdfBytes)
 	}
 }

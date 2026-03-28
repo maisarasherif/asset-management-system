@@ -1,7 +1,8 @@
-import { createRoot } from 'react-dom/client'
-//import './index.css'
-import App from './ams-frontend.jsx'
+﻿import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./styles/global.css";
 
-createRoot(document.getElementById('root')).render(
-  <App />,
-)
+createRoot(document.getElementById("root")).render(<App />);
+
+
+

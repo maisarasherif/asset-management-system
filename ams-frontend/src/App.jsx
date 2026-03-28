@@ -1,35 +1,36 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+﻿import AppErrorBoundary from "./components/ErrorBoundary";
+import { AuthProvider } from "./context/AuthContext";
+import { ConfirmProvider } from "./context/ConfirmContext";
+import { AppFeedbackProvider } from "./context/FeedbackContext";
+import { RequestStateProvider } from "./context/RequestStateContext";
+import { useAuth } from "./hooks/useAuth";
+import AppShell from "./layout/AppShell";
+import LoginPage from "./pages/LoginPage";
 
-function App() {
-  const [count, setCount] = useState(0)
-
+function Providers({ children }) {
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <AuthProvider>
+      <RequestStateProvider>
+        <AppFeedbackProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </AppFeedbackProvider>
+      </RequestStateProvider>
+    </AuthProvider>
+  );
 }
 
-export default App
+function Inner() {
+  const { user } = useAuth();
+  return user ? <AppErrorBoundary><AppShell /></AppErrorBoundary> : <LoginPage />;
+}
+
+export default function App() {
+  return (
+    <Providers>
+      <Inner />
+    </Providers>
+  );
+}
+
+
+
