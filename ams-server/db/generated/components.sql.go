@@ -9,8 +9,36 @@ import (
 	"context"
 )
 
+const archiveActiveComponentsByAssetID = `-- name: ArchiveActiveComponentsByAssetID :execrows
+UPDATE components
+SET is_archived = TRUE, updated_at = NOW()
+WHERE asset_id = $1 AND is_archived = FALSE
+`
+
+func (q *Queries) ArchiveActiveComponentsByAssetID(ctx context.Context, assetID string) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveActiveComponentsByAssetID, assetID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const archiveComponent = `-- name: ArchiveComponent :execrows
+UPDATE components
+SET is_archived = TRUE, updated_at = NOW()
+WHERE component_id = $1
+`
+
+func (q *Queries) ArchiveComponent(ctx context.Context, componentID string) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveComponent, componentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countComponents = `-- name: CountComponents :one
-SELECT COUNT(*) FROM components
+SELECT COUNT(*) FROM components WHERE is_archived = FALSE
 `
 
 func (q *Queries) CountComponents(ctx context.Context) (int64, error) {
@@ -20,8 +48,20 @@ func (q *Queries) CountComponents(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countComponentsByAssetCategoryID = `-- name: CountComponentsByAssetCategoryID :one
+SELECT COUNT(*) FROM components
+WHERE asset_category_id = $1 AND is_archived = FALSE
+`
+
+func (q *Queries) CountComponentsByAssetCategoryID(ctx context.Context, assetCategoryID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countComponentsByAssetCategoryID, assetCategoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countComponentsByAssetID = `-- name: CountComponentsByAssetID :one
-SELECT COUNT(*) FROM components WHERE asset_id = $1
+SELECT COUNT(*) FROM components WHERE asset_id = $1 AND is_archived = FALSE
 `
 
 func (q *Queries) CountComponentsByAssetID(ctx context.Context, assetID string) (int64, error) {
@@ -43,25 +83,28 @@ func (q *Queries) CountComponentsByCategoryID(ctx context.Context, categoryID st
 }
 
 const createComponent = `-- name: CreateComponent :one
-INSERT INTO components (component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
-RETURNING id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at
+INSERT INTO components (component_id, asset_id, category_id, asset_category_id, source_template_component_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, sort_order, is_archived, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, FALSE, NOW(), NOW())
+RETURNING id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, asset_category_id, source_template_component_id, sort_order, is_archived
 `
 
 type CreateComponentParams struct {
-	ComponentID    string `json:"component_id"`
-	AssetID        string `json:"asset_id"`
-	CategoryID     string `json:"category_id"`
-	Name           string `json:"name"`
-	SerialNumber   string `json:"serial_number"`
-	Manufacturer   string `json:"manufacturer"`
-	Description    string `json:"description"`
-	EquipmentType  string `json:"equipment_type"`
-	Structure      string `json:"structure"`
-	Model          string `json:"model"`
-	Class          string `json:"class"`
-	ClassCode      string `json:"class_code"`
-	SafetyCritical string `json:"safety_critical"`
+	ComponentID               string `json:"component_id"`
+	AssetID                   string `json:"asset_id"`
+	CategoryID                string `json:"category_id"`
+	AssetCategoryID           string `json:"asset_category_id"`
+	SourceTemplateComponentID string `json:"source_template_component_id"`
+	Name                      string `json:"name"`
+	SerialNumber              string `json:"serial_number"`
+	Manufacturer              string `json:"manufacturer"`
+	Description               string `json:"description"`
+	EquipmentType             string `json:"equipment_type"`
+	Structure                 string `json:"structure"`
+	Model                     string `json:"model"`
+	Class                     string `json:"class"`
+	ClassCode                 string `json:"class_code"`
+	SafetyCritical            string `json:"safety_critical"`
+	SortOrder                 int32  `json:"sort_order"`
 }
 
 func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams) (Component, error) {
@@ -69,6 +112,8 @@ func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams
 		arg.ComponentID,
 		arg.AssetID,
 		arg.CategoryID,
+		arg.AssetCategoryID,
+		arg.SourceTemplateComponentID,
 		arg.Name,
 		arg.SerialNumber,
 		arg.Manufacturer,
@@ -79,6 +124,7 @@ func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams
 		arg.Class,
 		arg.ClassCode,
 		arg.SafetyCritical,
+		arg.SortOrder,
 	)
 	var i Component
 	err := row.Scan(
@@ -98,6 +144,10 @@ func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams
 		&i.SafetyCritical,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AssetCategoryID,
+		&i.SourceTemplateComponentID,
+		&i.SortOrder,
+		&i.IsArchived,
 	)
 	return i, err
 }
@@ -114,8 +164,56 @@ func (q *Queries) DeleteComponent(ctx context.Context, componentID string) (int6
 	return result.RowsAffected(), nil
 }
 
+const getAllActiveComponentsByAssetID = `-- name: GetAllActiveComponentsByAssetID :many
+SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, asset_category_id, source_template_component_id, sort_order, is_archived FROM components
+WHERE asset_id = $1 AND is_archived = FALSE
+ORDER BY sort_order ASC, created_at ASC
+`
+
+func (q *Queries) GetAllActiveComponentsByAssetID(ctx context.Context, assetID string) ([]Component, error) {
+	rows, err := q.db.Query(ctx, getAllActiveComponentsByAssetID, assetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Component
+	for rows.Next() {
+		var i Component
+		if err := rows.Scan(
+			&i.ID,
+			&i.ComponentID,
+			&i.AssetID,
+			&i.CategoryID,
+			&i.Name,
+			&i.SerialNumber,
+			&i.Manufacturer,
+			&i.Description,
+			&i.EquipmentType,
+			&i.Structure,
+			&i.Model,
+			&i.Class,
+			&i.ClassCode,
+			&i.SafetyCritical,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AssetCategoryID,
+			&i.SourceTemplateComponentID,
+			&i.SortOrder,
+			&i.IsArchived,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllComponentsPaginated = `-- name: GetAllComponentsPaginated :many
-SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at FROM components
+SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, asset_category_id, source_template_component_id, sort_order, is_archived FROM components
+WHERE is_archived = FALSE
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -151,6 +249,10 @@ func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllCompo
 			&i.SafetyCritical,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AssetCategoryID,
+			&i.SourceTemplateComponentID,
+			&i.SortOrder,
+			&i.IsArchived,
 		); err != nil {
 			return nil, err
 		}
@@ -163,7 +265,7 @@ func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllCompo
 }
 
 const getComponentByID = `-- name: GetComponentByID :one
-SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at FROM components WHERE component_id = $1 LIMIT 1
+SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, asset_category_id, source_template_component_id, sort_order, is_archived FROM components WHERE component_id = $1 AND is_archived = FALSE LIMIT 1
 `
 
 func (q *Queries) GetComponentByID(ctx context.Context, componentID string) (Component, error) {
@@ -186,14 +288,50 @@ func (q *Queries) GetComponentByID(ctx context.Context, componentID string) (Com
 		&i.SafetyCritical,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AssetCategoryID,
+		&i.SourceTemplateComponentID,
+		&i.SortOrder,
+		&i.IsArchived,
+	)
+	return i, err
+}
+
+const getComponentByIDAny = `-- name: GetComponentByIDAny :one
+SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, asset_category_id, source_template_component_id, sort_order, is_archived FROM components WHERE component_id = $1 LIMIT 1
+`
+
+func (q *Queries) GetComponentByIDAny(ctx context.Context, componentID string) (Component, error) {
+	row := q.db.QueryRow(ctx, getComponentByIDAny, componentID)
+	var i Component
+	err := row.Scan(
+		&i.ID,
+		&i.ComponentID,
+		&i.AssetID,
+		&i.CategoryID,
+		&i.Name,
+		&i.SerialNumber,
+		&i.Manufacturer,
+		&i.Description,
+		&i.EquipmentType,
+		&i.Structure,
+		&i.Model,
+		&i.Class,
+		&i.ClassCode,
+		&i.SafetyCritical,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AssetCategoryID,
+		&i.SourceTemplateComponentID,
+		&i.SortOrder,
+		&i.IsArchived,
 	)
 	return i, err
 }
 
 const getComponentsByAssetIDPaginated = `-- name: GetComponentsByAssetIDPaginated :many
-SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at FROM components
-WHERE asset_id = $1
-ORDER BY created_at DESC
+SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, asset_category_id, source_template_component_id, sort_order, is_archived FROM components
+WHERE asset_id = $1 AND is_archived = FALSE
+ORDER BY sort_order ASC, created_at ASC
 LIMIT $2 OFFSET $3
 `
 
@@ -229,6 +367,10 @@ func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetCo
 			&i.SafetyCritical,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AssetCategoryID,
+			&i.SourceTemplateComponentID,
+			&i.SortOrder,
+			&i.IsArchived,
 		); err != nil {
 			return nil, err
 		}
@@ -242,30 +384,33 @@ func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetCo
 
 const updateComponent = `-- name: UpdateComponent :execrows
 UPDATE components
-SET category_id = $1, name = $2, serial_number = $3, manufacturer = $4, description = $5,
-    equipment_type = $6, structure = $7, model = $8, class = $9,
-    class_code = $10, safety_critical = $11, updated_at = NOW()
-WHERE component_id = $12
+SET category_id = $1, asset_category_id = $2, name = $3, serial_number = $4, manufacturer = $5, description = $6,
+    equipment_type = $7, structure = $8, model = $9, class = $10,
+    class_code = $11, safety_critical = $12, sort_order = $13, updated_at = NOW()
+WHERE component_id = $14
 `
 
 type UpdateComponentParams struct {
-	CategoryID     string `json:"category_id"`
-	Name           string `json:"name"`
-	SerialNumber   string `json:"serial_number"`
-	Manufacturer   string `json:"manufacturer"`
-	Description    string `json:"description"`
-	EquipmentType  string `json:"equipment_type"`
-	Structure      string `json:"structure"`
-	Model          string `json:"model"`
-	Class          string `json:"class"`
-	ClassCode      string `json:"class_code"`
-	SafetyCritical string `json:"safety_critical"`
-	ComponentID    string `json:"component_id"`
+	CategoryID      string `json:"category_id"`
+	AssetCategoryID string `json:"asset_category_id"`
+	Name            string `json:"name"`
+	SerialNumber    string `json:"serial_number"`
+	Manufacturer    string `json:"manufacturer"`
+	Description     string `json:"description"`
+	EquipmentType   string `json:"equipment_type"`
+	Structure       string `json:"structure"`
+	Model           string `json:"model"`
+	Class           string `json:"class"`
+	ClassCode       string `json:"class_code"`
+	SafetyCritical  string `json:"safety_critical"`
+	SortOrder       int32  `json:"sort_order"`
+	ComponentID     string `json:"component_id"`
 }
 
 func (q *Queries) UpdateComponent(ctx context.Context, arg UpdateComponentParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateComponent,
 		arg.CategoryID,
+		arg.AssetCategoryID,
 		arg.Name,
 		arg.SerialNumber,
 		arg.Manufacturer,
@@ -276,6 +421,7 @@ func (q *Queries) UpdateComponent(ctx context.Context, arg UpdateComponentParams
 		arg.Class,
 		arg.ClassCode,
 		arg.SafetyCritical,
+		arg.SortOrder,
 		arg.ComponentID,
 	)
 	if err != nil {

@@ -21,3 +21,9 @@ WHERE category_id = $3;
 
 -- name: DeleteCategory :execrows
 DELETE FROM categories WHERE category_id = $1;
+
+-- name: CountTemplateCategoriesByCategoryID :one
+SELECT COUNT(*) FROM asset_template_categories WHERE category_id = $1;
+
+-- name: CountAssetCategoriesByCategoryID :one
+SELECT COUNT(*) FROM asset_categories WHERE category_id = $1;

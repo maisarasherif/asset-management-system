@@ -157,7 +157,17 @@ func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check components"})
 			return
 		}
-		if count > 0 {
+		templateCount, err := queries.CountTemplateCategoriesByCategoryID(ctx, categoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check template categories"})
+			return
+		}
+		assetCategoryCount, err := queries.CountAssetCategoriesByCategoryID(ctx, categoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check asset categories"})
+			return
+		}
+		if count > 0 || templateCount > 0 || assetCategoryCount > 0 {
 			c.JSON(http.StatusConflict, gin.H{"error": "category has components assigned to it"})
 			return
 		}

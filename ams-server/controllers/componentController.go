@@ -128,16 +128,39 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		queries := db.New(pool)
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start transaction"})
+			return
+		}
+		defer tx.Rollback(ctx)
 
-		_, err := queries.GetAssetByID(ctx, input.AssetID)
+		queries := db.New(tx)
+
+		asset, err := queries.GetAssetByID(ctx, input.AssetID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+			return
+		}
+		if asset.TemplateID != "" {
+			c.JSON(http.StatusConflict, gin.H{"error": "template-linked assets can only be changed through their template"})
 			return
 		}
 		_, err = queries.GetCategoryByID(ctx, input.CategoryID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
+			return
+		}
+
+		assetCategory, err := ensureManualAssetCategory(ctx, queries, input.AssetID, input.CategoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve asset category"})
+			return
+		}
+
+		sortOrder, err := queries.CountComponentsByAssetCategoryID(ctx, assetCategory.AssetCategoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute component order"})
 			return
 		}
 
@@ -148,22 +171,30 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		component, err := queries.CreateComponent(ctx, db.CreateComponentParams{
-			ComponentID:    componentID,
-			AssetID:        input.AssetID,
-			CategoryID:     input.CategoryID,
-			Name:           input.Name,
-			SerialNumber:   input.SerialNumber,
-			Manufacturer:   input.Manufacturer,
-			Description:    input.Description,
-			EquipmentType:  input.EquipmentType,
-			Structure:      input.Structure,
-			Model:          input.Model,
-			Class:          input.Class,
-			ClassCode:      input.ClassCode,
-			SafetyCritical: input.SafetyCritical,
+			ComponentID:               componentID,
+			AssetID:                   input.AssetID,
+			CategoryID:                input.CategoryID,
+			AssetCategoryID:           assetCategory.AssetCategoryID,
+			SourceTemplateComponentID: "",
+			Name:                      input.Name,
+			SerialNumber:              input.SerialNumber,
+			Manufacturer:              input.Manufacturer,
+			Description:               input.Description,
+			EquipmentType:             input.EquipmentType,
+			Structure:                 input.Structure,
+			Model:                     input.Model,
+			Class:                     input.Class,
+			ClassCode:                 input.ClassCode,
+			SafetyCritical:            input.SafetyCritical,
+			SortOrder:                 int32(sortOrder),
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add component"})
+			return
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit component creation"})
 			return
 		}
 
@@ -188,27 +219,72 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		queries := db.New(pool)
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start transaction"})
+			return
+		}
+		defer tx.Rollback(ctx)
 
-		_, err := queries.GetCategoryByID(ctx, input.CategoryID)
+		queries := db.New(tx)
+
+		existing, err := queries.GetComponentByID(ctx, componentID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch component"})
+			return
+		}
+
+		asset, err := queries.GetAssetByID(ctx, existing.AssetID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch asset"})
+			return
+		}
+		if asset.TemplateID != "" {
+			c.JSON(http.StatusConflict, gin.H{"error": "template-linked assets can only be changed through their template"})
+			return
+		}
+
+		_, err = queries.GetCategoryByID(ctx, input.CategoryID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
 			return
 		}
 
+		assetCategory, err := ensureManualAssetCategory(ctx, queries, existing.AssetID, input.CategoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve asset category"})
+			return
+		}
+
+		sortOrder := existing.SortOrder
+		if assetCategory.AssetCategoryID != existing.AssetCategoryID {
+			count, err := queries.CountComponentsByAssetCategoryID(ctx, assetCategory.AssetCategoryID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute component order"})
+				return
+			}
+			sortOrder = int32(count)
+		}
+
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
-			CategoryID:     input.CategoryID,
-			Name:           input.Name,
-			SerialNumber:   input.SerialNumber,
-			Manufacturer:   input.Manufacturer,
-			Description:    input.Description,
-			EquipmentType:  input.EquipmentType,
-			Structure:      input.Structure,
-			Model:          input.Model,
-			Class:          input.Class,
-			ClassCode:      input.ClassCode,
-			SafetyCritical: input.SafetyCritical,
-			ComponentID:    componentID,
+			CategoryID:      input.CategoryID,
+			AssetCategoryID: assetCategory.AssetCategoryID,
+			Name:            input.Name,
+			SerialNumber:    input.SerialNumber,
+			Manufacturer:    input.Manufacturer,
+			Description:     input.Description,
+			EquipmentType:   input.EquipmentType,
+			Structure:       input.Structure,
+			Model:           input.Model,
+			Class:           input.Class,
+			ClassCode:       input.ClassCode,
+			SafetyCritical:  input.SafetyCritical,
+			SortOrder:       sortOrder,
+			ComponentID:     componentID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update component"})
@@ -216,6 +292,11 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		if rows == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit component update"})
 			return
 		}
 
@@ -230,7 +311,14 @@ func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		queries := db.New(pool)
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start transaction"})
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		queries := db.New(tx)
 
 		existing, err := queries.GetComponentByID(ctx, componentID)
 		if err != nil {
@@ -238,14 +326,47 @@ func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		rows, err := queries.DeleteComponent(ctx, componentID)
+		asset, err := queries.GetAssetByID(ctx, existing.AssetID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete component"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch asset"})
 			return
 		}
-		if rows == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+		if asset.TemplateID != "" {
+			c.JSON(http.StatusConflict, gin.H{"error": "template-linked assets can only be changed through their template"})
 			return
+		}
+
+		requirementCount, err := queries.CountComponentRequirementsByComponentID(ctx, componentID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check component requirements"})
+			return
+		}
+
+		certificateCount, err := queries.CountCertificatesByComponentID(ctx, componentID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check component certificates"})
+			return
+		}
+
+		if requirementCount > 0 || certificateCount > 0 {
+			if _, err := queries.ArchiveActiveRequirementsByComponentID(ctx, componentID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to archive component requirements"})
+				return
+			}
+			if _, err := queries.ArchiveComponent(ctx, componentID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to archive component"})
+				return
+			}
+		} else {
+			rows, err := queries.DeleteComponent(ctx, componentID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete component"})
+				return
+			}
+			if rows == 0 {
+				c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+				return
+			}
 		}
 
 		userID, _ := utils.GetUserIdFromContext(c)
@@ -255,6 +376,11 @@ func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			Str("asset_id", existing.AssetID).
 			Str("deleted_by", userID).
 			Msg("component deleted")
+
+		if err := tx.Commit(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit component deletion"})
+			return
+		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "component deleted successfully"})
 	}
@@ -277,11 +403,28 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		queries := db.New(pool)
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start transaction"})
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		queries := db.New(tx)
 
 		existing, err := queries.GetComponentByID(ctx, componentID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
+		asset, err := queries.GetAssetByID(ctx, existing.AssetID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch asset"})
+			return
+		}
+		if asset.TemplateID != "" {
+			c.JSON(http.StatusConflict, gin.H{"error": "template-linked assets can only be changed through their template"})
 			return
 		}
 
@@ -337,19 +480,37 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		assetCategory, err := ensureManualAssetCategory(ctx, queries, existing.AssetID, categoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve asset category"})
+			return
+		}
+
+		sortOrder := existing.SortOrder
+		if assetCategory.AssetCategoryID != existing.AssetCategoryID {
+			count, err := queries.CountComponentsByAssetCategoryID(ctx, assetCategory.AssetCategoryID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute component order"})
+				return
+			}
+			sortOrder = int32(count)
+		}
+
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
-			CategoryID:     categoryID,
-			Name:           name,
-			SerialNumber:   serialNumber,
-			Manufacturer:   manufacturer,
-			Description:    description,
-			EquipmentType:  equipmentType,
-			Structure:      structure,
-			Model:          model,
-			Class:          class,
-			ClassCode:      classCode,
-			SafetyCritical: safetyCritical,
-			ComponentID:    componentID,
+			CategoryID:      categoryID,
+			AssetCategoryID: assetCategory.AssetCategoryID,
+			Name:            name,
+			SerialNumber:    serialNumber,
+			Manufacturer:    manufacturer,
+			Description:     description,
+			EquipmentType:   equipmentType,
+			Structure:       structure,
+			Model:           model,
+			Class:           class,
+			ClassCode:       classCode,
+			SafetyCritical:  safetyCritical,
+			SortOrder:       sortOrder,
+			ComponentID:     componentID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update component"})
@@ -357,6 +518,11 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		if rows == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit component update"})
 			return
 		}
 

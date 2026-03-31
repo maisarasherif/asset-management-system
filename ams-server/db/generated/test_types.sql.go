@@ -9,6 +9,28 @@ import (
 	"context"
 )
 
+const countComponentRequirementsByTestID = `-- name: CountComponentRequirementsByTestID :one
+SELECT COUNT(*) FROM component_test_requirements WHERE test_id = $1
+`
+
+func (q *Queries) CountComponentRequirementsByTestID(ctx context.Context, testID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countComponentRequirementsByTestID, testID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTemplateRequirementsByTestID = `-- name: CountTemplateRequirementsByTestID :one
+SELECT COUNT(*) FROM asset_template_test_requirements WHERE test_id = $1
+`
+
+func (q *Queries) CountTemplateRequirementsByTestID(ctx context.Context, testID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countTemplateRequirementsByTestID, testID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTestType = `-- name: CreateTestType :one
 INSERT INTO test_types (test_id, test_name, validity_duration, description)
 VALUES ($1, $2, $3, $4)

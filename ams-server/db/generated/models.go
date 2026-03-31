@@ -22,6 +22,71 @@ type Asset struct {
 	AssignedProject string    `json:"assigned_project"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+	TemplateID      string    `json:"template_id"`
+}
+
+type AssetCategory struct {
+	ID                       int32              `json:"id"`
+	AssetCategoryID          string             `json:"asset_category_id"`
+	AssetID                  string             `json:"asset_id"`
+	CategoryID               string             `json:"category_id"`
+	SourceTemplateCategoryID string             `json:"source_template_category_id"`
+	SortOrder                int32              `json:"sort_order"`
+	IsArchived               bool               `json:"is_archived"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AssetTemplate struct {
+	ID         int32              `json:"id"`
+	TemplateID string             `json:"template_id"`
+	Name       string             `json:"name"`
+	IsDeleted  bool               `json:"is_deleted"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AssetTemplateCategory struct {
+	ID                 int32              `json:"id"`
+	TemplateCategoryID string             `json:"template_category_id"`
+	TemplateID         string             `json:"template_id"`
+	CategoryID         string             `json:"category_id"`
+	SortOrder          int32              `json:"sort_order"`
+	IsArchived         bool               `json:"is_archived"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AssetTemplateComponent struct {
+	ID                  int32              `json:"id"`
+	TemplateComponentID string             `json:"template_component_id"`
+	TemplateCategoryID  string             `json:"template_category_id"`
+	Name                string             `json:"name"`
+	SerialNumber        string             `json:"serial_number"`
+	Manufacturer        string             `json:"manufacturer"`
+	Description         string             `json:"description"`
+	EquipmentType       string             `json:"equipment_type"`
+	Structure           string             `json:"structure"`
+	Model               string             `json:"model"`
+	Class               string             `json:"class"`
+	ClassCode           string             `json:"class_code"`
+	SafetyCritical      string             `json:"safety_critical"`
+	SortOrder           int32              `json:"sort_order"`
+	IsArchived          bool               `json:"is_archived"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AssetTemplateTestRequirement struct {
+	ID                    int32              `json:"id"`
+	TemplateRequirementID string             `json:"template_requirement_id"`
+	TemplateComponentID   string             `json:"template_component_id"`
+	TestID                string             `json:"test_id"`
+	Label                 string             `json:"label"`
+	SortOrder             int32              `json:"sort_order"`
+	IsArchived            bool               `json:"is_archived"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Category struct {
@@ -49,6 +114,7 @@ type Certificate struct {
 	MaintenanceNotes string    `json:"maintenance_notes"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
+	RequirementID    string    `json:"requirement_id"`
 }
 
 type CertificateUploadAudit struct {
@@ -61,22 +127,39 @@ type CertificateUploadAudit struct {
 }
 
 type Component struct {
-	ID             int32     `json:"id"`
-	ComponentID    string    `json:"component_id"`
-	AssetID        string    `json:"asset_id"`
-	CategoryID     string    `json:"category_id"`
-	Name           string    `json:"name"`
-	SerialNumber   string    `json:"serial_number"`
-	Manufacturer   string    `json:"manufacturer"`
-	Description    string    `json:"description"`
-	EquipmentType  string    `json:"equipment_type"`
-	Structure      string    `json:"structure"`
-	Model          string    `json:"model"`
-	Class          string    `json:"class"`
-	ClassCode      string    `json:"class_code"`
-	SafetyCritical string    `json:"safety_critical"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID                        int32     `json:"id"`
+	ComponentID               string    `json:"component_id"`
+	AssetID                   string    `json:"asset_id"`
+	CategoryID                string    `json:"category_id"`
+	Name                      string    `json:"name"`
+	SerialNumber              string    `json:"serial_number"`
+	Manufacturer              string    `json:"manufacturer"`
+	Description               string    `json:"description"`
+	EquipmentType             string    `json:"equipment_type"`
+	Structure                 string    `json:"structure"`
+	Model                     string    `json:"model"`
+	Class                     string    `json:"class"`
+	ClassCode                 string    `json:"class_code"`
+	SafetyCritical            string    `json:"safety_critical"`
+	CreatedAt                 time.Time `json:"created_at"`
+	UpdatedAt                 time.Time `json:"updated_at"`
+	AssetCategoryID           string    `json:"asset_category_id"`
+	SourceTemplateComponentID string    `json:"source_template_component_id"`
+	SortOrder                 int32     `json:"sort_order"`
+	IsArchived                bool      `json:"is_archived"`
+}
+
+type ComponentTestRequirement struct {
+	ID                          int32              `json:"id"`
+	RequirementID               string             `json:"requirement_id"`
+	ComponentID                 string             `json:"component_id"`
+	SourceTemplateRequirementID string             `json:"source_template_requirement_id"`
+	TestID                      string             `json:"test_id"`
+	Label                       string             `json:"label"`
+	SortOrder                   int32              `json:"sort_order"`
+	IsArchived                  bool               `json:"is_archived"`
+	CreatedAt                   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type ScheduledTask struct {

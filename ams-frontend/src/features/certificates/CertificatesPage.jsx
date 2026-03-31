@@ -27,6 +27,7 @@ function CertificatesPage() {
   const [selected, setSelected] = useState(null);
   const [components, setComponents] = useState([]);
   const [testTypes, setTestTypes] = useState([]);
+  const [requirements, setRequirements] = useState([]);
 
   const deriveStatusFromExpiry = useCallback((expiryDateValue) => {
     if (!expiryDateValue) return "VALID";
@@ -66,10 +67,17 @@ function CertificatesPage() {
     Promise.all([
       api.get("/components?limit=200", { signal: controller.signal }),
       api.get("/test-types", { signal: controller.signal }),
-    ]).then(([componentsRes, testTypesRes]) => {
+    ]).then(async ([componentsRes, testTypesRes]) => {
       if (controller.signal.aborted) return;
-      setComponents(componentsRes?.data || []);
+      const componentsData = componentsRes?.data || [];
+      setComponents(componentsData);
       setTestTypes(testTypesRes?.data || testTypesRes || []);
+      const requirementResponses = await Promise.all(
+        componentsData.map(component => api.get(`/component/${component.component_id}/requirements`, { signal: controller.signal, silentError: true }))
+      );
+      if (!controller.signal.aborted) {
+        setRequirements(requirementResponses.flatMap(response => response || []));
+      }
     }).catch((e) => {
       if (e?.name !== "AbortError") console.error(e);
     });
@@ -159,10 +167,10 @@ function CertificatesPage() {
         <Pagination meta={meta} onPage={setPage} />
       </Card>
       {modal === "create" && <Modal title="New Certificate" onClose={() => setModal(null)} width={600}>
-        <CertificateForm components={components} testTypes={testTypes} onSubmit={handleCreate} onClose={() => setModal(null)} submitting={submitting} />
+        <CertificateForm components={components} testTypes={testTypes} requirements={requirements} onSubmit={handleCreate} onClose={() => setModal(null)} submitting={submitting} />
       </Modal>}
       {modal === "edit" && selected && <Modal title="Edit Certificate" onClose={() => { setModal(null); setSelected(null); }} width={600}>
-        <CertificateForm initial={{ ...selected, issue_date: selected.issue_date?.slice(0,10), expiry_date: selected.expiry_date?.slice(0,10) }} components={components} testTypes={testTypes} onSubmit={handleUpdate} onClose={() => { setModal(null); setSelected(null); }} submitting={submitting} />
+        <CertificateForm initial={{ ...selected, issue_date: selected.issue_date?.slice(0,10), expiry_date: selected.expiry_date?.slice(0,10) }} components={components} testTypes={testTypes} requirements={requirements} onSubmit={handleUpdate} onClose={() => { setModal(null); setSelected(null); }} submitting={submitting} />
       </Modal>}
     </div>
   );

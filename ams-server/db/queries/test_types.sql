@@ -19,3 +19,9 @@ WHERE test_id = $4;
 
 -- name: DeleteTestType :execrows
 DELETE FROM test_types WHERE test_id = $1;
+
+-- name: CountTemplateRequirementsByTestID :one
+SELECT COUNT(*) FROM asset_template_test_requirements WHERE test_id = $1;
+
+-- name: CountComponentRequirementsByTestID :one
+SELECT COUNT(*) FROM component_test_requirements WHERE test_id = $1;

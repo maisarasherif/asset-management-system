@@ -15,9 +15,17 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 
 	// Asset Routes
 	admin.POST("/addasset", controller.AddAsset(pool))
+	admin.POST("/addasset/from-template", controller.AddAssetFromTemplate(pool))
 	admin.DELETE("/deleteasset/:asset_id", controller.DeleteAsset(pool))
 	admin.PUT("/updateasset/:asset_id", controller.UpdateAsset(pool))
 	admin.PATCH("/patchasset/:asset_id", controller.PatchAsset(pool))
+
+	// Asset Template Routes
+	admin.GET("/asset-templates", controller.GetAssetTemplates(pool))
+	admin.GET("/asset-template/:template_id", controller.GetAssetTemplate(pool))
+	admin.POST("/asset-templates", controller.CreateAssetTemplate(pool))
+	admin.PUT("/asset-template/:template_id", controller.UpdateAssetTemplate(pool))
+	admin.DELETE("/asset-template/:template_id", controller.DeleteAssetTemplate(pool))
 
 	// User Routes
 	admin.POST("/register", controller.RegisterUser(pool))
@@ -31,6 +39,9 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	admin.PUT("/updatecomponent/:component_id", controller.UpdateComponent(pool))
 	admin.PATCH("/patchcomponent/:component_id", controller.PatchComponent(pool))
 	admin.DELETE("/deletecomponent/:component_id", controller.DeleteComponent(pool))
+	admin.POST("/component/:component_id/requirements", controller.AddComponentRequirement(pool))
+	admin.PUT("/component/requirement/:requirement_id", controller.UpdateComponentRequirement(pool))
+	admin.DELETE("/component/requirement/:requirement_id", controller.DeleteComponentRequirement(pool))
 
 	// Certificate Routes
 	admin.POST("/addcertificate", controller.AddCertificate(pool))
@@ -63,6 +74,7 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	protected.GET("/components", controller.GetComponents(pool))
 	protected.GET("/component/:component_id", controller.GetComponent(pool))
 	protected.GET("/components/asset/:asset_id", controller.GetComponentsByAsset(pool))
+	protected.GET("/component/:component_id/requirements", controller.GetComponentRequirements(pool))
 
 	// Certificate routes
 	protected.GET("/certificates", controller.GetCertificates(pool))

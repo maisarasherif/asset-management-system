@@ -69,7 +69,7 @@ func sendEmail(recipientEmail, recipientName, assetName, componentName, certific
 // Each channel is independent — failure in one does not affect the other.
 func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiringCertificatesWithContextRow, recipientEmail, recipientName string) {
 	queries := db.New(pool)
-	expiryDateStr := cert.ExpiryDate.Format("2006-01-02")
+	expiryDateStr := cert.ExpiryDate.Time.Format("2006-01-02")
 
 	// ── EMAIL ────────────────────────────────────────────────────────────────
 	emailSent, err := queries.HasRecentScheduledTask(ctx, db.HasRecentScheduledTaskParams{
@@ -126,7 +126,7 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiring
 			Str("certificate", cert.CertificateName).
 			Msg("ClickUp task already created within 6 months, skipping")
 	} else {
-		clickUpTaskID, err := CreateClickUpTask(cert.CertificateName, cert.AssetName, cert.ComponentName, cert.ExpiryDate)
+		clickUpTaskID, err := CreateClickUpTask(cert.CertificateName, cert.AssetName, cert.ComponentName, cert.ExpiryDate.Time)
 		status := "SENT"
 		taskID := uuid.New().String() // fallback task_id if ClickUp fails
 

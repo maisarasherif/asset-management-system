@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
+import Modal from "../../components/ui/Modal";
 import PageHeader from "../../components/ui/PageHeader";
 import StatusBadge from "../../components/ui/StatusBadge";
 import Table from "../../components/ui/Table";
@@ -9,33 +10,42 @@ import { useAuth } from "../../hooks/useAuth";
 import { useApi } from "../../hooks/useApi";
 import { useFeedback } from "../../hooks/useFeedback";
 import { formatDate } from "../../utils/format";
+import AssetForm from "../assets/AssetForm";
+import AssetFromTemplateModal from "../assets/AssetFromTemplateModal";
+import AssetTemplatesModal from "../assets/AssetTemplatesModal";
 import CertDonut from "./CertDonut";
 
 function Dashboard({ onOpenAsset, onOpenComponent }) {
   const api = useApi();
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const { notifyError, notifyInfo } = useFeedback();
   const [allCerts, setAllCerts]     = useState([]);
   const [assets, setAssets]         = useState([]);
   const [components, setComponents] = useState([]);
   const [loading, setLoading]       = useState(true);
   const [reportBusy, setReportBusy] = useState(false);
+  const [assetSubmitting, setAssetSubmitting] = useState(false);
+  const [assetModal, setAssetModal] = useState(null);
   const [selectedAssetId, setSelectedAssetId] = useState(null);
   const [certFilter, setCertFilter] = useState("ALL");
 
   const load = useCallback(async (signal) => {
-    Promise.all([
-      api.get("/assets?limit=200", { signal }),
-      api.get("/components?page=1&limit=500", { signal }),
-      api.get("/certificates/dashboard?limit=1000", { signal }),
-    ]).then(([a, comp, d]) => {
+    setLoading(true);
+    try {
+      const [a, comp, d] = await Promise.all([
+        api.get("/assets?limit=200", { signal }),
+        api.get("/components?page=1&limit=500", { signal }),
+        api.get("/certificates/dashboard?limit=1000", { signal }),
+      ]);
       if (signal?.aborted) return;
       setAssets(a?.data || []);
       setComponents(comp?.data || []);
       setAllCerts(d?.data || []);
-    }).catch((e) => {
+    } catch (e) {
       if (e?.name !== "AbortError") console.error(e);
-    }).finally(() => { if (!signal?.aborted) setLoading(false); });
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
   }, [api]);
 
   useEffect(() => {
@@ -113,12 +123,30 @@ function Dashboard({ onOpenAsset, onOpenComponent }) {
     }
   }, [logout, notifyError, notifyInfo, user?.token]);
 
+  const handleCreateBlankAsset = useCallback(async (form) => {
+    setAssetSubmitting(true);
+    try {
+      await api.post("/addasset", { ...form, template_id: "" });
+      setAssetModal(null);
+      await load();
+    } finally {
+      setAssetSubmitting(false);
+    }
+  }, [api, load]);
+
   return (
     <div className="fade-in">
       <PageHeader
         title={selectedAsset ? selectedAsset.name : "Operations Dashboard"}
         subtitle={selectedAsset ? `Asset dashboard · ${visibleCerts.length} certificates` : "Real-time compliance overview"}
-        action={<Button variant="primary" onClick={handleDownloadReport} disabled={reportBusy}>{reportBusy ? "Generating..." : "Certificate Report PDF"}</Button>}
+        action={(
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {isAdmin && <Button onClick={() => setAssetModal("templates")}>Manage Templates</Button>}
+            {isAdmin && <Button onClick={() => setAssetModal("from-template")}>Add From Template</Button>}
+            {isAdmin && <Button variant="primary" onClick={() => setAssetModal("blank")}>Add Blank Asset</Button>}
+            <Button variant="primary" onClick={handleDownloadReport} disabled={reportBusy}>{reportBusy ? "Generating..." : "Certificate Report PDF"}</Button>
+          </div>
+        )}
       />
       <div className="comp-layout">
         <aside className="comp-nav">
@@ -283,6 +311,31 @@ function Dashboard({ onOpenAsset, onOpenComponent }) {
           </div>
         </section>
       </div>
+
+      {assetModal === "blank" && (
+        <Modal title="Add Blank Asset" onClose={() => setAssetModal(null)}>
+          <AssetForm
+            onSubmit={handleCreateBlankAsset}
+            onClose={() => setAssetModal(null)}
+            submitting={assetSubmitting}
+            submitLabel="Create Asset"
+          />
+        </Modal>
+      )}
+
+      {assetModal === "from-template" && (
+        <AssetFromTemplateModal
+          onClose={() => setAssetModal(null)}
+          onCreated={() => load()}
+        />
+      )}
+
+      {assetModal === "templates" && (
+        <AssetTemplatesModal
+          onClose={() => setAssetModal(null)}
+          onChanged={() => load()}
+        />
+      )}
     </div>
   );
 }

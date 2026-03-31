@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -22,6 +23,14 @@ func generateFourDigitSegment() (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%04d", n.Int64()), nil
+}
+
+func generateResourceID(prefix string) (string, error) {
+	buf := make([]byte, 6)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s_%s", prefix, hex.EncodeToString(buf)), nil
 }
 
 func generateAssetID(ctx context.Context, queries *db.Queries) (string, error) {
@@ -50,7 +59,7 @@ func generateComponentID(ctx context.Context, queries *db.Queries, assetID strin
 		}
 
 		componentID := fmt.Sprintf("%s.%s", assetID, segment)
-		_, err = queries.GetComponentByID(ctx, componentID)
+		_, err = queries.GetComponentByIDAny(ctx, componentID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return componentID, nil
 		}

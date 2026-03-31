@@ -29,6 +29,38 @@ func computeCertificateStatus(expiryDate time.Time) string {
 	return "VALID"
 }
 
+func resolveCertificateTarget(ctx context.Context, queries *db.Queries, componentID, requirementID, providedTestID string) (db.Component, string, string, error) {
+	component, err := queries.GetComponentByID(ctx, componentID)
+	if err != nil {
+		return db.Component{}, "", "", err
+	}
+
+	requirementCount, err := queries.CountComponentRequirementsByComponentID(ctx, componentID)
+	if err != nil {
+		return db.Component{}, "", "", err
+	}
+
+	if requirementID != "" {
+		requirement, err := queries.GetComponentRequirementByID(ctx, requirementID)
+		if err != nil {
+			return db.Component{}, "", "", err
+		}
+		if requirement.ComponentID != componentID {
+			return db.Component{}, "", "", errors.New("requirement does not belong to the selected component")
+		}
+		return component, requirement.RequirementID, requirement.TestID, nil
+	}
+
+	if requirementCount > 0 {
+		return db.Component{}, "", "", errors.New("requirement_id is required for this component")
+	}
+	if providedTestID == "" {
+		return db.Component{}, "", "", errors.New("test_id is required")
+	}
+
+	return component, "", providedTestID, nil
+}
+
 func GetCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -166,13 +198,18 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		_, err := queries.GetComponentByID(ctx, input.ComponentID)
+		_, requirementID, testID, err := resolveCertificateTarget(ctx, queries, input.ComponentID, input.RequirementID, input.TestID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+				c.JSON(http.StatusNotFound, gin.H{"error": "component or requirement not found"})
+			default:
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			}
 			return
 		}
 
-		_, err = queries.GetTestTypeByID(ctx, input.TestID)
+		_, err = queries.GetTestTypeByID(ctx, testID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
@@ -191,13 +228,14 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 		certificate, err := queries.CreateCertificate(ctx, db.CreateCertificateParams{
 			CertificateID:    certificateID,
 			ComponentID:      input.ComponentID,
+			RequirementID:    requirementID,
 			CertificateName:  input.CertificateName,
 			IssueDate:        input.IssueDate,
 			ExpiryDate:       input.ExpiryDate,
 			CertificateFile:  input.CertificateFile,
 			IssuingAuthority: input.IssuingAuthority,
 			Status:           computeCertificateStatus(input.ExpiryDate),
-			TestID:           input.TestID,
+			TestID:           testID,
 			ImcaRef:          input.IMCARef,
 			ImcaD018:         input.IMCAD018,
 			MaintenanceNotes: input.MaintenanceNotes,
@@ -252,13 +290,18 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		_, err = queries.GetComponentByID(ctx, input.ComponentID)
+		_, requirementID, testID, err := resolveCertificateTarget(ctx, queries, input.ComponentID, input.RequirementID, input.TestID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+				c.JSON(http.StatusNotFound, gin.H{"error": "component or requirement not found"})
+			default:
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			}
 			return
 		}
 
-		_, err = queries.GetTestTypeByID(ctx, input.TestID)
+		_, err = queries.GetTestTypeByID(ctx, testID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
@@ -272,13 +315,14 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		rows, err := queries.UpdateCertificate(ctx, db.UpdateCertificateParams{
 			ComponentID:      input.ComponentID,
+			RequirementID:    requirementID,
 			CertificateName:  input.CertificateName,
 			IssueDate:        input.IssueDate,
 			ExpiryDate:       input.ExpiryDate,
 			CertificateFile:  input.CertificateFile,
 			IssuingAuthority: input.IssuingAuthority,
 			Status:           newStatus,
-			TestID:           input.TestID,
+			TestID:           testID,
 			ImcaRef:          input.IMCARef,
 			ImcaD018:         input.IMCAD018,
 			MaintenanceNotes: input.MaintenanceNotes,
@@ -400,6 +444,7 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 		expiryDate := existing.ExpiryDate
 		certificateFile := existing.CertificateFile
 		issuingAuthority := existing.IssuingAuthority
+		requirementID := existing.RequirementID
 		testID := existing.TestID
 		imcaRef := existing.ImcaRef
 		imcaD018 := existing.ImcaD018
@@ -407,6 +452,9 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		if input.ComponentID != nil {
 			componentID = *input.ComponentID
+		}
+		if input.RequirementID != nil {
+			requirementID = *input.RequirementID
 		}
 		if input.CertificateName != nil {
 			certificateName = *input.CertificateName
@@ -441,28 +489,34 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		_, err = queries.GetComponentByID(ctx, componentID)
+		_, requirementID, resolvedTestID, err := resolveCertificateTarget(ctx, queries, componentID, requirementID, testID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+				c.JSON(http.StatusNotFound, gin.H{"error": "component or requirement not found"})
+			default:
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			}
 			return
 		}
 
-		if input.TestID != nil {
-			_, err = queries.GetTestTypeByID(ctx, testID)
-			if err != nil {
-				if errors.Is(err, pgx.ErrNoRows) {
-					c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
-					return
-				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate test type"})
+		testID = resolvedTestID
+
+		_, err = queries.GetTestTypeByID(ctx, testID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
 				return
 			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate test type"})
+			return
 		}
 
 		newStatus := computeCertificateStatus(expiryDate)
 
 		rows, err := queries.UpdateCertificate(ctx, db.UpdateCertificateParams{
 			ComponentID:      componentID,
+			RequirementID:    requirementID,
 			CertificateName:  certificateName,
 			IssueDate:        issueDate,
 			ExpiryDate:       expiryDate,
@@ -719,8 +773,8 @@ func GetCertificatesReportPDF(pool *pgxpool.Pool) gin.HandlerFunc {
 				ComponentID:        certificate.ComponentID,
 				AssetName:          certificate.AssetName,
 				AssetID:            certificate.AssetID,
-				LastInspectionDate: certificate.IssueDate.Format("2006-01-02"),
-				NextInspectionDate: certificate.ExpiryDate.Format("2006-01-02"),
+				LastInspectionDate: certificate.IssueDate.Time.Format("2006-01-02"),
+				NextInspectionDate: certificate.ExpiryDate.Time.Format("2006-01-02"),
 				Status:             certificate.Status,
 				IssuingAuthority:   certificate.IssuingAuthority,
 			})

@@ -169,7 +169,17 @@ func DeleteTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check certificates"})
 			return
 		}
-		if count > 0 {
+		templateRequirementCount, err := queries.CountTemplateRequirementsByTestID(ctx, testID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check template requirements"})
+			return
+		}
+		componentRequirementCount, err := queries.CountComponentRequirementsByTestID(ctx, testID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check component requirements"})
+			return
+		}
+		if count > 0 || templateRequirementCount > 0 || componentRequirementCount > 0 {
 			c.JSON(http.StatusConflict, gin.H{"error": "test type has certificates assigned to it"})
 			return
 		}

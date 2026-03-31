@@ -9,12 +9,34 @@ import (
 	"context"
 )
 
+const countAssetCategoriesByCategoryID = `-- name: CountAssetCategoriesByCategoryID :one
+SELECT COUNT(*) FROM asset_categories WHERE category_id = $1
+`
+
+func (q *Queries) CountAssetCategoriesByCategoryID(ctx context.Context, categoryID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countAssetCategoriesByCategoryID, categoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countCategories = `-- name: CountCategories :one
 SELECT COUNT(*) FROM categories
 `
 
 func (q *Queries) CountCategories(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, countCategories)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTemplateCategoriesByCategoryID = `-- name: CountTemplateCategoriesByCategoryID :one
+SELECT COUNT(*) FROM asset_template_categories WHERE category_id = $1
+`
+
+func (q *Queries) CountTemplateCategoriesByCategoryID(ctx context.Context, categoryID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countTemplateCategoriesByCategoryID, categoryID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

@@ -9,7 +9,7 @@ SELECT COUNT(*) FROM certificates;
 -- name: GetCertificatesByComponentIDPaginated :many
 SELECT * FROM certificates
 WHERE component_id = $1
-ORDER BY created_at DESC
+ORDER BY issue_date DESC, created_at DESC
 LIMIT $2 OFFSET $3;
 
 -- name: CountCertificatesByComponentID :one
@@ -18,20 +18,23 @@ SELECT COUNT(*) FROM certificates WHERE component_id = $1;
 -- name: CountCertificatesByTestID :one
 SELECT COUNT(*) FROM certificates WHERE test_id = $1;
 
+-- name: CountCertificatesByRequirementID :one
+SELECT COUNT(*) FROM certificates WHERE requirement_id = $1;
+
 -- name: GetCertificateByID :one
 SELECT * FROM certificates WHERE certificate_id = $1 LIMIT 1;
 
 -- name: CreateCertificate :one
-INSERT INTO certificates (certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+INSERT INTO certificates (certificate_id, component_id, requirement_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
 RETURNING *;
 
 -- name: UpdateCertificate :execrows
 UPDATE certificates
-SET component_id = $1, certificate_name = $2, issue_date = $3, expiry_date = $4,
-    certificate_file = $5, issuing_authority = $6, status = $7, test_id = $8,
-    imca_ref = $9, imca_d018 = $10, maintenance_notes = $11, updated_at = NOW()
-WHERE certificate_id = $12;
+SET component_id = $1, requirement_id = $2, certificate_name = $3, issue_date = $4, expiry_date = $5,
+    certificate_file = $6, issuing_authority = $7, status = $8, test_id = $9,
+    imca_ref = $10, imca_d018 = $11, maintenance_notes = $12, updated_at = NOW()
+WHERE certificate_id = $13;
 
 -- name: UpdateCertificateFile :execrows
 UPDATE certificates
@@ -47,6 +50,18 @@ WHERE expiry_date <= $1 AND expiry_date >= NOW()
 ORDER BY expiry_date ASC;
 
 -- name: GetExpiringCertificatesWithContext :many
+WITH ranked_certificates AS (
+    SELECT
+        cert.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY CASE
+                WHEN cert.requirement_id <> '' THEN cert.requirement_id
+                ELSE cert.component_id || ':' || cert.test_id
+            END
+            ORDER BY cert.issue_date DESC, cert.created_at DESC, cert.id DESC
+        ) AS rn
+    FROM certificates cert
+)
 SELECT
     cert.certificate_id,
     cert.certificate_name,
@@ -56,14 +71,31 @@ SELECT
     comp.name AS component_name,
     asset.asset_id,
     asset.name AS asset_name
-FROM certificates cert
+FROM ranked_certificates cert
 JOIN components comp ON comp.component_id = cert.component_id
+LEFT JOIN component_test_requirements req ON req.requirement_id = cert.requirement_id
 JOIN assets asset ON asset.asset_id = comp.asset_id
-WHERE cert.expiry_date <= $1 AND cert.expiry_date >= NOW()
+WHERE cert.rn = 1
+  AND comp.is_archived = FALSE
+  AND (cert.requirement_id = '' OR req.is_archived = FALSE)
+  AND cert.expiry_date <= $1
+  AND cert.expiry_date >= NOW()
 ORDER BY cert.expiry_date ASC;
 
 
 -- name: GetAllCertificatesWithContextPaginated :many
+WITH ranked_certificates AS (
+    SELECT
+        cert.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY CASE
+                WHEN cert.requirement_id <> '' THEN cert.requirement_id
+                ELSE cert.component_id || ':' || cert.test_id
+            END
+            ORDER BY cert.issue_date DESC, cert.created_at DESC, cert.id DESC
+        ) AS rn
+    FROM certificates cert
+)
 SELECT
     cert.certificate_id,
     cert.certificate_name,
@@ -72,6 +104,7 @@ SELECT
     cert.status,
     cert.issuing_authority,
     cert.test_id,
+    cert.requirement_id,
     cert.imca_ref,
     cert.imca_d018,
     cert.maintenance_notes,
@@ -80,14 +113,39 @@ SELECT
     comp.name AS component_name,
     asset.asset_id,
     asset.name AS asset_name
-FROM certificates cert
+FROM ranked_certificates cert
 JOIN components comp ON comp.component_id = cert.component_id
+LEFT JOIN component_test_requirements req ON req.requirement_id = cert.requirement_id
 JOIN assets asset ON asset.asset_id = comp.asset_id
+WHERE cert.rn = 1
+  AND comp.is_archived = FALSE
+  AND (cert.requirement_id = '' OR req.is_archived = FALSE)
 ORDER BY cert.expiry_date ASC
 LIMIT $1 OFFSET $2;
 
 -- name: CountAllCertificatesWithContext :one
-SELECT COUNT(*) FROM certificates;
+WITH ranked_certificates AS (
+    SELECT
+        cert.id,
+        cert.component_id,
+        cert.requirement_id,
+        cert.test_id,
+        ROW_NUMBER() OVER (
+            PARTITION BY CASE
+                WHEN cert.requirement_id <> '' THEN cert.requirement_id
+                ELSE cert.component_id || ':' || cert.test_id
+            END
+            ORDER BY cert.issue_date DESC, cert.created_at DESC, cert.id DESC
+        ) AS rn
+    FROM certificates cert
+)
+SELECT COUNT(*)
+FROM ranked_certificates cert
+JOIN components comp ON comp.component_id = cert.component_id
+LEFT JOIN component_test_requirements req ON req.requirement_id = cert.requirement_id
+WHERE cert.rn = 1
+  AND comp.is_archived = FALSE
+  AND (cert.requirement_id = '' OR req.is_archived = FALSE);
 
 -- name: GetCertificateUploadAuditByCertificateIDPaginated :many
 SELECT certificate_id, file_key, file_name, uploaded_by, uploaded_at
