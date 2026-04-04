@@ -35,7 +35,6 @@ func GetCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 
 		limit, offset, query := utils.ParsePagination(c)
-
 		queries := db.New(pool)
 
 		certificates, err := queries.GetAllCertificatesPaginated(ctx, db.GetAllCertificatesPaginatedParams{
@@ -108,7 +107,6 @@ func GetCertificatesByComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 
 		limit, offset, query := utils.ParsePagination(c)
-
 		queries := db.New(pool)
 
 		_, err := queries.GetComponentByID(ctx, componentID)
@@ -182,18 +180,22 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		certificateID, err := generateCertificateID(ctx, queries, input.ComponentID)
+		certificateID, err := utils.GenerateCertificateID(ctx, queries, input.ComponentID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate certificate id"})
 			return
 		}
 
+		// dto uses time.Time, db expects *time.Time
+		issueDate := input.IssueDate
+		expiryDate := input.ExpiryDate
+
 		certificate, err := queries.CreateCertificate(ctx, db.CreateCertificateParams{
 			CertificateID:    certificateID,
 			ComponentID:      input.ComponentID,
 			CertificateName:  input.CertificateName,
-			IssueDate:        input.IssueDate,
-			ExpiryDate:       input.ExpiryDate,
+			IssueDate:        &issueDate,
+			ExpiryDate:       &expiryDate,
 			CertificateFile:  input.CertificateFile,
 			IssuingAuthority: input.IssuingAuthority,
 			Status:           computeCertificateStatus(input.ExpiryDate),
@@ -207,6 +209,11 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		expiryStr := ""
+		if certificate.ExpiryDate != nil {
+			expiryStr = certificate.ExpiryDate.Format("2006-01-02")
+		}
+
 		userID, _ := utils.GetUserIdFromContext(c)
 		logger.Log.Info().
 			Str("certificate_id", certificate.CertificateID).
@@ -214,7 +221,7 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			Str("component_id", certificate.ComponentID).
 			Str("test_id", certificate.TestID).
 			Str("status", certificate.Status).
-			Str("expiry_date", certificate.ExpiryDate.Format("2006-01-02")).
+			Str("expiry_date", expiryStr).
 			Str("created_by", userID).
 			Msg("certificate added successfully")
 
@@ -268,13 +275,15 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		issueDate := input.IssueDate
+		expiryDate := input.ExpiryDate
 		newStatus := computeCertificateStatus(input.ExpiryDate)
 
 		rows, err := queries.UpdateCertificate(ctx, db.UpdateCertificateParams{
 			ComponentID:      input.ComponentID,
 			CertificateName:  input.CertificateName,
-			IssueDate:        input.IssueDate,
-			ExpiryDate:       input.ExpiryDate,
+			IssueDate:        &issueDate,
+			ExpiryDate:       &expiryDate,
 			CertificateFile:  input.CertificateFile,
 			IssuingAuthority: input.IssuingAuthority,
 			Status:           newStatus,
@@ -356,10 +365,9 @@ func GetExpiringCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		thresholdDate := time.Now().AddDate(0, 0, daysThreshold)
-
 		queries := db.New(pool)
 
-		certificates, err := queries.GetExpiringCertificates(ctx, thresholdDate)
+		certificates, err := queries.GetExpiringCertificates(ctx, &thresholdDate)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch expiring certificates"})
 			return
@@ -396,8 +404,8 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		componentID := existing.ComponentID
 		certificateName := existing.CertificateName
-		issueDate := existing.IssueDate
-		expiryDate := existing.ExpiryDate
+		issueDate := existing.IssueDate   // *time.Time
+		expiryDate := existing.ExpiryDate // *time.Time
 		certificateFile := existing.CertificateFile
 		issuingAuthority := existing.IssuingAuthority
 		testID := existing.TestID
@@ -412,10 +420,10 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			certificateName = *input.CertificateName
 		}
 		if input.IssueDate != nil {
-			issueDate = *input.IssueDate
+			issueDate = input.IssueDate
 		}
 		if input.ExpiryDate != nil {
-			expiryDate = *input.ExpiryDate
+			expiryDate = input.ExpiryDate
 		}
 		if input.CertificateFile != nil {
 			certificateFile = *input.CertificateFile
@@ -436,7 +444,8 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			maintenanceNotes = *input.MaintenanceNotes
 		}
 
-		if expiryDate.Before(issueDate) {
+		// date validation — only if both are non-nil
+		if issueDate != nil && expiryDate != nil && expiryDate.Before(*issueDate) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "expiry date must be after issue date"})
 			return
 		}
@@ -459,7 +468,11 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			}
 		}
 
-		newStatus := computeCertificateStatus(expiryDate)
+		// compute status only if expiry date is set, otherwise keep PENDING
+		newStatus := existing.Status
+		if expiryDate != nil {
+			newStatus = computeCertificateStatus(*expiryDate)
+		}
 
 		rows, err := queries.UpdateCertificate(ctx, db.UpdateCertificateParams{
 			ComponentID:      componentID,
@@ -523,7 +536,7 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		defer file.Close()
 
-		const maxFileSize = 10 * 1024 * 1024 // 10 MB
+		const maxFileSize = 10 * 1024 * 1024
 		if header.Size > maxFileSize {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "file too large, maximum size is 10MB"})
 			return
@@ -563,9 +576,9 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		userID, _ := utils.GetUserIdFromContext(c)
 		_, err = pool.Exec(ctx, `
-				INSERT INTO certificate_upload_audit (certificate_id, file_key, file_name, uploaded_by, uploaded_at)
-				VALUES ($1, $2, $3, $4, NOW())
-			`, certificateID, key, header.Filename, userID)
+			INSERT INTO certificate_upload_audit (certificate_id, file_key, file_name, uploaded_by, uploaded_at)
+			VALUES ($1, $2, $3, $4, NOW())
+		`, certificateID, key, header.Filename, userID)
 		if err != nil {
 			logger.Log.Error().Err(err).Msg("failed to write certificate upload audit log")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write upload audit log"})
@@ -577,6 +590,7 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 			Str("file_key", key).
 			Str("uploaded_by", userID).
 			Msg("certificate file uploaded")
+
 		c.JSON(http.StatusOK, gin.H{"message": "file uploaded successfully"})
 	}
 }
@@ -654,7 +668,6 @@ func GetCertificatesWithContext(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 
 		limit, offset, query := utils.ParsePagination(c)
-
 		queries := db.New(pool)
 
 		certificates, err := queries.GetAllCertificatesWithContextPaginated(ctx, db.GetAllCertificatesWithContextPaginatedParams{
@@ -698,7 +711,6 @@ func GetCertificatesReportPDF(pool *pgxpool.Pool) gin.HandlerFunc {
 			if total > math.MaxInt32 {
 				limit = math.MaxInt32
 			}
-
 			certificates, err = queries.GetAllCertificatesWithContextPaginated(ctx, db.GetAllCertificatesWithContextPaginatedParams{
 				Limit:  limit,
 				Offset: 0,
@@ -712,6 +724,20 @@ func GetCertificatesReportPDF(pool *pgxpool.Pool) gin.HandlerFunc {
 		generatedAt := time.Now()
 		reportRows := make([]utils.CertificateReportRow, 0, len(certificates))
 		for _, certificate := range certificates {
+			// skip pending certificates from report — they have no real data
+			if certificate.Status == "PENDING" {
+				continue
+			}
+
+			issueDateStr := ""
+			if certificate.IssueDate != nil {
+				issueDateStr = certificate.IssueDate.Format("2006-01-02")
+			}
+			expiryDateStr := ""
+			if certificate.ExpiryDate != nil {
+				expiryDateStr = certificate.ExpiryDate.Format("2006-01-02")
+			}
+
 			reportRows = append(reportRows, utils.CertificateReportRow{
 				CertificateName:    certificate.CertificateName,
 				CertificateID:      certificate.CertificateID,
@@ -719,8 +745,8 @@ func GetCertificatesReportPDF(pool *pgxpool.Pool) gin.HandlerFunc {
 				ComponentID:        certificate.ComponentID,
 				AssetName:          certificate.AssetName,
 				AssetID:            certificate.AssetID,
-				LastInspectionDate: certificate.IssueDate.Format("2006-01-02"),
-				NextInspectionDate: certificate.ExpiryDate.Format("2006-01-02"),
+				LastInspectionDate: issueDateStr,
+				NextInspectionDate: expiryDateStr,
 				Status:             certificate.Status,
 				IssuingAuthority:   certificate.IssuingAuthority,
 			})
@@ -735,7 +761,7 @@ func GetCertificatesReportPDF(pool *pgxpool.Pool) gin.HandlerFunc {
 		userID, _ := utils.GetUserIdFromContext(c)
 		logger.Log.Info().
 			Str("generated_by", userID).
-			Int("certificate_count", len(certificates)).
+			Int("certificate_count", len(reportRows)).
 			Msg("certificate report generated")
 
 		filename := fmt.Sprintf("certificate-report-%s.pdf", generatedAt.Format("20060102-150405"))

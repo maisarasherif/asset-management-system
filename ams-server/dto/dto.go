@@ -90,13 +90,14 @@ type PatchCategoryInput struct {
 // ==================== Asset DTOs ====================
 
 type AssetInput struct {
-	Name            string `json:"name" validate:"required,min=2,max=200"`
-	Photo           string `json:"photo" validate:"omitempty,url"`
-	Datasheet       string `json:"datasheet" validate:"omitempty,url"`
-	Description     string `json:"description"`
-	Status          string `json:"status" validate:"required,oneof=ACTIVE INACTIVE MAINTENANCE"`
-	Location        string `json:"location"`
-	AssignedProject string `json:"assigned_project"`
+	Name            string  `json:"name" validate:"required,min=2,max=200"`
+	Photo           string  `json:"photo" validate:"omitempty,url"`
+	Datasheet       string  `json:"datasheet" validate:"omitempty,url"`
+	Description     string  `json:"description"`
+	Status          string  `json:"status" validate:"required,oneof=ACTIVE INACTIVE MAINTENANCE"`
+	Location        string  `json:"location"`
+	AssignedProject string  `json:"assigned_project"`
+	TemplateID      *string `json:"template_id"`
 }
 
 type PatchAssetInput struct {
@@ -171,14 +172,39 @@ type PatchCertificateInput struct {
 // ==================== Test Type DTOs ====================
 
 type TestTypeInput struct {
-    TestID           string `json:"test_id" validate:"required"`
-    TestName         string `json:"test_name" validate:"required,min=2,max=100"`
-    ValidityDuration int32  `json:"validity_duration" validate:"required,min=1"`
-    Description      string `json:"description"`
+	TestID           string `json:"test_id" validate:"required"`
+	TestName         string `json:"test_name" validate:"required,min=2,max=100"`
+	ValidityDuration int32  `json:"validity_duration" validate:"required,min=1"`
+	Description      string `json:"description"`
 }
 
 type PatchTestTypeInput struct {
-    TestName         *string `json:"test_name" validate:"omitempty,min=2,max=100"`
-    ValidityDuration *int32  `json:"validity_duration" validate:"omitempty,min=1"`
-    Description      *string `json:"description"`
+	TestName         *string `json:"test_name" validate:"omitempty,min=2,max=100"`
+	ValidityDuration *int32  `json:"validity_duration" validate:"omitempty,min=1"`
+	Description      *string `json:"description"`
+}
+
+// ==================== Asset Template DTOs ====================
+
+type AssetTemplateInput struct {
+	TemplateName string `json:"template_name" validate:"required,min=2,max=200"`
+	Description  string `json:"description"`
+}
+
+type TemplateComponentInput struct {
+	CategoryID     string `json:"category_id" validate:"required"`
+	Name           string `json:"name" validate:"required,min=2,max=200"`
+	Description    string `json:"description"`
+	SerialNumber   string `json:"serial_number"`
+	Manufacturer   string `json:"manufacturer"`
+	EquipmentType  string `json:"equipment_type"`
+	Structure      string `json:"structure"`
+	Model          string `json:"model"`
+	Class          string `json:"class"`
+	ClassCode      string `json:"class_code"`
+	SafetyCritical string `json:"safety_critical" validate:"required,oneof=YES NO"`
+}
+
+type TemplateComponentTestInput struct {
+	TestID string `json:"test_id" validate:"required"`
 }

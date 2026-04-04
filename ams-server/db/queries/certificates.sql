@@ -100,3 +100,19 @@ LIMIT $2 OFFSET $3;
 SELECT COUNT(*)
 FROM certificate_upload_audit
 WHERE certificate_id = $1;
+
+-- name: CreatePendingCertificate :one
+INSERT INTO certificates (
+    certificate_id, component_id, certificate_name, certificate_file,
+    issuing_authority, status, test_id, imca_ref, imca_d018,
+    maintenance_notes, template_component_test_id, created_at, updated_at
+)
+VALUES ($1, $2, $3, '', '', 'PENDING', $4, '', '', '', $5, NOW(), NOW())
+RETURNING *;
+
+-- name: FillPendingCertificate :execrows
+UPDATE certificates
+SET issue_date = $1, expiry_date = $2, issuing_authority = $3,
+    imca_ref = $4, imca_d018 = $5, maintenance_notes = $6,
+    status = $7, updated_at = NOW()
+WHERE certificate_id = $8;

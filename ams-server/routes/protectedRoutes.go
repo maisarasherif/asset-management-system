@@ -51,6 +51,16 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	admin.PATCH("/patchtesttype/:test_id", controller.PatchTestType(pool))
 	admin.DELETE("/deletetesttype/:test_id", controller.DeleteTestType(pool))
 
+	// Template Routes
+	admin.POST("/addtemplate", controller.AddTemplate(pool))
+	admin.PUT("/updatetemplate/:template_id", controller.UpdateTemplate(pool))
+	admin.DELETE("/deletetemplate/:template_id", controller.DeleteTemplate(pool))
+	admin.POST("/template/:template_id/addcomponent", controller.AddTemplateComponent(pool))
+	admin.PUT("/template/:template_id/component/:template_component_id", controller.UpdateTemplateComponent(pool))
+	admin.DELETE("/template/:template_id/component/:template_component_id", controller.DeleteTemplateComponent(pool))
+	admin.POST("/template/:template_id/component/:template_component_id/addtest", controller.AddTemplateComponentTest(pool))
+	admin.DELETE("/template/:template_id/component/:template_component_id/test/:template_component_test_id", controller.DeleteTemplateComponentTest(pool))
+
 	// ===================Protected Routes======================================================
 	protected := router.Group("/")
 	protected.Use(middleware.AuthMiddleware())
@@ -78,6 +88,12 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	// Category routes
 	protected.GET("/categories", controller.GetCategories(pool))
 	protected.GET("/category/:category_id", controller.GetCategory(pool))
+
+	// Template routes (read — any authenticated user)
+	protected.GET("/templates", controller.GetTemplates(pool))
+	protected.GET("/template/:template_id", controller.GetTemplate(pool))
+	protected.GET("/template/:template_id/components", controller.GetTemplateComponents(pool))
+	protected.GET("/template/:template_id/component/:template_component_id/tests", controller.GetTemplateComponentTests(pool))
 
 	// User routes
 	protected.GET("/user/:user_id", controller.GetUser(pool))

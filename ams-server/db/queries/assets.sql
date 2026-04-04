@@ -10,8 +10,8 @@ SELECT COUNT(*) FROM assets;
 SELECT * FROM assets WHERE asset_id = $1 LIMIT 1;
 
 -- name: CreateAsset :one
-INSERT INTO assets (asset_id, name, photo, datasheet, description, status, location, assigned_project, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+INSERT INTO assets (asset_id, name, photo, datasheet, description, status, location, assigned_project, template_id, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
 RETURNING *;
 
 -- name: UpdateAsset :execrows

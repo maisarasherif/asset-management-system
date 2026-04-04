@@ -22,6 +22,16 @@ type Asset struct {
 	AssignedProject string    `json:"assigned_project"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+	TemplateID      *string   `json:"template_id"`
+}
+
+type AssetTemplate struct {
+	ID           int32     `json:"id"`
+	TemplateID   string    `json:"template_id"`
+	TemplateName string    `json:"template_name"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type Category struct {
@@ -34,21 +44,22 @@ type Category struct {
 }
 
 type Certificate struct {
-	ID               int32     `json:"id"`
-	CertificateID    string    `json:"certificate_id"`
-	ComponentID      string    `json:"component_id"`
-	CertificateName  string    `json:"certificate_name"`
-	IssueDate        time.Time `json:"issue_date"`
-	ExpiryDate       time.Time `json:"expiry_date"`
-	CertificateFile  string    `json:"certificate_file"`
-	IssuingAuthority string    `json:"issuing_authority"`
-	Status           string    `json:"status"`
-	TestID           string    `json:"test_id"`
-	ImcaRef          string    `json:"imca_ref"`
-	ImcaD018         string    `json:"imca_d018"`
-	MaintenanceNotes string    `json:"maintenance_notes"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                      int32      `json:"id"`
+	CertificateID           string     `json:"certificate_id"`
+	ComponentID             string     `json:"component_id"`
+	CertificateName         string     `json:"certificate_name"`
+	IssueDate               *time.Time `json:"issue_date"`
+	ExpiryDate              *time.Time `json:"expiry_date"`
+	CertificateFile         string     `json:"certificate_file"`
+	IssuingAuthority        string     `json:"issuing_authority"`
+	Status                  string     `json:"status"`
+	TestID                  string     `json:"test_id"`
+	ImcaRef                 string     `json:"imca_ref"`
+	ImcaD018                string     `json:"imca_d018"`
+	MaintenanceNotes        string     `json:"maintenance_notes"`
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
+	TemplateComponentTestID *string    `json:"template_component_test_id"`
 }
 
 type CertificateUploadAudit struct {
@@ -61,22 +72,23 @@ type CertificateUploadAudit struct {
 }
 
 type Component struct {
-	ID             int32     `json:"id"`
-	ComponentID    string    `json:"component_id"`
-	AssetID        string    `json:"asset_id"`
-	CategoryID     string    `json:"category_id"`
-	Name           string    `json:"name"`
-	SerialNumber   string    `json:"serial_number"`
-	Manufacturer   string    `json:"manufacturer"`
-	Description    string    `json:"description"`
-	EquipmentType  string    `json:"equipment_type"`
-	Structure      string    `json:"structure"`
-	Model          string    `json:"model"`
-	Class          string    `json:"class"`
-	ClassCode      string    `json:"class_code"`
-	SafetyCritical string    `json:"safety_critical"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID                  int32     `json:"id"`
+	ComponentID         string    `json:"component_id"`
+	AssetID             string    `json:"asset_id"`
+	CategoryID          string    `json:"category_id"`
+	Name                string    `json:"name"`
+	SerialNumber        string    `json:"serial_number"`
+	Manufacturer        string    `json:"manufacturer"`
+	Description         string    `json:"description"`
+	EquipmentType       string    `json:"equipment_type"`
+	Structure           string    `json:"structure"`
+	Model               string    `json:"model"`
+	Class               string    `json:"class"`
+	ClassCode           string    `json:"class_code"`
+	SafetyCritical      string    `json:"safety_critical"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+	TemplateComponentID *string   `json:"template_component_id"`
 }
 
 type ScheduledTask struct {
@@ -86,6 +98,32 @@ type ScheduledTask struct {
 	Type          string    `json:"type"`
 	Status        string    `json:"status"`
 	SentAt        time.Time `json:"sent_at"`
+}
+
+type TemplateComponent struct {
+	ID                  int32     `json:"id"`
+	TemplateComponentID string    `json:"template_component_id"`
+	TemplateID          string    `json:"template_id"`
+	CategoryID          string    `json:"category_id"`
+	Name                string    `json:"name"`
+	Description         string    `json:"description"`
+	SerialNumber        string    `json:"serial_number"`
+	Manufacturer        string    `json:"manufacturer"`
+	EquipmentType       string    `json:"equipment_type"`
+	Structure           string    `json:"structure"`
+	Model               string    `json:"model"`
+	Class               string    `json:"class"`
+	ClassCode           string    `json:"class_code"`
+	SafetyCritical      string    `json:"safety_critical"`
+	CreatedAt           time.Time `json:"created_at"`
+}
+
+type TemplateComponentTest struct {
+	ID                      int32     `json:"id"`
+	TemplateComponentTestID string    `json:"template_component_test_id"`
+	TemplateComponentID     string    `json:"template_component_id"`
+	TestID                  string    `json:"test_id"`
+	CreatedAt               time.Time `json:"created_at"`
 }
 
 type TestType struct {

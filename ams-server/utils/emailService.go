@@ -126,7 +126,7 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiring
 			Str("certificate", cert.CertificateName).
 			Msg("ClickUp task already created within 6 months, skipping")
 	} else {
-		clickUpTaskID, err := CreateClickUpTask(cert.CertificateName, cert.AssetName, cert.ComponentName, cert.ExpiryDate)
+		clickUpTaskID, err := CreateClickUpTask(cert.CertificateName, cert.AssetName, cert.ComponentName, *cert.ExpiryDate)
 		status := "SENT"
 		taskID := uuid.New().String() // fallback task_id if ClickUp fails
 
@@ -181,7 +181,7 @@ func runExpiryCheck(pool *pgxpool.Pool) {
 
 	queries := db.New(pool)
 
-	certificates, err := queries.GetExpiringCertificatesWithContext(ctx, thresholdDate)
+	certificates, err := queries.GetExpiringCertificatesWithContext(ctx, &thresholdDate)
 	if err != nil {
 		logger.Log.Error().Err(err).Msg("failed to fetch expiring certificates")
 		return
