@@ -148,19 +148,21 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		component, err := queries.CreateComponent(ctx, db.CreateComponentParams{
-			ComponentID:    componentID,
-			AssetID:        input.AssetID,
-			CategoryID:     input.CategoryID,
-			Name:           input.Name,
-			SerialNumber:   input.SerialNumber,
-			Manufacturer:   input.Manufacturer,
-			Description:    input.Description,
-			EquipmentType:  input.EquipmentType,
-			Structure:      input.Structure,
-			Model:          input.Model,
-			Class:          input.Class,
-			ClassCode:      input.ClassCode,
-			SafetyCritical: input.SafetyCritical,
+			ComponentID:     componentID,
+			AssetID:         input.AssetID,
+			CategoryID:      input.CategoryID,
+			Name:            input.Name,
+			SerialNumber:    input.SerialNumber,
+			Manufacturer:    input.Manufacturer,
+			Description:     input.Description,
+			Location:        input.Location,
+			AssignedProject: input.AssignedProject,
+			EquipmentType:   input.EquipmentType,
+			Structure:       input.Structure,
+			Model:           input.Model,
+			Class:           input.Class,
+			ClassCode:       input.ClassCode,
+			SafetyCritical:  input.SafetyCritical,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add component"})
@@ -197,18 +199,20 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
-			CategoryID:     input.CategoryID,
-			Name:           input.Name,
-			SerialNumber:   input.SerialNumber,
-			Manufacturer:   input.Manufacturer,
-			Description:    input.Description,
-			EquipmentType:  input.EquipmentType,
-			Structure:      input.Structure,
-			Model:          input.Model,
-			Class:          input.Class,
-			ClassCode:      input.ClassCode,
-			SafetyCritical: input.SafetyCritical,
-			ComponentID:    componentID,
+			CategoryID:      input.CategoryID,
+			Name:            input.Name,
+			SerialNumber:    input.SerialNumber,
+			Manufacturer:    input.Manufacturer,
+			Description:     input.Description,
+			Location:        input.Location,
+			AssignedProject: input.AssignedProject,
+			EquipmentType:   input.EquipmentType,
+			Structure:       input.Structure,
+			Model:           input.Model,
+			Class:           input.Class,
+			ClassCode:       input.ClassCode,
+			SafetyCritical:  input.SafetyCritical,
+			ComponentID:     componentID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update component"})
@@ -290,6 +294,8 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		serialNumber := existing.SerialNumber
 		manufacturer := existing.Manufacturer
 		description := existing.Description
+		location := existing.Location
+		assignedProject := existing.AssignedProject
 		equipmentType := existing.EquipmentType
 		structure := existing.Structure
 		model := existing.Model
@@ -311,6 +317,12 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		if input.Description != nil {
 			description = *input.Description
+		}
+		if input.Location != nil {
+			location = *input.Location
+		}
+		if input.AssignedProject != nil {
+			assignedProject = *input.AssignedProject
 		}
 		if input.EquipmentType != nil {
 			equipmentType = *input.EquipmentType
@@ -338,18 +350,20 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
-			CategoryID:     categoryID,
-			Name:           name,
-			SerialNumber:   serialNumber,
-			Manufacturer:   manufacturer,
-			Description:    description,
-			EquipmentType:  equipmentType,
-			Structure:      structure,
-			Model:          model,
-			Class:          class,
-			ClassCode:      classCode,
-			SafetyCritical: safetyCritical,
-			ComponentID:    componentID,
+			CategoryID:      categoryID,
+			Name:            name,
+			SerialNumber:    serialNumber,
+			Manufacturer:    manufacturer,
+			Description:     description,
+			Location:        location,
+			AssignedProject: assignedProject,
+			EquipmentType:   equipmentType,
+			Structure:       structure,
+			Model:           model,
+			Class:           class,
+			ClassCode:       classCode,
+			SafetyCritical:  safetyCritical,
+			ComponentID:     componentID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update component"})

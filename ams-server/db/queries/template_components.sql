@@ -1,10 +1,10 @@
 -- name: CreateTemplateComponent :one
 INSERT INTO template_components (
     template_component_id, template_id, category_id, name, description,
-    serial_number, manufacturer, equipment_type, structure, model,
-    class, class_code, safety_critical, created_at
+    serial_number, manufacturer, location, assigned_project, equipment_type,
+    structure, model, class, class_code, safety_critical, created_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
 RETURNING *;
 
 -- name: GetTemplateComponentsByTemplateID :many
@@ -19,9 +19,9 @@ WHERE template_component_id = $1 LIMIT 1;
 -- name: UpdateTemplateComponent :execrows
 UPDATE template_components
 SET category_id = $1, name = $2, description = $3, serial_number = $4,
-    manufacturer = $5, equipment_type = $6, structure = $7, model = $8,
-    class = $9, class_code = $10, safety_critical = $11
-WHERE template_component_id = $12;
+    manufacturer = $5, location = $6, assigned_project = $7, equipment_type = $8, structure = $9, model = $10,
+    class = $11, class_code = $12, safety_critical = $13
+WHERE template_component_id = $14;
 
 -- name: DeleteTemplateComponent :execrows
 DELETE FROM template_components WHERE template_component_id = $1;

@@ -1,0 +1,238 @@
+package controllers
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
+	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/utils"
+)
+
+func GetMainCategories(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		limit, offset, query := utils.ParsePagination(c)
+		queries := db.New(pool)
+
+		mainCategories, err := queries.GetAllMainCategoriesPaginated(ctx, db.GetAllMainCategoriesPaginatedParams{
+			Limit:  limit,
+			Offset: offset,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch main categories"})
+			return
+		}
+
+		total, err := queries.CountMainCategories(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count main categories"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: mainCategories,
+			Meta: utils.BuildMeta(query, total),
+		})
+	}
+}
+
+func GetMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		mainCategoryID := c.Param("main_category_id")
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		mainCategory, err := queries.GetMainCategoryByID(ctx, mainCategoryID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "main category not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch main category"})
+			return
+		}
+
+		c.JSON(http.StatusOK, mainCategory)
+	}
+}
+
+func AddMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var input dto.MainCategoryInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		mainCategoryID, err := utils.GenerateMainCategoryID(ctx, queries)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate main category id"})
+			return
+		}
+
+		mainCategory, err := queries.CreateMainCategory(ctx, db.CreateMainCategoryParams{
+			MainCategoryID:   mainCategoryID,
+			MainCategoryName: input.MainCategoryName,
+			Description:      input.Description,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add main category"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, mainCategory)
+	}
+}
+
+func UpdateMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		mainCategoryID := c.Param("main_category_id")
+
+		var input dto.MainCategoryInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		rows, err := queries.UpdateMainCategory(ctx, db.UpdateMainCategoryParams{
+			MainCategoryName: input.MainCategoryName,
+			Description:      input.Description,
+			MainCategoryID:   mainCategoryID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update main category"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "main category not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "main category updated successfully"})
+	}
+}
+
+func PatchMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		mainCategoryID := c.Param("main_category_id")
+
+		var input dto.PatchMainCategoryInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		existing, err := queries.GetMainCategoryByID(ctx, mainCategoryID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "main category not found"})
+			return
+		}
+
+		mainCategoryName := existing.MainCategoryName
+		description := existing.Description
+
+		if input.MainCategoryName != nil {
+			mainCategoryName = *input.MainCategoryName
+		}
+		if input.Description != nil {
+			description = *input.Description
+		}
+
+		rows, err := queries.UpdateMainCategory(ctx, db.UpdateMainCategoryParams{
+			MainCategoryName: mainCategoryName,
+			Description:      description,
+			MainCategoryID:   mainCategoryID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update main category"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "main category not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "main category updated successfully"})
+	}
+}
+
+func DeleteMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		mainCategoryID := c.Param("main_category_id")
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		_, err := queries.GetMainCategoryByID(ctx, mainCategoryID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "main category not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch main category"})
+			return
+		}
+
+		count, err := queries.CountCategoriesByMainCategoryID(ctx, &mainCategoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check categories"})
+			return
+		}
+		if count > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "main category has categories assigned to it"})
+			return
+		}
+
+		rows, err := queries.DeleteMainCategory(ctx, mainCategoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete main category"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "main category not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "main category deleted successfully"})
+	}
+}

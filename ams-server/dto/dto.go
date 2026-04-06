@@ -78,13 +78,25 @@ type LoginResponse struct {
 // ==================== Category DTOs ====================
 
 type CategoryInput struct {
-	CategoryName string `json:"category_name" validate:"required,min=2,max=100"`
-	Description  string `json:"description"`
+	MainCategoryID string `json:"main_category_id" validate:"required"`
+	CategoryName   string `json:"category_name" validate:"required,min=2,max=100"`
+	Description    string `json:"description"`
 }
 
 type PatchCategoryInput struct {
-	CategoryName *string `json:"category_name" validate:"omitempty,min=2,max=100"`
-	Description  *string `json:"description"`
+	MainCategoryID *string `json:"main_category_id"`
+	CategoryName   *string `json:"category_name" validate:"omitempty,min=2,max=100"`
+	Description    *string `json:"description"`
+}
+
+type MainCategoryInput struct {
+	MainCategoryName string `json:"main_category_name" validate:"required,min=2,max=100"`
+	Description      string `json:"description"`
+}
+
+type PatchMainCategoryInput struct {
+	MainCategoryName *string `json:"main_category_name" validate:"omitempty,min=2,max=100"`
+	Description      *string `json:"description"`
 }
 
 // ==================== Asset DTOs ====================
@@ -113,32 +125,36 @@ type PatchAssetInput struct {
 // ==================== Component DTOs ====================
 
 type ComponentInput struct {
-	AssetID        string `json:"asset_id" validate:"required"`
-	CategoryID     string `json:"category_id" validate:"required"`
-	Name           string `json:"name" validate:"required,min=2,max=200"`
-	SerialNumber   string `json:"serial_number"`
-	Manufacturer   string `json:"manufacturer"`
-	Description    string `json:"description"`
-	EquipmentType  string `json:"equipment_type"`
-	Structure      string `json:"structure"`
-	Model          string `json:"model"`
-	Class          string `json:"class"`
-	ClassCode      string `json:"class_code"`
-	SafetyCritical string `json:"safety_critical" validate:"required,oneof=YES NO"`
+	AssetID         string `json:"asset_id" validate:"required"`
+	CategoryID      string `json:"category_id" validate:"required"`
+	Name            string `json:"name" validate:"required,min=2,max=200"`
+	SerialNumber    string `json:"serial_number"`
+	Manufacturer    string `json:"manufacturer"`
+	Description     string `json:"description"`
+	Location        string `json:"location"`
+	AssignedProject string `json:"assigned_project"`
+	EquipmentType   string `json:"equipment_type"`
+	Structure       string `json:"structure"`
+	Model           string `json:"model"`
+	Class           string `json:"class"`
+	ClassCode       string `json:"class_code"`
+	SafetyCritical  string `json:"safety_critical" validate:"required,oneof=YES NO"`
 }
 
 type PatchComponentInput struct {
-	CategoryID     *string `json:"category_id"`
-	Name           *string `json:"name" validate:"omitempty,min=2,max=200"`
-	SerialNumber   *string `json:"serial_number"`
-	Manufacturer   *string `json:"manufacturer"`
-	Description    *string `json:"description"`
-	EquipmentType  *string `json:"equipment_type"`
-	Structure      *string `json:"structure"`
-	Model          *string `json:"model"`
-	Class          *string `json:"class"`
-	ClassCode      *string `json:"class_code"`
-	SafetyCritical *string `json:"safety_critical" validate:"omitempty,oneof=YES NO"`
+	CategoryID      *string `json:"category_id"`
+	Name            *string `json:"name" validate:"omitempty,min=2,max=200"`
+	SerialNumber    *string `json:"serial_number"`
+	Manufacturer    *string `json:"manufacturer"`
+	Description     *string `json:"description"`
+	Location        *string `json:"location"`
+	AssignedProject *string `json:"assigned_project"`
+	EquipmentType   *string `json:"equipment_type"`
+	Structure       *string `json:"structure"`
+	Model           *string `json:"model"`
+	Class           *string `json:"class"`
+	ClassCode       *string `json:"class_code"`
+	SafetyCritical  *string `json:"safety_critical" validate:"omitempty,oneof=YES NO"`
 }
 
 // ==================== Certificate DTOs ====================
@@ -192,17 +208,19 @@ type AssetTemplateInput struct {
 }
 
 type TemplateComponentInput struct {
-	CategoryID     string `json:"category_id" validate:"required"`
-	Name           string `json:"name" validate:"required,min=2,max=200"`
-	Description    string `json:"description"`
-	SerialNumber   string `json:"serial_number"`
-	Manufacturer   string `json:"manufacturer"`
-	EquipmentType  string `json:"equipment_type"`
-	Structure      string `json:"structure"`
-	Model          string `json:"model"`
-	Class          string `json:"class"`
-	ClassCode      string `json:"class_code"`
-	SafetyCritical string `json:"safety_critical" validate:"required,oneof=YES NO"`
+	CategoryID      string `json:"category_id" validate:"required"`
+	Name            string `json:"name" validate:"required,min=2,max=200"`
+	Description     string `json:"description"`
+	SerialNumber    string `json:"serial_number"`
+	Manufacturer    string `json:"manufacturer"`
+	Location        string `json:"location"`
+	AssignedProject string `json:"assigned_project"`
+	EquipmentType   string `json:"equipment_type"`
+	Structure       string `json:"structure"`
+	Model           string `json:"model"`
+	Class           string `json:"class"`
+	ClassCode       string `json:"class_code"`
+	SafetyCritical  string `json:"safety_critical" validate:"required,oneof=YES NO"`
 }
 
 type TemplateComponentTestInput struct {

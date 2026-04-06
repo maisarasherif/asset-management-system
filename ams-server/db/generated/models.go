@@ -35,12 +35,13 @@ type AssetTemplate struct {
 }
 
 type Category struct {
-	ID           int32     `json:"id"`
-	CategoryID   string    `json:"category_id"`
-	CategoryName string    `json:"category_name"`
-	Description  string    `json:"description"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID             int32     `json:"id"`
+	CategoryID     string    `json:"category_id"`
+	CategoryName   string    `json:"category_name"`
+	Description    string    `json:"description"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	MainCategoryID *string   `json:"main_category_id"`
 }
 
 type Certificate struct {
@@ -89,6 +90,17 @@ type Component struct {
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
 	TemplateComponentID *string   `json:"template_component_id"`
+	Location            string    `json:"location"`
+	AssignedProject     string    `json:"assigned_project"`
+}
+
+type MainCategory struct {
+	ID               int32     `json:"id"`
+	MainCategoryID   string    `json:"main_category_id"`
+	MainCategoryName string    `json:"main_category_name"`
+	Description      string    `json:"description"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type ScheduledTask struct {
@@ -116,6 +128,8 @@ type TemplateComponent struct {
 	ClassCode           string    `json:"class_code"`
 	SafetyCritical      string    `json:"safety_critical"`
 	CreatedAt           time.Time `json:"created_at"`
+	Location            string    `json:"location"`
+	AssignedProject     string    `json:"assigned_project"`
 }
 
 type TemplateComponentTest struct {

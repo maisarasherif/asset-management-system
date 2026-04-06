@@ -30,6 +30,8 @@ func SpinUpAssetFromTemplate(ctx context.Context, pool *pgxpool.Pool, assetID, t
 			SerialNumber:        tc.SerialNumber,
 			Manufacturer:        tc.Manufacturer,
 			Description:         tc.Description,
+			Location:            tc.Location,
+			AssignedProject:     tc.AssignedProject,
 			EquipmentType:       tc.EquipmentType,
 			Structure:           tc.Structure,
 			Model:               tc.Model,

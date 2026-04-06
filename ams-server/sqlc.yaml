@@ -30,6 +30,10 @@ sql:
           go_type:
             type: "string"
             pointer: true
+        - column: "categories.main_category_id"
+          go_type:
+            type: "string"
+            pointer: true
         - column: "certificates.created_at"
           go_type: "time.Time"
         - column: "certificates.updated_at"
@@ -59,4 +63,8 @@ sql:
         - column: "template_components.created_at"
           go_type: "time.Time"
         - column: "template_component_tests.created_at"
+          go_type: "time.Time"
+        - column: "main_categories.created_at"
+          go_type: "time.Time"
+        - column: "main_categories.updated_at"
           go_type: "time.Time"

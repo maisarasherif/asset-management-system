@@ -132,3 +132,37 @@ func GenerateTemplateID(ctx context.Context, queries *db.Queries) (string, error
 	}
 	return "", fmt.Errorf("failed to generate unique template id after %d attempts", maxIDGenerationTry)
 }
+
+func GenerateCategoryID(ctx context.Context, queries *db.Queries) (string, error) {
+	for i := 0; i < maxIDGenerationTry; i++ {
+		segment, err := generateFourDigitSegment()
+		if err != nil {
+			return "", err
+		}
+		_, err = queries.GetCategoryByID(ctx, segment)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return segment, nil
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	return "", fmt.Errorf("failed to generate unique category id after %d attempts", maxIDGenerationTry)
+}
+
+func GenerateMainCategoryID(ctx context.Context, queries *db.Queries) (string, error) {
+	for i := 0; i < maxIDGenerationTry; i++ {
+		segment, err := generateFourDigitSegment()
+		if err != nil {
+			return "", err
+		}
+		_, err = queries.GetMainCategoryByID(ctx, segment)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return segment, nil
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	return "", fmt.Errorf("failed to generate unique main category id after %d attempts", maxIDGenerationTry)
+}

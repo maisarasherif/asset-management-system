@@ -34,11 +34,11 @@ func (q *Queries) CountTemplateComponentsByTemplateID(ctx context.Context, templ
 const createTemplateComponent = `-- name: CreateTemplateComponent :one
 INSERT INTO template_components (
     template_component_id, template_id, category_id, name, description,
-    serial_number, manufacturer, equipment_type, structure, model,
-    class, class_code, safety_critical, created_at
+    serial_number, manufacturer, location, assigned_project, equipment_type,
+    structure, model, class, class_code, safety_critical, created_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
-RETURNING id, template_component_id, template_id, category_id, name, description, serial_number, manufacturer, equipment_type, structure, model, class, class_code, safety_critical, created_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+RETURNING id, template_component_id, template_id, category_id, name, description, serial_number, manufacturer, equipment_type, structure, model, class, class_code, safety_critical, created_at, location, assigned_project
 `
 
 type CreateTemplateComponentParams struct {
@@ -49,6 +49,8 @@ type CreateTemplateComponentParams struct {
 	Description         string `json:"description"`
 	SerialNumber        string `json:"serial_number"`
 	Manufacturer        string `json:"manufacturer"`
+	Location            string `json:"location"`
+	AssignedProject     string `json:"assigned_project"`
 	EquipmentType       string `json:"equipment_type"`
 	Structure           string `json:"structure"`
 	Model               string `json:"model"`
@@ -66,6 +68,8 @@ func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplat
 		arg.Description,
 		arg.SerialNumber,
 		arg.Manufacturer,
+		arg.Location,
+		arg.AssignedProject,
 		arg.EquipmentType,
 		arg.Structure,
 		arg.Model,
@@ -90,6 +94,8 @@ func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplat
 		&i.ClassCode,
 		&i.SafetyCritical,
 		&i.CreatedAt,
+		&i.Location,
+		&i.AssignedProject,
 	)
 	return i, err
 }
@@ -107,7 +113,7 @@ func (q *Queries) DeleteTemplateComponent(ctx context.Context, templateComponent
 }
 
 const getTemplateComponentByID = `-- name: GetTemplateComponentByID :one
-SELECT id, template_component_id, template_id, category_id, name, description, serial_number, manufacturer, equipment_type, structure, model, class, class_code, safety_critical, created_at FROM template_components
+SELECT id, template_component_id, template_id, category_id, name, description, serial_number, manufacturer, equipment_type, structure, model, class, class_code, safety_critical, created_at, location, assigned_project FROM template_components
 WHERE template_component_id = $1 LIMIT 1
 `
 
@@ -130,12 +136,14 @@ func (q *Queries) GetTemplateComponentByID(ctx context.Context, templateComponen
 		&i.ClassCode,
 		&i.SafetyCritical,
 		&i.CreatedAt,
+		&i.Location,
+		&i.AssignedProject,
 	)
 	return i, err
 }
 
 const getTemplateComponentsByTemplateID = `-- name: GetTemplateComponentsByTemplateID :many
-SELECT id, template_component_id, template_id, category_id, name, description, serial_number, manufacturer, equipment_type, structure, model, class, class_code, safety_critical, created_at FROM template_components
+SELECT id, template_component_id, template_id, category_id, name, description, serial_number, manufacturer, equipment_type, structure, model, class, class_code, safety_critical, created_at, location, assigned_project FROM template_components
 WHERE template_id = $1
 ORDER BY category_id, name ASC
 `
@@ -165,6 +173,8 @@ func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templat
 			&i.ClassCode,
 			&i.SafetyCritical,
 			&i.CreatedAt,
+			&i.Location,
+			&i.AssignedProject,
 		); err != nil {
 			return nil, err
 		}
@@ -179,9 +189,9 @@ func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templat
 const updateTemplateComponent = `-- name: UpdateTemplateComponent :execrows
 UPDATE template_components
 SET category_id = $1, name = $2, description = $3, serial_number = $4,
-    manufacturer = $5, equipment_type = $6, structure = $7, model = $8,
-    class = $9, class_code = $10, safety_critical = $11
-WHERE template_component_id = $12
+    manufacturer = $5, location = $6, assigned_project = $7, equipment_type = $8, structure = $9, model = $10,
+    class = $11, class_code = $12, safety_critical = $13
+WHERE template_component_id = $14
 `
 
 type UpdateTemplateComponentParams struct {
@@ -190,6 +200,8 @@ type UpdateTemplateComponentParams struct {
 	Description         string `json:"description"`
 	SerialNumber        string `json:"serial_number"`
 	Manufacturer        string `json:"manufacturer"`
+	Location            string `json:"location"`
+	AssignedProject     string `json:"assigned_project"`
 	EquipmentType       string `json:"equipment_type"`
 	Structure           string `json:"structure"`
 	Model               string `json:"model"`
@@ -206,6 +218,8 @@ func (q *Queries) UpdateTemplateComponent(ctx context.Context, arg UpdateTemplat
 		arg.Description,
 		arg.SerialNumber,
 		arg.Manufacturer,
+		arg.Location,
+		arg.AssignedProject,
 		arg.EquipmentType,
 		arg.Structure,
 		arg.Model,

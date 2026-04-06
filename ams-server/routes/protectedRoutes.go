@@ -40,6 +40,10 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	admin.POST("/certificate/:certificate_id/file", controller.UploadCertificateFile(pool))
 
 	// Category Routes
+	admin.POST("/addmaincategory", controller.AddMainCategory(pool))
+	admin.PUT("/updatemaincategory/:main_category_id", controller.UpdateMainCategory(pool))
+	admin.PATCH("/patchmaincategory/:main_category_id", controller.PatchMainCategory(pool))
+	admin.DELETE("/deletemaincategory/:main_category_id", controller.DeleteMainCategory(pool))
 	admin.POST("/addcategory", controller.AddCategory(pool))
 	admin.PUT("/updatecategory/:category_id", controller.UpdateCategory(pool))
 	admin.PATCH("/patchcategory/:category_id", controller.PatchCategory(pool))
@@ -86,7 +90,10 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	protected.GET("/certificates/report.pdf", controller.GetCertificatesReportPDF(pool))
 
 	// Category routes
+	protected.GET("/main-categories", controller.GetMainCategories(pool))
+	protected.GET("/main-category/:main_category_id", controller.GetMainCategory(pool))
 	protected.GET("/categories", controller.GetCategories(pool))
+	protected.GET("/categories/main/:main_category_id", controller.GetCategoriesByMainCategory(pool))
 	protected.GET("/category/:category_id", controller.GetCategory(pool))
 
 	// Template routes (read — any authenticated user)
