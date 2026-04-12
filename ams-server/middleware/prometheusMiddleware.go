@@ -38,7 +38,7 @@ var (
 func PrometheusMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Skip the metrics endpoint itself to avoid self-referential noise
-		if c.Request.URL.Path == "/metrics" {
+		if c.Request.URL.Path == "/v1/metrics" {
 			c.Next()
 			return
 		}

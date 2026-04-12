@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/logger"
@@ -100,10 +99,10 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiring
 		}
 
 		_, recordErr := queries.CreateScheduledTask(ctx, db.CreateScheduledTaskParams{
-			TaskID:        uuid.New().String(),
-			CertificateID: cert.CertificateID,
-			Type:          "EMAIL",
-			Status:        status,
+			CertificateID:  cert.CertificateID,
+			Type:           "EMAIL",
+			Status:         status,
+			ExternalTaskID: "",
 		})
 		if recordErr != nil {
 			logger.Log.Error().Err(recordErr).
@@ -128,7 +127,7 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiring
 	} else {
 		clickUpTaskID, err := CreateClickUpTask(cert.CertificateName, cert.AssetName, cert.ComponentName, *cert.ExpiryDate)
 		status := "SENT"
-		taskID := uuid.New().String() // fallback task_id if ClickUp fails
+		externalTaskID := ""
 
 		if err != nil {
 			status = "FAILED"
@@ -136,7 +135,7 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiring
 				Str("certificate", cert.CertificateName).
 				Msg("failed to create ClickUp task")
 		} else {
-			taskID = clickUpTaskID
+			externalTaskID = clickUpTaskID
 			logger.Log.Info().
 				Str("certificate", cert.CertificateName).
 				Str("clickup_task_id", clickUpTaskID).
@@ -145,10 +144,10 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiring
 		}
 
 		_, recordErr := queries.CreateScheduledTask(ctx, db.CreateScheduledTaskParams{
-			TaskID:        taskID,
-			CertificateID: cert.CertificateID,
-			Type:          "CLICKUP",
-			Status:        status,
+			CertificateID:  cert.CertificateID,
+			Type:           "CLICKUP",
+			Status:         status,
+			ExternalTaskID: externalTaskID,
 		})
 		if recordErr != nil {
 			logger.Log.Error().Err(recordErr).

@@ -10,8 +10,8 @@ SELECT COUNT(*) FROM main_categories;
 SELECT * FROM main_categories WHERE main_category_id = $1 LIMIT 1;
 
 -- name: CreateMainCategory :one
-INSERT INTO main_categories (main_category_id, main_category_name, description, created_at, updated_at)
-VALUES ($1, $2, $3, NOW(), NOW())
+INSERT INTO main_categories (main_category_name, description, created_at, updated_at)
+VALUES ($1, $2, NOW(), NOW())
 RETURNING *;
 
 -- name: UpdateMainCategory :execrows

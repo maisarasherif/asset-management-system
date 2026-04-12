@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
-	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
 // ==================== Asset Templates ====================
@@ -33,14 +33,7 @@ func AddTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		templateID, err := utils.GenerateTemplateID(ctx, queries)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate template id"})
-			return
-		}
-
 		template, err := queries.CreateAssetTemplate(ctx, db.CreateAssetTemplateParams{
-			TemplateID:   templateID,
 			TemplateName: input.TemplateName,
 			Description:  input.Description,
 		})
@@ -130,6 +123,129 @@ func UpdateTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
+func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		templateID := c.Param("template_id")
+
+		var input dto.ConfigureTemplateInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		categoryIDs, testIDs, err := collectConfigureReferenceIDs(input.Components)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin template configuration transaction"})
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		queries := db.New(tx)
+
+		_, err = queries.GetAssetTemplateByID(ctx, templateID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "template not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch template"})
+			return
+		}
+
+		existingCategoryIDs, err := queries.GetExistingCategoryIDs(ctx, categoryIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate categories"})
+			return
+		}
+		missingCategoryIDs := missingIDs(categoryIDs, existingCategoryIDs)
+		if len(missingCategoryIDs) > 0 {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":                "one or more categories were not found",
+				"missing_category_ids": missingCategoryIDs,
+			})
+			return
+		}
+
+		existingTestIDs, err := queries.GetExistingTestTypeIDs(ctx, testIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate test types"})
+			return
+		}
+		missingTestIDs := missingIDs(testIDs, existingTestIDs)
+		if len(missingTestIDs) > 0 {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":            "one or more test types were not found",
+				"missing_test_ids": missingTestIDs,
+			})
+			return
+		}
+
+		if _, err := queries.DeleteTemplateComponentsByTemplateID(ctx, templateID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear existing template configuration"})
+			return
+		}
+
+		totalTests := 0
+		for _, componentInput := range input.Components {
+			component, err := queries.CreateTemplateComponent(ctx, db.CreateTemplateComponentParams{
+				TemplateID:      templateID,
+				CategoryID:      componentInput.CategoryID,
+				Name:            componentInput.Name,
+				Description:     componentInput.Description,
+				SerialNumber:    componentInput.SerialNumber,
+				Manufacturer:    componentInput.Manufacturer,
+				Location:        componentInput.Location,
+				AssignedProject: componentInput.AssignedProject,
+				EquipmentType:   componentInput.EquipmentType,
+				Structure:       componentInput.Structure,
+				Model:           componentInput.Model,
+				Class:           componentInput.Class,
+				ClassCode:       componentInput.ClassCode,
+				SafetyCritical:  componentInput.SafetyCritical,
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create template component"})
+				return
+			}
+
+			for _, testID := range componentInput.TestIDs {
+				if _, err := queries.CreateTemplateComponentTest(ctx, db.CreateTemplateComponentTestParams{
+					TemplateComponentID: component.TemplateComponentID,
+					TestID:              testID,
+				}); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign test to template component"})
+					return
+				}
+				totalTests++
+			}
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit template configuration"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":               "template configured successfully",
+			"components_configured": len(input.Components),
+			"tests_assigned":        totalTests,
+		})
+	}
+}
+
 func DeleteTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		templateID := c.Param("template_id")
@@ -149,6 +265,16 @@ func DeleteTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		assetCount, err := queries.CountAssetsByTemplateID(ctx, &templateID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check template usage"})
+			return
+		}
+		if assetCount > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "template is in use by existing assets"})
+			return
+		}
+
 		rows, err := queries.DeleteAssetTemplate(ctx, templateID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete template"})
@@ -161,6 +287,51 @@ func DeleteTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{"message": "template deleted successfully"})
 	}
+}
+
+func collectConfigureReferenceIDs(components []dto.ConfigureTemplateComponentItem) ([]string, []string, error) {
+	categoryIDs := make([]string, 0, len(components))
+	testIDs := make([]string, 0)
+	seenCategoryIDs := make(map[string]struct{}, len(components))
+	seenTestIDs := make(map[string]struct{})
+
+	for _, component := range components {
+		if _, exists := seenCategoryIDs[component.CategoryID]; !exists {
+			seenCategoryIDs[component.CategoryID] = struct{}{}
+			categoryIDs = append(categoryIDs, component.CategoryID)
+		}
+
+		componentSeenTests := make(map[string]struct{}, len(component.TestIDs))
+		for _, testID := range component.TestIDs {
+			if _, exists := componentSeenTests[testID]; exists {
+				return nil, nil, fmt.Errorf("duplicate test_id %q found in component %q", testID, component.Name)
+			}
+			componentSeenTests[testID] = struct{}{}
+
+			if _, exists := seenTestIDs[testID]; !exists {
+				seenTestIDs[testID] = struct{}{}
+				testIDs = append(testIDs, testID)
+			}
+		}
+	}
+
+	return categoryIDs, testIDs, nil
+}
+
+func missingIDs(requested []string, found []string) []string {
+	foundSet := make(map[string]struct{}, len(found))
+	for _, id := range found {
+		foundSet[id] = struct{}{}
+	}
+
+	missing := make([]string, 0)
+	for _, id := range requested {
+		if _, exists := foundSet[id]; !exists {
+			missing = append(missing, id)
+		}
+	}
+
+	return missing
 }
 
 // ==================== Template Components ====================
@@ -204,28 +375,21 @@ func AddTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		templateComponentID, err := utils.GenerateTemplateComponentID(ctx, queries, templateID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate template component id"})
-			return
-		}
-
 		component, err := queries.CreateTemplateComponent(ctx, db.CreateTemplateComponentParams{
-			TemplateComponentID: templateComponentID,
-			TemplateID:          templateID,
-			CategoryID:          input.CategoryID,
-			Name:                input.Name,
-			Description:         input.Description,
-			SerialNumber:        input.SerialNumber,
-			Manufacturer:        input.Manufacturer,
-			Location:            input.Location,
-			AssignedProject:     input.AssignedProject,
-			EquipmentType:       input.EquipmentType,
-			Structure:           input.Structure,
-			Model:               input.Model,
-			Class:               input.Class,
-			ClassCode:           input.ClassCode,
-			SafetyCritical:      input.SafetyCritical,
+			TemplateID:      templateID,
+			CategoryID:      input.CategoryID,
+			Name:            input.Name,
+			Description:     input.Description,
+			SerialNumber:    input.SerialNumber,
+			Manufacturer:    input.Manufacturer,
+			Location:        input.Location,
+			AssignedProject: input.AssignedProject,
+			EquipmentType:   input.EquipmentType,
+			Structure:       input.Structure,
+			Model:           input.Model,
+			Class:           input.Class,
+			ClassCode:       input.ClassCode,
+			SafetyCritical:  input.SafetyCritical,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create template component"})
@@ -407,16 +571,9 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		templateComponentTestID, err := utils.GenerateTemplateComponentTestID(ctx, queries, templateComponentID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate template component test id"})
-			return
-		}
-
 		tct, err := queries.CreateTemplateComponentTest(ctx, db.CreateTemplateComponentTestParams{
-			TemplateComponentTestID: templateComponentTestID,
-			TemplateComponentID:     templateComponentID,
-			TestID:                  input.TestID,
+			TemplateComponentID: templateComponentID,
+			TestID:              input.TestID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add test to template component"})

@@ -49,13 +49,12 @@ func (q *Queries) CountUsersByEmailExcluding(ctx context.Context, arg CountUsers
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (user_id, first_name, last_name, email, password, role, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+INSERT INTO users (first_name, last_name, email, password, role, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 RETURNING id, user_id, first_name, last_name, email, password, role, token, refresh_token, created_at, updated_at
 `
 
 type CreateUserParams struct {
-	UserID    string `json:"user_id"`
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	Email     string `json:"email"`
@@ -65,7 +64,6 @@ type CreateUserParams struct {
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser,
-		arg.UserID,
 		arg.FirstName,
 		arg.LastName,
 		arg.Email,

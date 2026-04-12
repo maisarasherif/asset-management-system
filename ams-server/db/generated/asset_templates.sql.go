@@ -9,20 +9,30 @@ import (
 	"context"
 )
 
+const countAssetsByTemplateID = `-- name: CountAssetsByTemplateID :one
+SELECT COUNT(*) FROM assets WHERE template_id = $1
+`
+
+func (q *Queries) CountAssetsByTemplateID(ctx context.Context, templateID *string) (int64, error) {
+	row := q.db.QueryRow(ctx, countAssetsByTemplateID, templateID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAssetTemplate = `-- name: CreateAssetTemplate :one
-INSERT INTO asset_templates (template_id, template_name, description, created_at, updated_at)
-VALUES ($1, $2, $3, NOW(), NOW())
+INSERT INTO asset_templates (template_name, description, created_at, updated_at)
+VALUES ($1, $2, NOW(), NOW())
 RETURNING id, template_id, template_name, description, created_at, updated_at
 `
 
 type CreateAssetTemplateParams struct {
-	TemplateID   string `json:"template_id"`
 	TemplateName string `json:"template_name"`
 	Description  string `json:"description"`
 }
 
 func (q *Queries) CreateAssetTemplate(ctx context.Context, arg CreateAssetTemplateParams) (AssetTemplate, error) {
-	row := q.db.QueryRow(ctx, createAssetTemplate, arg.TemplateID, arg.TemplateName, arg.Description)
+	row := q.db.QueryRow(ctx, createAssetTemplate, arg.TemplateName, arg.Description)
 	var i AssetTemplate
 	err := row.Scan(
 		&i.ID,

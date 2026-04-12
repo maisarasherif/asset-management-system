@@ -10,100 +10,111 @@ import (
 func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 
 	// ===================Admin-Protected Routes======================================================
-	admin := router.Group("/")
+	admin := router.Group("/v1")
 	admin.Use(middleware.AuthMiddleware(), middleware.AdminMiddleware())
 
-	// Asset Routes
-	admin.POST("/addasset", controller.AddAsset(pool))
-	admin.DELETE("/deleteasset/:asset_id", controller.DeleteAsset(pool))
-	admin.PUT("/updateasset/:asset_id", controller.UpdateAsset(pool))
-	admin.PATCH("/patchasset/:asset_id", controller.PatchAsset(pool))
-
 	// User Routes
-	admin.POST("/register", controller.RegisterUser(pool))
-	admin.PUT("/updateuser/:user_id", controller.UpdateUser(pool))
-	admin.PATCH("/patchuser/:user_id", controller.PatchUser(pool))
-	admin.DELETE("/deleteuser/:user_id", controller.DeleteUser(pool))
-	admin.GET("/users", controller.GetUsers(pool))
+	admin.POST("/user", controller.RegisterUser(pool))
+	admin.PUT("/user/:user_id", controller.UpdateUser(pool))
+	admin.PATCH("/user/:user_id", controller.PatchUser(pool))
+	admin.DELETE("/user/:user_id", controller.DeleteUser(pool))
+
+	// Asset Routes
+	admin.POST("/asset", controller.AddAsset(pool))
+	admin.PUT("/asset/:asset_id", controller.UpdateAsset(pool))
+	admin.PATCH("/asset/:asset_id", controller.PatchAsset(pool))
+	admin.DELETE("/asset/:asset_id", controller.DeleteAsset(pool))
 
 	// Component Routes
-	admin.POST("/addcomponent", controller.AddComponent(pool))
-	admin.PUT("/updatecomponent/:component_id", controller.UpdateComponent(pool))
-	admin.PATCH("/patchcomponent/:component_id", controller.PatchComponent(pool))
-	admin.DELETE("/deletecomponent/:component_id", controller.DeleteComponent(pool))
+	admin.POST("/component", controller.AddComponent(pool))
+	admin.PUT("/component/:component_id", controller.UpdateComponent(pool))
+	admin.PATCH("/component/:component_id", controller.PatchComponent(pool))
+	admin.DELETE("/component/:component_id", controller.DeleteComponent(pool))
 
 	// Certificate Routes
-	admin.POST("/addcertificate", controller.AddCertificate(pool))
-	admin.PUT("/updatecertificate/:certificate_id", controller.UpdateCertificate(pool))
-	admin.PATCH("/patchcertificate/:certificate_id", controller.PatchCertificate(pool))
-	admin.DELETE("/deletecertificate/:certificate_id", controller.DeleteCertificate(pool))
+	admin.POST("/certificate", controller.AddCertificate(pool))
+	admin.PUT("/certificate/:certificate_id", controller.UpdateCertificate(pool))
+	admin.PATCH("/certificate/:certificate_id", controller.PatchCertificate(pool))
+	admin.DELETE("/certificate/:certificate_id", controller.DeleteCertificate(pool))
 	admin.POST("/certificate/:certificate_id/file", controller.UploadCertificateFile(pool))
 
+	// Main Category Routes
+	admin.POST("/main-category", controller.AddMainCategory(pool))
+	admin.PUT("/main-category/:main_category_id", controller.UpdateMainCategory(pool))
+	admin.PATCH("/main-category/:main_category_id", controller.PatchMainCategory(pool))
+	admin.DELETE("/main-category/:main_category_id", controller.DeleteMainCategory(pool))
+
 	// Category Routes
-	admin.POST("/addmaincategory", controller.AddMainCategory(pool))
-	admin.PUT("/updatemaincategory/:main_category_id", controller.UpdateMainCategory(pool))
-	admin.PATCH("/patchmaincategory/:main_category_id", controller.PatchMainCategory(pool))
-	admin.DELETE("/deletemaincategory/:main_category_id", controller.DeleteMainCategory(pool))
-	admin.POST("/addcategory", controller.AddCategory(pool))
-	admin.PUT("/updatecategory/:category_id", controller.UpdateCategory(pool))
-	admin.PATCH("/patchcategory/:category_id", controller.PatchCategory(pool))
-	admin.DELETE("/deletecategory/:category_id", controller.DeleteCategory(pool))
+	admin.POST("/category", controller.AddCategory(pool))
+	admin.PUT("/category/:category_id", controller.UpdateCategory(pool))
+	admin.PATCH("/category/:category_id", controller.PatchCategory(pool))
+	admin.DELETE("/category/:category_id", controller.DeleteCategory(pool))
 
 	// Test Type Routes
-	admin.POST("/addtesttype", controller.AddTestType(pool))
-	admin.PUT("/updatetesttype/:test_id", controller.UpdateTestType(pool))
-	admin.PATCH("/patchtesttype/:test_id", controller.PatchTestType(pool))
-	admin.DELETE("/deletetesttype/:test_id", controller.DeleteTestType(pool))
+	admin.POST("/test-type", controller.AddTestType(pool))
+	admin.PUT("/test-type/:test_id", controller.UpdateTestType(pool))
+	admin.PATCH("/test-type/:test_id", controller.PatchTestType(pool))
+	admin.DELETE("/test-type/:test_id", controller.DeleteTestType(pool))
 
 	// Template Routes
-	admin.POST("/addtemplate", controller.AddTemplate(pool))
-	admin.PUT("/updatetemplate/:template_id", controller.UpdateTemplate(pool))
-	admin.DELETE("/deletetemplate/:template_id", controller.DeleteTemplate(pool))
-	admin.POST("/template/:template_id/addcomponent", controller.AddTemplateComponent(pool))
-	admin.PUT("/template/:template_id/component/:template_component_id", controller.UpdateTemplateComponent(pool))
-	admin.DELETE("/template/:template_id/component/:template_component_id", controller.DeleteTemplateComponent(pool))
-	admin.POST("/template/:template_id/component/:template_component_id/addtest", controller.AddTemplateComponentTest(pool))
-	admin.DELETE("/template/:template_id/component/:template_component_id/test/:template_component_test_id", controller.DeleteTemplateComponentTest(pool))
+	admin.POST("/template", controller.AddTemplate(pool))
+	admin.PUT("/template/:template_id", controller.UpdateTemplate(pool))
+	admin.PUT("/template/:template_id/configuration", controller.ConfigureTemplate(pool))
+	admin.DELETE("/template/:template_id", controller.DeleteTemplate(pool))
+
+	// Template Component Routes
+	admin.POST("/template/:template_id/component", controller.AddTemplateComponent(pool))
+	admin.PUT("/template-component/:template_component_id", controller.UpdateTemplateComponent(pool))
+	admin.DELETE("/template-component/:template_component_id", controller.DeleteTemplateComponent(pool))
+
+	// Template Component Test Routes
+	admin.POST("/template-component/:template_component_id/test", controller.AddTemplateComponentTest(pool))
+	admin.DELETE("/template-component-test/:template_component_test_id", controller.DeleteTemplateComponentTest(pool))
 
 	// ===================Protected Routes======================================================
-	protected := router.Group("/")
+	protected := router.Group("/v1")
 	protected.Use(middleware.AuthMiddleware())
 
-	// Asset routes
+	// User Routes
+	protected.GET("/users", controller.GetUsers(pool))
+	protected.GET("/user/:user_id", controller.GetUser(pool))
+	protected.PUT("/account/password", controller.UpdatePassword(pool))
+	protected.POST("/logout", controller.LogoutUser(pool))
+
+	// Asset Routes
 	protected.GET("/assets", controller.GetAssets(pool))
 	protected.GET("/asset/:asset_id", controller.GetAsset(pool))
 
-	// Component routes
+	// Component Routes
 	protected.GET("/components", controller.GetComponents(pool))
 	protected.GET("/component/:component_id", controller.GetComponent(pool))
 	protected.GET("/components/asset/:asset_id", controller.GetComponentsByAsset(pool))
 
-	// Certificate routes
+	// Certificate Routes
 	protected.GET("/certificates", controller.GetCertificates(pool))
 	protected.GET("/certificate/:certificate_id", controller.GetCertificate(pool))
 	protected.GET("/certificates/component/:component_id", controller.GetCertificatesByComponent(pool))
-	protected.GET("/expiring-certificates", controller.GetExpiringCertificates(pool))
-	protected.GET("/test-types", controller.GetTestTypes(pool))
+	protected.GET("/certificates/expiring", controller.GetExpiringCertificates(pool))
+	protected.GET("/certificates/dashboard", controller.GetCertificatesWithContext(pool))
+	protected.GET("/certificates/report", controller.GetCertificatesReportPDF(pool))
 	protected.GET("/certificate/:certificate_id/file", controller.GetCertificateFile(pool))
 	protected.GET("/certificate/:certificate_id/uploads", controller.GetCertificateUploadAudit(pool))
-	protected.GET("/certificates/dashboard", controller.GetCertificatesWithContext(pool))
-	protected.GET("/certificates/report.pdf", controller.GetCertificatesReportPDF(pool))
 
-	// Category routes
+	// Main Category Routes
 	protected.GET("/main-categories", controller.GetMainCategories(pool))
 	protected.GET("/main-category/:main_category_id", controller.GetMainCategory(pool))
-	protected.GET("/categories", controller.GetCategories(pool))
-	protected.GET("/categories/main/:main_category_id", controller.GetCategoriesByMainCategory(pool))
-	protected.GET("/category/:category_id", controller.GetCategory(pool))
 
-	// Template routes (read — any authenticated user)
+	// Category Routes
+	protected.GET("/categories", controller.GetCategories(pool))
+	protected.GET("/category/:category_id", controller.GetCategory(pool))
+	protected.GET("/categories/main/:main_category_id", controller.GetCategoriesByMainCategory(pool))
+
+	// Test Type Routes
+	protected.GET("/test-types", controller.GetTestTypes(pool))
+
+	// Template Routes
 	protected.GET("/templates", controller.GetTemplates(pool))
 	protected.GET("/template/:template_id", controller.GetTemplate(pool))
 	protected.GET("/template/:template_id/components", controller.GetTemplateComponents(pool))
-	protected.GET("/template/:template_id/component/:template_component_id/tests", controller.GetTemplateComponentTests(pool))
-
-	// User routes
-	protected.GET("/user/:user_id", controller.GetUser(pool))
-	protected.PUT("/updatepassword", controller.UpdatePassword(pool))
-	protected.POST("/logout", controller.LogoutUser(pool))
+	protected.GET("/template-component/:template_component_id/tests", controller.GetTemplateComponentTests(pool))
 }

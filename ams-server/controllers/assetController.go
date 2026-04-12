@@ -87,11 +87,17 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 		defer cancel()
 
-		queries := db.New(pool)
-
-		// validate template exists if provided
 		if input.TemplateID != nil && *input.TemplateID != "" {
-			_, err := queries.GetAssetTemplateByID(ctx, *input.TemplateID)
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin asset creation transaction"})
+				return
+			}
+			defer tx.Rollback(ctx)
+
+			queries := db.New(tx)
+
+			template, err := queries.GetAssetTemplateByID(ctx, *input.TemplateID)
 			if err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
 					c.JSON(http.StatusNotFound, gin.H{"error": "template not found"})
@@ -100,16 +106,49 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate template"})
 				return
 			}
-		}
 
-		assetID, err := utils.GenerateAssetID(ctx, queries)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate asset id"})
+			asset, err := queries.CreateAssetFromTemplate(ctx, db.CreateAssetFromTemplateParams{
+				Name:            input.Name,
+				Photo:           input.Photo,
+				Datasheet:       input.Datasheet,
+				Description:     input.Description,
+				Status:          input.Status,
+				Location:        input.Location,
+				AssignedProject: input.AssignedProject,
+				TemplateID:      &template.TemplateID,
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add asset"})
+				return
+			}
+
+			if err := utils.SpinUpAssetFromTemplate(ctx, tx, asset.AssetID, template.TemplateID); err != nil {
+				logger.Log.Error().
+					Err(err).
+					Str("asset_id", asset.AssetID).
+					Str("template_id", template.TemplateID).
+					Msg("template-backed asset creation rolled back")
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to spin up asset from template"})
+				return
+			}
+
+			if err := tx.Commit(ctx); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit asset creation"})
+				return
+			}
+
+			logger.Log.Info().
+				Str("asset_id", asset.AssetID).
+				Str("template_id", template.TemplateID).
+				Msg("asset created and spun up from template successfully")
+
+			c.JSON(http.StatusCreated, asset)
 			return
 		}
 
+		queries := db.New(pool)
+
 		asset, err := queries.CreateAsset(ctx, db.CreateAssetParams{
-			AssetID:         assetID,
 			Name:            input.Name,
 			Photo:           input.Photo,
 			Datasheet:       input.Datasheet,
@@ -117,39 +156,14 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			Status:          input.Status,
 			Location:        input.Location,
 			AssignedProject: input.AssignedProject,
-			TemplateID:      input.TemplateID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add asset"})
 			return
 		}
 
-		// spin up components and pending certificates from template
-		if input.TemplateID != nil && *input.TemplateID != "" {
-			if err := utils.SpinUpAssetFromTemplate(ctx, pool, assetID, *input.TemplateID); err != nil {
-				// asset was created but spin-up failed — log it and inform the caller
-				// do not delete the asset, operator can add components manually
-				logger.Log.Error().
-					Err(err).
-					Str("asset_id", assetID).
-					Str("template_id", *input.TemplateID).
-					Msg("asset created but template spin-up failed")
-				c.JSON(http.StatusCreated, gin.H{
-					"asset":   asset,
-					"warning": "asset created but some components or certificates failed to spin up, please check and add manually",
-				})
-				return
-			}
-
-			logger.Log.Info().
-				Str("asset_id", assetID).
-				Str("template_id", *input.TemplateID).
-				Msg("asset spun up from template successfully")
-		}
-
 		c.JSON(http.StatusCreated, asset)
 	}
-
 }
 
 func UpdateAsset(pool *pgxpool.Pool) gin.HandlerFunc {

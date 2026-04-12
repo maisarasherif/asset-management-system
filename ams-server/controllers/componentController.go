@@ -141,14 +141,7 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		componentID, err := utils.GenerateComponentID(ctx, queries, input.AssetID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate component id"})
-			return
-		}
-
 		component, err := queries.CreateComponent(ctx, db.CreateComponentParams{
-			ComponentID:     componentID,
 			AssetID:         input.AssetID,
 			CategoryID:      input.CategoryID,
 			Name:            input.Name,

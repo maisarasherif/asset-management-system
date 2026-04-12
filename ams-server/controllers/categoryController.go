@@ -139,14 +139,7 @@ func AddCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		categoryID, err := utils.GenerateCategoryID(ctx, queries)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate category id"})
-			return
-		}
-
 		category, err := queries.CreateCategory(ctx, db.CreateCategoryParams{
-			CategoryID:     categoryID,
 			MainCategoryID: &input.MainCategoryID,
 			CategoryName:   input.CategoryName,
 			Description:    input.Description,
@@ -230,6 +223,16 @@ func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		if count > 0 {
 			c.JSON(http.StatusConflict, gin.H{"error": "category has components assigned to it"})
+			return
+		}
+
+		templateComponentCount, err := queries.CountTemplateComponentsByCategoryID(ctx, categoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check template components"})
+			return
+		}
+		if templateComponentCount > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "category is used by template components"})
 			return
 		}
 

@@ -1,6 +1,6 @@
 -- name: CreateScheduledTask :one
-INSERT INTO scheduled_tasks (task_id, certificate_id, type, status, sent_at)
-VALUES ($1, $2, $3, $4, NOW())
+INSERT INTO scheduled_tasks (certificate_id, certificate_ref_id, type, status, external_task_id, sent_at)
+VALUES ($1, (SELECT id FROM certificates WHERE certificate_id = $1), $2, $3, $4, NOW())
 RETURNING *;
 
 -- name: HasRecentScheduledTask :one

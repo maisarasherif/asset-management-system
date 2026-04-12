@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 )
 
 const countTemplateComponentsByCategoryID = `-- name: CountTemplateComponentsByCategoryID :one
@@ -33,35 +34,79 @@ func (q *Queries) CountTemplateComponentsByTemplateID(ctx context.Context, templ
 
 const createTemplateComponent = `-- name: CreateTemplateComponent :one
 INSERT INTO template_components (
-    template_component_id, template_id, category_id, name, description,
+    template_id, template_ref_id, category_id, category_ref_id, position, name, description,
     serial_number, manufacturer, location, assigned_project, equipment_type,
     structure, model, class, class_code, safety_critical, created_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
-RETURNING id, template_component_id, template_id, category_id, name, description, serial_number, manufacturer, equipment_type, structure, model, class, class_code, safety_critical, created_at, location, assigned_project
+VALUES (
+    $1,
+    (SELECT id FROM asset_templates WHERE template_id = $1),
+    $2,
+    (SELECT id FROM categories WHERE category_id = $2),
+    COALESCE((SELECT MAX(position) + 1 FROM template_components WHERE template_id = $1), 1),
+    $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW()
+)
+RETURNING
+    id,
+    template_component_id,
+    template_id,
+    category_id,
+    position,
+    name,
+    description,
+    serial_number,
+    manufacturer,
+    equipment_type,
+    structure,
+    model,
+    class,
+    class_code,
+    safety_critical,
+    created_at,
+    location,
+    assigned_project
 `
 
 type CreateTemplateComponentParams struct {
-	TemplateComponentID string `json:"template_component_id"`
-	TemplateID          string `json:"template_id"`
-	CategoryID          string `json:"category_id"`
-	Name                string `json:"name"`
-	Description         string `json:"description"`
-	SerialNumber        string `json:"serial_number"`
-	Manufacturer        string `json:"manufacturer"`
-	Location            string `json:"location"`
-	AssignedProject     string `json:"assigned_project"`
-	EquipmentType       string `json:"equipment_type"`
-	Structure           string `json:"structure"`
-	Model               string `json:"model"`
-	Class               string `json:"class"`
-	ClassCode           string `json:"class_code"`
-	SafetyCritical      string `json:"safety_critical"`
+	TemplateID      string `json:"template_id"`
+	CategoryID      string `json:"category_id"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	SerialNumber    string `json:"serial_number"`
+	Manufacturer    string `json:"manufacturer"`
+	Location        string `json:"location"`
+	AssignedProject string `json:"assigned_project"`
+	EquipmentType   string `json:"equipment_type"`
+	Structure       string `json:"structure"`
+	Model           string `json:"model"`
+	Class           string `json:"class"`
+	ClassCode       string `json:"class_code"`
+	SafetyCritical  string `json:"safety_critical"`
 }
 
-func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplateComponentParams) (TemplateComponent, error) {
+type CreateTemplateComponentRow struct {
+	ID                  int32     `json:"id"`
+	TemplateComponentID string    `json:"template_component_id"`
+	TemplateID          string    `json:"template_id"`
+	CategoryID          string    `json:"category_id"`
+	Position            int32     `json:"position"`
+	Name                string    `json:"name"`
+	Description         string    `json:"description"`
+	SerialNumber        string    `json:"serial_number"`
+	Manufacturer        string    `json:"manufacturer"`
+	EquipmentType       string    `json:"equipment_type"`
+	Structure           string    `json:"structure"`
+	Model               string    `json:"model"`
+	Class               string    `json:"class"`
+	ClassCode           string    `json:"class_code"`
+	SafetyCritical      string    `json:"safety_critical"`
+	CreatedAt           time.Time `json:"created_at"`
+	Location            string    `json:"location"`
+	AssignedProject     string    `json:"assigned_project"`
+}
+
+func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplateComponentParams) (CreateTemplateComponentRow, error) {
 	row := q.db.QueryRow(ctx, createTemplateComponent,
-		arg.TemplateComponentID,
 		arg.TemplateID,
 		arg.CategoryID,
 		arg.Name,
@@ -77,12 +122,13 @@ func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplat
 		arg.ClassCode,
 		arg.SafetyCritical,
 	)
-	var i TemplateComponent
+	var i CreateTemplateComponentRow
 	err := row.Scan(
 		&i.ID,
 		&i.TemplateComponentID,
 		&i.TemplateID,
 		&i.CategoryID,
+		&i.Position,
 		&i.Name,
 		&i.Description,
 		&i.SerialNumber,
@@ -112,19 +158,72 @@ func (q *Queries) DeleteTemplateComponent(ctx context.Context, templateComponent
 	return result.RowsAffected(), nil
 }
 
+const deleteTemplateComponentsByTemplateID = `-- name: DeleteTemplateComponentsByTemplateID :execrows
+DELETE FROM template_components WHERE template_id = $1
+`
+
+func (q *Queries) DeleteTemplateComponentsByTemplateID(ctx context.Context, templateID string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteTemplateComponentsByTemplateID, templateID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getTemplateComponentByID = `-- name: GetTemplateComponentByID :one
-SELECT id, template_component_id, template_id, category_id, name, description, serial_number, manufacturer, equipment_type, structure, model, class, class_code, safety_critical, created_at, location, assigned_project FROM template_components
+SELECT
+    id,
+    template_component_id,
+    template_id,
+    category_id,
+    position,
+    name,
+    description,
+    serial_number,
+    manufacturer,
+    equipment_type,
+    structure,
+    model,
+    class,
+    class_code,
+    safety_critical,
+    created_at,
+    location,
+    assigned_project
+FROM template_components
 WHERE template_component_id = $1 LIMIT 1
 `
 
-func (q *Queries) GetTemplateComponentByID(ctx context.Context, templateComponentID string) (TemplateComponent, error) {
+type GetTemplateComponentByIDRow struct {
+	ID                  int32     `json:"id"`
+	TemplateComponentID string    `json:"template_component_id"`
+	TemplateID          string    `json:"template_id"`
+	CategoryID          string    `json:"category_id"`
+	Position            int32     `json:"position"`
+	Name                string    `json:"name"`
+	Description         string    `json:"description"`
+	SerialNumber        string    `json:"serial_number"`
+	Manufacturer        string    `json:"manufacturer"`
+	EquipmentType       string    `json:"equipment_type"`
+	Structure           string    `json:"structure"`
+	Model               string    `json:"model"`
+	Class               string    `json:"class"`
+	ClassCode           string    `json:"class_code"`
+	SafetyCritical      string    `json:"safety_critical"`
+	CreatedAt           time.Time `json:"created_at"`
+	Location            string    `json:"location"`
+	AssignedProject     string    `json:"assigned_project"`
+}
+
+func (q *Queries) GetTemplateComponentByID(ctx context.Context, templateComponentID string) (GetTemplateComponentByIDRow, error) {
 	row := q.db.QueryRow(ctx, getTemplateComponentByID, templateComponentID)
-	var i TemplateComponent
+	var i GetTemplateComponentByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.TemplateComponentID,
 		&i.TemplateID,
 		&i.CategoryID,
+		&i.Position,
 		&i.Name,
 		&i.Description,
 		&i.SerialNumber,
@@ -143,25 +242,66 @@ func (q *Queries) GetTemplateComponentByID(ctx context.Context, templateComponen
 }
 
 const getTemplateComponentsByTemplateID = `-- name: GetTemplateComponentsByTemplateID :many
-SELECT id, template_component_id, template_id, category_id, name, description, serial_number, manufacturer, equipment_type, structure, model, class, class_code, safety_critical, created_at, location, assigned_project FROM template_components
+SELECT
+    id,
+    template_component_id,
+    template_id,
+    category_id,
+    position,
+    name,
+    description,
+    serial_number,
+    manufacturer,
+    equipment_type,
+    structure,
+    model,
+    class,
+    class_code,
+    safety_critical,
+    created_at,
+    location,
+    assigned_project
+FROM template_components
 WHERE template_id = $1
-ORDER BY category_id, name ASC
+ORDER BY position ASC, created_at ASC
 `
 
-func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templateID string) ([]TemplateComponent, error) {
+type GetTemplateComponentsByTemplateIDRow struct {
+	ID                  int32     `json:"id"`
+	TemplateComponentID string    `json:"template_component_id"`
+	TemplateID          string    `json:"template_id"`
+	CategoryID          string    `json:"category_id"`
+	Position            int32     `json:"position"`
+	Name                string    `json:"name"`
+	Description         string    `json:"description"`
+	SerialNumber        string    `json:"serial_number"`
+	Manufacturer        string    `json:"manufacturer"`
+	EquipmentType       string    `json:"equipment_type"`
+	Structure           string    `json:"structure"`
+	Model               string    `json:"model"`
+	Class               string    `json:"class"`
+	ClassCode           string    `json:"class_code"`
+	SafetyCritical      string    `json:"safety_critical"`
+	CreatedAt           time.Time `json:"created_at"`
+	Location            string    `json:"location"`
+	AssignedProject     string    `json:"assigned_project"`
+}
+
+func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templateID string) ([]GetTemplateComponentsByTemplateIDRow, error) {
 	rows, err := q.db.Query(ctx, getTemplateComponentsByTemplateID, templateID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TemplateComponent
+	var items []GetTemplateComponentsByTemplateIDRow
 	for rows.Next() {
-		var i TemplateComponent
+		var i GetTemplateComponentsByTemplateIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TemplateComponentID,
 			&i.TemplateID,
 			&i.CategoryID,
+			&i.Position,
 			&i.Name,
 			&i.Description,
 			&i.SerialNumber,
@@ -188,7 +328,9 @@ func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templat
 
 const updateTemplateComponent = `-- name: UpdateTemplateComponent :execrows
 UPDATE template_components
-SET category_id = $1, name = $2, description = $3, serial_number = $4,
+SET category_id = $1,
+    category_ref_id = (SELECT id FROM categories WHERE category_id = $1),
+    name = $2, description = $3, serial_number = $4,
     manufacturer = $5, location = $6, assigned_project = $7, equipment_type = $8, structure = $9, model = $10,
     class = $11, class_code = $12, safety_critical = $13
 WHERE template_component_id = $14

@@ -14,8 +14,8 @@ SELECT COUNT(*) FROM users WHERE email = $1;
 SELECT COUNT(*) FROM users WHERE email = $1 AND user_id != $2;
 
 -- name: CreateUser :one
-INSERT INTO users (user_id, first_name, last_name, email, password, role, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+INSERT INTO users (first_name, last_name, email, password, role, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 RETURNING *;
 
 -- name: GetUserByEmail :one

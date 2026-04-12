@@ -32,19 +32,18 @@ func (q *Queries) CountMainCategories(ctx context.Context) (int64, error) {
 }
 
 const createMainCategory = `-- name: CreateMainCategory :one
-INSERT INTO main_categories (main_category_id, main_category_name, description, created_at, updated_at)
-VALUES ($1, $2, $3, NOW(), NOW())
+INSERT INTO main_categories (main_category_name, description, created_at, updated_at)
+VALUES ($1, $2, NOW(), NOW())
 RETURNING id, main_category_id, main_category_name, description, created_at, updated_at
 `
 
 type CreateMainCategoryParams struct {
-	MainCategoryID   string `json:"main_category_id"`
 	MainCategoryName string `json:"main_category_name"`
 	Description      string `json:"description"`
 }
 
 func (q *Queries) CreateMainCategory(ctx context.Context, arg CreateMainCategoryParams) (MainCategory, error) {
-	row := q.db.QueryRow(ctx, createMainCategory, arg.MainCategoryID, arg.MainCategoryName, arg.Description)
+	row := q.db.QueryRow(ctx, createMainCategory, arg.MainCategoryName, arg.Description)
 	var i MainCategory
 	err := row.Scan(
 		&i.ID,

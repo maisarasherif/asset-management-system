@@ -180,18 +180,11 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		certificateID, err := utils.GenerateCertificateID(ctx, queries, input.ComponentID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate certificate id"})
-			return
-		}
-
 		// dto uses time.Time, db expects *time.Time
 		issueDate := input.IssueDate
 		expiryDate := input.ExpiryDate
 
 		certificate, err := queries.CreateCertificate(ctx, db.CreateCertificateParams{
-			CertificateID:    certificateID,
 			ComponentID:      input.ComponentID,
 			CertificateName:  input.CertificateName,
 			IssueDate:        &issueDate,
@@ -575,13 +568,19 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		userID, _ := utils.GetUserIdFromContext(c)
-		_, err = pool.Exec(ctx, `
-			INSERT INTO certificate_upload_audit (certificate_id, file_key, file_name, uploaded_by, uploaded_at)
-			VALUES ($1, $2, $3, $4, NOW())
-		`, certificateID, key, header.Filename, userID)
+		rows, err = queries.CreateCertificateUploadAuditEntry(ctx, db.CreateCertificateUploadAuditEntryParams{
+			CertificateID: certificateID,
+			FileKey:       key,
+			FileName:      header.Filename,
+			UploadedBy:    userID,
+		})
 		if err != nil {
 			logger.Log.Error().Err(err).Msg("failed to write certificate upload audit log")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write upload audit log"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
 			return
 		}
 

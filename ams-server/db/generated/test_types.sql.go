@@ -10,31 +10,26 @@ import (
 )
 
 const createTestType = `-- name: CreateTestType :one
-INSERT INTO test_types (test_id, test_name, validity_duration, description)
-VALUES ($1, $2, $3, $4)
-RETURNING test_id, test_name, validity_duration, description
+INSERT INTO test_types (test_name, validity_duration, description)
+VALUES ($1, $2, $3)
+RETURNING test_id, test_name, validity_duration, description, id
 `
 
 type CreateTestTypeParams struct {
-	TestID           string `json:"test_id"`
 	TestName         string `json:"test_name"`
 	ValidityDuration int32  `json:"validity_duration"`
 	Description      string `json:"description"`
 }
 
 func (q *Queries) CreateTestType(ctx context.Context, arg CreateTestTypeParams) (TestType, error) {
-	row := q.db.QueryRow(ctx, createTestType,
-		arg.TestID,
-		arg.TestName,
-		arg.ValidityDuration,
-		arg.Description,
-	)
+	row := q.db.QueryRow(ctx, createTestType, arg.TestName, arg.ValidityDuration, arg.Description)
 	var i TestType
 	err := row.Scan(
 		&i.TestID,
 		&i.TestName,
 		&i.ValidityDuration,
 		&i.Description,
+		&i.ID,
 	)
 	return i, err
 }
@@ -52,7 +47,7 @@ func (q *Queries) DeleteTestType(ctx context.Context, testID string) (int64, err
 }
 
 const getAllTestTypes = `-- name: GetAllTestTypes :many
-SELECT test_id, test_name, validity_duration, description FROM test_types
+SELECT test_id, test_name, validity_duration, description, id FROM test_types
 ORDER BY test_name ASC
 `
 
@@ -70,6 +65,7 @@ func (q *Queries) GetAllTestTypes(ctx context.Context) ([]TestType, error) {
 			&i.TestName,
 			&i.ValidityDuration,
 			&i.Description,
+			&i.ID,
 		); err != nil {
 			return nil, err
 		}
@@ -81,8 +77,35 @@ func (q *Queries) GetAllTestTypes(ctx context.Context) ([]TestType, error) {
 	return items, nil
 }
 
+const getExistingTestTypeIDs = `-- name: GetExistingTestTypeIDs :many
+SELECT test_id
+FROM test_types
+WHERE test_id = ANY($1::text[])
+ORDER BY test_id ASC
+`
+
+func (q *Queries) GetExistingTestTypeIDs(ctx context.Context, dollar_1 []string) ([]string, error) {
+	rows, err := q.db.Query(ctx, getExistingTestTypeIDs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var test_id string
+		if err := rows.Scan(&test_id); err != nil {
+			return nil, err
+		}
+		items = append(items, test_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTestTypeByID = `-- name: GetTestTypeByID :one
-SELECT test_id, test_name, validity_duration, description FROM test_types
+SELECT test_id, test_name, validity_duration, description, id FROM test_types
 WHERE test_id = $1
 LIMIT 1
 `
@@ -95,6 +118,7 @@ func (q *Queries) GetTestTypeByID(ctx context.Context, testID string) (TestType,
 		&i.TestName,
 		&i.ValidityDuration,
 		&i.Description,
+		&i.ID,
 	)
 	return i, err
 }

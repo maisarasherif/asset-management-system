@@ -31,7 +31,6 @@ func AddTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 		queries := db.New(pool)
 
 		testType, err := queries.CreateTestType(ctx, db.CreateTestTypeParams{
-			TestID:           input.TestID,
 			TestName:         input.TestName,
 			ValidityDuration: input.ValidityDuration,
 			Description:      input.Description,
@@ -171,6 +170,16 @@ func DeleteTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		if count > 0 {
 			c.JSON(http.StatusConflict, gin.H{"error": "test type has certificates assigned to it"})
+			return
+		}
+
+		templateTestCount, err := queries.CountTemplateComponentTestsByTestID(ctx, testID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check template tests"})
+			return
+		}
+		if templateTestCount > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "test type is assigned to template components"})
 			return
 		}
 

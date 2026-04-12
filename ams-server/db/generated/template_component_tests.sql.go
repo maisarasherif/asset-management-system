@@ -23,26 +23,48 @@ func (q *Queries) CountTemplateComponentTestsByTestID(ctx context.Context, testI
 
 const createTemplateComponentTest = `-- name: CreateTemplateComponentTest :one
 INSERT INTO template_component_tests (
-    template_component_test_id, template_component_id, test_id, created_at
+    template_component_id, template_component_ref_id, test_id, test_type_ref_id, position, created_at
 )
-VALUES ($1, $2, $3, NOW())
-RETURNING id, template_component_test_id, template_component_id, test_id, created_at
+VALUES (
+    $1,
+    (SELECT id FROM template_components WHERE template_component_id = $1),
+    $2,
+    (SELECT id FROM test_types WHERE test_id = $2),
+    COALESCE((SELECT MAX(position) + 1 FROM template_component_tests WHERE template_component_id = $1), 1),
+    NOW()
+)
+RETURNING
+    id,
+    template_component_test_id,
+    template_component_id,
+    test_id,
+    position,
+    created_at
 `
 
 type CreateTemplateComponentTestParams struct {
-	TemplateComponentTestID string `json:"template_component_test_id"`
-	TemplateComponentID     string `json:"template_component_id"`
-	TestID                  string `json:"test_id"`
+	TemplateComponentID string `json:"template_component_id"`
+	TestID              string `json:"test_id"`
 }
 
-func (q *Queries) CreateTemplateComponentTest(ctx context.Context, arg CreateTemplateComponentTestParams) (TemplateComponentTest, error) {
-	row := q.db.QueryRow(ctx, createTemplateComponentTest, arg.TemplateComponentTestID, arg.TemplateComponentID, arg.TestID)
-	var i TemplateComponentTest
+type CreateTemplateComponentTestRow struct {
+	ID                      int32     `json:"id"`
+	TemplateComponentTestID string    `json:"template_component_test_id"`
+	TemplateComponentID     string    `json:"template_component_id"`
+	TestID                  string    `json:"test_id"`
+	Position                int32     `json:"position"`
+	CreatedAt               time.Time `json:"created_at"`
+}
+
+func (q *Queries) CreateTemplateComponentTest(ctx context.Context, arg CreateTemplateComponentTestParams) (CreateTemplateComponentTestRow, error) {
+	row := q.db.QueryRow(ctx, createTemplateComponentTest, arg.TemplateComponentID, arg.TestID)
+	var i CreateTemplateComponentTestRow
 	err := row.Scan(
 		&i.ID,
 		&i.TemplateComponentTestID,
 		&i.TemplateComponentID,
 		&i.TestID,
+		&i.Position,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -61,43 +83,77 @@ func (q *Queries) DeleteTemplateComponentTest(ctx context.Context, templateCompo
 }
 
 const getTemplateComponentTestByID = `-- name: GetTemplateComponentTestByID :one
-SELECT id, template_component_test_id, template_component_id, test_id, created_at FROM template_component_tests
+SELECT
+    id,
+    template_component_test_id,
+    template_component_id,
+    test_id,
+    position,
+    created_at
+FROM template_component_tests
 WHERE template_component_test_id = $1 LIMIT 1
 `
 
-func (q *Queries) GetTemplateComponentTestByID(ctx context.Context, templateComponentTestID string) (TemplateComponentTest, error) {
+type GetTemplateComponentTestByIDRow struct {
+	ID                      int32     `json:"id"`
+	TemplateComponentTestID string    `json:"template_component_test_id"`
+	TemplateComponentID     string    `json:"template_component_id"`
+	TestID                  string    `json:"test_id"`
+	Position                int32     `json:"position"`
+	CreatedAt               time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetTemplateComponentTestByID(ctx context.Context, templateComponentTestID string) (GetTemplateComponentTestByIDRow, error) {
 	row := q.db.QueryRow(ctx, getTemplateComponentTestByID, templateComponentTestID)
-	var i TemplateComponentTest
+	var i GetTemplateComponentTestByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.TemplateComponentTestID,
 		&i.TemplateComponentID,
 		&i.TestID,
+		&i.Position,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getTemplateComponentTestsByComponentID = `-- name: GetTemplateComponentTestsByComponentID :many
-SELECT id, template_component_test_id, template_component_id, test_id, created_at FROM template_component_tests
+SELECT
+    id,
+    template_component_test_id,
+    template_component_id,
+    test_id,
+    position,
+    created_at
+FROM template_component_tests
 WHERE template_component_id = $1
-ORDER BY created_at ASC
+ORDER BY position ASC, created_at ASC
 `
 
-func (q *Queries) GetTemplateComponentTestsByComponentID(ctx context.Context, templateComponentID string) ([]TemplateComponentTest, error) {
+type GetTemplateComponentTestsByComponentIDRow struct {
+	ID                      int32     `json:"id"`
+	TemplateComponentTestID string    `json:"template_component_test_id"`
+	TemplateComponentID     string    `json:"template_component_id"`
+	TestID                  string    `json:"test_id"`
+	Position                int32     `json:"position"`
+	CreatedAt               time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetTemplateComponentTestsByComponentID(ctx context.Context, templateComponentID string) ([]GetTemplateComponentTestsByComponentIDRow, error) {
 	rows, err := q.db.Query(ctx, getTemplateComponentTestsByComponentID, templateComponentID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TemplateComponentTest
+	var items []GetTemplateComponentTestsByComponentIDRow
 	for rows.Next() {
-		var i TemplateComponentTest
+		var i GetTemplateComponentTestsByComponentIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TemplateComponentTestID,
 			&i.TemplateComponentID,
 			&i.TestID,
+			&i.Position,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -115,20 +171,22 @@ SELECT
     tct.template_component_test_id,
     tct.template_component_id,
     tct.test_id,
+    tct.position,
     tct.created_at,
     tt.test_name,
     tt.validity_duration,
     tt.description
 FROM template_component_tests tct
-JOIN test_types tt ON tt.test_id = tct.test_id
+JOIN test_types tt ON tt.id = tct.test_type_ref_id
 WHERE tct.template_component_id = $1
-ORDER BY tct.created_at ASC
+ORDER BY tct.position ASC, tct.created_at ASC
 `
 
 type GetTemplateComponentTestsWithDetailRow struct {
 	TemplateComponentTestID string    `json:"template_component_test_id"`
 	TemplateComponentID     string    `json:"template_component_id"`
 	TestID                  string    `json:"test_id"`
+	Position                int32     `json:"position"`
 	CreatedAt               time.Time `json:"created_at"`
 	TestName                string    `json:"test_name"`
 	ValidityDuration        int32     `json:"validity_duration"`
@@ -148,6 +206,7 @@ func (q *Queries) GetTemplateComponentTestsWithDetail(ctx context.Context, templ
 			&i.TemplateComponentTestID,
 			&i.TemplateComponentID,
 			&i.TestID,
+			&i.Position,
 			&i.CreatedAt,
 			&i.TestName,
 			&i.ValidityDuration,

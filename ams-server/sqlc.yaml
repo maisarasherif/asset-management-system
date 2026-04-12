@@ -18,15 +18,7 @@ sql:
           go_type:
             type: "time.Time"
             pointer: true
-        - column: "certificates.template_component_test_id"
-          go_type:
-            type: "string"
-            pointer: true
         - column: "assets.template_id"
-          go_type:
-            type: "string"
-            pointer: true
-        - column: "components.template_component_id"
           go_type:
             type: "string"
             pointer: true

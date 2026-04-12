@@ -188,7 +188,6 @@ type PatchCertificateInput struct {
 // ==================== Test Type DTOs ====================
 
 type TestTypeInput struct {
-	TestID           string `json:"test_id" validate:"required"`
 	TestName         string `json:"test_name" validate:"required,min=2,max=100"`
 	ValidityDuration int32  `json:"validity_duration" validate:"required,min=1"`
 	Description      string `json:"description"`
@@ -225,4 +224,25 @@ type TemplateComponentInput struct {
 
 type TemplateComponentTestInput struct {
 	TestID string `json:"test_id" validate:"required"`
+}
+
+type ConfigureTemplateComponentItem struct {
+	CategoryID      string   `json:"category_id" validate:"required"`
+	Name            string   `json:"name" validate:"required,min=2,max=200"`
+	Description     string   `json:"description"`
+	SerialNumber    string   `json:"serial_number"`
+	Manufacturer    string   `json:"manufacturer"`
+	Location        string   `json:"location"`
+	AssignedProject string   `json:"assigned_project"`
+	EquipmentType   string   `json:"equipment_type"`
+	Structure       string   `json:"structure"`
+	Model           string   `json:"model"`
+	Class           string   `json:"class"`
+	ClassCode       string   `json:"class_code"`
+	SafetyCritical  string   `json:"safety_critical" validate:"required,oneof=YES NO"`
+	TestIDs         []string `json:"test_ids" validate:"required,dive,required"`
+}
+
+type ConfigureTemplateInput struct {
+	Components []ConfigureTemplateComponentItem `json:"components" validate:"required,dive"`
 }

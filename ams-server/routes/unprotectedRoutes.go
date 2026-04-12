@@ -10,8 +10,6 @@ import (
 )
 
 func SetupUnprotectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
-
 	loginRateLimit := middleware.RateLimitMiddleware(10, time.Minute)
-	router.POST("/login", loginRateLimit, controller.LoginUser(pool))
-
+	router.POST("/v1/login", loginRateLimit, controller.LoginUser(pool))
 }

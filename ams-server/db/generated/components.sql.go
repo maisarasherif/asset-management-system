@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 )
 
 const countComponents = `-- name: CountComponents :one
@@ -44,36 +45,78 @@ func (q *Queries) CountComponentsByCategoryID(ctx context.Context, categoryID st
 
 const createComponent = `-- name: CreateComponent :one
 INSERT INTO components (
-    component_id, asset_id, category_id, name, serial_number, manufacturer,
+    asset_id, asset_ref_id, category_id, category_ref_id, name, serial_number, manufacturer,
     description, location, assigned_project, equipment_type, structure, model,
-    class, class_code, safety_critical, template_component_id, created_at, updated_at
+    class, class_code, safety_critical, created_at, updated_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
-RETURNING id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, template_component_id, location, assigned_project
+VALUES (
+    $1,
+    (SELECT id FROM assets WHERE asset_id = $1),
+    $2,
+    (SELECT id FROM categories WHERE category_id = $2),
+    $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW()
+)
+RETURNING
+    id,
+    component_id,
+    asset_id,
+    category_id,
+    name,
+    serial_number,
+    manufacturer,
+    description,
+    equipment_type,
+    structure,
+    model,
+    class,
+    class_code,
+    safety_critical,
+    created_at,
+    updated_at,
+    location,
+    assigned_project
 `
 
 type CreateComponentParams struct {
-	ComponentID         string  `json:"component_id"`
-	AssetID             string  `json:"asset_id"`
-	CategoryID          string  `json:"category_id"`
-	Name                string  `json:"name"`
-	SerialNumber        string  `json:"serial_number"`
-	Manufacturer        string  `json:"manufacturer"`
-	Description         string  `json:"description"`
-	Location            string  `json:"location"`
-	AssignedProject     string  `json:"assigned_project"`
-	EquipmentType       string  `json:"equipment_type"`
-	Structure           string  `json:"structure"`
-	Model               string  `json:"model"`
-	Class               string  `json:"class"`
-	ClassCode           string  `json:"class_code"`
-	SafetyCritical      string  `json:"safety_critical"`
-	TemplateComponentID *string `json:"template_component_id"`
+	AssetID         string `json:"asset_id"`
+	CategoryID      string `json:"category_id"`
+	Name            string `json:"name"`
+	SerialNumber    string `json:"serial_number"`
+	Manufacturer    string `json:"manufacturer"`
+	Description     string `json:"description"`
+	Location        string `json:"location"`
+	AssignedProject string `json:"assigned_project"`
+	EquipmentType   string `json:"equipment_type"`
+	Structure       string `json:"structure"`
+	Model           string `json:"model"`
+	Class           string `json:"class"`
+	ClassCode       string `json:"class_code"`
+	SafetyCritical  string `json:"safety_critical"`
 }
 
-func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams) (Component, error) {
+type CreateComponentRow struct {
+	ID              int32     `json:"id"`
+	ComponentID     string    `json:"component_id"`
+	AssetID         string    `json:"asset_id"`
+	CategoryID      string    `json:"category_id"`
+	Name            string    `json:"name"`
+	SerialNumber    string    `json:"serial_number"`
+	Manufacturer    string    `json:"manufacturer"`
+	Description     string    `json:"description"`
+	EquipmentType   string    `json:"equipment_type"`
+	Structure       string    `json:"structure"`
+	Model           string    `json:"model"`
+	Class           string    `json:"class"`
+	ClassCode       string    `json:"class_code"`
+	SafetyCritical  string    `json:"safety_critical"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Location        string    `json:"location"`
+	AssignedProject string    `json:"assigned_project"`
+}
+
+func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams) (CreateComponentRow, error) {
 	row := q.db.QueryRow(ctx, createComponent,
-		arg.ComponentID,
 		arg.AssetID,
 		arg.CategoryID,
 		arg.Name,
@@ -88,9 +131,8 @@ func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams
 		arg.Class,
 		arg.ClassCode,
 		arg.SafetyCritical,
-		arg.TemplateComponentID,
 	)
-	var i Component
+	var i CreateComponentRow
 	err := row.Scan(
 		&i.ID,
 		&i.ComponentID,
@@ -108,7 +150,6 @@ func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams
 		&i.SafetyCritical,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.TemplateComponentID,
 		&i.Location,
 		&i.AssignedProject,
 	)
@@ -128,7 +169,26 @@ func (q *Queries) DeleteComponent(ctx context.Context, componentID string) (int6
 }
 
 const getAllComponentsPaginated = `-- name: GetAllComponentsPaginated :many
-SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, template_component_id, location, assigned_project FROM components
+SELECT
+    id,
+    component_id,
+    asset_id,
+    category_id,
+    name,
+    serial_number,
+    manufacturer,
+    description,
+    equipment_type,
+    structure,
+    model,
+    class,
+    class_code,
+    safety_critical,
+    created_at,
+    updated_at,
+    location,
+    assigned_project
+FROM components
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -138,15 +198,36 @@ type GetAllComponentsPaginatedParams struct {
 	Offset int32 `json:"offset"`
 }
 
-func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllComponentsPaginatedParams) ([]Component, error) {
+type GetAllComponentsPaginatedRow struct {
+	ID              int32     `json:"id"`
+	ComponentID     string    `json:"component_id"`
+	AssetID         string    `json:"asset_id"`
+	CategoryID      string    `json:"category_id"`
+	Name            string    `json:"name"`
+	SerialNumber    string    `json:"serial_number"`
+	Manufacturer    string    `json:"manufacturer"`
+	Description     string    `json:"description"`
+	EquipmentType   string    `json:"equipment_type"`
+	Structure       string    `json:"structure"`
+	Model           string    `json:"model"`
+	Class           string    `json:"class"`
+	ClassCode       string    `json:"class_code"`
+	SafetyCritical  string    `json:"safety_critical"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Location        string    `json:"location"`
+	AssignedProject string    `json:"assigned_project"`
+}
+
+func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllComponentsPaginatedParams) ([]GetAllComponentsPaginatedRow, error) {
 	rows, err := q.db.Query(ctx, getAllComponentsPaginated, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Component
+	var items []GetAllComponentsPaginatedRow
 	for rows.Next() {
-		var i Component
+		var i GetAllComponentsPaginatedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ComponentID,
@@ -164,7 +245,6 @@ func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllCompo
 			&i.SafetyCritical,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.TemplateComponentID,
 			&i.Location,
 			&i.AssignedProject,
 		); err != nil {
@@ -179,12 +259,54 @@ func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllCompo
 }
 
 const getComponentByID = `-- name: GetComponentByID :one
-SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, template_component_id, location, assigned_project FROM components WHERE component_id = $1 LIMIT 1
+SELECT
+    id,
+    component_id,
+    asset_id,
+    category_id,
+    name,
+    serial_number,
+    manufacturer,
+    description,
+    equipment_type,
+    structure,
+    model,
+    class,
+    class_code,
+    safety_critical,
+    created_at,
+    updated_at,
+    location,
+    assigned_project
+FROM components
+WHERE component_id = $1
+LIMIT 1
 `
 
-func (q *Queries) GetComponentByID(ctx context.Context, componentID string) (Component, error) {
+type GetComponentByIDRow struct {
+	ID              int32     `json:"id"`
+	ComponentID     string    `json:"component_id"`
+	AssetID         string    `json:"asset_id"`
+	CategoryID      string    `json:"category_id"`
+	Name            string    `json:"name"`
+	SerialNumber    string    `json:"serial_number"`
+	Manufacturer    string    `json:"manufacturer"`
+	Description     string    `json:"description"`
+	EquipmentType   string    `json:"equipment_type"`
+	Structure       string    `json:"structure"`
+	Model           string    `json:"model"`
+	Class           string    `json:"class"`
+	ClassCode       string    `json:"class_code"`
+	SafetyCritical  string    `json:"safety_critical"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Location        string    `json:"location"`
+	AssignedProject string    `json:"assigned_project"`
+}
+
+func (q *Queries) GetComponentByID(ctx context.Context, componentID string) (GetComponentByIDRow, error) {
 	row := q.db.QueryRow(ctx, getComponentByID, componentID)
-	var i Component
+	var i GetComponentByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.ComponentID,
@@ -202,7 +324,6 @@ func (q *Queries) GetComponentByID(ctx context.Context, componentID string) (Com
 		&i.SafetyCritical,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.TemplateComponentID,
 		&i.Location,
 		&i.AssignedProject,
 	)
@@ -210,7 +331,26 @@ func (q *Queries) GetComponentByID(ctx context.Context, componentID string) (Com
 }
 
 const getComponentsByAssetIDPaginated = `-- name: GetComponentsByAssetIDPaginated :many
-SELECT id, component_id, asset_id, category_id, name, serial_number, manufacturer, description, equipment_type, structure, model, class, class_code, safety_critical, created_at, updated_at, template_component_id, location, assigned_project FROM components
+SELECT
+    id,
+    component_id,
+    asset_id,
+    category_id,
+    name,
+    serial_number,
+    manufacturer,
+    description,
+    equipment_type,
+    structure,
+    model,
+    class,
+    class_code,
+    safety_critical,
+    created_at,
+    updated_at,
+    location,
+    assigned_project
+FROM components
 WHERE asset_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -222,15 +362,36 @@ type GetComponentsByAssetIDPaginatedParams struct {
 	Offset  int32  `json:"offset"`
 }
 
-func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetComponentsByAssetIDPaginatedParams) ([]Component, error) {
+type GetComponentsByAssetIDPaginatedRow struct {
+	ID              int32     `json:"id"`
+	ComponentID     string    `json:"component_id"`
+	AssetID         string    `json:"asset_id"`
+	CategoryID      string    `json:"category_id"`
+	Name            string    `json:"name"`
+	SerialNumber    string    `json:"serial_number"`
+	Manufacturer    string    `json:"manufacturer"`
+	Description     string    `json:"description"`
+	EquipmentType   string    `json:"equipment_type"`
+	Structure       string    `json:"structure"`
+	Model           string    `json:"model"`
+	Class           string    `json:"class"`
+	ClassCode       string    `json:"class_code"`
+	SafetyCritical  string    `json:"safety_critical"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Location        string    `json:"location"`
+	AssignedProject string    `json:"assigned_project"`
+}
+
+func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetComponentsByAssetIDPaginatedParams) ([]GetComponentsByAssetIDPaginatedRow, error) {
 	rows, err := q.db.Query(ctx, getComponentsByAssetIDPaginated, arg.AssetID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Component
+	var items []GetComponentsByAssetIDPaginatedRow
 	for rows.Next() {
-		var i Component
+		var i GetComponentsByAssetIDPaginatedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ComponentID,
@@ -248,7 +409,6 @@ func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetCo
 			&i.SafetyCritical,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.TemplateComponentID,
 			&i.Location,
 			&i.AssignedProject,
 		); err != nil {
@@ -264,7 +424,9 @@ func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetCo
 
 const updateComponent = `-- name: UpdateComponent :execrows
 UPDATE components
-SET category_id = $1, name = $2, serial_number = $3, manufacturer = $4, description = $5,
+SET category_id = $1,
+    category_ref_id = (SELECT id FROM categories WHERE category_id = $1),
+    name = $2, serial_number = $3, manufacturer = $4, description = $5,
     location = $6, assigned_project = $7, equipment_type = $8, structure = $9, model = $10, class = $11,
     class_code = $12, safety_critical = $13, updated_at = NOW()
 WHERE component_id = $14

@@ -29,10 +29,10 @@ func main() {
 
 	router.SetTrustedProxies(nil)
 
-	router.GET("/metrics", middleware.MetricsAuthMiddleware(), middleware.MetricsHandler())
+	router.GET("/v1/metrics", middleware.MetricsAuthMiddleware(), middleware.MetricsHandler())
 
-	router.GET("/hello", func(c *gin.Context) {
-		c.String(200, "Hello, Asset Management System!")
+	router.GET("/v1/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
 	})
 
 	controller.SeedAdminUser(pool)

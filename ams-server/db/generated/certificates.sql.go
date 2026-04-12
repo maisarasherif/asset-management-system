@@ -70,13 +70,36 @@ func (q *Queries) CountCertificatesByTestID(ctx context.Context, testID string) 
 }
 
 const createCertificate = `-- name: CreateCertificate :one
-INSERT INTO certificates (certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
-RETURNING id, certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at, template_component_test_id
+INSERT INTO certificates (
+    component_id, component_ref_id, certificate_name, issue_date, expiry_date, certificate_file,
+    issuing_authority, status, test_id, test_type_ref_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at
+)
+VALUES (
+    $1,
+    (SELECT id FROM components WHERE component_id = $1),
+    $2, $3, $4, $5, $6, $7, $8,
+    (SELECT id FROM test_types WHERE test_id = $8),
+    $9, $10, $11, NOW(), NOW()
+)
+RETURNING
+    id,
+    certificate_id,
+    component_id,
+    certificate_name,
+    issue_date,
+    expiry_date,
+    certificate_file,
+    issuing_authority,
+    status,
+    test_id,
+    imca_ref,
+    imca_d018,
+    maintenance_notes,
+    created_at,
+    updated_at
 `
 
 type CreateCertificateParams struct {
-	CertificateID    string     `json:"certificate_id"`
 	ComponentID      string     `json:"component_id"`
 	CertificateName  string     `json:"certificate_name"`
 	IssueDate        *time.Time `json:"issue_date"`
@@ -90,9 +113,26 @@ type CreateCertificateParams struct {
 	MaintenanceNotes string     `json:"maintenance_notes"`
 }
 
-func (q *Queries) CreateCertificate(ctx context.Context, arg CreateCertificateParams) (Certificate, error) {
+type CreateCertificateRow struct {
+	ID               int32      `json:"id"`
+	CertificateID    string     `json:"certificate_id"`
+	ComponentID      string     `json:"component_id"`
+	CertificateName  string     `json:"certificate_name"`
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	CertificateFile  string     `json:"certificate_file"`
+	IssuingAuthority string     `json:"issuing_authority"`
+	Status           string     `json:"status"`
+	TestID           string     `json:"test_id"`
+	ImcaRef          string     `json:"imca_ref"`
+	ImcaD018         string     `json:"imca_d018"`
+	MaintenanceNotes string     `json:"maintenance_notes"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+func (q *Queries) CreateCertificate(ctx context.Context, arg CreateCertificateParams) (CreateCertificateRow, error) {
 	row := q.db.QueryRow(ctx, createCertificate,
-		arg.CertificateID,
 		arg.ComponentID,
 		arg.CertificateName,
 		arg.IssueDate,
@@ -105,7 +145,7 @@ func (q *Queries) CreateCertificate(ctx context.Context, arg CreateCertificatePa
 		arg.ImcaD018,
 		arg.MaintenanceNotes,
 	)
-	var i Certificate
+	var i CreateCertificateRow
 	err := row.Scan(
 		&i.ID,
 		&i.CertificateID,
@@ -122,38 +162,101 @@ func (q *Queries) CreateCertificate(ctx context.Context, arg CreateCertificatePa
 		&i.MaintenanceNotes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.TemplateComponentTestID,
 	)
 	return i, err
 }
 
+const createCertificateUploadAuditEntry = `-- name: CreateCertificateUploadAuditEntry :execrows
+INSERT INTO certificate_upload_audit (certificate_id, certificate_ref_id, file_key, file_name, uploaded_by, uploaded_at)
+VALUES ($1, (SELECT id FROM certificates WHERE certificate_id = $1), $2, $3, $4, NOW())
+`
+
+type CreateCertificateUploadAuditEntryParams struct {
+	CertificateID string `json:"certificate_id"`
+	FileKey       string `json:"file_key"`
+	FileName      string `json:"file_name"`
+	UploadedBy    string `json:"uploaded_by"`
+}
+
+func (q *Queries) CreateCertificateUploadAuditEntry(ctx context.Context, arg CreateCertificateUploadAuditEntryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createCertificateUploadAuditEntry,
+		arg.CertificateID,
+		arg.FileKey,
+		arg.FileName,
+		arg.UploadedBy,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createPendingCertificate = `-- name: CreatePendingCertificate :one
 INSERT INTO certificates (
-    certificate_id, component_id, certificate_name, certificate_file,
-    issuing_authority, status, test_id, imca_ref, imca_d018,
-    maintenance_notes, template_component_test_id, created_at, updated_at
+    component_id, component_ref_id, certificate_name, certificate_file,
+    issuing_authority, status, test_id, test_type_ref_id, imca_ref, imca_d018,
+    maintenance_notes, created_at, updated_at
 )
-VALUES ($1, $2, $3, '', '', 'PENDING', $4, '', '', '', $5, NOW(), NOW())
-RETURNING id, certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at, template_component_test_id
+VALUES (
+    $1,
+    (SELECT id FROM components WHERE component_id = $1),
+    $2,
+    '',
+    '',
+    'PENDING',
+    $3,
+    (SELECT id FROM test_types WHERE test_id = $3),
+    '',
+    '',
+    '',
+    NOW(),
+    NOW()
+)
+RETURNING
+    id,
+    certificate_id,
+    component_id,
+    certificate_name,
+    issue_date,
+    expiry_date,
+    certificate_file,
+    issuing_authority,
+    status,
+    test_id,
+    imca_ref,
+    imca_d018,
+    maintenance_notes,
+    created_at,
+    updated_at
 `
 
 type CreatePendingCertificateParams struct {
-	CertificateID           string  `json:"certificate_id"`
-	ComponentID             string  `json:"component_id"`
-	CertificateName         string  `json:"certificate_name"`
-	TestID                  string  `json:"test_id"`
-	TemplateComponentTestID *string `json:"template_component_test_id"`
+	ComponentID     string `json:"component_id"`
+	CertificateName string `json:"certificate_name"`
+	TestID          string `json:"test_id"`
 }
 
-func (q *Queries) CreatePendingCertificate(ctx context.Context, arg CreatePendingCertificateParams) (Certificate, error) {
-	row := q.db.QueryRow(ctx, createPendingCertificate,
-		arg.CertificateID,
-		arg.ComponentID,
-		arg.CertificateName,
-		arg.TestID,
-		arg.TemplateComponentTestID,
-	)
-	var i Certificate
+type CreatePendingCertificateRow struct {
+	ID               int32      `json:"id"`
+	CertificateID    string     `json:"certificate_id"`
+	ComponentID      string     `json:"component_id"`
+	CertificateName  string     `json:"certificate_name"`
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	CertificateFile  string     `json:"certificate_file"`
+	IssuingAuthority string     `json:"issuing_authority"`
+	Status           string     `json:"status"`
+	TestID           string     `json:"test_id"`
+	ImcaRef          string     `json:"imca_ref"`
+	ImcaD018         string     `json:"imca_d018"`
+	MaintenanceNotes string     `json:"maintenance_notes"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+func (q *Queries) CreatePendingCertificate(ctx context.Context, arg CreatePendingCertificateParams) (CreatePendingCertificateRow, error) {
+	row := q.db.QueryRow(ctx, createPendingCertificate, arg.ComponentID, arg.CertificateName, arg.TestID)
+	var i CreatePendingCertificateRow
 	err := row.Scan(
 		&i.ID,
 		&i.CertificateID,
@@ -170,7 +273,6 @@ func (q *Queries) CreatePendingCertificate(ctx context.Context, arg CreatePendin
 		&i.MaintenanceNotes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.TemplateComponentTestID,
 	)
 	return i, err
 }
@@ -224,7 +326,23 @@ func (q *Queries) FillPendingCertificate(ctx context.Context, arg FillPendingCer
 }
 
 const getAllCertificatesPaginated = `-- name: GetAllCertificatesPaginated :many
-SELECT id, certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at, template_component_test_id FROM certificates
+SELECT
+    id,
+    certificate_id,
+    component_id,
+    certificate_name,
+    issue_date,
+    expiry_date,
+    certificate_file,
+    issuing_authority,
+    status,
+    test_id,
+    imca_ref,
+    imca_d018,
+    maintenance_notes,
+    created_at,
+    updated_at
+FROM certificates
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -234,15 +352,33 @@ type GetAllCertificatesPaginatedParams struct {
 	Offset int32 `json:"offset"`
 }
 
-func (q *Queries) GetAllCertificatesPaginated(ctx context.Context, arg GetAllCertificatesPaginatedParams) ([]Certificate, error) {
+type GetAllCertificatesPaginatedRow struct {
+	ID               int32      `json:"id"`
+	CertificateID    string     `json:"certificate_id"`
+	ComponentID      string     `json:"component_id"`
+	CertificateName  string     `json:"certificate_name"`
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	CertificateFile  string     `json:"certificate_file"`
+	IssuingAuthority string     `json:"issuing_authority"`
+	Status           string     `json:"status"`
+	TestID           string     `json:"test_id"`
+	ImcaRef          string     `json:"imca_ref"`
+	ImcaD018         string     `json:"imca_d018"`
+	MaintenanceNotes string     `json:"maintenance_notes"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+func (q *Queries) GetAllCertificatesPaginated(ctx context.Context, arg GetAllCertificatesPaginatedParams) ([]GetAllCertificatesPaginatedRow, error) {
 	rows, err := q.db.Query(ctx, getAllCertificatesPaginated, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Certificate
+	var items []GetAllCertificatesPaginatedRow
 	for rows.Next() {
-		var i Certificate
+		var i GetAllCertificatesPaginatedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CertificateID,
@@ -259,7 +395,6 @@ func (q *Queries) GetAllCertificatesPaginated(ctx context.Context, arg GetAllCer
 			&i.MaintenanceNotes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.TemplateComponentTestID,
 		); err != nil {
 			return nil, err
 		}
@@ -289,8 +424,8 @@ SELECT
     asset.asset_id,
     asset.name AS asset_name
 FROM certificates cert
-JOIN components comp ON comp.component_id = cert.component_id
-JOIN assets asset ON asset.asset_id = comp.asset_id
+JOIN components comp ON comp.id = cert.component_ref_id
+JOIN assets asset ON asset.id = comp.asset_ref_id
 ORDER BY cert.expiry_date ASC
 LIMIT $1 OFFSET $2
 `
@@ -355,12 +490,48 @@ func (q *Queries) GetAllCertificatesWithContextPaginated(ctx context.Context, ar
 }
 
 const getCertificateByID = `-- name: GetCertificateByID :one
-SELECT id, certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at, template_component_test_id FROM certificates WHERE certificate_id = $1 LIMIT 1
+SELECT
+    id,
+    certificate_id,
+    component_id,
+    certificate_name,
+    issue_date,
+    expiry_date,
+    certificate_file,
+    issuing_authority,
+    status,
+    test_id,
+    imca_ref,
+    imca_d018,
+    maintenance_notes,
+    created_at,
+    updated_at
+FROM certificates
+WHERE certificate_id = $1
+LIMIT 1
 `
 
-func (q *Queries) GetCertificateByID(ctx context.Context, certificateID string) (Certificate, error) {
+type GetCertificateByIDRow struct {
+	ID               int32      `json:"id"`
+	CertificateID    string     `json:"certificate_id"`
+	ComponentID      string     `json:"component_id"`
+	CertificateName  string     `json:"certificate_name"`
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	CertificateFile  string     `json:"certificate_file"`
+	IssuingAuthority string     `json:"issuing_authority"`
+	Status           string     `json:"status"`
+	TestID           string     `json:"test_id"`
+	ImcaRef          string     `json:"imca_ref"`
+	ImcaD018         string     `json:"imca_d018"`
+	MaintenanceNotes string     `json:"maintenance_notes"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+func (q *Queries) GetCertificateByID(ctx context.Context, certificateID string) (GetCertificateByIDRow, error) {
 	row := q.db.QueryRow(ctx, getCertificateByID, certificateID)
-	var i Certificate
+	var i GetCertificateByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.CertificateID,
@@ -377,7 +548,6 @@ func (q *Queries) GetCertificateByID(ctx context.Context, certificateID string) 
 		&i.MaintenanceNotes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.TemplateComponentTestID,
 	)
 	return i, err
 }
@@ -431,7 +601,23 @@ func (q *Queries) GetCertificateUploadAuditByCertificateIDPaginated(ctx context.
 }
 
 const getCertificatesByComponentIDPaginated = `-- name: GetCertificatesByComponentIDPaginated :many
-SELECT id, certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at, template_component_test_id FROM certificates
+SELECT
+    id,
+    certificate_id,
+    component_id,
+    certificate_name,
+    issue_date,
+    expiry_date,
+    certificate_file,
+    issuing_authority,
+    status,
+    test_id,
+    imca_ref,
+    imca_d018,
+    maintenance_notes,
+    created_at,
+    updated_at
+FROM certificates
 WHERE component_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -443,15 +629,33 @@ type GetCertificatesByComponentIDPaginatedParams struct {
 	Offset      int32  `json:"offset"`
 }
 
-func (q *Queries) GetCertificatesByComponentIDPaginated(ctx context.Context, arg GetCertificatesByComponentIDPaginatedParams) ([]Certificate, error) {
+type GetCertificatesByComponentIDPaginatedRow struct {
+	ID               int32      `json:"id"`
+	CertificateID    string     `json:"certificate_id"`
+	ComponentID      string     `json:"component_id"`
+	CertificateName  string     `json:"certificate_name"`
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	CertificateFile  string     `json:"certificate_file"`
+	IssuingAuthority string     `json:"issuing_authority"`
+	Status           string     `json:"status"`
+	TestID           string     `json:"test_id"`
+	ImcaRef          string     `json:"imca_ref"`
+	ImcaD018         string     `json:"imca_d018"`
+	MaintenanceNotes string     `json:"maintenance_notes"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+func (q *Queries) GetCertificatesByComponentIDPaginated(ctx context.Context, arg GetCertificatesByComponentIDPaginatedParams) ([]GetCertificatesByComponentIDPaginatedRow, error) {
 	rows, err := q.db.Query(ctx, getCertificatesByComponentIDPaginated, arg.ComponentID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Certificate
+	var items []GetCertificatesByComponentIDPaginatedRow
 	for rows.Next() {
-		var i Certificate
+		var i GetCertificatesByComponentIDPaginatedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CertificateID,
@@ -468,7 +672,6 @@ func (q *Queries) GetCertificatesByComponentIDPaginated(ctx context.Context, arg
 			&i.MaintenanceNotes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.TemplateComponentTestID,
 		); err != nil {
 			return nil, err
 		}
@@ -481,20 +684,54 @@ func (q *Queries) GetCertificatesByComponentIDPaginated(ctx context.Context, arg
 }
 
 const getExpiringCertificates = `-- name: GetExpiringCertificates :many
-SELECT id, certificate_id, component_id, certificate_name, issue_date, expiry_date, certificate_file, issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at, template_component_test_id FROM certificates
+SELECT
+    id,
+    certificate_id,
+    component_id,
+    certificate_name,
+    issue_date,
+    expiry_date,
+    certificate_file,
+    issuing_authority,
+    status,
+    test_id,
+    imca_ref,
+    imca_d018,
+    maintenance_notes,
+    created_at,
+    updated_at
+FROM certificates
 WHERE expiry_date <= $1 AND expiry_date >= NOW()
 ORDER BY expiry_date ASC
 `
 
-func (q *Queries) GetExpiringCertificates(ctx context.Context, expiryDate *time.Time) ([]Certificate, error) {
+type GetExpiringCertificatesRow struct {
+	ID               int32      `json:"id"`
+	CertificateID    string     `json:"certificate_id"`
+	ComponentID      string     `json:"component_id"`
+	CertificateName  string     `json:"certificate_name"`
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	CertificateFile  string     `json:"certificate_file"`
+	IssuingAuthority string     `json:"issuing_authority"`
+	Status           string     `json:"status"`
+	TestID           string     `json:"test_id"`
+	ImcaRef          string     `json:"imca_ref"`
+	ImcaD018         string     `json:"imca_d018"`
+	MaintenanceNotes string     `json:"maintenance_notes"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+func (q *Queries) GetExpiringCertificates(ctx context.Context, expiryDate *time.Time) ([]GetExpiringCertificatesRow, error) {
 	rows, err := q.db.Query(ctx, getExpiringCertificates, expiryDate)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Certificate
+	var items []GetExpiringCertificatesRow
 	for rows.Next() {
-		var i Certificate
+		var i GetExpiringCertificatesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CertificateID,
@@ -511,7 +748,6 @@ func (q *Queries) GetExpiringCertificates(ctx context.Context, expiryDate *time.
 			&i.MaintenanceNotes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.TemplateComponentTestID,
 		); err != nil {
 			return nil, err
 		}
@@ -534,8 +770,8 @@ SELECT
     asset.asset_id,
     asset.name AS asset_name
 FROM certificates cert
-JOIN components comp ON comp.component_id = cert.component_id
-JOIN assets asset ON asset.asset_id = comp.asset_id
+JOIN components comp ON comp.id = cert.component_ref_id
+JOIN assets asset ON asset.id = comp.asset_ref_id
 WHERE cert.expiry_date <= $1 AND cert.expiry_date >= NOW()
 ORDER BY cert.expiry_date ASC
 `
@@ -582,8 +818,11 @@ func (q *Queries) GetExpiringCertificatesWithContext(ctx context.Context, expiry
 
 const updateCertificate = `-- name: UpdateCertificate :execrows
 UPDATE certificates
-SET component_id = $1, certificate_name = $2, issue_date = $3, expiry_date = $4,
+SET component_id = $1,
+    component_ref_id = (SELECT id FROM components WHERE component_id = $1),
+    certificate_name = $2, issue_date = $3, expiry_date = $4,
     certificate_file = $5, issuing_authority = $6, status = $7, test_id = $8,
+    test_type_ref_id = (SELECT id FROM test_types WHERE test_id = $8),
     imca_ref = $9, imca_d018 = $10, maintenance_notes = $11, updated_at = NOW()
 WHERE certificate_id = $12
 `

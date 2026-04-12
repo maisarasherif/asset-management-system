@@ -7,9 +7,15 @@ SELECT * FROM test_types
 WHERE test_id = $1
 LIMIT 1;
 
+-- name: GetExistingTestTypeIDs :many
+SELECT test_id
+FROM test_types
+WHERE test_id = ANY($1::text[])
+ORDER BY test_id ASC;
+
 -- name: CreateTestType :one
-INSERT INTO test_types (test_id, test_name, validity_duration, description)
-VALUES ($1, $2, $3, $4)
+INSERT INTO test_types (test_name, validity_duration, description)
+VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: UpdateTestType :execrows

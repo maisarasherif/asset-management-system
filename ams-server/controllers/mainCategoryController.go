@@ -84,14 +84,7 @@ func AddMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		mainCategoryID, err := utils.GenerateMainCategoryID(ctx, queries)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate main category id"})
-			return
-		}
-
 		mainCategory, err := queries.CreateMainCategory(ctx, db.CreateMainCategoryParams{
-			MainCategoryID:   mainCategoryID,
 			MainCategoryName: input.MainCategoryName,
 			Description:      input.Description,
 		})

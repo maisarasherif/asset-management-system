@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
@@ -130,7 +129,6 @@ func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		user, err := queries.CreateUser(ctx, db.CreateUserParams{
-			UserID:    uuid.New().String(),
 			FirstName: input.FirstName,
 			LastName:  input.LastName,
 			Email:     input.Email,
@@ -543,7 +541,6 @@ func SeedAdminUser(pool *pgxpool.Pool) {
 	}
 
 	_, err = queries.CreateUser(ctx, db.CreateUserParams{
-		UserID:    uuid.New().String(),
 		FirstName: "Super",
 		LastName:  "Admin",
 		Email:     email,

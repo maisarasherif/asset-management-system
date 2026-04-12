@@ -10,24 +10,24 @@ import (
 )
 
 const createScheduledTask = `-- name: CreateScheduledTask :one
-INSERT INTO scheduled_tasks (task_id, certificate_id, type, status, sent_at)
-VALUES ($1, $2, $3, $4, NOW())
-RETURNING id, task_id, certificate_id, type, status, sent_at
+INSERT INTO scheduled_tasks (certificate_id, certificate_ref_id, type, status, external_task_id, sent_at)
+VALUES ($1, (SELECT id FROM certificates WHERE certificate_id = $1), $2, $3, $4, NOW())
+RETURNING id, task_id, certificate_id, type, status, sent_at, external_task_id, certificate_ref_id
 `
 
 type CreateScheduledTaskParams struct {
-	TaskID        string `json:"task_id"`
-	CertificateID string `json:"certificate_id"`
-	Type          string `json:"type"`
-	Status        string `json:"status"`
+	CertificateID  string `json:"certificate_id"`
+	Type           string `json:"type"`
+	Status         string `json:"status"`
+	ExternalTaskID string `json:"external_task_id"`
 }
 
 func (q *Queries) CreateScheduledTask(ctx context.Context, arg CreateScheduledTaskParams) (ScheduledTask, error) {
 	row := q.db.QueryRow(ctx, createScheduledTask,
-		arg.TaskID,
 		arg.CertificateID,
 		arg.Type,
 		arg.Status,
+		arg.ExternalTaskID,
 	)
 	var i ScheduledTask
 	err := row.Scan(
@@ -37,6 +37,8 @@ func (q *Queries) CreateScheduledTask(ctx context.Context, arg CreateScheduledTa
 		&i.Type,
 		&i.Status,
 		&i.SentAt,
+		&i.ExternalTaskID,
+		&i.CertificateRefID,
 	)
 	return i, err
 }
