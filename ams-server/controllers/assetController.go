@@ -51,7 +51,10 @@ func GetAssets(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		assetID := c.Param("asset_id")
+		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -87,7 +90,13 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 		defer cancel()
 
-		if input.TemplateID != nil && *input.TemplateID != "" {
+		templateID, err := utils.ParseOptionalUUID(input.TemplateID, "template_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if templateID != nil {
 			tx, err := pool.Begin(ctx)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin asset creation transaction"})
@@ -97,7 +106,7 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 			queries := db.New(tx)
 
-			template, err := queries.GetAssetTemplateByID(ctx, *input.TemplateID)
+			template, err := queries.GetAssetTemplateByID(ctx, *templateID)
 			if err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
 					c.JSON(http.StatusNotFound, gin.H{"error": "template not found"})
@@ -115,7 +124,7 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 				Status:          input.Status,
 				Location:        input.Location,
 				AssignedProject: input.AssignedProject,
-				TemplateID:      &template.TemplateID,
+				TemplateID:      templateID,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add asset"})
@@ -125,8 +134,8 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			if err := utils.SpinUpAssetFromTemplate(ctx, tx, asset.AssetID, template.TemplateID); err != nil {
 				logger.Log.Error().
 					Err(err).
-					Str("asset_id", asset.AssetID).
-					Str("template_id", template.TemplateID).
+					Str("asset_id", asset.AssetID.String()).
+					Str("template_id", template.TemplateID.String()).
 					Msg("template-backed asset creation rolled back")
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to spin up asset from template"})
 				return
@@ -138,8 +147,8 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			}
 
 			logger.Log.Info().
-				Str("asset_id", asset.AssetID).
-				Str("template_id", template.TemplateID).
+				Str("asset_id", asset.AssetID.String()).
+				Str("template_id", template.TemplateID.String()).
 				Msg("asset created and spun up from template successfully")
 
 			c.JSON(http.StatusCreated, asset)
@@ -168,7 +177,10 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		assetID := c.Param("asset_id")
+		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
+		if !ok {
+			return
+		}
 
 		var input dto.AssetInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -210,7 +222,10 @@ func UpdateAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		assetID := c.Param("asset_id")
+		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -235,7 +250,7 @@ func DeleteAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		userID, _ := utils.GetUserIdFromContext(c)
 		logger.Log.Warn().
-			Str("asset_id", assetID).
+			Str("asset_id", assetID.String()).
 			Str("asset_name", existing.Name).
 			Str("deleted_by", userID).
 			Msg("asset deleted")
@@ -246,7 +261,10 @@ func DeleteAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func PatchAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		assetID := c.Param("asset_id")
+		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
+		if !ok {
+			return
+		}
 
 		var input dto.PatchAssetInput
 		if err := c.ShouldBindJSON(&input); err != nil {

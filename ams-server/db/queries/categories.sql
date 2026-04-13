@@ -1,7 +1,7 @@
 -- name: GetAllCategoriesPaginated :many
 SELECT
-    id,
     category_id,
+    display_id,
     main_category_id,
     category_name,
     description,
@@ -13,28 +13,30 @@ LIMIT $1 OFFSET $2;
 
 -- name: GetCategoriesByMainCategoryIDPaginated :many
 SELECT
-    id,
     category_id,
+    display_id,
     main_category_id,
     category_name,
     description,
     created_at,
     updated_at
 FROM categories
-WHERE main_category_id = $1
+WHERE main_category_id = sqlc.arg(main_category_id)
 ORDER BY created_at DESC
-LIMIT $2 OFFSET $3;
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountCategoriesByMainCategoryIDPaginated :one
-SELECT COUNT(*) FROM categories WHERE main_category_id = $1;
+SELECT COUNT(*)
+FROM categories
+WHERE main_category_id = sqlc.arg(main_category_id);
 
 -- name: CountCategories :one
 SELECT COUNT(*) FROM categories;
 
 -- name: GetCategoryByID :one
 SELECT
-    id,
     category_id,
+    display_id,
     main_category_id,
     category_name,
     description,
@@ -47,15 +49,22 @@ LIMIT 1;
 -- name: GetExistingCategoryIDs :many
 SELECT category_id
 FROM categories
-WHERE category_id = ANY($1::text[])
+WHERE category_id = ANY($1::uuid[])
 ORDER BY category_id ASC;
 
 -- name: CreateCategory :one
-INSERT INTO categories (main_category_id, main_category_ref_id, category_name, description, created_at, updated_at)
-VALUES ($1, (SELECT id FROM main_categories WHERE main_category_id = $1), $2, $3, NOW(), NOW())
+INSERT INTO categories (display_id, main_category_id, category_name, description, created_at, updated_at)
+VALUES (
+    next_display_id('category_display_id_seq'),
+    sqlc.arg(main_category_id),
+    sqlc.arg(category_name),
+    sqlc.arg(description),
+    NOW(),
+    NOW()
+)
 RETURNING
-    id,
     category_id,
+    display_id,
     main_category_id,
     category_name,
     description,
@@ -64,12 +73,11 @@ RETURNING
 
 -- name: UpdateCategory :execrows
 UPDATE categories
-SET main_category_id = $1,
-    main_category_ref_id = (SELECT id FROM main_categories WHERE main_category_id = $1),
-    category_name = $2,
-    description = $3,
+SET main_category_id = sqlc.arg(main_category_id),
+    category_name = sqlc.arg(category_name),
+    description = sqlc.arg(description),
     updated_at = NOW()
-WHERE category_id = $4;
+WHERE category_id = sqlc.arg(category_id);
 
 -- name: DeleteCategory :execrows
 DELETE FROM categories WHERE category_id = $1;

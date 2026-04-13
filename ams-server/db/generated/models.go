@@ -7,125 +7,114 @@ package db
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Asset struct {
-	ID              int32       `json:"id"`
-	AssetID         string      `json:"asset_id"`
-	Name            string      `json:"name"`
-	Photo           string      `json:"photo"`
-	Datasheet       string      `json:"datasheet"`
-	Description     string      `json:"description"`
-	Status          string      `json:"status"`
-	Location        string      `json:"location"`
-	AssignedProject string      `json:"assigned_project"`
-	CreatedAt       time.Time   `json:"created_at"`
-	UpdatedAt       time.Time   `json:"updated_at"`
-	TemplateID      *string     `json:"template_id"`
-	TemplateRefID   pgtype.Int4 `json:"template_ref_id"`
+	Name            string     `json:"name"`
+	Photo           string     `json:"photo"`
+	Datasheet       string     `json:"datasheet"`
+	Description     string     `json:"description"`
+	Status          string     `json:"status"`
+	Location        string     `json:"location"`
+	AssignedProject string     `json:"assigned_project"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	AssetID         uuid.UUID  `json:"asset_id"`
+	DisplayID       string     `json:"display_id"`
+	TemplateID      *uuid.UUID `json:"template_id"`
 }
 
 type AssetTemplate struct {
-	ID           int32     `json:"id"`
-	TemplateID   string    `json:"template_id"`
 	TemplateName string    `json:"template_name"`
 	Description  string    `json:"description"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	TemplateID   uuid.UUID `json:"template_id"`
+	DisplayID    string    `json:"display_id"`
 }
 
 type Category struct {
-	ID                int32     `json:"id"`
-	CategoryID        string    `json:"category_id"`
-	CategoryName      string    `json:"category_name"`
-	Description       string    `json:"description"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
-	MainCategoryID    *string   `json:"main_category_id"`
-	MainCategoryRefID int32     `json:"main_category_ref_id"`
+	CategoryName   string     `json:"category_name"`
+	Description    string     `json:"description"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	CategoryID     uuid.UUID  `json:"category_id"`
+	DisplayID      string     `json:"display_id"`
+	MainCategoryID *uuid.UUID `json:"main_category_id"`
 }
 
 type Certificate struct {
-	ID                         int32       `json:"id"`
-	CertificateID              string      `json:"certificate_id"`
-	ComponentID                string      `json:"component_id"`
-	CertificateName            string      `json:"certificate_name"`
-	IssueDate                  *time.Time  `json:"issue_date"`
-	ExpiryDate                 *time.Time  `json:"expiry_date"`
-	CertificateFile            string      `json:"certificate_file"`
-	IssuingAuthority           string      `json:"issuing_authority"`
-	Status                     string      `json:"status"`
-	TestID                     string      `json:"test_id"`
-	ImcaRef                    string      `json:"imca_ref"`
-	ImcaD018                   string      `json:"imca_d018"`
-	MaintenanceNotes           string      `json:"maintenance_notes"`
-	CreatedAt                  time.Time   `json:"created_at"`
-	UpdatedAt                  time.Time   `json:"updated_at"`
-	ComponentRefID             int32       `json:"component_ref_id"`
-	TestTypeRefID              int32       `json:"test_type_ref_id"`
-	TemplateComponentTestRefID pgtype.Int4 `json:"template_component_test_ref_id"`
+	CertificateName         string     `json:"certificate_name"`
+	IssueDate               *time.Time `json:"issue_date"`
+	ExpiryDate              *time.Time `json:"expiry_date"`
+	CertificateFile         string     `json:"certificate_file"`
+	IssuingAuthority        string     `json:"issuing_authority"`
+	Status                  string     `json:"status"`
+	ImcaRef                 string     `json:"imca_ref"`
+	ImcaD018                string     `json:"imca_d018"`
+	MaintenanceNotes        string     `json:"maintenance_notes"`
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
+	CertificateID           uuid.UUID  `json:"certificate_id"`
+	DisplayID               string     `json:"display_id"`
+	ComponentID             uuid.UUID  `json:"component_id"`
+	TestID                  uuid.UUID  `json:"test_id"`
+	TemplateComponentTestID *uuid.UUID `json:"template_component_test_id"`
 }
 
 type CertificateUploadAudit struct {
-	ID               int32              `json:"id"`
-	CertificateID    string             `json:"certificate_id"`
-	FileKey          string             `json:"file_key"`
-	FileName         string             `json:"file_name"`
-	UploadedBy       string             `json:"uploaded_by"`
-	UploadedAt       pgtype.Timestamptz `json:"uploaded_at"`
-	CertificateRefID int32              `json:"certificate_ref_id"`
+	FileKey       string             `json:"file_key"`
+	FileName      string             `json:"file_name"`
+	UploadedBy    string             `json:"uploaded_by"`
+	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
+	Uuid          uuid.UUID          `json:"uuid"`
+	CertificateID uuid.UUID          `json:"certificate_id"`
 }
 
 type Component struct {
-	ID                     int32       `json:"id"`
-	ComponentID            string      `json:"component_id"`
-	AssetID                string      `json:"asset_id"`
-	CategoryID             string      `json:"category_id"`
-	Name                   string      `json:"name"`
-	SerialNumber           string      `json:"serial_number"`
-	Manufacturer           string      `json:"manufacturer"`
-	Description            string      `json:"description"`
-	EquipmentType          string      `json:"equipment_type"`
-	Structure              string      `json:"structure"`
-	Model                  string      `json:"model"`
-	Class                  string      `json:"class"`
-	ClassCode              string      `json:"class_code"`
-	SafetyCritical         string      `json:"safety_critical"`
-	CreatedAt              time.Time   `json:"created_at"`
-	UpdatedAt              time.Time   `json:"updated_at"`
-	Location               string      `json:"location"`
-	AssignedProject        string      `json:"assigned_project"`
-	AssetRefID             int32       `json:"asset_ref_id"`
-	CategoryRefID          int32       `json:"category_ref_id"`
-	TemplateComponentRefID pgtype.Int4 `json:"template_component_ref_id"`
+	Name                string     `json:"name"`
+	SerialNumber        string     `json:"serial_number"`
+	Manufacturer        string     `json:"manufacturer"`
+	Description         string     `json:"description"`
+	EquipmentType       string     `json:"equipment_type"`
+	Structure           string     `json:"structure"`
+	Model               string     `json:"model"`
+	Class               string     `json:"class"`
+	ClassCode           string     `json:"class_code"`
+	SafetyCritical      string     `json:"safety_critical"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+	Location            string     `json:"location"`
+	AssignedProject     string     `json:"assigned_project"`
+	ComponentID         uuid.UUID  `json:"component_id"`
+	DisplayID           string     `json:"display_id"`
+	AssetID             uuid.UUID  `json:"asset_id"`
+	CategoryID          uuid.UUID  `json:"category_id"`
+	TemplateComponentID *uuid.UUID `json:"template_component_id"`
 }
 
 type MainCategory struct {
-	ID               int32     `json:"id"`
-	MainCategoryID   string    `json:"main_category_id"`
 	MainCategoryName string    `json:"main_category_name"`
 	Description      string    `json:"description"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
+	MainCategoryID   uuid.UUID `json:"main_category_id"`
+	DisplayID        string    `json:"display_id"`
 }
 
 type ScheduledTask struct {
-	ID               int32     `json:"id"`
-	TaskID           string    `json:"task_id"`
-	CertificateID    string    `json:"certificate_id"`
-	Type             string    `json:"type"`
-	Status           string    `json:"status"`
-	SentAt           time.Time `json:"sent_at"`
-	ExternalTaskID   string    `json:"external_task_id"`
-	CertificateRefID int32     `json:"certificate_ref_id"`
+	Type           string    `json:"type"`
+	Status         string    `json:"status"`
+	SentAt         time.Time `json:"sent_at"`
+	ExternalTaskID string    `json:"external_task_id"`
+	TaskID         uuid.UUID `json:"task_id"`
+	DisplayID      string    `json:"display_id"`
+	CertificateID  uuid.UUID `json:"certificate_id"`
 }
 
 type TemplateComponent struct {
-	ID                  int32     `json:"id"`
-	TemplateComponentID string    `json:"template_component_id"`
-	TemplateID          string    `json:"template_id"`
-	CategoryID          string    `json:"category_id"`
 	Name                string    `json:"name"`
 	Description         string    `json:"description"`
 	SerialNumber        string    `json:"serial_number"`
@@ -139,33 +128,31 @@ type TemplateComponent struct {
 	CreatedAt           time.Time `json:"created_at"`
 	Location            string    `json:"location"`
 	AssignedProject     string    `json:"assigned_project"`
-	TemplateRefID       int32     `json:"template_ref_id"`
-	CategoryRefID       int32     `json:"category_ref_id"`
 	Position            int32     `json:"position"`
+	TemplateComponentID uuid.UUID `json:"template_component_id"`
+	DisplayID           string    `json:"display_id"`
+	TemplateID          uuid.UUID `json:"template_id"`
+	CategoryID          uuid.UUID `json:"category_id"`
 }
 
 type TemplateComponentTest struct {
-	ID                      int32     `json:"id"`
-	TemplateComponentTestID string    `json:"template_component_test_id"`
-	TemplateComponentID     string    `json:"template_component_id"`
-	TestID                  string    `json:"test_id"`
 	CreatedAt               time.Time `json:"created_at"`
-	TemplateComponentRefID  int32     `json:"template_component_ref_id"`
-	TestTypeRefID           int32     `json:"test_type_ref_id"`
 	Position                int32     `json:"position"`
+	TemplateComponentTestID uuid.UUID `json:"template_component_test_id"`
+	DisplayID               string    `json:"display_id"`
+	TemplateComponentID     uuid.UUID `json:"template_component_id"`
+	TestID                  uuid.UUID `json:"test_id"`
 }
 
 type TestType struct {
-	TestID           string `json:"test_id"`
-	TestName         string `json:"test_name"`
-	ValidityDuration int32  `json:"validity_duration"`
-	Description      string `json:"description"`
-	ID               int32  `json:"id"`
+	TestName         string    `json:"test_name"`
+	ValidityDuration int32     `json:"validity_duration"`
+	Description      string    `json:"description"`
+	TestID           uuid.UUID `json:"test_id"`
+	DisplayID        string    `json:"display_id"`
 }
 
 type User struct {
-	ID           int32     `json:"id"`
-	UserID       string    `json:"user_id"`
 	FirstName    string    `json:"first_name"`
 	LastName     string    `json:"last_name"`
 	Email        string    `json:"email"`
@@ -175,4 +162,6 @@ type User struct {
 	RefreshToken string    `json:"refresh_token"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	UserID       uuid.UUID `json:"user_id"`
+	DisplayID    string    `json:"display_id"`
 }

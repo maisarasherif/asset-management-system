@@ -78,13 +78,13 @@ type LoginResponse struct {
 // ==================== Category DTOs ====================
 
 type CategoryInput struct {
-	MainCategoryID string `json:"main_category_id" validate:"required"`
+	MainCategoryID string `json:"main_category_id" validate:"required,uuid"`
 	CategoryName   string `json:"category_name" validate:"required,min=2,max=100"`
 	Description    string `json:"description"`
 }
 
 type PatchCategoryInput struct {
-	MainCategoryID *string `json:"main_category_id"`
+	MainCategoryID *string `json:"main_category_id" validate:"omitempty,uuid"`
 	CategoryName   *string `json:"category_name" validate:"omitempty,min=2,max=100"`
 	Description    *string `json:"description"`
 }
@@ -109,7 +109,7 @@ type AssetInput struct {
 	Status          string  `json:"status" validate:"required,oneof=ACTIVE INACTIVE MAINTENANCE"`
 	Location        string  `json:"location"`
 	AssignedProject string  `json:"assigned_project"`
-	TemplateID      *string `json:"template_id"`
+	TemplateID      *string `json:"template_id" validate:"omitempty,uuid"`
 }
 
 type PatchAssetInput struct {
@@ -125,8 +125,8 @@ type PatchAssetInput struct {
 // ==================== Component DTOs ====================
 
 type ComponentInput struct {
-	AssetID         string `json:"asset_id" validate:"required"`
-	CategoryID      string `json:"category_id" validate:"required"`
+	AssetID         string `json:"asset_id" validate:"required,uuid"`
+	CategoryID      string `json:"category_id" validate:"required,uuid"`
 	Name            string `json:"name" validate:"required,min=2,max=200"`
 	SerialNumber    string `json:"serial_number"`
 	Manufacturer    string `json:"manufacturer"`
@@ -142,7 +142,7 @@ type ComponentInput struct {
 }
 
 type PatchComponentInput struct {
-	CategoryID      *string `json:"category_id"`
+	CategoryID      *string `json:"category_id" validate:"omitempty,uuid"`
 	Name            *string `json:"name" validate:"omitempty,min=2,max=200"`
 	SerialNumber    *string `json:"serial_number"`
 	Manufacturer    *string `json:"manufacturer"`
@@ -160,26 +160,26 @@ type PatchComponentInput struct {
 // ==================== Certificate DTOs ====================
 
 type CertificateInput struct {
-	ComponentID      string    `json:"component_id" validate:"required"`
+	ComponentID      string    `json:"component_id" validate:"required,uuid"`
 	CertificateName  string    `json:"certificate_name" validate:"required,min=2,max=200"`
 	IssueDate        time.Time `json:"issue_date" validate:"required"`
 	ExpiryDate       time.Time `json:"expiry_date" validate:"required"`
 	CertificateFile  string    `json:"certificate_file" validate:"omitempty,url"`
 	IssuingAuthority string    `json:"issuing_authority" validate:"required,min=2,max=200"`
-	TestID           string    `json:"test_id" validate:"required"`
+	TestID           string    `json:"test_id" validate:"required,uuid"`
 	IMCARef          string    `json:"imca_ref"`
 	IMCAD018         string    `json:"imca_d018"`
 	MaintenanceNotes string    `json:"maintenance_notes"`
 }
 
 type PatchCertificateInput struct {
-	ComponentID      *string    `json:"component_id"`
+	ComponentID      *string    `json:"component_id" validate:"omitempty,uuid"`
 	CertificateName  *string    `json:"certificate_name" validate:"omitempty,min=2,max=200"`
 	IssueDate        *time.Time `json:"issue_date"`
 	ExpiryDate       *time.Time `json:"expiry_date"`
 	CertificateFile  *string    `json:"certificate_file" validate:"omitempty,url"`
 	IssuingAuthority *string    `json:"issuing_authority" validate:"omitempty,min=2,max=200"`
-	TestID           *string    `json:"test_id"`
+	TestID           *string    `json:"test_id" validate:"omitempty,uuid"`
 	IMCARef          *string    `json:"imca_ref"`
 	IMCAD018         *string    `json:"imca_d018"`
 	MaintenanceNotes *string    `json:"maintenance_notes"`
@@ -207,7 +207,7 @@ type AssetTemplateInput struct {
 }
 
 type TemplateComponentInput struct {
-	CategoryID      string `json:"category_id" validate:"required"`
+	CategoryID      string `json:"category_id" validate:"required,uuid"`
 	Name            string `json:"name" validate:"required,min=2,max=200"`
 	Description     string `json:"description"`
 	SerialNumber    string `json:"serial_number"`
@@ -223,11 +223,11 @@ type TemplateComponentInput struct {
 }
 
 type TemplateComponentTestInput struct {
-	TestID string `json:"test_id" validate:"required"`
+	TestID string `json:"test_id" validate:"required,uuid"`
 }
 
 type ConfigureTemplateComponentItem struct {
-	CategoryID      string   `json:"category_id" validate:"required"`
+	CategoryID      string   `json:"category_id" validate:"required,uuid"`
 	Name            string   `json:"name" validate:"required,min=2,max=200"`
 	Description     string   `json:"description"`
 	SerialNumber    string   `json:"serial_number"`
@@ -240,7 +240,7 @@ type ConfigureTemplateComponentItem struct {
 	Class           string   `json:"class"`
 	ClassCode       string   `json:"class_code"`
 	SafetyCritical  string   `json:"safety_critical" validate:"required,oneof=YES NO"`
-	TestIDs         []string `json:"test_ids" validate:"required,dive,required"`
+	TestIDs         []string `json:"test_ids" validate:"required,dive,required,uuid"`
 }
 
 type ConfigureTemplateInput struct {

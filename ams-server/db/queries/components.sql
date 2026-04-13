@@ -1,7 +1,7 @@
 -- name: GetAllComponentsPaginated :many
 SELECT
-    id,
     component_id,
+    display_id,
     asset_id,
     category_id,
     name,
@@ -27,8 +27,8 @@ SELECT COUNT(*) FROM components;
 
 -- name: GetComponentsByAssetIDPaginated :many
 SELECT
-    id,
     component_id,
+    display_id,
     asset_id,
     category_id,
     name,
@@ -46,17 +46,19 @@ SELECT
     location,
     assigned_project
 FROM components
-WHERE asset_id = $1
+WHERE asset_id = sqlc.arg(asset_id)
 ORDER BY created_at DESC
-LIMIT $2 OFFSET $3;
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountComponentsByAssetID :one
-SELECT COUNT(*) FROM components WHERE asset_id = $1;
+SELECT COUNT(*)
+FROM components
+WHERE asset_id = $1;
 
 -- name: GetComponentByID :one
 SELECT
-    id,
     component_id,
+    display_id,
     asset_id,
     category_id,
     name,
@@ -78,24 +80,39 @@ WHERE component_id = $1
 LIMIT 1;
 
 -- name: CountComponentsByCategoryID :one
-SELECT COUNT(*) FROM components WHERE category_id = $1;
+SELECT COUNT(*)
+FROM components
+WHERE category_id = $1;
 
 -- name: CreateComponent :one
 INSERT INTO components (
-    asset_id, asset_ref_id, category_id, category_ref_id, name, serial_number, manufacturer,
+    display_id,
+    asset_id, category_id, name, serial_number, manufacturer,
     description, location, assigned_project, equipment_type, structure, model,
     class, class_code, safety_critical, created_at, updated_at
 )
 VALUES (
-    $1,
-    (SELECT id FROM assets WHERE asset_id = $1),
-    $2,
-    (SELECT id FROM categories WHERE category_id = $2),
-    $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW()
+    next_display_id('component_display_id_seq'),
+    sqlc.arg(asset_id),
+    sqlc.arg(category_id),
+    sqlc.arg(name),
+    sqlc.arg(serial_number),
+    sqlc.arg(manufacturer),
+    sqlc.arg(description),
+    sqlc.arg(location),
+    sqlc.arg(assigned_project),
+    sqlc.arg(equipment_type),
+    sqlc.arg(structure),
+    sqlc.arg(model),
+    sqlc.arg(class),
+    sqlc.arg(class_code),
+    sqlc.arg(safety_critical),
+    NOW(),
+    NOW()
 )
 RETURNING
-    id,
     component_id,
+    display_id,
     asset_id,
     category_id,
     name,
@@ -115,12 +132,21 @@ RETURNING
 
 -- name: UpdateComponent :execrows
 UPDATE components
-SET category_id = $1,
-    category_ref_id = (SELECT id FROM categories WHERE category_id = $1),
-    name = $2, serial_number = $3, manufacturer = $4, description = $5,
-    location = $6, assigned_project = $7, equipment_type = $8, structure = $9, model = $10, class = $11,
-    class_code = $12, safety_critical = $13, updated_at = NOW()
-WHERE component_id = $14;
+SET category_id = sqlc.arg(category_id),
+    name = sqlc.arg(name),
+    serial_number = sqlc.arg(serial_number),
+    manufacturer = sqlc.arg(manufacturer),
+    description = sqlc.arg(description),
+    location = sqlc.arg(location),
+    assigned_project = sqlc.arg(assigned_project),
+    equipment_type = sqlc.arg(equipment_type),
+    structure = sqlc.arg(structure),
+    model = sqlc.arg(model),
+    class = sqlc.arg(class),
+    class_code = sqlc.arg(class_code),
+    safety_critical = sqlc.arg(safety_critical),
+    updated_at = NOW()
+WHERE component_id = sqlc.arg(component_id);
 
 -- name: DeleteComponent :execrows
 DELETE FROM components WHERE component_id = $1;

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
@@ -50,7 +51,7 @@ func GetUsers(pool *pgxpool.Pool) gin.HandlerFunc {
 		response := make([]dto.UserResponse, len(users))
 		for i, u := range users {
 			response[i] = dto.UserResponse{
-				UserID:    u.UserID,
+				UserID:    u.UserID.String(),
 				FirstName: u.FirstName,
 				LastName:  u.LastName,
 				Email:     u.Email,
@@ -69,7 +70,10 @@ func GetUsers(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.Param("user_id")
+		userID, ok := utils.ParseUUIDParam(c, "user_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -83,7 +87,7 @@ func GetUser(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, dto.UserResponse{
-			UserID:    user.UserID,
+			UserID:    user.UserID.String(),
 			FirstName: user.FirstName,
 			LastName:  user.LastName,
 			Email:     user.Email,
@@ -142,14 +146,14 @@ func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		adminID, _ := utils.GetUserIdFromContext(c)
 		logger.Log.Info().
-			Str("new_user_id", user.UserID).
+			Str("new_user_id", user.UserID.String()).
 			Str("email", user.Email).
 			Str("role", user.Role).
 			Str("created_by", adminID).
 			Msg("new user registered")
 
 		c.JSON(http.StatusCreated, dto.UserResponse{
-			UserID:    user.UserID,
+			UserID:    user.UserID.String(),
 			FirstName: user.FirstName,
 			LastName:  user.LastName,
 			Email:     user.Email,
@@ -162,7 +166,10 @@ func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.Param("user_id")
+		userID, ok := utils.ParseUUIDParam(c, "user_id")
+		if !ok {
+			return
+		}
 
 		var input dto.UpdateUserInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -217,7 +224,7 @@ func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
 		if existingUser.Role != input.Role {
 			adminID, _ := utils.GetUserIdFromContext(c)
 			logger.Log.Warn().
-				Str("user_id", userID).
+				Str("user_id", userID.String()).
 				Str("old_role", existingUser.Role).
 				Str("new_role", input.Role).
 				Str("changed_by", adminID).
@@ -251,7 +258,13 @@ func UpdatePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		existingPassword, err := queries.GetUserPasswordByID(ctx, userID)
+		parsedUserID, err := utils.ParseUUID(userID, "user_id")
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		existingPassword, err := queries.GetUserPasswordByID(ctx, parsedUserID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch user password"})
 			return
@@ -273,7 +286,7 @@ func UpdatePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		rows, err := queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
 			Password: hashedPassword,
-			UserID:   userID,
+			UserID:   parsedUserID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
@@ -294,14 +307,22 @@ func UpdatePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.Param("user_id")
+		userID, ok := utils.ParseUUIDParam(c, "user_id")
+		if !ok {
+			return
+		}
 
 		requestingUserID, err := utils.GetUserIdFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "could not identify requesting user"})
 			return
 		}
-		if requestingUserID == userID {
+		requestingUserUUID, err := uuid.Parse(requestingUserID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "could not identify requesting user"})
+			return
+		}
+		if requestingUserUUID == userID {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete your own account"})
 			return
 		}
@@ -328,7 +349,7 @@ func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		logger.Log.Warn().
-			Str("deleted_user_id", userID).
+			Str("deleted_user_id", userID.String()).
 			Str("deleted_email", targetUser.Email).
 			Str("deleted_by", requestingUserID).
 			Msg("user deleted")
@@ -339,7 +360,10 @@ func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func PatchUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.Param("user_id")
+		userID, ok := utils.ParseUUIDParam(c, "user_id")
+		if !ok {
+			return
+		}
 
 		var input dto.PatchUserInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -412,7 +436,7 @@ func PatchUser(pool *pgxpool.Pool) gin.HandlerFunc {
 		if existingUser.Role != role {
 			adminID, _ := utils.GetUserIdFromContext(c)
 			logger.Log.Warn().
-				Str("user_id", userID).
+				Str("user_id", userID.String()).
 				Str("old_role", existingUser.Role).
 				Str("new_role", role).
 				Str("changed_by", adminID).
@@ -461,27 +485,27 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			foundUser.FirstName,
 			foundUser.LastName,
 			foundUser.Role,
-			foundUser.UserID,
+			foundUser.UserID.String(),
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate tokens"})
 			return
 		}
 
-		if err = utils.UpdateAllTokens(pool, foundUser.UserID, token, refreshToken); err != nil {
+		if err = utils.UpdateAllTokens(pool, foundUser.UserID.String(), token, refreshToken); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update tokens"})
 			return
 		}
 
 		logger.Log.Info().
-			Str("user_id", foundUser.UserID).
+			Str("user_id", foundUser.UserID.String()).
 			Str("email", foundUser.Email).
 			Str("role", foundUser.Role).
 			Str("ip", c.ClientIP()).
 			Msg("user logged in")
 
 		c.JSON(http.StatusOK, dto.LoginResponse{
-			UserID:       foundUser.UserID,
+			UserID:       foundUser.UserID.String(),
 			FirstName:    foundUser.FirstName,
 			LastName:     foundUser.LastName,
 			Email:        foundUser.Email,

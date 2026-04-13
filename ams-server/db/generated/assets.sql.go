@@ -8,6 +8,8 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const countAssets = `-- name: CountAssets :one
@@ -23,6 +25,7 @@ func (q *Queries) CountAssets(ctx context.Context) (int64, error) {
 
 const createAsset = `-- name: CreateAsset :one
 INSERT INTO assets (
+    display_id,
     name,
     photo,
     datasheet,
@@ -33,10 +36,10 @@ INSERT INTO assets (
     created_at,
     updated_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+VALUES (next_display_id('asset_display_id_seq'), $1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
 RETURNING
-    id,
     asset_id,
+    display_id,
     name,
     photo,
     datasheet,
@@ -60,18 +63,18 @@ type CreateAssetParams struct {
 }
 
 type CreateAssetRow struct {
-	ID              int32     `json:"id"`
-	AssetID         string    `json:"asset_id"`
-	Name            string    `json:"name"`
-	Photo           string    `json:"photo"`
-	Datasheet       string    `json:"datasheet"`
-	Description     string    `json:"description"`
-	Status          string    `json:"status"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
-	TemplateID      *string   `json:"template_id"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	AssetID         uuid.UUID  `json:"asset_id"`
+	DisplayID       string     `json:"display_id"`
+	Name            string     `json:"name"`
+	Photo           string     `json:"photo"`
+	Datasheet       string     `json:"datasheet"`
+	Description     string     `json:"description"`
+	Status          string     `json:"status"`
+	Location        string     `json:"location"`
+	AssignedProject string     `json:"assigned_project"`
+	TemplateID      *uuid.UUID `json:"template_id"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (CreateAssetRow, error) {
@@ -86,8 +89,8 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Creat
 	)
 	var i CreateAssetRow
 	err := row.Scan(
-		&i.ID,
 		&i.AssetID,
+		&i.DisplayID,
 		&i.Name,
 		&i.Photo,
 		&i.Datasheet,
@@ -104,6 +107,7 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Creat
 
 const createAssetFromTemplate = `-- name: CreateAssetFromTemplate :one
 INSERT INTO assets (
+    display_id,
     name,
     photo,
     datasheet,
@@ -112,11 +116,11 @@ INSERT INTO assets (
     location,
     assigned_project,
     template_id,
-    template_ref_id,
     created_at,
     updated_at
 )
 VALUES (
+    next_display_id('asset_display_id_seq'),
     $1,
     $2,
     $3,
@@ -125,13 +129,12 @@ VALUES (
     $6,
     $7,
     $8,
-    (SELECT id FROM asset_templates WHERE template_id = $8),
     NOW(),
     NOW()
 )
 RETURNING
-    id,
     asset_id,
+    display_id,
     name,
     photo,
     datasheet,
@@ -145,29 +148,29 @@ RETURNING
 `
 
 type CreateAssetFromTemplateParams struct {
-	Name            string  `json:"name"`
-	Photo           string  `json:"photo"`
-	Datasheet       string  `json:"datasheet"`
-	Description     string  `json:"description"`
-	Status          string  `json:"status"`
-	Location        string  `json:"location"`
-	AssignedProject string  `json:"assigned_project"`
-	TemplateID      *string `json:"template_id"`
+	Name            string     `json:"name"`
+	Photo           string     `json:"photo"`
+	Datasheet       string     `json:"datasheet"`
+	Description     string     `json:"description"`
+	Status          string     `json:"status"`
+	Location        string     `json:"location"`
+	AssignedProject string     `json:"assigned_project"`
+	TemplateID      *uuid.UUID `json:"template_id"`
 }
 
 type CreateAssetFromTemplateRow struct {
-	ID              int32     `json:"id"`
-	AssetID         string    `json:"asset_id"`
-	Name            string    `json:"name"`
-	Photo           string    `json:"photo"`
-	Datasheet       string    `json:"datasheet"`
-	Description     string    `json:"description"`
-	Status          string    `json:"status"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
-	TemplateID      *string   `json:"template_id"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	AssetID         uuid.UUID  `json:"asset_id"`
+	DisplayID       string     `json:"display_id"`
+	Name            string     `json:"name"`
+	Photo           string     `json:"photo"`
+	Datasheet       string     `json:"datasheet"`
+	Description     string     `json:"description"`
+	Status          string     `json:"status"`
+	Location        string     `json:"location"`
+	AssignedProject string     `json:"assigned_project"`
+	TemplateID      *uuid.UUID `json:"template_id"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) CreateAssetFromTemplate(ctx context.Context, arg CreateAssetFromTemplateParams) (CreateAssetFromTemplateRow, error) {
@@ -183,8 +186,8 @@ func (q *Queries) CreateAssetFromTemplate(ctx context.Context, arg CreateAssetFr
 	)
 	var i CreateAssetFromTemplateRow
 	err := row.Scan(
-		&i.ID,
 		&i.AssetID,
+		&i.DisplayID,
 		&i.Name,
 		&i.Photo,
 		&i.Datasheet,
@@ -203,7 +206,7 @@ const deleteAsset = `-- name: DeleteAsset :execrows
 DELETE FROM assets WHERE asset_id = $1
 `
 
-func (q *Queries) DeleteAsset(ctx context.Context, assetID string) (int64, error) {
+func (q *Queries) DeleteAsset(ctx context.Context, assetID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteAsset, assetID)
 	if err != nil {
 		return 0, err
@@ -213,8 +216,8 @@ func (q *Queries) DeleteAsset(ctx context.Context, assetID string) (int64, error
 
 const getAllAssetsPaginated = `-- name: GetAllAssetsPaginated :many
 SELECT
-    id,
     asset_id,
+    display_id,
     name,
     photo,
     datasheet,
@@ -236,18 +239,18 @@ type GetAllAssetsPaginatedParams struct {
 }
 
 type GetAllAssetsPaginatedRow struct {
-	ID              int32     `json:"id"`
-	AssetID         string    `json:"asset_id"`
-	Name            string    `json:"name"`
-	Photo           string    `json:"photo"`
-	Datasheet       string    `json:"datasheet"`
-	Description     string    `json:"description"`
-	Status          string    `json:"status"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
-	TemplateID      *string   `json:"template_id"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	AssetID         uuid.UUID  `json:"asset_id"`
+	DisplayID       string     `json:"display_id"`
+	Name            string     `json:"name"`
+	Photo           string     `json:"photo"`
+	Datasheet       string     `json:"datasheet"`
+	Description     string     `json:"description"`
+	Status          string     `json:"status"`
+	Location        string     `json:"location"`
+	AssignedProject string     `json:"assigned_project"`
+	TemplateID      *uuid.UUID `json:"template_id"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetAllAssetsPaginated(ctx context.Context, arg GetAllAssetsPaginatedParams) ([]GetAllAssetsPaginatedRow, error) {
@@ -260,8 +263,8 @@ func (q *Queries) GetAllAssetsPaginated(ctx context.Context, arg GetAllAssetsPag
 	for rows.Next() {
 		var i GetAllAssetsPaginatedRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.AssetID,
+			&i.DisplayID,
 			&i.Name,
 			&i.Photo,
 			&i.Datasheet,
@@ -285,8 +288,8 @@ func (q *Queries) GetAllAssetsPaginated(ctx context.Context, arg GetAllAssetsPag
 
 const getAssetByID = `-- name: GetAssetByID :one
 SELECT
-    id,
     asset_id,
+    display_id,
     name,
     photo,
     datasheet,
@@ -303,26 +306,26 @@ LIMIT 1
 `
 
 type GetAssetByIDRow struct {
-	ID              int32     `json:"id"`
-	AssetID         string    `json:"asset_id"`
-	Name            string    `json:"name"`
-	Photo           string    `json:"photo"`
-	Datasheet       string    `json:"datasheet"`
-	Description     string    `json:"description"`
-	Status          string    `json:"status"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
-	TemplateID      *string   `json:"template_id"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	AssetID         uuid.UUID  `json:"asset_id"`
+	DisplayID       string     `json:"display_id"`
+	Name            string     `json:"name"`
+	Photo           string     `json:"photo"`
+	Datasheet       string     `json:"datasheet"`
+	Description     string     `json:"description"`
+	Status          string     `json:"status"`
+	Location        string     `json:"location"`
+	AssignedProject string     `json:"assigned_project"`
+	TemplateID      *uuid.UUID `json:"template_id"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
-func (q *Queries) GetAssetByID(ctx context.Context, assetID string) (GetAssetByIDRow, error) {
+func (q *Queries) GetAssetByID(ctx context.Context, assetID uuid.UUID) (GetAssetByIDRow, error) {
 	row := q.db.QueryRow(ctx, getAssetByID, assetID)
 	var i GetAssetByIDRow
 	err := row.Scan(
-		&i.ID,
 		&i.AssetID,
+		&i.DisplayID,
 		&i.Name,
 		&i.Photo,
 		&i.Datasheet,
@@ -345,14 +348,14 @@ WHERE asset_id = $8
 `
 
 type UpdateAssetParams struct {
-	Name            string `json:"name"`
-	Photo           string `json:"photo"`
-	Datasheet       string `json:"datasheet"`
-	Description     string `json:"description"`
-	Status          string `json:"status"`
-	Location        string `json:"location"`
-	AssignedProject string `json:"assigned_project"`
-	AssetID         string `json:"asset_id"`
+	Name            string    `json:"name"`
+	Photo           string    `json:"photo"`
+	Datasheet       string    `json:"datasheet"`
+	Description     string    `json:"description"`
+	Status          string    `json:"status"`
+	Location        string    `json:"location"`
+	AssignedProject string    `json:"assigned_project"`
+	AssetID         uuid.UUID `json:"asset_id"`
 }
 
 func (q *Queries) UpdateAsset(ctx context.Context, arg UpdateAssetParams) (int64, error) {

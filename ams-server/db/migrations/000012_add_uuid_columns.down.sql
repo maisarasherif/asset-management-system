@@ -1,0 +1,25 @@
+ALTER TABLE certificate_upload_audit DROP CONSTRAINT IF EXISTS certificate_upload_audit_uuid_unique;
+ALTER TABLE scheduled_tasks DROP CONSTRAINT IF EXISTS scheduled_tasks_uuid_unique;
+ALTER TABLE certificates DROP CONSTRAINT IF EXISTS certificates_uuid_unique;
+ALTER TABLE components DROP CONSTRAINT IF EXISTS components_uuid_unique;
+ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_uuid_unique;
+ALTER TABLE template_component_tests DROP CONSTRAINT IF EXISTS template_component_tests_uuid_unique;
+ALTER TABLE template_components DROP CONSTRAINT IF EXISTS template_components_uuid_unique;
+ALTER TABLE asset_templates DROP CONSTRAINT IF EXISTS asset_templates_uuid_unique;
+ALTER TABLE test_types DROP CONSTRAINT IF EXISTS test_types_uuid_unique;
+ALTER TABLE categories DROP CONSTRAINT IF EXISTS categories_uuid_unique;
+ALTER TABLE main_categories DROP CONSTRAINT IF EXISTS main_categories_uuid_unique;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_uuid_unique;
+
+ALTER TABLE certificate_upload_audit DROP COLUMN IF EXISTS uuid;
+ALTER TABLE scheduled_tasks DROP COLUMN IF EXISTS uuid;
+ALTER TABLE certificates DROP COLUMN IF EXISTS uuid;
+ALTER TABLE components DROP COLUMN IF EXISTS uuid;
+ALTER TABLE assets DROP COLUMN IF EXISTS uuid;
+ALTER TABLE template_component_tests DROP COLUMN IF EXISTS uuid;
+ALTER TABLE template_components DROP COLUMN IF EXISTS uuid;
+ALTER TABLE asset_templates DROP COLUMN IF EXISTS uuid;
+ALTER TABLE test_types DROP COLUMN IF EXISTS uuid;
+ALTER TABLE categories DROP COLUMN IF EXISTS uuid;
+ALTER TABLE main_categories DROP COLUMN IF EXISTS uuid;
+ALTER TABLE users DROP COLUMN IF EXISTS uuid;

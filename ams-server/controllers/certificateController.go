@@ -61,7 +61,10 @@ func GetCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		certificateID := c.Param("certificate_id")
+		certificateID, ok := utils.ParseUUIDParam(c, "certificate_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -101,7 +104,10 @@ func GetTestTypes(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetCertificatesByComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		componentID := c.Param("component_id")
+		componentID, ok := utils.ParseUUIDParam(c, "component_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -121,8 +127,8 @@ func GetCertificatesByComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		certificates, err := queries.GetCertificatesByComponentIDPaginated(ctx, db.GetCertificatesByComponentIDPaginatedParams{
 			ComponentID: componentID,
-			Limit:       limit,
-			Offset:      offset,
+			PageLimit:   limit,
+			PageOffset:  offset,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
@@ -164,13 +170,25 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		_, err := queries.GetComponentByID(ctx, input.ComponentID)
+		componentID, err := utils.ParseUUID(input.ComponentID, "component_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		testID, err := utils.ParseUUID(input.TestID, "test_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err = queries.GetComponentByID(ctx, componentID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
 			return
 		}
 
-		_, err = queries.GetTestTypeByID(ctx, input.TestID)
+		_, err = queries.GetTestTypeByID(ctx, testID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
@@ -185,14 +203,14 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 		expiryDate := input.ExpiryDate
 
 		certificate, err := queries.CreateCertificate(ctx, db.CreateCertificateParams{
-			ComponentID:      input.ComponentID,
+			ComponentID:      componentID,
 			CertificateName:  input.CertificateName,
 			IssueDate:        &issueDate,
 			ExpiryDate:       &expiryDate,
 			CertificateFile:  input.CertificateFile,
 			IssuingAuthority: input.IssuingAuthority,
 			Status:           computeCertificateStatus(input.ExpiryDate),
-			TestID:           input.TestID,
+			TestID:           testID,
 			ImcaRef:          input.IMCARef,
 			ImcaD018:         input.IMCAD018,
 			MaintenanceNotes: input.MaintenanceNotes,
@@ -209,10 +227,10 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		userID, _ := utils.GetUserIdFromContext(c)
 		logger.Log.Info().
-			Str("certificate_id", certificate.CertificateID).
+			Str("certificate_id", certificate.CertificateID.String()).
 			Str("certificate_name", certificate.CertificateName).
-			Str("component_id", certificate.ComponentID).
-			Str("test_id", certificate.TestID).
+			Str("component_id", certificate.ComponentID.String()).
+			Str("test_id", certificate.TestID.String()).
 			Str("status", certificate.Status).
 			Str("expiry_date", expiryStr).
 			Str("created_by", userID).
@@ -224,7 +242,10 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		certificateID := c.Param("certificate_id")
+		certificateID, ok := utils.ParseUUIDParam(c, "certificate_id")
+		if !ok {
+			return
+		}
 
 		var input dto.CertificateInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -252,13 +273,25 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		_, err = queries.GetComponentByID(ctx, input.ComponentID)
+		componentID, err := utils.ParseUUID(input.ComponentID, "component_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		testID, err := utils.ParseUUID(input.TestID, "test_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err = queries.GetComponentByID(ctx, componentID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
 			return
 		}
 
-		_, err = queries.GetTestTypeByID(ctx, input.TestID)
+		_, err = queries.GetTestTypeByID(ctx, testID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
@@ -273,14 +306,14 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 		newStatus := computeCertificateStatus(input.ExpiryDate)
 
 		rows, err := queries.UpdateCertificate(ctx, db.UpdateCertificateParams{
-			ComponentID:      input.ComponentID,
+			ComponentID:      componentID,
 			CertificateName:  input.CertificateName,
 			IssueDate:        &issueDate,
 			ExpiryDate:       &expiryDate,
 			CertificateFile:  input.CertificateFile,
 			IssuingAuthority: input.IssuingAuthority,
 			Status:           newStatus,
-			TestID:           input.TestID,
+			TestID:           testID,
 			ImcaRef:          input.IMCARef,
 			ImcaD018:         input.IMCAD018,
 			MaintenanceNotes: input.MaintenanceNotes,
@@ -297,7 +330,7 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		userID, _ := utils.GetUserIdFromContext(c)
 		logger.Log.Info().
-			Str("certificate_id", certificateID).
+			Str("certificate_id", certificateID.String()).
 			Str("certificate_name", existing.CertificateName).
 			Str("old_status", existing.Status).
 			Str("new_status", newStatus).
@@ -310,7 +343,10 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		certificateID := c.Param("certificate_id")
+		certificateID, ok := utils.ParseUUIDParam(c, "certificate_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -335,9 +371,9 @@ func DeleteCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		userID, _ := utils.GetUserIdFromContext(c)
 		logger.Log.Warn().
-			Str("certificate_id", certificateID).
+			Str("certificate_id", certificateID.String()).
 			Str("certificate_name", existing.CertificateName).
-			Str("component_id", existing.ComponentID).
+			Str("component_id", existing.ComponentID.String()).
 			Str("deleted_by", userID).
 			Msg("certificate deleted")
 
@@ -372,7 +408,10 @@ func GetExpiringCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		certificateID := c.Param("certificate_id")
+		certificateID, ok := utils.ParseUUIDParam(c, "certificate_id")
+		if !ok {
+			return
+		}
 
 		var input dto.PatchCertificateInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -407,7 +446,12 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 		maintenanceNotes := existing.MaintenanceNotes
 
 		if input.ComponentID != nil {
-			componentID = *input.ComponentID
+			parsedComponentID, err := utils.ParseUUID(*input.ComponentID, "component_id")
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			componentID = parsedComponentID
 		}
 		if input.CertificateName != nil {
 			certificateName = *input.CertificateName
@@ -425,7 +469,12 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			issuingAuthority = *input.IssuingAuthority
 		}
 		if input.TestID != nil {
-			testID = *input.TestID
+			parsedTestID, err := utils.ParseUUID(*input.TestID, "test_id")
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			testID = parsedTestID
 		}
 		if input.IMCARef != nil {
 			imcaRef = *input.IMCARef
@@ -492,7 +541,7 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		userID, _ := utils.GetUserIdFromContext(c)
 		logger.Log.Info().
-			Str("certificate_id", certificateID).
+			Str("certificate_id", certificateID.String()).
 			Str("certificate_name", existing.CertificateName).
 			Str("old_status", existing.Status).
 			Str("new_status", newStatus).
@@ -505,7 +554,10 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		certificateID := c.Param("certificate_id")
+		certificateID, ok := utils.ParseUUIDParam(c, "certificate_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 		defer cancel()
@@ -547,7 +599,7 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		key, err := utils.UploadFile(ctx, file, header, certificateID)
+		key, err := utils.UploadFile(ctx, file, header, certificateID.String())
 		if err != nil {
 			logger.Log.Error().Err(err).Msg("failed to upload certificate file")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload file"})
@@ -585,7 +637,7 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		logger.Log.Info().
-			Str("certificate_id", certificateID).
+			Str("certificate_id", certificateID.String()).
 			Str("file_key", key).
 			Str("uploaded_by", userID).
 			Msg("certificate file uploaded")
@@ -596,7 +648,10 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetCertificateUploadAudit(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		certificateID := c.Param("certificate_id")
+		certificateID, ok := utils.ParseUUIDParam(c, "certificate_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -606,8 +661,8 @@ func GetCertificateUploadAudit(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		auditEntries, err := queries.GetCertificateUploadAuditByCertificateIDPaginated(ctx, db.GetCertificateUploadAuditByCertificateIDPaginatedParams{
 			CertificateID: certificateID,
-			Limit:         limit,
-			Offset:        offset,
+			PageLimit:     limit,
+			PageOffset:    offset,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificate upload audit"})
@@ -629,7 +684,10 @@ func GetCertificateUploadAudit(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		certificateID := c.Param("certificate_id")
+		certificateID, ok := utils.ParseUUIDParam(c, "certificate_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -739,11 +797,11 @@ func GetCertificatesReportPDF(pool *pgxpool.Pool) gin.HandlerFunc {
 
 			reportRows = append(reportRows, utils.CertificateReportRow{
 				CertificateName:    certificate.CertificateName,
-				CertificateID:      certificate.CertificateID,
+				CertificateID:      certificate.CertificateID.String(),
 				ComponentName:      certificate.ComponentName,
-				ComponentID:        certificate.ComponentID,
+				ComponentID:        certificate.ComponentID.String(),
 				AssetName:          certificate.AssetName,
-				AssetID:            certificate.AssetID,
+				AssetID:            certificate.AssetID.String(),
 				LastInspectionDate: issueDateStr,
 				NextInspectionDate: expiryDateStr,
 				Status:             certificate.Status,

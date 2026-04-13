@@ -1,0 +1,53 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+ALTER TABLE users ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE main_categories ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE categories ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE test_types ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE asset_templates ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE template_components ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE template_component_tests ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE assets ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE components ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE certificates ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE scheduled_tasks ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+ALTER TABLE certificate_upload_audit ADD COLUMN uuid UUID DEFAULT gen_random_uuid();
+
+UPDATE users SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE main_categories SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE categories SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE test_types SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE asset_templates SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE template_components SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE template_component_tests SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE assets SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE components SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE certificates SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE scheduled_tasks SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+UPDATE certificate_upload_audit SET uuid = gen_random_uuid() WHERE uuid IS NULL;
+
+ALTER TABLE users ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE main_categories ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE categories ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE test_types ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE asset_templates ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE template_components ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE template_component_tests ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE assets ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE components ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE certificates ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE scheduled_tasks ALTER COLUMN uuid SET NOT NULL;
+ALTER TABLE certificate_upload_audit ALTER COLUMN uuid SET NOT NULL;
+
+ALTER TABLE users ADD CONSTRAINT users_uuid_unique UNIQUE (uuid);
+ALTER TABLE main_categories ADD CONSTRAINT main_categories_uuid_unique UNIQUE (uuid);
+ALTER TABLE categories ADD CONSTRAINT categories_uuid_unique UNIQUE (uuid);
+ALTER TABLE test_types ADD CONSTRAINT test_types_uuid_unique UNIQUE (uuid);
+ALTER TABLE asset_templates ADD CONSTRAINT asset_templates_uuid_unique UNIQUE (uuid);
+ALTER TABLE template_components ADD CONSTRAINT template_components_uuid_unique UNIQUE (uuid);
+ALTER TABLE template_component_tests ADD CONSTRAINT template_component_tests_uuid_unique UNIQUE (uuid);
+ALTER TABLE assets ADD CONSTRAINT assets_uuid_unique UNIQUE (uuid);
+ALTER TABLE components ADD CONSTRAINT components_uuid_unique UNIQUE (uuid);
+ALTER TABLE certificates ADD CONSTRAINT certificates_uuid_unique UNIQUE (uuid);
+ALTER TABLE scheduled_tasks ADD CONSTRAINT scheduled_tasks_uuid_unique UNIQUE (uuid);
+ALTER TABLE certificate_upload_audit ADD CONSTRAINT certificate_upload_audit_uuid_unique UNIQUE (uuid);

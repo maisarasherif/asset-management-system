@@ -8,13 +8,17 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const countTemplateComponentsByCategoryID = `-- name: CountTemplateComponentsByCategoryID :one
-SELECT COUNT(*) FROM template_components WHERE category_id = $1
+SELECT COUNT(*)
+FROM template_components
+WHERE category_id = $1
 `
 
-func (q *Queries) CountTemplateComponentsByCategoryID(ctx context.Context, categoryID string) (int64, error) {
+func (q *Queries) CountTemplateComponentsByCategoryID(ctx context.Context, categoryID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countTemplateComponentsByCategoryID, categoryID)
 	var count int64
 	err := row.Scan(&count)
@@ -22,10 +26,12 @@ func (q *Queries) CountTemplateComponentsByCategoryID(ctx context.Context, categ
 }
 
 const countTemplateComponentsByTemplateID = `-- name: CountTemplateComponentsByTemplateID :one
-SELECT COUNT(*) FROM template_components WHERE template_id = $1
+SELECT COUNT(*)
+FROM template_components
+WHERE template_id = $1
 `
 
-func (q *Queries) CountTemplateComponentsByTemplateID(ctx context.Context, templateID string) (int64, error) {
+func (q *Queries) CountTemplateComponentsByTemplateID(ctx context.Context, templateID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countTemplateComponentsByTemplateID, templateID)
 	var count int64
 	err := row.Scan(&count)
@@ -34,21 +40,33 @@ func (q *Queries) CountTemplateComponentsByTemplateID(ctx context.Context, templ
 
 const createTemplateComponent = `-- name: CreateTemplateComponent :one
 INSERT INTO template_components (
-    template_id, template_ref_id, category_id, category_ref_id, position, name, description,
+    display_id,
+    template_id, category_id, position, name, description,
     serial_number, manufacturer, location, assigned_project, equipment_type,
     structure, model, class, class_code, safety_critical, created_at
 )
 VALUES (
+    next_display_id('template_component_display_id_seq'),
     $1,
-    (SELECT id FROM asset_templates WHERE template_id = $1),
     $2,
-    (SELECT id FROM categories WHERE category_id = $2),
     COALESCE((SELECT MAX(position) + 1 FROM template_components WHERE template_id = $1), 1),
-    $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW()
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    $9,
+    $10,
+    $11,
+    $12,
+    $13,
+    $14,
+    NOW()
 )
 RETURNING
-    id,
     template_component_id,
+    display_id,
     template_id,
     category_id,
     position,
@@ -68,27 +86,27 @@ RETURNING
 `
 
 type CreateTemplateComponentParams struct {
-	TemplateID      string `json:"template_id"`
-	CategoryID      string `json:"category_id"`
-	Name            string `json:"name"`
-	Description     string `json:"description"`
-	SerialNumber    string `json:"serial_number"`
-	Manufacturer    string `json:"manufacturer"`
-	Location        string `json:"location"`
-	AssignedProject string `json:"assigned_project"`
-	EquipmentType   string `json:"equipment_type"`
-	Structure       string `json:"structure"`
-	Model           string `json:"model"`
-	Class           string `json:"class"`
-	ClassCode       string `json:"class_code"`
-	SafetyCritical  string `json:"safety_critical"`
+	TemplateID      uuid.UUID `json:"template_id"`
+	CategoryID      uuid.UUID `json:"category_id"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	SerialNumber    string    `json:"serial_number"`
+	Manufacturer    string    `json:"manufacturer"`
+	Location        string    `json:"location"`
+	AssignedProject string    `json:"assigned_project"`
+	EquipmentType   string    `json:"equipment_type"`
+	Structure       string    `json:"structure"`
+	Model           string    `json:"model"`
+	Class           string    `json:"class"`
+	ClassCode       string    `json:"class_code"`
+	SafetyCritical  string    `json:"safety_critical"`
 }
 
 type CreateTemplateComponentRow struct {
-	ID                  int32     `json:"id"`
-	TemplateComponentID string    `json:"template_component_id"`
-	TemplateID          string    `json:"template_id"`
-	CategoryID          string    `json:"category_id"`
+	TemplateComponentID uuid.UUID `json:"template_component_id"`
+	DisplayID           string    `json:"display_id"`
+	TemplateID          uuid.UUID `json:"template_id"`
+	CategoryID          uuid.UUID `json:"category_id"`
 	Position            int32     `json:"position"`
 	Name                string    `json:"name"`
 	Description         string    `json:"description"`
@@ -124,8 +142,8 @@ func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplat
 	)
 	var i CreateTemplateComponentRow
 	err := row.Scan(
-		&i.ID,
 		&i.TemplateComponentID,
+		&i.DisplayID,
 		&i.TemplateID,
 		&i.CategoryID,
 		&i.Position,
@@ -150,7 +168,7 @@ const deleteTemplateComponent = `-- name: DeleteTemplateComponent :execrows
 DELETE FROM template_components WHERE template_component_id = $1
 `
 
-func (q *Queries) DeleteTemplateComponent(ctx context.Context, templateComponentID string) (int64, error) {
+func (q *Queries) DeleteTemplateComponent(ctx context.Context, templateComponentID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteTemplateComponent, templateComponentID)
 	if err != nil {
 		return 0, err
@@ -159,10 +177,11 @@ func (q *Queries) DeleteTemplateComponent(ctx context.Context, templateComponent
 }
 
 const deleteTemplateComponentsByTemplateID = `-- name: DeleteTemplateComponentsByTemplateID :execrows
-DELETE FROM template_components WHERE template_id = $1
+DELETE FROM template_components
+WHERE template_id = $1
 `
 
-func (q *Queries) DeleteTemplateComponentsByTemplateID(ctx context.Context, templateID string) (int64, error) {
+func (q *Queries) DeleteTemplateComponentsByTemplateID(ctx context.Context, templateID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteTemplateComponentsByTemplateID, templateID)
 	if err != nil {
 		return 0, err
@@ -172,8 +191,8 @@ func (q *Queries) DeleteTemplateComponentsByTemplateID(ctx context.Context, temp
 
 const getTemplateComponentByID = `-- name: GetTemplateComponentByID :one
 SELECT
-    id,
     template_component_id,
+    display_id,
     template_id,
     category_id,
     position,
@@ -191,14 +210,15 @@ SELECT
     location,
     assigned_project
 FROM template_components
-WHERE template_component_id = $1 LIMIT 1
+WHERE template_component_id = $1
+LIMIT 1
 `
 
 type GetTemplateComponentByIDRow struct {
-	ID                  int32     `json:"id"`
-	TemplateComponentID string    `json:"template_component_id"`
-	TemplateID          string    `json:"template_id"`
-	CategoryID          string    `json:"category_id"`
+	TemplateComponentID uuid.UUID `json:"template_component_id"`
+	DisplayID           string    `json:"display_id"`
+	TemplateID          uuid.UUID `json:"template_id"`
+	CategoryID          uuid.UUID `json:"category_id"`
 	Position            int32     `json:"position"`
 	Name                string    `json:"name"`
 	Description         string    `json:"description"`
@@ -215,12 +235,12 @@ type GetTemplateComponentByIDRow struct {
 	AssignedProject     string    `json:"assigned_project"`
 }
 
-func (q *Queries) GetTemplateComponentByID(ctx context.Context, templateComponentID string) (GetTemplateComponentByIDRow, error) {
+func (q *Queries) GetTemplateComponentByID(ctx context.Context, templateComponentID uuid.UUID) (GetTemplateComponentByIDRow, error) {
 	row := q.db.QueryRow(ctx, getTemplateComponentByID, templateComponentID)
 	var i GetTemplateComponentByIDRow
 	err := row.Scan(
-		&i.ID,
 		&i.TemplateComponentID,
+		&i.DisplayID,
 		&i.TemplateID,
 		&i.CategoryID,
 		&i.Position,
@@ -243,8 +263,8 @@ func (q *Queries) GetTemplateComponentByID(ctx context.Context, templateComponen
 
 const getTemplateComponentsByTemplateID = `-- name: GetTemplateComponentsByTemplateID :many
 SELECT
-    id,
     template_component_id,
+    display_id,
     template_id,
     category_id,
     position,
@@ -267,10 +287,10 @@ ORDER BY position ASC, created_at ASC
 `
 
 type GetTemplateComponentsByTemplateIDRow struct {
-	ID                  int32     `json:"id"`
-	TemplateComponentID string    `json:"template_component_id"`
-	TemplateID          string    `json:"template_id"`
-	CategoryID          string    `json:"category_id"`
+	TemplateComponentID uuid.UUID `json:"template_component_id"`
+	DisplayID           string    `json:"display_id"`
+	TemplateID          uuid.UUID `json:"template_id"`
+	CategoryID          uuid.UUID `json:"category_id"`
 	Position            int32     `json:"position"`
 	Name                string    `json:"name"`
 	Description         string    `json:"description"`
@@ -287,7 +307,7 @@ type GetTemplateComponentsByTemplateIDRow struct {
 	AssignedProject     string    `json:"assigned_project"`
 }
 
-func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templateID string) ([]GetTemplateComponentsByTemplateIDRow, error) {
+func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templateID uuid.UUID) ([]GetTemplateComponentsByTemplateIDRow, error) {
 	rows, err := q.db.Query(ctx, getTemplateComponentsByTemplateID, templateID)
 	if err != nil {
 		return nil, err
@@ -297,8 +317,8 @@ func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templat
 	for rows.Next() {
 		var i GetTemplateComponentsByTemplateIDRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.TemplateComponentID,
+			&i.DisplayID,
 			&i.TemplateID,
 			&i.CategoryID,
 			&i.Position,
@@ -329,28 +349,36 @@ func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templat
 const updateTemplateComponent = `-- name: UpdateTemplateComponent :execrows
 UPDATE template_components
 SET category_id = $1,
-    category_ref_id = (SELECT id FROM categories WHERE category_id = $1),
-    name = $2, description = $3, serial_number = $4,
-    manufacturer = $5, location = $6, assigned_project = $7, equipment_type = $8, structure = $9, model = $10,
-    class = $11, class_code = $12, safety_critical = $13
+    name = $2,
+    description = $3,
+    serial_number = $4,
+    manufacturer = $5,
+    location = $6,
+    assigned_project = $7,
+    equipment_type = $8,
+    structure = $9,
+    model = $10,
+    class = $11,
+    class_code = $12,
+    safety_critical = $13
 WHERE template_component_id = $14
 `
 
 type UpdateTemplateComponentParams struct {
-	CategoryID          string `json:"category_id"`
-	Name                string `json:"name"`
-	Description         string `json:"description"`
-	SerialNumber        string `json:"serial_number"`
-	Manufacturer        string `json:"manufacturer"`
-	Location            string `json:"location"`
-	AssignedProject     string `json:"assigned_project"`
-	EquipmentType       string `json:"equipment_type"`
-	Structure           string `json:"structure"`
-	Model               string `json:"model"`
-	Class               string `json:"class"`
-	ClassCode           string `json:"class_code"`
-	SafetyCritical      string `json:"safety_critical"`
-	TemplateComponentID string `json:"template_component_id"`
+	CategoryID          uuid.UUID `json:"category_id"`
+	Name                string    `json:"name"`
+	Description         string    `json:"description"`
+	SerialNumber        string    `json:"serial_number"`
+	Manufacturer        string    `json:"manufacturer"`
+	Location            string    `json:"location"`
+	AssignedProject     string    `json:"assigned_project"`
+	EquipmentType       string    `json:"equipment_type"`
+	Structure           string    `json:"structure"`
+	Model               string    `json:"model"`
+	Class               string    `json:"class"`
+	ClassCode           string    `json:"class_code"`
+	SafetyCritical      string    `json:"safety_critical"`
+	TemplateComponentID uuid.UUID `json:"template_component_id"`
 }
 
 func (q *Queries) UpdateTemplateComponent(ctx context.Context, arg UpdateTemplateComponentParams) (int64, error) {

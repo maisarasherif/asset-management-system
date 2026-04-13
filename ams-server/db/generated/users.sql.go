@@ -8,6 +8,8 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const countUsers = `-- name: CountUsers :one
@@ -37,8 +39,8 @@ SELECT COUNT(*) FROM users WHERE email = $1 AND user_id != $2
 `
 
 type CountUsersByEmailExcludingParams struct {
-	Email  string `json:"email"`
-	UserID string `json:"user_id"`
+	Email  string    `json:"email"`
+	UserID uuid.UUID `json:"user_id"`
 }
 
 func (q *Queries) CountUsersByEmailExcluding(ctx context.Context, arg CountUsersByEmailExcludingParams) (int64, error) {
@@ -49,9 +51,20 @@ func (q *Queries) CountUsersByEmailExcluding(ctx context.Context, arg CountUsers
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (first_name, last_name, email, password, role, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-RETURNING id, user_id, first_name, last_name, email, password, role, token, refresh_token, created_at, updated_at
+INSERT INTO users (display_id, first_name, last_name, email, password, role, created_at, updated_at)
+VALUES (next_display_id('user_display_id_seq'), $1, $2, $3, $4, $5, NOW(), NOW())
+RETURNING
+    user_id,
+    display_id,
+    first_name,
+    last_name,
+    email,
+    password,
+    role,
+    token,
+    refresh_token,
+    created_at,
+    updated_at
 `
 
 type CreateUserParams struct {
@@ -62,7 +75,21 @@ type CreateUserParams struct {
 	Role      string `json:"role"`
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+type CreateUserRow struct {
+	UserID       uuid.UUID `json:"user_id"`
+	DisplayID    string    `json:"display_id"`
+	FirstName    string    `json:"first_name"`
+	LastName     string    `json:"last_name"`
+	Email        string    `json:"email"`
+	Password     string    `json:"password"`
+	Role         string    `json:"role"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
 	row := q.db.QueryRow(ctx, createUser,
 		arg.FirstName,
 		arg.LastName,
@@ -70,10 +97,10 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.Password,
 		arg.Role,
 	)
-	var i User
+	var i CreateUserRow
 	err := row.Scan(
-		&i.ID,
 		&i.UserID,
+		&i.DisplayID,
 		&i.FirstName,
 		&i.LastName,
 		&i.Email,
@@ -91,7 +118,7 @@ const deleteUser = `-- name: DeleteUser :execrows
 DELETE FROM users WHERE user_id = $1
 `
 
-func (q *Queries) DeleteUser(ctx context.Context, userID string) (int64, error) {
+func (q *Queries) DeleteUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteUser, userID)
 	if err != nil {
 		return 0, err
@@ -100,7 +127,15 @@ func (q *Queries) DeleteUser(ctx context.Context, userID string) (int64, error) 
 }
 
 const getAllUsersPaginated = `-- name: GetAllUsersPaginated :many
-SELECT user_id, first_name, last_name, email, role, created_at, updated_at
+SELECT
+    user_id,
+    display_id,
+    first_name,
+    last_name,
+    email,
+    role,
+    created_at,
+    updated_at
 FROM users
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -112,7 +147,8 @@ type GetAllUsersPaginatedParams struct {
 }
 
 type GetAllUsersPaginatedRow struct {
-	UserID    string    `json:"user_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	DisplayID string    `json:"display_id"`
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
 	Email     string    `json:"email"`
@@ -132,6 +168,7 @@ func (q *Queries) GetAllUsersPaginated(ctx context.Context, arg GetAllUsersPagin
 		var i GetAllUsersPaginatedRow
 		if err := rows.Scan(
 			&i.UserID,
+			&i.DisplayID,
 			&i.FirstName,
 			&i.LastName,
 			&i.Email,
@@ -150,15 +187,43 @@ func (q *Queries) GetAllUsersPaginated(ctx context.Context, arg GetAllUsersPagin
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, user_id, first_name, last_name, email, password, role, token, refresh_token, created_at, updated_at FROM users WHERE email = $1 LIMIT 1
+SELECT
+    user_id,
+    display_id,
+    first_name,
+    last_name,
+    email,
+    password,
+    role,
+    token,
+    refresh_token,
+    created_at,
+    updated_at
+FROM users
+WHERE email = $1
+LIMIT 1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+type GetUserByEmailRow struct {
+	UserID       uuid.UUID `json:"user_id"`
+	DisplayID    string    `json:"display_id"`
+	FirstName    string    `json:"first_name"`
+	LastName     string    `json:"last_name"`
+	Email        string    `json:"email"`
+	Password     string    `json:"password"`
+	Role         string    `json:"role"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
-	var i User
+	var i GetUserByEmailRow
 	err := row.Scan(
-		&i.ID,
 		&i.UserID,
+		&i.DisplayID,
 		&i.FirstName,
 		&i.LastName,
 		&i.Email,
@@ -173,12 +238,23 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT user_id, first_name, last_name, email, role, created_at, updated_at
-FROM users WHERE user_id = $1 LIMIT 1
+SELECT
+    user_id,
+    display_id,
+    first_name,
+    last_name,
+    email,
+    role,
+    created_at,
+    updated_at
+FROM users
+WHERE user_id = $1
+LIMIT 1
 `
 
 type GetUserByIDRow struct {
-	UserID    string    `json:"user_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	DisplayID string    `json:"display_id"`
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
 	Email     string    `json:"email"`
@@ -187,11 +263,12 @@ type GetUserByIDRow struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-func (q *Queries) GetUserByID(ctx context.Context, userID string) (GetUserByIDRow, error) {
+func (q *Queries) GetUserByID(ctx context.Context, userID uuid.UUID) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, userID)
 	var i GetUserByIDRow
 	err := row.Scan(
 		&i.UserID,
+		&i.DisplayID,
 		&i.FirstName,
 		&i.LastName,
 		&i.Email,
@@ -206,7 +283,7 @@ const getUserPasswordByID = `-- name: GetUserPasswordByID :one
 SELECT password FROM users WHERE user_id = $1 LIMIT 1
 `
 
-func (q *Queries) GetUserPasswordByID(ctx context.Context, userID string) (string, error) {
+func (q *Queries) GetUserPasswordByID(ctx context.Context, userID uuid.UUID) (string, error) {
 	row := q.db.QueryRow(ctx, getUserPasswordByID, userID)
 	var password string
 	err := row.Scan(&password)
@@ -220,11 +297,11 @@ WHERE user_id = $5
 `
 
 type UpdateUserParams struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Email     string `json:"email"`
-	Role      string `json:"role"`
-	UserID    string `json:"user_id"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	UserID    uuid.UUID `json:"user_id"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (int64, error) {
@@ -248,8 +325,8 @@ WHERE user_id = $2
 `
 
 type UpdateUserPasswordParams struct {
-	Password string `json:"password"`
-	UserID   string `json:"user_id"`
+	Password string    `json:"password"`
+	UserID   uuid.UUID `json:"user_id"`
 }
 
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error) {
@@ -266,9 +343,9 @@ WHERE user_id = $3
 `
 
 type UpdateUserTokensParams struct {
-	Token        string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
-	UserID       string `json:"user_id"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
+	UserID       uuid.UUID `json:"user_id"`
 }
 
 func (q *Queries) UpdateUserTokens(ctx context.Context, arg UpdateUserTokensParams) error {

@@ -77,10 +77,15 @@ func UpdateAllTokens(pool *pgxpool.Pool, userId, token, refreshToken string) err
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err := queries.UpdateUserTokens(ctx, db.UpdateUserTokensParams{
+	parsedUserID, err := ParseUUID(userId, "user_id")
+	if err != nil {
+		return err
+	}
+
+	err = queries.UpdateUserTokens(ctx, db.UpdateUserTokensParams{
 		Token:        token,
 		RefreshToken: refreshToken,
-		UserID:       userId,
+		UserID:       parsedUserID,
 	})
 	if err != nil {
 		return err

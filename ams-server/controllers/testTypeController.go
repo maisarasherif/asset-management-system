@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
 func AddTestType(pool *pgxpool.Pool) gin.HandlerFunc {
@@ -46,7 +47,10 @@ func AddTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		testID := c.Param("test_id")
+		testID, ok := utils.ParseUUIDParam(c, "test_id")
+		if !ok {
+			return
+		}
 
 		var input dto.TestTypeInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -84,7 +88,10 @@ func UpdateTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func PatchTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		testID := c.Param("test_id")
+		testID, ok := utils.ParseUUIDParam(c, "test_id")
+		if !ok {
+			return
+		}
 
 		var input dto.PatchTestTypeInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -146,7 +153,10 @@ func PatchTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		testID := c.Param("test_id")
+		testID, ok := utils.ParseUUIDParam(c, "test_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()

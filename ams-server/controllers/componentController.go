@@ -48,7 +48,10 @@ func GetComponents(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		componentID := c.Param("component_id")
+		componentID, ok := utils.ParseUUIDParam(c, "component_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -71,7 +74,10 @@ func GetComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetComponentsByAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		assetID := c.Param("asset_id")
+		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -91,9 +97,9 @@ func GetComponentsByAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		components, err := queries.GetComponentsByAssetIDPaginated(ctx, db.GetComponentsByAssetIDPaginatedParams{
-			AssetID: assetID,
-			Limit:   limit,
-			Offset:  offset,
+			AssetID:    assetID,
+			PageLimit:  limit,
+			PageOffset: offset,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch components"})
@@ -130,20 +136,32 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		_, err := queries.GetAssetByID(ctx, input.AssetID)
+		assetID, err := utils.ParseUUID(input.AssetID, "asset_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		categoryID, err := utils.ParseUUID(input.CategoryID, "category_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err = queries.GetAssetByID(ctx, assetID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
 			return
 		}
-		_, err = queries.GetCategoryByID(ctx, input.CategoryID)
+		_, err = queries.GetCategoryByID(ctx, categoryID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
 			return
 		}
 
 		component, err := queries.CreateComponent(ctx, db.CreateComponentParams{
-			AssetID:         input.AssetID,
-			CategoryID:      input.CategoryID,
+			AssetID:         assetID,
+			CategoryID:      categoryID,
 			Name:            input.Name,
 			SerialNumber:    input.SerialNumber,
 			Manufacturer:    input.Manufacturer,
@@ -168,7 +186,10 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		componentID := c.Param("component_id")
+		componentID, ok := utils.ParseUUIDParam(c, "component_id")
+		if !ok {
+			return
+		}
 
 		var input dto.ComponentInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -185,14 +206,20 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		_, err := queries.GetCategoryByID(ctx, input.CategoryID)
+		categoryID, err := utils.ParseUUID(input.CategoryID, "category_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err = queries.GetCategoryByID(ctx, categoryID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
 			return
 		}
 
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
-			CategoryID:      input.CategoryID,
+			CategoryID:      categoryID,
 			Name:            input.Name,
 			SerialNumber:    input.SerialNumber,
 			Manufacturer:    input.Manufacturer,
@@ -222,7 +249,10 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		componentID := c.Param("component_id")
+		componentID, ok := utils.ParseUUIDParam(c, "component_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -247,9 +277,9 @@ func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		userID, _ := utils.GetUserIdFromContext(c)
 		logger.Log.Warn().
-			Str("component_id", componentID).
+			Str("component_id", componentID.String()).
 			Str("component_name", existing.Name).
-			Str("asset_id", existing.AssetID).
+			Str("asset_id", existing.AssetID.String()).
 			Str("deleted_by", userID).
 			Msg("component deleted")
 
@@ -259,7 +289,10 @@ func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		componentID := c.Param("component_id")
+		componentID, ok := utils.ParseUUIDParam(c, "component_id")
+		if !ok {
+			return
+		}
 
 		var input dto.PatchComponentInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -297,7 +330,12 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		safetyCritical := existing.SafetyCritical
 
 		if input.CategoryID != nil {
-			categoryID = *input.CategoryID
+			parsedCategoryID, err := utils.ParseUUID(*input.CategoryID, "category_id")
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			categoryID = parsedCategoryID
 		}
 		if input.Name != nil {
 			name = *input.Name

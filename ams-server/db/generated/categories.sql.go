@@ -8,6 +8,8 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const countCategories = `-- name: CountCategories :one
@@ -22,10 +24,12 @@ func (q *Queries) CountCategories(ctx context.Context) (int64, error) {
 }
 
 const countCategoriesByMainCategoryIDPaginated = `-- name: CountCategoriesByMainCategoryIDPaginated :one
-SELECT COUNT(*) FROM categories WHERE main_category_id = $1
+SELECT COUNT(*)
+FROM categories
+WHERE main_category_id = $1
 `
 
-func (q *Queries) CountCategoriesByMainCategoryIDPaginated(ctx context.Context, mainCategoryID *string) (int64, error) {
+func (q *Queries) CountCategoriesByMainCategoryIDPaginated(ctx context.Context, mainCategoryID *uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countCategoriesByMainCategoryIDPaginated, mainCategoryID)
 	var count int64
 	err := row.Scan(&count)
@@ -33,11 +37,18 @@ func (q *Queries) CountCategoriesByMainCategoryIDPaginated(ctx context.Context, 
 }
 
 const createCategory = `-- name: CreateCategory :one
-INSERT INTO categories (main_category_id, main_category_ref_id, category_name, description, created_at, updated_at)
-VALUES ($1, (SELECT id FROM main_categories WHERE main_category_id = $1), $2, $3, NOW(), NOW())
+INSERT INTO categories (display_id, main_category_id, category_name, description, created_at, updated_at)
+VALUES (
+    next_display_id('category_display_id_seq'),
+    $1,
+    $2,
+    $3,
+    NOW(),
+    NOW()
+)
 RETURNING
-    id,
     category_id,
+    display_id,
     main_category_id,
     category_name,
     description,
@@ -46,27 +57,27 @@ RETURNING
 `
 
 type CreateCategoryParams struct {
-	MainCategoryID *string `json:"main_category_id"`
-	CategoryName   string  `json:"category_name"`
-	Description    string  `json:"description"`
+	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	CategoryName   string     `json:"category_name"`
+	Description    string     `json:"description"`
 }
 
 type CreateCategoryRow struct {
-	ID             int32     `json:"id"`
-	CategoryID     string    `json:"category_id"`
-	MainCategoryID *string   `json:"main_category_id"`
-	CategoryName   string    `json:"category_name"`
-	Description    string    `json:"description"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	CategoryID     uuid.UUID  `json:"category_id"`
+	DisplayID      string     `json:"display_id"`
+	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	CategoryName   string     `json:"category_name"`
+	Description    string     `json:"description"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) (CreateCategoryRow, error) {
 	row := q.db.QueryRow(ctx, createCategory, arg.MainCategoryID, arg.CategoryName, arg.Description)
 	var i CreateCategoryRow
 	err := row.Scan(
-		&i.ID,
 		&i.CategoryID,
+		&i.DisplayID,
 		&i.MainCategoryID,
 		&i.CategoryName,
 		&i.Description,
@@ -80,7 +91,7 @@ const deleteCategory = `-- name: DeleteCategory :execrows
 DELETE FROM categories WHERE category_id = $1
 `
 
-func (q *Queries) DeleteCategory(ctx context.Context, categoryID string) (int64, error) {
+func (q *Queries) DeleteCategory(ctx context.Context, categoryID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteCategory, categoryID)
 	if err != nil {
 		return 0, err
@@ -90,8 +101,8 @@ func (q *Queries) DeleteCategory(ctx context.Context, categoryID string) (int64,
 
 const getAllCategoriesPaginated = `-- name: GetAllCategoriesPaginated :many
 SELECT
-    id,
     category_id,
+    display_id,
     main_category_id,
     category_name,
     description,
@@ -108,13 +119,13 @@ type GetAllCategoriesPaginatedParams struct {
 }
 
 type GetAllCategoriesPaginatedRow struct {
-	ID             int32     `json:"id"`
-	CategoryID     string    `json:"category_id"`
-	MainCategoryID *string   `json:"main_category_id"`
-	CategoryName   string    `json:"category_name"`
-	Description    string    `json:"description"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	CategoryID     uuid.UUID  `json:"category_id"`
+	DisplayID      string     `json:"display_id"`
+	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	CategoryName   string     `json:"category_name"`
+	Description    string     `json:"description"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetAllCategoriesPaginated(ctx context.Context, arg GetAllCategoriesPaginatedParams) ([]GetAllCategoriesPaginatedRow, error) {
@@ -127,8 +138,8 @@ func (q *Queries) GetAllCategoriesPaginated(ctx context.Context, arg GetAllCateg
 	for rows.Next() {
 		var i GetAllCategoriesPaginatedRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.CategoryID,
+			&i.DisplayID,
 			&i.MainCategoryID,
 			&i.CategoryName,
 			&i.Description,
@@ -147,8 +158,8 @@ func (q *Queries) GetAllCategoriesPaginated(ctx context.Context, arg GetAllCateg
 
 const getCategoriesByMainCategoryIDPaginated = `-- name: GetCategoriesByMainCategoryIDPaginated :many
 SELECT
-    id,
     category_id,
+    display_id,
     main_category_id,
     category_name,
     description,
@@ -157,27 +168,27 @@ SELECT
 FROM categories
 WHERE main_category_id = $1
 ORDER BY created_at DESC
-LIMIT $2 OFFSET $3
+LIMIT $3 OFFSET $2
 `
 
 type GetCategoriesByMainCategoryIDPaginatedParams struct {
-	MainCategoryID *string `json:"main_category_id"`
-	Limit          int32   `json:"limit"`
-	Offset         int32   `json:"offset"`
+	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	PageOffset     int32      `json:"page_offset"`
+	PageLimit      int32      `json:"page_limit"`
 }
 
 type GetCategoriesByMainCategoryIDPaginatedRow struct {
-	ID             int32     `json:"id"`
-	CategoryID     string    `json:"category_id"`
-	MainCategoryID *string   `json:"main_category_id"`
-	CategoryName   string    `json:"category_name"`
-	Description    string    `json:"description"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	CategoryID     uuid.UUID  `json:"category_id"`
+	DisplayID      string     `json:"display_id"`
+	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	CategoryName   string     `json:"category_name"`
+	Description    string     `json:"description"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetCategoriesByMainCategoryIDPaginated(ctx context.Context, arg GetCategoriesByMainCategoryIDPaginatedParams) ([]GetCategoriesByMainCategoryIDPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getCategoriesByMainCategoryIDPaginated, arg.MainCategoryID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getCategoriesByMainCategoryIDPaginated, arg.MainCategoryID, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -186,8 +197,8 @@ func (q *Queries) GetCategoriesByMainCategoryIDPaginated(ctx context.Context, ar
 	for rows.Next() {
 		var i GetCategoriesByMainCategoryIDPaginatedRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.CategoryID,
+			&i.DisplayID,
 			&i.MainCategoryID,
 			&i.CategoryName,
 			&i.Description,
@@ -206,8 +217,8 @@ func (q *Queries) GetCategoriesByMainCategoryIDPaginated(ctx context.Context, ar
 
 const getCategoryByID = `-- name: GetCategoryByID :one
 SELECT
-    id,
     category_id,
+    display_id,
     main_category_id,
     category_name,
     description,
@@ -219,21 +230,21 @@ LIMIT 1
 `
 
 type GetCategoryByIDRow struct {
-	ID             int32     `json:"id"`
-	CategoryID     string    `json:"category_id"`
-	MainCategoryID *string   `json:"main_category_id"`
-	CategoryName   string    `json:"category_name"`
-	Description    string    `json:"description"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	CategoryID     uuid.UUID  `json:"category_id"`
+	DisplayID      string     `json:"display_id"`
+	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	CategoryName   string     `json:"category_name"`
+	Description    string     `json:"description"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
-func (q *Queries) GetCategoryByID(ctx context.Context, categoryID string) (GetCategoryByIDRow, error) {
+func (q *Queries) GetCategoryByID(ctx context.Context, categoryID uuid.UUID) (GetCategoryByIDRow, error) {
 	row := q.db.QueryRow(ctx, getCategoryByID, categoryID)
 	var i GetCategoryByIDRow
 	err := row.Scan(
-		&i.ID,
 		&i.CategoryID,
+		&i.DisplayID,
 		&i.MainCategoryID,
 		&i.CategoryName,
 		&i.Description,
@@ -246,19 +257,19 @@ func (q *Queries) GetCategoryByID(ctx context.Context, categoryID string) (GetCa
 const getExistingCategoryIDs = `-- name: GetExistingCategoryIDs :many
 SELECT category_id
 FROM categories
-WHERE category_id = ANY($1::text[])
+WHERE category_id = ANY($1::uuid[])
 ORDER BY category_id ASC
 `
 
-func (q *Queries) GetExistingCategoryIDs(ctx context.Context, dollar_1 []string) ([]string, error) {
+func (q *Queries) GetExistingCategoryIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, getExistingCategoryIDs, dollar_1)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []uuid.UUID
 	for rows.Next() {
-		var category_id string
+		var category_id uuid.UUID
 		if err := rows.Scan(&category_id); err != nil {
 			return nil, err
 		}
@@ -273,7 +284,6 @@ func (q *Queries) GetExistingCategoryIDs(ctx context.Context, dollar_1 []string)
 const updateCategory = `-- name: UpdateCategory :execrows
 UPDATE categories
 SET main_category_id = $1,
-    main_category_ref_id = (SELECT id FROM main_categories WHERE main_category_id = $1),
     category_name = $2,
     description = $3,
     updated_at = NOW()
@@ -281,10 +291,10 @@ WHERE category_id = $4
 `
 
 type UpdateCategoryParams struct {
-	MainCategoryID *string `json:"main_category_id"`
-	CategoryName   string  `json:"category_name"`
-	Description    string  `json:"description"`
-	CategoryID     string  `json:"category_id"`
+	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	CategoryName   string     `json:"category_name"`
+	Description    string     `json:"description"`
+	CategoryID     uuid.UUID  `json:"category_id"`
 }
 
 func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (int64, error) {

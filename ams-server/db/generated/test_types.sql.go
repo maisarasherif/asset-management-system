@@ -7,12 +7,19 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const createTestType = `-- name: CreateTestType :one
-INSERT INTO test_types (test_name, validity_duration, description)
-VALUES ($1, $2, $3)
-RETURNING test_id, test_name, validity_duration, description, id
+INSERT INTO test_types (display_id, test_name, validity_duration, description)
+VALUES (next_display_id('test_type_display_id_seq'), $1, $2, $3)
+RETURNING
+    test_id,
+    display_id,
+    test_name,
+    validity_duration,
+    description
 `
 
 type CreateTestTypeParams struct {
@@ -21,15 +28,23 @@ type CreateTestTypeParams struct {
 	Description      string `json:"description"`
 }
 
-func (q *Queries) CreateTestType(ctx context.Context, arg CreateTestTypeParams) (TestType, error) {
+type CreateTestTypeRow struct {
+	TestID           uuid.UUID `json:"test_id"`
+	DisplayID        string    `json:"display_id"`
+	TestName         string    `json:"test_name"`
+	ValidityDuration int32     `json:"validity_duration"`
+	Description      string    `json:"description"`
+}
+
+func (q *Queries) CreateTestType(ctx context.Context, arg CreateTestTypeParams) (CreateTestTypeRow, error) {
 	row := q.db.QueryRow(ctx, createTestType, arg.TestName, arg.ValidityDuration, arg.Description)
-	var i TestType
+	var i CreateTestTypeRow
 	err := row.Scan(
 		&i.TestID,
+		&i.DisplayID,
 		&i.TestName,
 		&i.ValidityDuration,
 		&i.Description,
-		&i.ID,
 	)
 	return i, err
 }
@@ -38,7 +53,7 @@ const deleteTestType = `-- name: DeleteTestType :execrows
 DELETE FROM test_types WHERE test_id = $1
 `
 
-func (q *Queries) DeleteTestType(ctx context.Context, testID string) (int64, error) {
+func (q *Queries) DeleteTestType(ctx context.Context, testID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteTestType, testID)
 	if err != nil {
 		return 0, err
@@ -47,25 +62,39 @@ func (q *Queries) DeleteTestType(ctx context.Context, testID string) (int64, err
 }
 
 const getAllTestTypes = `-- name: GetAllTestTypes :many
-SELECT test_id, test_name, validity_duration, description, id FROM test_types
+SELECT
+    test_id,
+    display_id,
+    test_name,
+    validity_duration,
+    description
+FROM test_types
 ORDER BY test_name ASC
 `
 
-func (q *Queries) GetAllTestTypes(ctx context.Context) ([]TestType, error) {
+type GetAllTestTypesRow struct {
+	TestID           uuid.UUID `json:"test_id"`
+	DisplayID        string    `json:"display_id"`
+	TestName         string    `json:"test_name"`
+	ValidityDuration int32     `json:"validity_duration"`
+	Description      string    `json:"description"`
+}
+
+func (q *Queries) GetAllTestTypes(ctx context.Context) ([]GetAllTestTypesRow, error) {
 	rows, err := q.db.Query(ctx, getAllTestTypes)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TestType
+	var items []GetAllTestTypesRow
 	for rows.Next() {
-		var i TestType
+		var i GetAllTestTypesRow
 		if err := rows.Scan(
 			&i.TestID,
+			&i.DisplayID,
 			&i.TestName,
 			&i.ValidityDuration,
 			&i.Description,
-			&i.ID,
 		); err != nil {
 			return nil, err
 		}
@@ -80,19 +109,19 @@ func (q *Queries) GetAllTestTypes(ctx context.Context) ([]TestType, error) {
 const getExistingTestTypeIDs = `-- name: GetExistingTestTypeIDs :many
 SELECT test_id
 FROM test_types
-WHERE test_id = ANY($1::text[])
+WHERE test_id = ANY($1::uuid[])
 ORDER BY test_id ASC
 `
 
-func (q *Queries) GetExistingTestTypeIDs(ctx context.Context, dollar_1 []string) ([]string, error) {
+func (q *Queries) GetExistingTestTypeIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, getExistingTestTypeIDs, dollar_1)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []uuid.UUID
 	for rows.Next() {
-		var test_id string
+		var test_id uuid.UUID
 		if err := rows.Scan(&test_id); err != nil {
 			return nil, err
 		}
@@ -105,20 +134,34 @@ func (q *Queries) GetExistingTestTypeIDs(ctx context.Context, dollar_1 []string)
 }
 
 const getTestTypeByID = `-- name: GetTestTypeByID :one
-SELECT test_id, test_name, validity_duration, description, id FROM test_types
+SELECT
+    test_id,
+    display_id,
+    test_name,
+    validity_duration,
+    description
+FROM test_types
 WHERE test_id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetTestTypeByID(ctx context.Context, testID string) (TestType, error) {
+type GetTestTypeByIDRow struct {
+	TestID           uuid.UUID `json:"test_id"`
+	DisplayID        string    `json:"display_id"`
+	TestName         string    `json:"test_name"`
+	ValidityDuration int32     `json:"validity_duration"`
+	Description      string    `json:"description"`
+}
+
+func (q *Queries) GetTestTypeByID(ctx context.Context, testID uuid.UUID) (GetTestTypeByIDRow, error) {
 	row := q.db.QueryRow(ctx, getTestTypeByID, testID)
-	var i TestType
+	var i GetTestTypeByIDRow
 	err := row.Scan(
 		&i.TestID,
+		&i.DisplayID,
 		&i.TestName,
 		&i.ValidityDuration,
 		&i.Description,
-		&i.ID,
 	)
 	return i, err
 }
@@ -130,10 +173,10 @@ WHERE test_id = $4
 `
 
 type UpdateTestTypeParams struct {
-	TestName         string `json:"test_name"`
-	ValidityDuration int32  `json:"validity_duration"`
-	Description      string `json:"description"`
-	TestID           string `json:"test_id"`
+	TestName         string    `json:"test_name"`
+	ValidityDuration int32     `json:"validity_duration"`
+	Description      string    `json:"description"`
+	TestID           uuid.UUID `json:"test_id"`
 }
 
 func (q *Queries) UpdateTestType(ctx context.Context, arg UpdateTestTypeParams) (int64, error) {

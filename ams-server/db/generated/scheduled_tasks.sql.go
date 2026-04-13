@@ -7,38 +7,64 @@ package db
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 const createScheduledTask = `-- name: CreateScheduledTask :one
-INSERT INTO scheduled_tasks (certificate_id, certificate_ref_id, type, status, external_task_id, sent_at)
-VALUES ($1, (SELECT id FROM certificates WHERE certificate_id = $1), $2, $3, $4, NOW())
-RETURNING id, task_id, certificate_id, type, status, sent_at, external_task_id, certificate_ref_id
+INSERT INTO scheduled_tasks (display_id, certificate_id, type, status, external_task_id, sent_at)
+VALUES (
+    next_display_id('scheduled_task_display_id_seq'),
+    $1,
+    $2,
+    $3,
+    $4,
+    NOW()
+)
+RETURNING
+    task_id,
+    display_id,
+    certificate_id,
+    type,
+    status,
+    sent_at,
+    external_task_id
 `
 
 type CreateScheduledTaskParams struct {
-	CertificateID  string `json:"certificate_id"`
-	Type           string `json:"type"`
-	Status         string `json:"status"`
-	ExternalTaskID string `json:"external_task_id"`
+	CertificateID  uuid.UUID `json:"certificate_id"`
+	Type           string    `json:"type"`
+	Status         string    `json:"status"`
+	ExternalTaskID string    `json:"external_task_id"`
 }
 
-func (q *Queries) CreateScheduledTask(ctx context.Context, arg CreateScheduledTaskParams) (ScheduledTask, error) {
+type CreateScheduledTaskRow struct {
+	TaskID         uuid.UUID `json:"task_id"`
+	DisplayID      string    `json:"display_id"`
+	CertificateID  uuid.UUID `json:"certificate_id"`
+	Type           string    `json:"type"`
+	Status         string    `json:"status"`
+	SentAt         time.Time `json:"sent_at"`
+	ExternalTaskID string    `json:"external_task_id"`
+}
+
+func (q *Queries) CreateScheduledTask(ctx context.Context, arg CreateScheduledTaskParams) (CreateScheduledTaskRow, error) {
 	row := q.db.QueryRow(ctx, createScheduledTask,
 		arg.CertificateID,
 		arg.Type,
 		arg.Status,
 		arg.ExternalTaskID,
 	)
-	var i ScheduledTask
+	var i CreateScheduledTaskRow
 	err := row.Scan(
-		&i.ID,
 		&i.TaskID,
+		&i.DisplayID,
 		&i.CertificateID,
 		&i.Type,
 		&i.Status,
 		&i.SentAt,
 		&i.ExternalTaskID,
-		&i.CertificateRefID,
 	)
 	return i, err
 }
@@ -52,8 +78,8 @@ WHERE certificate_id = $1
 `
 
 type HasRecentScheduledTaskParams struct {
-	CertificateID string `json:"certificate_id"`
-	Type          string `json:"type"`
+	CertificateID uuid.UUID `json:"certificate_id"`
+	Type          string    `json:"type"`
 }
 
 func (q *Queries) HasRecentScheduledTask(ctx context.Context, arg HasRecentScheduledTaskParams) (int64, error) {

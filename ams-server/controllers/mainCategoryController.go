@@ -46,7 +46,10 @@ func GetMainCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		mainCategoryID := c.Param("main_category_id")
+		mainCategoryID, ok := utils.ParseUUIDParam(c, "main_category_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -99,7 +102,10 @@ func AddMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		mainCategoryID := c.Param("main_category_id")
+		mainCategoryID, ok := utils.ParseUUIDParam(c, "main_category_id")
+		if !ok {
+			return
+		}
 
 		var input dto.MainCategoryInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -136,7 +142,10 @@ func UpdateMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func PatchMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		mainCategoryID := c.Param("main_category_id")
+		mainCategoryID, ok := utils.ParseUUIDParam(c, "main_category_id")
+		if !ok {
+			return
+		}
 
 		var input dto.PatchMainCategoryInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -189,7 +198,10 @@ func PatchMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		mainCategoryID := c.Param("main_category_id")
+		mainCategoryID, ok := utils.ParseUUIDParam(c, "main_category_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()

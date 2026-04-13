@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
 // ==================== Asset Templates ====================
@@ -65,7 +67,10 @@ func GetTemplates(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateID := c.Param("template_id")
+		templateID, ok := utils.ParseUUIDParam(c, "template_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -88,7 +93,10 @@ func GetTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateID := c.Param("template_id")
+		templateID, ok := utils.ParseUUIDParam(c, "template_id")
+		if !ok {
+			return
+		}
 
 		var input dto.AssetTemplateInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -125,7 +133,10 @@ func UpdateTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateID := c.Param("template_id")
+		templateID, ok := utils.ParseUUIDParam(c, "template_id")
+		if !ok {
+			return
+		}
 
 		var input dto.ConfigureTemplateInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -138,6 +149,18 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		categoryIDs, testIDs, err := collectConfigureReferenceIDs(input.Components)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		categoryUUIDs, err := utils.ParseUUIDSlice(categoryIDs, "category_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		testUUIDs, err := utils.ParseUUIDSlice(testIDs, "test_id")
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -165,12 +188,12 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		existingCategoryIDs, err := queries.GetExistingCategoryIDs(ctx, categoryIDs)
+		existingCategoryIDs, err := queries.GetExistingCategoryIDs(ctx, categoryUUIDs)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate categories"})
 			return
 		}
-		missingCategoryIDs := missingIDs(categoryIDs, existingCategoryIDs)
+		missingCategoryIDs := missingIDs(categoryUUIDs, existingCategoryIDs)
 		if len(missingCategoryIDs) > 0 {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":                "one or more categories were not found",
@@ -179,12 +202,12 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		existingTestIDs, err := queries.GetExistingTestTypeIDs(ctx, testIDs)
+		existingTestIDs, err := queries.GetExistingTestTypeIDs(ctx, testUUIDs)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate test types"})
 			return
 		}
-		missingTestIDs := missingIDs(testIDs, existingTestIDs)
+		missingTestIDs := missingIDs(testUUIDs, existingTestIDs)
 		if len(missingTestIDs) > 0 {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":            "one or more test types were not found",
@@ -200,9 +223,15 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		totalTests := 0
 		for _, componentInput := range input.Components {
+			categoryID, err := utils.ParseUUID(componentInput.CategoryID, "category_id")
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
 			component, err := queries.CreateTemplateComponent(ctx, db.CreateTemplateComponentParams{
 				TemplateID:      templateID,
-				CategoryID:      componentInput.CategoryID,
+				CategoryID:      categoryID,
 				Name:            componentInput.Name,
 				Description:     componentInput.Description,
 				SerialNumber:    componentInput.SerialNumber,
@@ -221,7 +250,13 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 				return
 			}
 
-			for _, testID := range componentInput.TestIDs {
+			for _, testIDValue := range componentInput.TestIDs {
+				testID, err := utils.ParseUUID(testIDValue, "test_id")
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+					return
+				}
+
 				if _, err := queries.CreateTemplateComponentTest(ctx, db.CreateTemplateComponentTestParams{
 					TemplateComponentID: component.TemplateComponentID,
 					TestID:              testID,
@@ -248,7 +283,10 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateID := c.Param("template_id")
+		templateID, ok := utils.ParseUUIDParam(c, "template_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -318,8 +356,8 @@ func collectConfigureReferenceIDs(components []dto.ConfigureTemplateComponentIte
 	return categoryIDs, testIDs, nil
 }
 
-func missingIDs(requested []string, found []string) []string {
-	foundSet := make(map[string]struct{}, len(found))
+func missingIDs(requested []uuid.UUID, found []uuid.UUID) []string {
+	foundSet := make(map[uuid.UUID]struct{}, len(found))
 	for _, id := range found {
 		foundSet[id] = struct{}{}
 	}
@@ -327,7 +365,7 @@ func missingIDs(requested []string, found []string) []string {
 	missing := make([]string, 0)
 	for _, id := range requested {
 		if _, exists := foundSet[id]; !exists {
-			missing = append(missing, id)
+			missing = append(missing, id.String())
 		}
 	}
 
@@ -338,7 +376,10 @@ func missingIDs(requested []string, found []string) []string {
 
 func AddTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateID := c.Param("template_id")
+		templateID, ok := utils.ParseUUIDParam(c, "template_id")
+		if !ok {
+			return
+		}
 
 		var input dto.TemplateComponentInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -365,7 +406,13 @@ func AddTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		_, err = queries.GetCategoryByID(ctx, input.CategoryID)
+		categoryID, err := utils.ParseUUID(input.CategoryID, "category_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err = queries.GetCategoryByID(ctx, categoryID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
@@ -377,7 +424,7 @@ func AddTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		component, err := queries.CreateTemplateComponent(ctx, db.CreateTemplateComponentParams{
 			TemplateID:      templateID,
-			CategoryID:      input.CategoryID,
+			CategoryID:      categoryID,
 			Name:            input.Name,
 			Description:     input.Description,
 			SerialNumber:    input.SerialNumber,
@@ -402,7 +449,10 @@ func AddTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetTemplateComponents(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateID := c.Param("template_id")
+		templateID, ok := utils.ParseUUIDParam(c, "template_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -431,7 +481,10 @@ func GetTemplateComponents(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateComponentID := c.Param("template_component_id")
+		templateComponentID, ok := utils.ParseUUIDParam(c, "template_component_id")
+		if !ok {
+			return
+		}
 
 		var input dto.TemplateComponentInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -458,7 +511,13 @@ func UpdateTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		_, err = queries.GetCategoryByID(ctx, input.CategoryID)
+		categoryID, err := utils.ParseUUID(input.CategoryID, "category_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err = queries.GetCategoryByID(ctx, categoryID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
@@ -469,7 +528,7 @@ func UpdateTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		rows, err := queries.UpdateTemplateComponent(ctx, db.UpdateTemplateComponentParams{
-			CategoryID:          input.CategoryID,
+			CategoryID:          categoryID,
 			Name:                input.Name,
 			Description:         input.Description,
 			SerialNumber:        input.SerialNumber,
@@ -499,7 +558,10 @@ func UpdateTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateComponentID := c.Param("template_component_id")
+		templateComponentID, ok := utils.ParseUUIDParam(c, "template_component_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -534,7 +596,10 @@ func DeleteTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateComponentID := c.Param("template_component_id")
+		templateComponentID, ok := utils.ParseUUIDParam(c, "template_component_id")
+		if !ok {
+			return
+		}
 
 		var input dto.TemplateComponentTestInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -561,7 +626,13 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		_, err = queries.GetTestTypeByID(ctx, input.TestID)
+		testID, err := utils.ParseUUID(input.TestID, "test_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err = queries.GetTestTypeByID(ctx, testID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
@@ -573,7 +644,7 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		tct, err := queries.CreateTemplateComponentTest(ctx, db.CreateTemplateComponentTestParams{
 			TemplateComponentID: templateComponentID,
-			TestID:              input.TestID,
+			TestID:              testID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add test to template component"})
@@ -586,7 +657,10 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetTemplateComponentTests(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateComponentID := c.Param("template_component_id")
+		templateComponentID, ok := utils.ParseUUIDParam(c, "template_component_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -615,7 +689,10 @@ func GetTemplateComponentTests(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		templateComponentTestID := c.Param("template_component_test_id")
+		templateComponentTestID, ok := utils.ParseUUIDParam(c, "template_component_test_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()

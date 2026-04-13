@@ -7,13 +7,18 @@ package db
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 const countAssetsByTemplateID = `-- name: CountAssetsByTemplateID :one
-SELECT COUNT(*) FROM assets WHERE template_id = $1
+SELECT COUNT(*)
+FROM assets
+WHERE template_id = $1
 `
 
-func (q *Queries) CountAssetsByTemplateID(ctx context.Context, templateID *string) (int64, error) {
+func (q *Queries) CountAssetsByTemplateID(ctx context.Context, templateID *uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countAssetsByTemplateID, templateID)
 	var count int64
 	err := row.Scan(&count)
@@ -21,9 +26,15 @@ func (q *Queries) CountAssetsByTemplateID(ctx context.Context, templateID *strin
 }
 
 const createAssetTemplate = `-- name: CreateAssetTemplate :one
-INSERT INTO asset_templates (template_name, description, created_at, updated_at)
-VALUES ($1, $2, NOW(), NOW())
-RETURNING id, template_id, template_name, description, created_at, updated_at
+INSERT INTO asset_templates (display_id, template_name, description, created_at, updated_at)
+VALUES (next_display_id('template_display_id_seq'), $1, $2, NOW(), NOW())
+RETURNING
+    template_id,
+    display_id,
+    template_name,
+    description,
+    created_at,
+    updated_at
 `
 
 type CreateAssetTemplateParams struct {
@@ -31,12 +42,21 @@ type CreateAssetTemplateParams struct {
 	Description  string `json:"description"`
 }
 
-func (q *Queries) CreateAssetTemplate(ctx context.Context, arg CreateAssetTemplateParams) (AssetTemplate, error) {
+type CreateAssetTemplateRow struct {
+	TemplateID   uuid.UUID `json:"template_id"`
+	DisplayID    string    `json:"display_id"`
+	TemplateName string    `json:"template_name"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (q *Queries) CreateAssetTemplate(ctx context.Context, arg CreateAssetTemplateParams) (CreateAssetTemplateRow, error) {
 	row := q.db.QueryRow(ctx, createAssetTemplate, arg.TemplateName, arg.Description)
-	var i AssetTemplate
+	var i CreateAssetTemplateRow
 	err := row.Scan(
-		&i.ID,
 		&i.TemplateID,
+		&i.DisplayID,
 		&i.TemplateName,
 		&i.Description,
 		&i.CreatedAt,
@@ -49,7 +69,7 @@ const deleteAssetTemplate = `-- name: DeleteAssetTemplate :execrows
 DELETE FROM asset_templates WHERE template_id = $1
 `
 
-func (q *Queries) DeleteAssetTemplate(ctx context.Context, templateID string) (int64, error) {
+func (q *Queries) DeleteAssetTemplate(ctx context.Context, templateID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteAssetTemplate, templateID)
 	if err != nil {
 		return 0, err
@@ -58,22 +78,38 @@ func (q *Queries) DeleteAssetTemplate(ctx context.Context, templateID string) (i
 }
 
 const getAllAssetTemplates = `-- name: GetAllAssetTemplates :many
-SELECT id, template_id, template_name, description, created_at, updated_at FROM asset_templates
+SELECT
+    template_id,
+    display_id,
+    template_name,
+    description,
+    created_at,
+    updated_at
+FROM asset_templates
 ORDER BY created_at DESC
 `
 
-func (q *Queries) GetAllAssetTemplates(ctx context.Context) ([]AssetTemplate, error) {
+type GetAllAssetTemplatesRow struct {
+	TemplateID   uuid.UUID `json:"template_id"`
+	DisplayID    string    `json:"display_id"`
+	TemplateName string    `json:"template_name"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (q *Queries) GetAllAssetTemplates(ctx context.Context) ([]GetAllAssetTemplatesRow, error) {
 	rows, err := q.db.Query(ctx, getAllAssetTemplates)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []AssetTemplate
+	var items []GetAllAssetTemplatesRow
 	for rows.Next() {
-		var i AssetTemplate
+		var i GetAllAssetTemplatesRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.TemplateID,
+			&i.DisplayID,
 			&i.TemplateName,
 			&i.Description,
 			&i.CreatedAt,
@@ -90,16 +126,33 @@ func (q *Queries) GetAllAssetTemplates(ctx context.Context) ([]AssetTemplate, er
 }
 
 const getAssetTemplateByID = `-- name: GetAssetTemplateByID :one
-SELECT id, template_id, template_name, description, created_at, updated_at FROM asset_templates
-WHERE template_id = $1 LIMIT 1
+SELECT
+    template_id,
+    display_id,
+    template_name,
+    description,
+    created_at,
+    updated_at
+FROM asset_templates
+WHERE template_id = $1
+LIMIT 1
 `
 
-func (q *Queries) GetAssetTemplateByID(ctx context.Context, templateID string) (AssetTemplate, error) {
+type GetAssetTemplateByIDRow struct {
+	TemplateID   uuid.UUID `json:"template_id"`
+	DisplayID    string    `json:"display_id"`
+	TemplateName string    `json:"template_name"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (q *Queries) GetAssetTemplateByID(ctx context.Context, templateID uuid.UUID) (GetAssetTemplateByIDRow, error) {
 	row := q.db.QueryRow(ctx, getAssetTemplateByID, templateID)
-	var i AssetTemplate
+	var i GetAssetTemplateByIDRow
 	err := row.Scan(
-		&i.ID,
 		&i.TemplateID,
+		&i.DisplayID,
 		&i.TemplateName,
 		&i.Description,
 		&i.CreatedAt,
@@ -115,9 +168,9 @@ WHERE template_id = $3
 `
 
 type UpdateAssetTemplateParams struct {
-	TemplateName string `json:"template_name"`
-	Description  string `json:"description"`
-	TemplateID   string `json:"template_id"`
+	TemplateName string    `json:"template_name"`
+	Description  string    `json:"description"`
+	TemplateID   uuid.UUID `json:"template_id"`
 }
 
 func (q *Queries) UpdateAssetTemplate(ctx context.Context, arg UpdateAssetTemplateParams) (int64, error) {

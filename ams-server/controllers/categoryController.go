@@ -47,7 +47,10 @@ func GetCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetCategoriesByMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		mainCategoryID := c.Param("main_category_id")
+		mainCategoryID, ok := utils.ParseUUIDParam(c, "main_category_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -68,8 +71,8 @@ func GetCategoriesByMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		categories, err := queries.GetCategoriesByMainCategoryIDPaginated(ctx, db.GetCategoriesByMainCategoryIDPaginatedParams{
 			MainCategoryID: &mainCategoryID,
-			Limit:          limit,
-			Offset:         offset,
+			PageLimit:      limit,
+			PageOffset:     offset,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch categories"})
@@ -91,7 +94,10 @@ func GetCategoriesByMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		categoryID := c.Param("category_id")
+		categoryID, ok := utils.ParseUUIDParam(c, "category_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -129,7 +135,13 @@ func AddCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		_, err := queries.GetMainCategoryByID(ctx, input.MainCategoryID)
+		mainCategoryID, err := utils.ParseUUID(input.MainCategoryID, "main_category_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err = queries.GetMainCategoryByID(ctx, mainCategoryID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "main category not found"})
@@ -140,7 +152,7 @@ func AddCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		category, err := queries.CreateCategory(ctx, db.CreateCategoryParams{
-			MainCategoryID: &input.MainCategoryID,
+			MainCategoryID: &mainCategoryID,
 			CategoryName:   input.CategoryName,
 			Description:    input.Description,
 		})
@@ -155,7 +167,10 @@ func AddCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func UpdateCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		categoryID := c.Param("category_id")
+		categoryID, ok := utils.ParseUUIDParam(c, "category_id")
+		if !ok {
+			return
+		}
 
 		var input dto.CategoryInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -172,7 +187,13 @@ func UpdateCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
-		_, err := queries.GetMainCategoryByID(ctx, input.MainCategoryID)
+		mainCategoryID, err := utils.ParseUUID(input.MainCategoryID, "main_category_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err = queries.GetMainCategoryByID(ctx, mainCategoryID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "main category not found"})
@@ -183,7 +204,7 @@ func UpdateCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		rows, err := queries.UpdateCategory(ctx, db.UpdateCategoryParams{
-			MainCategoryID: &input.MainCategoryID,
+			MainCategoryID: &mainCategoryID,
 			CategoryName:   input.CategoryName,
 			Description:    input.Description,
 			CategoryID:     categoryID,
@@ -203,7 +224,10 @@ func UpdateCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		categoryID := c.Param("category_id")
+		categoryID, ok := utils.ParseUUIDParam(c, "category_id")
+		if !ok {
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -212,6 +236,10 @@ func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		_, err := queries.GetCategoryByID(ctx, categoryID)
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch category"})
 			return
 		}
@@ -252,7 +280,10 @@ func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func PatchCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		categoryID := c.Param("category_id")
+		categoryID, ok := utils.ParseUUIDParam(c, "category_id")
+		if !ok {
+			return
+		}
 
 		var input dto.PatchCategoryInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -280,7 +311,12 @@ func PatchCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		description := existing.Description
 
 		if input.MainCategoryID != nil {
-			mainCategoryID = input.MainCategoryID
+			parsedMainCategoryID, err := utils.ParseUUID(*input.MainCategoryID, "main_category_id")
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			mainCategoryID = &parsedMainCategoryID
 		}
 		if input.CategoryName != nil {
 			categoryName = *input.CategoryName
@@ -290,7 +326,7 @@ func PatchCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		if mainCategoryID == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "main category is required"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "main_category_id is required"})
 			return
 		}
 
