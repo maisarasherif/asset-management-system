@@ -4,3 +4,7 @@
 /skills
 /themes
 /postman
+/design-pocs
+node_modules/
+dist/
+.DS_Store

@@ -1,6 +1,10 @@
 package dto
 
-import "time"
+import (
+	"encoding/json"
+	"reflect"
+	"time"
+)
 
 // ==================== Pagination DTOs ====================
 
@@ -19,6 +23,31 @@ type PaginationMeta struct {
 type PaginatedResponse struct {
 	Data interface{}    `json:"data"`
 	Meta PaginationMeta `json:"meta"`
+}
+
+func normalizePaginatedData(data interface{}) interface{} {
+	if data == nil {
+		return []interface{}{}
+	}
+
+	value := reflect.ValueOf(data)
+	if value.Kind() == reflect.Slice && value.IsNil() {
+		return reflect.MakeSlice(value.Type(), 0, 0).Interface()
+	}
+
+	return data
+}
+
+func (r PaginatedResponse) MarshalJSON() ([]byte, error) {
+	type responseAlias struct {
+		Data interface{}    `json:"data"`
+		Meta PaginationMeta `json:"meta"`
+	}
+
+	return json.Marshal(responseAlias{
+		Data: normalizePaginatedData(r.Data),
+		Meta: r.Meta,
+	})
 }
 
 // ==================== User DTOs ====================
