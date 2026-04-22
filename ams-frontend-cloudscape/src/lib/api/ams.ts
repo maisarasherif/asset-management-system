@@ -2,19 +2,27 @@ import type {
   Asset,
   AssetDashboardData,
   AssetInput,
+  AssetTemplateInput,
   AssetTemplate,
+  CategoryInput,
   Category,
   Certificate,
   CertificateInput,
   CertificateUploadAudit,
+  PatchCertificateInput,
+  ConfigureTemplateInput,
   ComponentInput,
+  MainCategoryInput,
   ComponentRecord,
   LoginResponse,
   MainCategory,
   MessageResponse,
   PaginatedResponse,
+  TemplateConfigurationComponent,
   TemplateComponent,
+  TemplateComponentInput,
   TemplateComponentTest,
+  TestTypeInput,
   TestType,
   UpdatePasswordInput,
 } from "../../types/ams";
@@ -131,6 +139,26 @@ export function listAllCategories() {
   return fetchAllPages((page) => listCategories(page));
 }
 
+export function createCategory(payload: CategoryInput) {
+  return apiRequest<Category>("/v1/category", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCategory(categoryId: string, payload: CategoryInput) {
+  return apiRequest<MessageResponse>(`/v1/category/${categoryId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteCategory(categoryId: string) {
+  return apiRequest<MessageResponse>(`/v1/category/${categoryId}`, {
+    method: "DELETE",
+  });
+}
+
 export function listMainCategories(page = 1, limit = 100) {
   return apiRequest<PaginatedResponse<MainCategory>>(
     `/v1/main-categories?page=${page}&limit=${limit}`
@@ -141,8 +169,51 @@ export function listAllMainCategories() {
   return fetchAllPages((page) => listMainCategories(page));
 }
 
+export function createMainCategory(payload: MainCategoryInput) {
+  return apiRequest<MainCategory>("/v1/main-category", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateMainCategory(
+  mainCategoryId: string,
+  payload: MainCategoryInput
+) {
+  return apiRequest<MessageResponse>(`/v1/main-category/${mainCategoryId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteMainCategory(mainCategoryId: string) {
+  return apiRequest<MessageResponse>(`/v1/main-category/${mainCategoryId}`, {
+    method: "DELETE",
+  });
+}
+
 export function listTestTypes() {
   return apiRequest<TestType[]>("/v1/test-types");
+}
+
+export function createTestType(payload: TestTypeInput) {
+  return apiRequest<TestType>("/v1/test-type", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateTestType(testId: string, payload: TestTypeInput) {
+  return apiRequest<MessageResponse>(`/v1/test-type/${testId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteTestType(testId: string) {
+  return apiRequest<MessageResponse>(`/v1/test-type/${testId}`, {
+    method: "DELETE",
+  });
 }
 
 export function listTemplates() {
@@ -153,8 +224,58 @@ export function getTemplate(templateId: string) {
   return apiRequest<AssetTemplate>(`/v1/template/${templateId}`);
 }
 
+export function createTemplate(payload: AssetTemplateInput) {
+  return apiRequest<AssetTemplate>("/v1/template", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateTemplate(templateId: string, payload: AssetTemplateInput) {
+  return apiRequest<MessageResponse>(`/v1/template/${templateId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteTemplate(templateId: string) {
+  return apiRequest<MessageResponse>(`/v1/template/${templateId}`, {
+    method: "DELETE",
+  });
+}
+
+export function configureTemplate(templateId: string, payload: ConfigureTemplateInput) {
+  return apiRequest<MessageResponse>(`/v1/template/${templateId}/configuration`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listTemplateComponents(templateId: string) {
   return apiRequest<TemplateComponent[]>(`/v1/template/${templateId}/components`);
+}
+
+export function createTemplateComponent(templateId: string, payload: TemplateComponentInput) {
+  return apiRequest<TemplateComponent>(`/v1/template/${templateId}/component`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateTemplateComponent(
+  templateComponentId: string,
+  payload: TemplateComponentInput
+) {
+  return apiRequest<MessageResponse>(`/v1/template-component/${templateComponentId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteTemplateComponent(templateComponentId: string) {
+  return apiRequest<MessageResponse>(`/v1/template-component/${templateComponentId}`, {
+    method: "DELETE",
+  });
 }
 
 export function listTemplateComponentTests(templateComponentId: string) {
@@ -163,22 +284,37 @@ export function listTemplateComponentTests(templateComponentId: string) {
   );
 }
 
-export async function getTemplatePreview(templateId: string) {
-  const components = await listTemplateComponents(templateId);
-  const testsByComponent = await Promise.all(
-    components.map((component) => listTemplateComponentTests(component.template_component_id))
+export function addTemplateComponentTest(templateComponentId: string, testId: string) {
+  return apiRequest<TemplateComponentTest>(`/v1/template-component/${templateComponentId}/test`, {
+    method: "POST",
+    body: JSON.stringify({ test_id: testId }),
+  });
+}
+
+export function deleteTemplateComponentTest(templateComponentTestId: string) {
+  return apiRequest<MessageResponse>(`/v1/template-component-test/${templateComponentTestId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getTemplateConfiguration(
+  templateId: string
+): Promise<TemplateConfigurationComponent[]> {
+  return normalizeCollection(
+    await apiRequest<TemplateConfigurationComponent[]>(`/v1/template/${templateId}/configuration`)
   );
+}
+
+export async function getTemplatePreview(templateId: string) {
+  const components = await getTemplateConfiguration(templateId);
 
   return {
     components,
     totalComponents: components.length,
-    totalTests: testsByComponent.reduce(
-      (count, componentTests) => count + componentTests.length,
-      0
-    ),
-    testsByComponent: testsByComponent.map((tests, index) => ({
-      componentId: components[index]?.template_component_id || "",
-      count: tests.length,
+    totalTests: components.reduce((count, component) => count + component.tests.length, 0),
+    testsByComponent: components.map((component) => ({
+      componentId: component.template_component_id,
+      count: component.tests.length,
     })),
   };
 }
@@ -211,6 +347,13 @@ export function createCertificate(payload: CertificateInput) {
 export function updateCertificate(certificateId: string, payload: CertificateInput) {
   return apiRequest<MessageResponse>(`/v1/certificate/${certificateId}`, {
     method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function patchCertificate(certificateId: string, payload: PatchCertificateInput) {
+  return apiRequest<MessageResponse>(`/v1/certificate/${certificateId}`, {
+    method: "PATCH",
     body: JSON.stringify(payload),
   });
 }

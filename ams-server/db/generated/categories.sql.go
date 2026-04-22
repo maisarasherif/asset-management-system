@@ -37,12 +37,13 @@ func (q *Queries) CountCategoriesByMainCategoryIDPaginated(ctx context.Context, 
 }
 
 const createCategory = `-- name: CreateCategory :one
-INSERT INTO categories (display_id, main_category_id, category_name, description, created_at, updated_at)
+INSERT INTO categories (display_id, main_category_id, sort_order, category_name, description, created_at, updated_at)
 VALUES (
     next_display_id('category_display_id_seq'),
     $1,
     $2,
     $3,
+    $4,
     NOW(),
     NOW()
 )
@@ -50,6 +51,7 @@ RETURNING
     category_id,
     display_id,
     main_category_id,
+    sort_order,
     category_name,
     description,
     created_at,
@@ -58,6 +60,7 @@ RETURNING
 
 type CreateCategoryParams struct {
 	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	SortOrder      int32      `json:"sort_order"`
 	CategoryName   string     `json:"category_name"`
 	Description    string     `json:"description"`
 }
@@ -66,6 +69,7 @@ type CreateCategoryRow struct {
 	CategoryID     uuid.UUID  `json:"category_id"`
 	DisplayID      string     `json:"display_id"`
 	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	SortOrder      int32      `json:"sort_order"`
 	CategoryName   string     `json:"category_name"`
 	Description    string     `json:"description"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -73,12 +77,18 @@ type CreateCategoryRow struct {
 }
 
 func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) (CreateCategoryRow, error) {
-	row := q.db.QueryRow(ctx, createCategory, arg.MainCategoryID, arg.CategoryName, arg.Description)
+	row := q.db.QueryRow(ctx, createCategory,
+		arg.MainCategoryID,
+		arg.SortOrder,
+		arg.CategoryName,
+		arg.Description,
+	)
 	var i CreateCategoryRow
 	err := row.Scan(
 		&i.CategoryID,
 		&i.DisplayID,
 		&i.MainCategoryID,
+		&i.SortOrder,
 		&i.CategoryName,
 		&i.Description,
 		&i.CreatedAt,
@@ -101,15 +111,21 @@ func (q *Queries) DeleteCategory(ctx context.Context, categoryID uuid.UUID) (int
 
 const getAllCategoriesPaginated = `-- name: GetAllCategoriesPaginated :many
 SELECT
-    category_id,
-    display_id,
-    main_category_id,
-    category_name,
-    description,
-    created_at,
-    updated_at
-FROM categories
-ORDER BY created_at DESC
+    c.category_id,
+    c.display_id,
+    c.main_category_id,
+    c.sort_order,
+    c.category_name,
+    c.description,
+    c.created_at,
+    c.updated_at
+FROM categories c
+LEFT JOIN main_categories mc ON mc.main_category_id = c.main_category_id
+ORDER BY
+    CASE WHEN mc.sort_order IS NULL THEN 1 ELSE 0 END,
+    mc.sort_order ASC NULLS LAST,
+    c.sort_order ASC,
+    c.created_at ASC
 LIMIT $1 OFFSET $2
 `
 
@@ -122,6 +138,7 @@ type GetAllCategoriesPaginatedRow struct {
 	CategoryID     uuid.UUID  `json:"category_id"`
 	DisplayID      string     `json:"display_id"`
 	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	SortOrder      int32      `json:"sort_order"`
 	CategoryName   string     `json:"category_name"`
 	Description    string     `json:"description"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -141,6 +158,7 @@ func (q *Queries) GetAllCategoriesPaginated(ctx context.Context, arg GetAllCateg
 			&i.CategoryID,
 			&i.DisplayID,
 			&i.MainCategoryID,
+			&i.SortOrder,
 			&i.CategoryName,
 			&i.Description,
 			&i.CreatedAt,
@@ -161,13 +179,14 @@ SELECT
     category_id,
     display_id,
     main_category_id,
+    sort_order,
     category_name,
     description,
     created_at,
     updated_at
 FROM categories
 WHERE main_category_id = $1
-ORDER BY created_at DESC
+ORDER BY sort_order ASC, created_at ASC
 LIMIT $3 OFFSET $2
 `
 
@@ -181,6 +200,7 @@ type GetCategoriesByMainCategoryIDPaginatedRow struct {
 	CategoryID     uuid.UUID  `json:"category_id"`
 	DisplayID      string     `json:"display_id"`
 	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	SortOrder      int32      `json:"sort_order"`
 	CategoryName   string     `json:"category_name"`
 	Description    string     `json:"description"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -200,6 +220,7 @@ func (q *Queries) GetCategoriesByMainCategoryIDPaginated(ctx context.Context, ar
 			&i.CategoryID,
 			&i.DisplayID,
 			&i.MainCategoryID,
+			&i.SortOrder,
 			&i.CategoryName,
 			&i.Description,
 			&i.CreatedAt,
@@ -220,6 +241,7 @@ SELECT
     category_id,
     display_id,
     main_category_id,
+    sort_order,
     category_name,
     description,
     created_at,
@@ -233,6 +255,7 @@ type GetCategoryByIDRow struct {
 	CategoryID     uuid.UUID  `json:"category_id"`
 	DisplayID      string     `json:"display_id"`
 	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	SortOrder      int32      `json:"sort_order"`
 	CategoryName   string     `json:"category_name"`
 	Description    string     `json:"description"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -246,6 +269,7 @@ func (q *Queries) GetCategoryByID(ctx context.Context, categoryID uuid.UUID) (Ge
 		&i.CategoryID,
 		&i.DisplayID,
 		&i.MainCategoryID,
+		&i.SortOrder,
 		&i.CategoryName,
 		&i.Description,
 		&i.CreatedAt,
@@ -284,14 +308,16 @@ func (q *Queries) GetExistingCategoryIDs(ctx context.Context, dollar_1 []uuid.UU
 const updateCategory = `-- name: UpdateCategory :execrows
 UPDATE categories
 SET main_category_id = $1,
-    category_name = $2,
-    description = $3,
+    sort_order = $2,
+    category_name = $3,
+    description = $4,
     updated_at = NOW()
-WHERE category_id = $4
+WHERE category_id = $5
 `
 
 type UpdateCategoryParams struct {
 	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	SortOrder      int32      `json:"sort_order"`
 	CategoryName   string     `json:"category_name"`
 	Description    string     `json:"description"`
 	CategoryID     uuid.UUID  `json:"category_id"`
@@ -300,6 +326,7 @@ type UpdateCategoryParams struct {
 func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateCategory,
 		arg.MainCategoryID,
+		arg.SortOrder,
 		arg.CategoryName,
 		arg.Description,
 		arg.CategoryID,

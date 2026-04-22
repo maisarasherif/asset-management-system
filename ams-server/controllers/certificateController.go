@@ -98,7 +98,7 @@ func GetTestTypes(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, testTypes)
+		c.JSON(http.StatusOK, dto.NormalizeListData(testTypes))
 	}
 }
 
@@ -402,7 +402,7 @@ func GetExpiringCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, certificates)
+		c.JSON(http.StatusOK, dto.NormalizeListData(certificates))
 	}
 }
 

@@ -1,4 +1,4 @@
-import { Box, SpaceBetween, StatusIndicator } from "@cloudscape-design/components";
+import { Box, StatusIndicator } from "@cloudscape-design/components";
 
 interface CertificateDonutProps {
   expired: number;
@@ -43,20 +43,26 @@ export function CertificateDonut({
           </Box>
         </div>
       </div>
-      <SpaceBetween direction="vertical" size="xs">
-        <div className="certificate-donut__legend">
+      <div className="certificate-donut__legend-grid">
+        <div className="certificate-donut__legend-card">
           <StatusIndicator type="error">Expired</StatusIndicator>
-          <Box fontWeight="bold">{expired}</Box>
+          <Box fontSize="heading-m" fontWeight="bold">
+            {expired}
+          </Box>
         </div>
-        <div className="certificate-donut__legend">
+        <div className="certificate-donut__legend-card">
           <StatusIndicator type="warning">Expiring soon</StatusIndicator>
-          <Box fontWeight="bold">{expiringSoon}</Box>
+          <Box fontSize="heading-m" fontWeight="bold">
+            {expiringSoon}
+          </Box>
         </div>
-        <div className="certificate-donut__legend">
+        <div className="certificate-donut__legend-card">
           <StatusIndicator type="success">Valid</StatusIndicator>
-          <Box fontWeight="bold">{valid}</Box>
+          <Box fontSize="heading-m" fontWeight="bold">
+            {valid}
+          </Box>
         </div>
-      </SpaceBetween>
+      </div>
     </div>
   );
 }

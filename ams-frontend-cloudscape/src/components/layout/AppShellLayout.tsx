@@ -12,8 +12,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { listAllAssets, logoutRequest } from "../../lib/api/ams";
-import { useAuth } from "../../providers/AuthProvider";
-import { useFlashbar } from "../../providers/FlashbarProvider";
+import { useAuth } from "../../providers/auth-context";
+import { useFlashbar } from "../../providers/flashbar-context";
 
 const TOP_NAV_I18N = {
   searchDismissIconAriaLabel: "Close search",
@@ -46,6 +46,22 @@ function getHelpPanelContent(pathname: string) {
       title: "Asset workspace",
       content:
         "The asset page is the primary workspace. Review asset details, select a component from the left pane, and manage that component's certificates on the right.",
+    };
+  }
+
+  if (pathname.startsWith("/templates")) {
+    return {
+      title: "Templates",
+      content:
+        "Templates define the component blueprint and default certificate tests for new assets. Use Configure to stage the component and test design before it is applied.",
+    };
+  }
+
+  if (pathname.startsWith("/catalog")) {
+    return {
+      title: "Catalog",
+      content:
+        "The catalog powers template and certificate workflows. Manage main categories, categories, and test types here before configuring templates.",
     };
   }
 
@@ -88,6 +104,13 @@ export function AppShellLayout() {
     assetOptions.find((option) => option.value === selectedAssetId) ?? null;
 
   const helpPanel = getHelpPanelContent(location.pathname);
+  const activeHref = location.pathname.startsWith("/assets")
+    ? "/assets"
+    : location.pathname.startsWith("/templates")
+      ? "/templates"
+      : location.pathname.startsWith("/catalog")
+        ? "/catalog"
+        : location.pathname;
 
   return (
     <AppLayout
@@ -123,9 +146,7 @@ export function AppShellLayout() {
             />
           </div>
           <SideNavigation
-            activeHref={
-              location.pathname.startsWith("/assets") ? "/assets" : location.pathname
-            }
+            activeHref={activeHref}
             header={{ href: "/dashboard", text: "AMS Cloudscape" }}
             items={[
               { type: "link", text: "Dashboard", href: "/dashboard" },
@@ -161,14 +182,14 @@ export function AppShellLayout() {
 
 export function AppChrome() {
   const navigate = useNavigate();
-  const { success } = useFlashbar();
+  const { clearAll } = useFlashbar();
   const { logout, session } = useAuth();
   const logoutMutation = useMutation({
     mutationFn: logoutRequest,
     onSettled: () => {
+      clearAll();
       logout();
       navigate("/login", { replace: true });
-      success("Signed out", "Your session has been cleared.");
     },
   });
   const fullName = `${session?.firstName || ""} ${session?.lastName || ""}`.trim();

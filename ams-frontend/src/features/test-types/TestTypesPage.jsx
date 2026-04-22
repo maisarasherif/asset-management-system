@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
@@ -9,6 +9,34 @@ import { useApi } from "../../hooks/useApi";
 import { useAuth } from "../../hooks/useAuth";
 import { useConfirm } from "../../hooks/useConfirm";
 
+const EMPTY_FORM = { test_id: "", test_name: "", validity_duration: "", description: "" };
+const actionGroupStyle = { display: "inline-flex", gap: 6, flexWrap: "nowrap", whiteSpace: "nowrap" };
+
+function TestTypeModalForm({ mode, initialForm, submitting, onClose, onSave }) {
+  const [form, setForm] = useState(initialForm);
+
+  useEffect(() => {
+    setForm(initialForm);
+  }, [initialForm]);
+
+  return (
+    <Modal title={mode === "create" ? "New Test Type" : "Edit Test Type"} onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {mode === "create" && <Input label="Test ID" value={form.test_id} onChange={(v) => setForm((p) => ({ ...p, test_id: v }))} required />}
+        <Input label="Test Name" value={form.test_name} onChange={(v) => setForm((p) => ({ ...p, test_name: v }))} required />
+        <Input label="Validity Duration (days)" type="number" value={String(form.validity_duration ?? "")} onChange={(v) => setForm((p) => ({ ...p, validity_duration: v }))} required />
+        <Input label="Description" type="textarea" value={form.description} onChange={(v) => setForm((p) => ({ ...p, description: v }))} />
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <Button onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button variant="primary" onClick={() => onSave(form)} disabled={submitting}>
+            {submitting ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function TestTypesPage() {
   const api = useApi();
   const { isAdmin } = useAuth();
@@ -18,7 +46,7 @@ function TestTypesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [form, setForm] = useState({ test_id: "", test_name: "", validity_duration: "", description: "" });
+  const [draftForm, setDraftForm] = useState(EMPTY_FORM);
 
   const load = useCallback(async (opts = {}) => {
     setLoading(true);
@@ -28,7 +56,9 @@ function TestTypesPage() {
       setData(res?.data || res || []);
     } catch (e) {
       if (e?.name !== "AbortError") throw e;
-    } finally { if (!opts.signal?.aborted) setLoading(false); }
+    } finally {
+      if (!opts.signal?.aborted) setLoading(false);
+    }
   }, [api]);
 
   useEffect(() => {
@@ -37,10 +67,29 @@ function TestTypesPage() {
     return () => controller.abort();
   }, [load]);
 
-  const openCreate = () => { setForm({ test_id: "", test_name: "", validity_duration: "", description: "" }); setModal("create"); };
-  const openEdit = (row) => { setSelected(row); setForm({ test_id: row.test_id, test_name: row.test_name, validity_duration: row.validity_duration, description: row.description }); setModal("edit"); };
-  const handleSave = async () => {
-    const payload = { ...form, validity_duration: parseInt(form.validity_duration) };
+  const openCreate = () => {
+    setSelected(null);
+    setDraftForm(EMPTY_FORM);
+    setModal("create");
+  };
+
+  const openEdit = (row) => {
+    setSelected(row);
+    setDraftForm({
+      test_id: row.test_id,
+      test_name: row.test_name,
+      validity_duration: row.validity_duration,
+      description: row.description,
+    });
+    setModal("edit");
+  };
+
+  const handleSave = async (form) => {
+    const payload = {
+      ...form,
+      validity_duration: Number.parseInt(form.validity_duration, 10),
+    };
+
     setSubmitting(true);
     try {
       if (modal === "create") await api.post("/addtesttype", payload);
@@ -51,6 +100,7 @@ function TestTypesPage() {
       setSubmitting(false);
     }
   };
+
   const handleDelete = async (id) => {
     if (!(await confirmAction("Delete this test type?"))) return;
     await api.del(`/deletetesttype/${id}`);
@@ -59,41 +109,46 @@ function TestTypesPage() {
 
   return (
     <div className="fade-in">
-      <PageHeader title="Test Types" subtitle="Certificate test type definitions"
-        action={isAdmin && <Button variant="primary" onClick={openCreate}>+ New Test Type</Button>} />
+      <PageHeader
+        title="Test Types"
+        subtitle="Certificate test type definitions"
+        action={isAdmin && <Button variant="primary" onClick={openCreate}>+ New Test Type</Button>}
+      />
       <Card>
-        <Table loading={loading} data={data}
+        <Table
+          loading={loading}
+          data={data}
           columns={[
-            { key: "test_id", label: "ID", render: v => <span style={{ color: "var(--text-2)" }}>{v}</span> },
-            { key: "test_name", label: "Name", render: v => <span style={{ fontWeight: 500 }}>{v}</span> },
-            { key: "validity_duration", label: "Validity (days)", render: v => <span style={{ color: "var(--amber)" }}>{v}d</span> },
+            { key: "test_id", label: "ID", render: (v) => <span style={{ color: "var(--text-2)" }}>{v}</span> },
+            { key: "test_name", label: "Name", render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
+            { key: "validity_duration", label: "Validity (days)", render: (v) => <span style={{ color: "var(--amber)" }}>{v}d</span> },
             { key: "description", label: "Description" },
-            isAdmin ? { key: "test_id", label: "", render: (v, row) => (
-              <div style={{ display: "flex", gap: 6 }}>
-                <Button size="sm" onClick={e => { e.stopPropagation(); openEdit(row); }}>Edit</Button>
-                <Button size="sm" variant="danger" onClick={e => { e.stopPropagation(); handleDelete(v); }}>Del</Button>
-              </div>
-            )} : null
+            isAdmin ? {
+              key: "test_id",
+              label: "",
+              render: (v, row) => (
+                <div style={actionGroupStyle}>
+                  <Button size="sm" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>Edit</Button>
+                  <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); handleDelete(v); }}>Del</Button>
+                </div>
+              ),
+              style: { width: 1, whiteSpace: "nowrap" },
+              headerStyle: { width: 1 },
+            } : null,
           ].filter(Boolean)}
         />
       </Card>
-      {modal && <Modal title={modal === "create" ? "New Test Type" : "Edit Test Type"} onClose={() => setModal(null)}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {modal === "create" && <Input label="Test ID" value={form.test_id} onChange={v => setForm(p => ({ ...p, test_id: v }))} required />}
-          <Input label="Test Name" value={form.test_name} onChange={v => setForm(p => ({ ...p, test_name: v }))} required />
-          <Input label="Validity Duration (days)" type="number" value={String(form.validity_duration)} onChange={v => setForm(p => ({ ...p, validity_duration: v }))} required />
-          <Input label="Description" type="textarea" value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} />
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <Button onClick={() => setModal(null)} disabled={submitting}>Cancel</Button>
-            <Button variant="primary" onClick={handleSave} disabled={submitting}>
-              {submitting ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </div>
-      </Modal>}
+      {modal && (
+        <TestTypeModalForm
+          mode={modal}
+          initialForm={draftForm}
+          submitting={submitting}
+          onClose={() => setModal(null)}
+          onSave={handleSave}
+        />
+      )}
     </div>
   );
 }
 
 export default TestTypesPage;
-

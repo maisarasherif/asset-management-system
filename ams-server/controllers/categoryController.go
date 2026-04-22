@@ -8,11 +8,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
+
+func isCategoryUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
 
 func GetCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -153,10 +159,15 @@ func AddCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		category, err := queries.CreateCategory(ctx, db.CreateCategoryParams{
 			MainCategoryID: &mainCategoryID,
+			SortOrder:      input.SortOrder,
 			CategoryName:   input.CategoryName,
 			Description:    input.Description,
 		})
 		if err != nil {
+			if isCategoryUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "category sort order is already in use for this main category"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add category"})
 			return
 		}
@@ -205,11 +216,16 @@ func UpdateCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		rows, err := queries.UpdateCategory(ctx, db.UpdateCategoryParams{
 			MainCategoryID: &mainCategoryID,
+			SortOrder:      input.SortOrder,
 			CategoryName:   input.CategoryName,
 			Description:    input.Description,
 			CategoryID:     categoryID,
 		})
 		if err != nil {
+			if isCategoryUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "category sort order is already in use for this main category"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update category"})
 			return
 		}
@@ -309,6 +325,7 @@ func PatchCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		mainCategoryID := existing.MainCategoryID
 		categoryName := existing.CategoryName
 		description := existing.Description
+		sortOrder := existing.SortOrder
 
 		if input.MainCategoryID != nil {
 			parsedMainCategoryID, err := utils.ParseUUID(*input.MainCategoryID, "main_category_id")
@@ -323,6 +340,9 @@ func PatchCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		if input.Description != nil {
 			description = *input.Description
+		}
+		if input.SortOrder != nil {
+			sortOrder = *input.SortOrder
 		}
 
 		if mainCategoryID == nil {
@@ -342,11 +362,16 @@ func PatchCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		rows, err := queries.UpdateCategory(ctx, db.UpdateCategoryParams{
 			MainCategoryID: mainCategoryID,
+			SortOrder:      sortOrder,
 			CategoryName:   categoryName,
 			Description:    description,
 			CategoryID:     categoryID,
 		})
 		if err != nil {
+			if isCategoryUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "category sort order is already in use for this main category"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update category"})
 			return
 		}

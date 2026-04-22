@@ -115,6 +115,7 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	// Template Routes
 	protected.GET("/templates", controller.GetTemplates(pool))
 	protected.GET("/template/:template_id", controller.GetTemplate(pool))
+	protected.GET("/template/:template_id/configuration", controller.GetTemplateConfiguration(pool))
 	protected.GET("/template/:template_id/components", controller.GetTemplateComponents(pool))
 	protected.GET("/template-component/:template_component_id/tests", controller.GetTemplateComponentTests(pool))
 }

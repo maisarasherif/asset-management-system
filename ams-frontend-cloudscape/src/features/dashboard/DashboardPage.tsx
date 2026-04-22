@@ -1,7 +1,6 @@
 import {
   Box,
   Button,
-  ColumnLayout,
   Container,
   ContentLayout,
   Header,
@@ -16,7 +15,7 @@ import { useNavigate } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
 import { getAssetDashboard, listAllAssets } from "../../lib/api/ams";
-import { useAuth } from "../../providers/AuthProvider";
+import { useAuth } from "../../providers/auth-context";
 import type { AssetDashboardData } from "../../types/ams";
 import { formatDate, humanizeEnum } from "../../utils/format";
 import { certificateStatusType } from "../../utils/status";
@@ -165,35 +164,13 @@ export function DashboardPage() {
       }
     >
       <SpaceBetween direction="vertical" size="l">
-        <ColumnLayout columns={3} variant="text-grid">
+        <div className="dashboard-top-grid">
           <Container header={<Header variant="h2">Certificate status</Header>}>
             <CertificateDonut
               expired={dashboard.statusCounts.expired}
               expiringSoon={dashboard.statusCounts.expiringSoon}
               valid={dashboard.statusCounts.valid}
             />
-          </Container>
-          <Container header={<Header variant="h2">Asset snapshot</Header>}>
-            <div className="metric-grid">
-              <div className="metric-card">
-                <Box variant="awsui-key-label">Components</Box>
-                <Box fontSize="display-l" fontWeight="bold">
-                  {dashboard.components.length}
-                </Box>
-              </div>
-              <div className="metric-card">
-                <Box variant="awsui-key-label">Certificates</Box>
-                <Box fontSize="display-l" fontWeight="bold">
-                  {dashboard.certificates.length}
-                </Box>
-              </div>
-              <div className="metric-card">
-                <Box variant="awsui-key-label">Attention required</Box>
-                <Box fontSize="display-l" fontWeight="bold">
-                  {dashboard.urgentCertificates.length}
-                </Box>
-              </div>
-            </div>
           </Container>
           <Container header={<Header variant="h2">Asset details</Header>}>
             <SpaceBetween direction="vertical" size="xs">
@@ -217,7 +194,7 @@ export function DashboardPage() {
               </div>
             </SpaceBetween>
           </Container>
-        </ColumnLayout>
+        </div>
 
         <Container header={<Header variant="h2">Urgent certificates</Header>}>
           <Table

@@ -26,7 +26,7 @@ import {
   updateComponent,
 } from "../../lib/api/ams";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
-import { useFlashbar } from "../../providers/FlashbarProvider";
+import { useFlashbar } from "../../providers/flashbar-context";
 import type { ComponentInput, SafetyCritical } from "../../types/ams";
 import { humanizeEnum } from "../../utils/format";
 

@@ -8,11 +8,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
 
 func GetMainCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -88,10 +94,15 @@ func AddMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		queries := db.New(pool)
 
 		mainCategory, err := queries.CreateMainCategory(ctx, db.CreateMainCategoryParams{
+			SortOrder:        input.SortOrder,
 			MainCategoryName: input.MainCategoryName,
 			Description:      input.Description,
 		})
 		if err != nil {
+			if isUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "main category sort order is already in use"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add main category"})
 			return
 		}
@@ -123,11 +134,16 @@ func UpdateMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		queries := db.New(pool)
 
 		rows, err := queries.UpdateMainCategory(ctx, db.UpdateMainCategoryParams{
+			SortOrder:        input.SortOrder,
 			MainCategoryName: input.MainCategoryName,
 			Description:      input.Description,
 			MainCategoryID:   mainCategoryID,
 		})
 		if err != nil {
+			if isUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "main category sort order is already in use"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update main category"})
 			return
 		}
@@ -170,6 +186,7 @@ func PatchMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		mainCategoryName := existing.MainCategoryName
 		description := existing.Description
+		sortOrder := existing.SortOrder
 
 		if input.MainCategoryName != nil {
 			mainCategoryName = *input.MainCategoryName
@@ -177,13 +194,21 @@ func PatchMainCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		if input.Description != nil {
 			description = *input.Description
 		}
+		if input.SortOrder != nil {
+			sortOrder = *input.SortOrder
+		}
 
 		rows, err := queries.UpdateMainCategory(ctx, db.UpdateMainCategoryParams{
+			SortOrder:        sortOrder,
 			MainCategoryName: mainCategoryName,
 			Description:      description,
 			MainCategoryID:   mainCategoryID,
 		})
 		if err != nil {
+			if isUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "main category sort order is already in use"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update main category"})
 			return
 		}

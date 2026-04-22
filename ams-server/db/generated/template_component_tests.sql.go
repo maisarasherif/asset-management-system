@@ -86,6 +86,19 @@ func (q *Queries) DeleteTemplateComponentTest(ctx context.Context, templateCompo
 	return result.RowsAffected(), nil
 }
 
+const deleteTemplateComponentTestsByComponentID = `-- name: DeleteTemplateComponentTestsByComponentID :execrows
+DELETE FROM template_component_tests
+WHERE template_component_id = $1
+`
+
+func (q *Queries) DeleteTemplateComponentTestsByComponentID(ctx context.Context, templateComponentID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteTemplateComponentTestsByComponentID, templateComponentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getTemplateComponentTestByID = `-- name: GetTemplateComponentTestByID :one
 SELECT
     template_component_test_id,
@@ -209,6 +222,66 @@ func (q *Queries) GetTemplateComponentTestsWithDetail(ctx context.Context, templ
 	var items []GetTemplateComponentTestsWithDetailRow
 	for rows.Next() {
 		var i GetTemplateComponentTestsWithDetailRow
+		if err := rows.Scan(
+			&i.TemplateComponentTestID,
+			&i.TemplateComponentTestDisplayID,
+			&i.TemplateComponentID,
+			&i.TestID,
+			&i.Position,
+			&i.CreatedAt,
+			&i.TestName,
+			&i.ValidityDuration,
+			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTemplateComponentTestsWithDetailByTemplateID = `-- name: GetTemplateComponentTestsWithDetailByTemplateID :many
+SELECT
+    tct.template_component_test_id AS template_component_test_id,
+    tct.display_id AS template_component_test_display_id,
+    tct.template_component_id AS template_component_id,
+    tct.test_id AS test_id,
+    tct.position,
+    tct.created_at,
+    tt.test_name,
+    tt.validity_duration,
+    tt.description
+FROM template_component_tests tct
+JOIN test_types tt ON tt.test_id = tct.test_id
+JOIN template_components tc ON tc.template_component_id = tct.template_component_id
+WHERE tc.template_id = $1
+ORDER BY tc.position ASC, tct.position ASC, tct.created_at ASC
+`
+
+type GetTemplateComponentTestsWithDetailByTemplateIDRow struct {
+	TemplateComponentTestID        uuid.UUID `json:"template_component_test_id"`
+	TemplateComponentTestDisplayID string    `json:"template_component_test_display_id"`
+	TemplateComponentID            uuid.UUID `json:"template_component_id"`
+	TestID                         uuid.UUID `json:"test_id"`
+	Position                       int32     `json:"position"`
+	CreatedAt                      time.Time `json:"created_at"`
+	TestName                       string    `json:"test_name"`
+	ValidityDuration               int32     `json:"validity_duration"`
+	Description                    string    `json:"description"`
+}
+
+func (q *Queries) GetTemplateComponentTestsWithDetailByTemplateID(ctx context.Context, templateID uuid.UUID) ([]GetTemplateComponentTestsWithDetailByTemplateIDRow, error) {
+	rows, err := q.db.Query(ctx, getTemplateComponentTestsWithDetailByTemplateID, templateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTemplateComponentTestsWithDetailByTemplateIDRow
+	for rows.Next() {
+		var i GetTemplateComponentTestsWithDetailByTemplateIDRow
 		if err := rows.Scan(
 			&i.TemplateComponentTestID,
 			&i.TemplateComponentTestDisplayID,

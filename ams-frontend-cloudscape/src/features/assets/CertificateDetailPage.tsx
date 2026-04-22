@@ -13,7 +13,7 @@ import {
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   getAsset,
   getCertificate,
@@ -24,13 +24,14 @@ import {
   uploadCertificateFile,
 } from "../../lib/api/ams";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
-import { useFlashbar } from "../../providers/FlashbarProvider";
+import { useFlashbar } from "../../providers/flashbar-context";
 import type { CertificateUploadAudit } from "../../types/ams";
 import { certificateStatusType } from "../../utils/status";
 import { formatDate, formatDateTime, humanizeEnum } from "../../utils/format";
 
 export function CertificateDetailPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { assetId, componentId, certificateId } = useParams();
   const { error, success } = useFlashbar();
@@ -168,9 +169,9 @@ export function CertificateDetailPage() {
               </Button>
               <Button
                 onClick={() =>
-                  navigate(
-                    `/assets/${assetId}/components/${componentId}/certificates/${certificateId}/edit`
-                  )
+                  navigate(`/assets/${assetId}/components/${componentId}/certificates/${certificateId}/edit`, {
+                    state: { from: `${location.pathname}${location.search}` },
+                  })
                 }
               >
                 Edit certificate

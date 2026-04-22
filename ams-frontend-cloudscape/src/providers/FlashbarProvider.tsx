@@ -1,27 +1,15 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useMemo,
   useState,
   type PropsWithChildren,
 } from "react";
 import type { FlashbarProps } from "@cloudscape-design/components";
-
-type NoticeType = NonNullable<FlashbarProps.MessageDefinition["type"]>;
-
-interface FlashbarContextValue {
-  items: FlashbarProps.MessageDefinition[];
-  clearAll: () => void;
-  dismiss: (id: string) => void;
-  push: (type: NoticeType, header: string, content: string) => void;
-  success: (header: string, content: string) => void;
-  error: (header: string, content: string) => void;
-  info: (header: string, content: string) => void;
-  warning: (header: string, content: string) => void;
-}
-
-const FlashbarContext = createContext<FlashbarContextValue | null>(null);
+import {
+  FlashbarContext,
+  type FlashbarContextValue,
+  type NoticeType,
+} from "./flashbar-context";
 
 export function FlashbarProvider({ children }: PropsWithChildren) {
   const [items, setItems] = useState<FlashbarProps.MessageDefinition[]>([]);
@@ -70,12 +58,4 @@ export function FlashbarProvider({ children }: PropsWithChildren) {
   return (
     <FlashbarContext.Provider value={value}>{children}</FlashbarContext.Provider>
   );
-}
-
-export function useFlashbar() {
-  const context = useContext(FlashbarContext);
-  if (!context) {
-    throw new Error("useFlashbar must be used within FlashbarProvider");
-  }
-  return context;
 }

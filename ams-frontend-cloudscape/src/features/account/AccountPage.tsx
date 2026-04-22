@@ -15,8 +15,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { logoutRequest, updatePassword } from "../../lib/api/ams";
-import { useAuth } from "../../providers/AuthProvider";
-import { useFlashbar } from "../../providers/FlashbarProvider";
+import { useAuth } from "../../providers/auth-context";
+import { useFlashbar } from "../../providers/flashbar-context";
 import { humanizeEnum } from "../../utils/format";
 
 export function AccountPage() {

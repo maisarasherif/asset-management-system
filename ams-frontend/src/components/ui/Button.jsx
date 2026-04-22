@@ -13,7 +13,8 @@
       padding: pad, fontSize: fs, fontWeight: 500, letterSpacing: "0.05em",
       ...styles, border: `1px solid ${styles.borderColor}`,
       borderRadius: 3, transition: "all 0.15s", cursor: disabled ? "not-allowed" : "pointer",
-      opacity: disabled ? 0.5 : 1, fontFamily: "var(--font-mono)", textTransform: "uppercase", ...style
+      opacity: disabled ? 0.5 : 1, fontFamily: "var(--font-mono)", textTransform: "uppercase",
+      whiteSpace: "nowrap", flexShrink: 0, ...style
     }}>{children}</button>
   );
 }

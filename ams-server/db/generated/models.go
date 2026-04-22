@@ -43,6 +43,7 @@ type Category struct {
 	CategoryID     uuid.UUID  `json:"category_id"`
 	DisplayID      string     `json:"display_id"`
 	MainCategoryID *uuid.UUID `json:"main_category_id"`
+	SortOrder      int32      `json:"sort_order"`
 }
 
 type Certificate struct {
@@ -102,6 +103,7 @@ type MainCategory struct {
 	UpdatedAt        time.Time `json:"updated_at"`
 	MainCategoryID   uuid.UUID `json:"main_category_id"`
 	DisplayID        string    `json:"display_id"`
+	SortOrder        int32     `json:"sort_order"`
 }
 
 type ScheduledTask struct {

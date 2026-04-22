@@ -1,29 +1,16 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
   type PropsWithChildren,
 } from "react";
 import { configureApiClient } from "../lib/api/client";
+import { AuthContext, type AuthContextValue } from "./auth-context";
 import type { AuthSession } from "../types/ams";
 
 const SESSION_STORAGE_KEY = "ams-cloudscape-session";
 const ASSET_STORAGE_KEY = "ams-cloudscape-selected-asset";
-
-interface AuthContextValue {
-  session: AuthSession | null;
-  selectedAssetId: string | null;
-  isAdmin: boolean;
-  isAuthenticated: boolean;
-  login: (session: AuthSession) => void;
-  logout: () => void;
-  setSelectedAssetId: (assetId: string | null) => void;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
 
 function readStoredSession(): AuthSession | null {
   try {
@@ -103,12 +90,4 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
 }

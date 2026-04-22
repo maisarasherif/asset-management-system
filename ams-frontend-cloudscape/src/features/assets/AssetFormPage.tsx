@@ -25,8 +25,8 @@ import {
   updateAsset,
 } from "../../lib/api/ams";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
-import { useAuth } from "../../providers/AuthProvider";
-import { useFlashbar } from "../../providers/FlashbarProvider";
+import { useAuth } from "../../providers/auth-context";
+import { useFlashbar } from "../../providers/flashbar-context";
 import type { AssetInput, AssetStatus } from "../../types/ams";
 import { humanizeEnum } from "../../utils/format";
 

@@ -1,0 +1,2 @@
+-- This migration only normalizes existing sort_order values to oldest-first creation order.
+-- Reverting it would require restoring the previous per-row sort_order values, which are not preserved.

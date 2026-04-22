@@ -16,18 +16,18 @@ import {
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   createCertificate,
   getAsset,
   getCertificate,
   getComponent,
   listTestTypes,
-  updateCertificate,
+  patchCertificate,
 } from "../../lib/api/ams";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
-import { useFlashbar } from "../../providers/FlashbarProvider";
-import type { CertificateInput } from "../../types/ams";
+import { useFlashbar } from "../../providers/flashbar-context";
+import type { CertificateInput, PatchCertificateInput } from "../../types/ams";
 import { toDateInputValue, toIsoDate } from "../../utils/format";
 
 function addDays(dateValue: string, days: number) {
@@ -53,8 +53,49 @@ interface CertificateFormState {
   maintenance_notes: string;
 }
 
+function buildPatchPayload(
+  baseForm: CertificateFormState,
+  nextForm: CertificateFormState
+): PatchCertificateInput {
+  const payload: PatchCertificateInput = {};
+
+  if (nextForm.component_id !== baseForm.component_id) {
+    payload.component_id = nextForm.component_id;
+  }
+  if (nextForm.certificate_name.trim() !== baseForm.certificate_name.trim()) {
+    payload.certificate_name = nextForm.certificate_name.trim();
+  }
+  if (nextForm.issue_date !== baseForm.issue_date) {
+    payload.issue_date = nextForm.issue_date ? toIsoDate(nextForm.issue_date) : undefined;
+  }
+  if (nextForm.expiry_date !== baseForm.expiry_date) {
+    payload.expiry_date = nextForm.expiry_date ? toIsoDate(nextForm.expiry_date) : undefined;
+  }
+  if (nextForm.certificate_file.trim() !== baseForm.certificate_file.trim()) {
+    payload.certificate_file = nextForm.certificate_file.trim();
+  }
+  if (nextForm.issuing_authority.trim() !== baseForm.issuing_authority.trim()) {
+    payload.issuing_authority = nextForm.issuing_authority.trim();
+  }
+  if (nextForm.test_id !== baseForm.test_id) {
+    payload.test_id = nextForm.test_id;
+  }
+  if (nextForm.imca_ref.trim() !== baseForm.imca_ref.trim()) {
+    payload.imca_ref = nextForm.imca_ref.trim();
+  }
+  if (nextForm.imca_d018.trim() !== baseForm.imca_d018.trim()) {
+    payload.imca_d018 = nextForm.imca_d018.trim();
+  }
+  if (nextForm.maintenance_notes.trim() !== baseForm.maintenance_notes.trim()) {
+    payload.maintenance_notes = nextForm.maintenance_notes.trim();
+  }
+
+  return payload;
+}
+
 export function CertificateFormPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { assetId, componentId, certificateId } = useParams();
   const { error, success } = useFlashbar();
@@ -130,14 +171,21 @@ export function CertificateFormPage() {
     form.issue_date && selectedTestType
       ? addDays(form.issue_date, selectedTestType.validity_duration)
       : "";
+  const cancelTarget =
+    typeof location.state === "object" &&
+    location.state !== null &&
+    "from" in location.state &&
+    typeof (location.state as { from?: unknown }).from === "string"
+      ? (location.state as { from: string }).from
+      : `/assets/${assetId}`;
 
   const saveMutation = useMutation({
-    mutationFn: async (payload: CertificateInput) => {
+    mutationFn: async (payload: CertificateInput | PatchCertificateInput) => {
       if (isEditing && certificateId) {
-        await updateCertificate(certificateId, payload);
+        await patchCertificate(certificateId, payload as PatchCertificateInput);
         return null;
       }
-      return createCertificate(payload);
+      return createCertificate(payload as CertificateInput);
     },
     onSuccess: async (createdCertificate) => {
       if (!assetId || !componentId) return;
@@ -231,6 +279,11 @@ export function CertificateFormPage() {
     }
 
     setErrorMessage("");
+    if (isEditing) {
+      saveMutation.mutate(buildPatchPayload(baseForm, form));
+      return;
+    }
+
     saveMutation.mutate({
       component_id: componentId,
       certificate_name: form.certificate_name.trim(),
@@ -251,7 +304,7 @@ export function CertificateFormPage() {
         <Header
           actions={
             <SpaceBetween direction="horizontal" size="xs">
-              <Button onClick={() => navigate(`/assets/${assetId}`)}>Cancel</Button>
+              <Button onClick={() => navigate(cancelTarget)}>Cancel</Button>
               <Button loading={saveMutation.isPending} variant="primary" onClick={handleSubmit}>
                 {isEditing ? "Save certificate" : "Create certificate"}
               </Button>
@@ -286,10 +339,22 @@ export function CertificateFormPage() {
                     placeholder="Select a test type"
                     selectedOption={selectedTestTypeOption}
                     onChange={({ detail }) =>
-                      setForm((current) => ({
-                        ...current,
-                        test_id: detail.selectedOption.value ?? "",
-                      }))
+                      setForm((current) => {
+                        const nextTestId = detail.selectedOption.value ?? "";
+                        const nextTestType = testTypesQuery.data?.find(
+                          (testType) => testType.test_id === nextTestId
+                        );
+                        const nextExpiry =
+                          current.issue_date && nextTestType
+                            ? addDays(current.issue_date, nextTestType.validity_duration)
+                            : current.expiry_date;
+
+                        return {
+                          ...current,
+                          test_id: nextTestId,
+                          expiry_date: nextExpiry,
+                        };
+                      })
                     }
                   />
                 </FormField>
@@ -313,15 +378,27 @@ export function CertificateFormPage() {
                     value={form.issue_date}
                     type="date"
                     onChange={(event) =>
-                      setForm((current) => ({ ...current, issue_date: event.target.value }))
+                      setForm((current) => {
+                        const nextIssueDate = event.target.value;
+                        const nextExpiry =
+                          nextIssueDate && selectedTestType
+                            ? addDays(nextIssueDate, selectedTestType.validity_duration)
+                            : current.expiry_date;
+
+                        return {
+                          ...current,
+                          issue_date: nextIssueDate,
+                          expiry_date: nextExpiry,
+                        };
+                      })
                     }
                   />
                 </FormField>
                 <FormField
                   description={
                     suggestedExpiry
-                      ? `Suggested from test validity: ${suggestedExpiry}`
-                      : "Choose the expiry date recorded on the certificate."
+                      ? `Auto-filled from test validity: ${suggestedExpiry}`
+                      : "Choose a test type and issue date to auto-fill expiry."
                   }
                   label="Expiry date"
                 >
@@ -336,33 +413,25 @@ export function CertificateFormPage() {
                 </FormField>
               </ColumnLayout>
 
-              {suggestedExpiry && suggestedExpiry !== form.expiry_date ? (
-                <Box>
-                  <Button
-                    formAction="none"
-                    variant="inline-link"
-                    onClick={() =>
-                      setForm((current) => ({ ...current, expiry_date: suggestedExpiry }))
-                    }
-                  >
-                    Use suggested expiry date
-                  </Button>
-                </Box>
-              ) : null}
-
               <ColumnLayout columns={2}>
-                <FormField label="Certificate file URL">
-                  <Input
-                    type="url"
-                    value={form.certificate_file}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({
-                        ...current,
-                        certificate_file: detail.value,
-                      }))
-                    }
-                  />
-                </FormField>
+                {isEditing ? (
+                  <FormField label="Certificate file path">
+                    <Input value={form.certificate_file || "No file uploaded"} readOnly />
+                  </FormField>
+                ) : (
+                  <FormField label="Certificate file URL">
+                    <Input
+                      type="url"
+                      value={form.certificate_file}
+                      onChange={({ detail }) =>
+                        setForm((current) => ({
+                          ...current,
+                          certificate_file: detail.value,
+                        }))
+                      }
+                    />
+                  </FormField>
+                )}
                 <FormField label="IMCA Ref">
                   <Input
                     value={form.imca_ref}

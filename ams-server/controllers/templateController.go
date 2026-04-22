@@ -61,7 +61,7 @@ func GetTemplates(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, templates)
+		c.JSON(http.StatusOK, dto.NormalizeListData(templates))
 	}
 }
 
@@ -216,11 +216,18 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		if _, err := queries.DeleteTemplateComponentsByTemplateID(ctx, templateID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear existing template configuration"})
+		existingComponents, err := queries.GetTemplateComponentsByTemplateID(ctx, templateID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch existing template components"})
 			return
 		}
 
+		existingComponentMap := make(map[uuid.UUID]db.GetTemplateComponentsByTemplateIDRow, len(existingComponents))
+		for _, component := range existingComponents {
+			existingComponentMap[component.TemplateComponentID] = component
+		}
+
+		keptComponentIDs := make(map[uuid.UUID]struct{}, len(input.Components))
 		totalTests := 0
 		for _, componentInput := range input.Components {
 			categoryID, err := utils.ParseUUID(componentInput.CategoryID, "category_id")
@@ -229,26 +236,79 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 				return
 			}
 
-			component, err := queries.CreateTemplateComponent(ctx, db.CreateTemplateComponentParams{
-				TemplateID:      templateID,
-				CategoryID:      categoryID,
-				Name:            componentInput.Name,
-				Description:     componentInput.Description,
-				SerialNumber:    componentInput.SerialNumber,
-				Manufacturer:    componentInput.Manufacturer,
-				Location:        componentInput.Location,
-				AssignedProject: componentInput.AssignedProject,
-				EquipmentType:   componentInput.EquipmentType,
-				Structure:       componentInput.Structure,
-				Model:           componentInput.Model,
-				Class:           componentInput.Class,
-				ClassCode:       componentInput.ClassCode,
-				SafetyCritical:  componentInput.SafetyCritical,
-			})
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create template component"})
-				return
+			templateComponentID := uuid.Nil
+			if componentInput.TemplateComponentID != "" {
+				templateComponentID, err = utils.ParseUUID(componentInput.TemplateComponentID, "template_component_id")
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+					return
+				}
 			}
+
+			if templateComponentID != uuid.Nil {
+				if _, exists := keptComponentIDs[templateComponentID]; exists {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "duplicate template_component_id in configuration payload"})
+					return
+				}
+
+				if _, exists := existingComponentMap[templateComponentID]; !exists {
+					c.JSON(http.StatusNotFound, gin.H{"error": "template component not found"})
+					return
+				}
+
+				rows, err := queries.UpdateTemplateComponent(ctx, db.UpdateTemplateComponentParams{
+					TemplateComponentID: templateComponentID,
+					CategoryID:          categoryID,
+					Name:                componentInput.Name,
+					Description:         componentInput.Description,
+					SerialNumber:        componentInput.SerialNumber,
+					Manufacturer:        componentInput.Manufacturer,
+					Location:            componentInput.Location,
+					AssignedProject:     componentInput.AssignedProject,
+					EquipmentType:       componentInput.EquipmentType,
+					Structure:           componentInput.Structure,
+					Model:               componentInput.Model,
+					Class:               componentInput.Class,
+					ClassCode:           componentInput.ClassCode,
+					SafetyCritical:      componentInput.SafetyCritical,
+				})
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update template component"})
+					return
+				}
+				if rows == 0 {
+					c.JSON(http.StatusNotFound, gin.H{"error": "template component not found"})
+					return
+				}
+
+				if _, err := queries.DeleteTemplateComponentTestsByComponentID(ctx, templateComponentID); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to replace template component tests"})
+					return
+				}
+			} else {
+				component, err := queries.CreateTemplateComponent(ctx, db.CreateTemplateComponentParams{
+					TemplateID:      templateID,
+					CategoryID:      categoryID,
+					Name:            componentInput.Name,
+					Description:     componentInput.Description,
+					SerialNumber:    componentInput.SerialNumber,
+					Manufacturer:    componentInput.Manufacturer,
+					Location:        componentInput.Location,
+					AssignedProject: componentInput.AssignedProject,
+					EquipmentType:   componentInput.EquipmentType,
+					Structure:       componentInput.Structure,
+					Model:           componentInput.Model,
+					Class:           componentInput.Class,
+					ClassCode:       componentInput.ClassCode,
+					SafetyCritical:  componentInput.SafetyCritical,
+				})
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create template component"})
+					return
+				}
+				templateComponentID = component.TemplateComponentID
+			}
+			keptComponentIDs[templateComponentID] = struct{}{}
 
 			for _, testIDValue := range componentInput.TestIDs {
 				testID, err := utils.ParseUUID(testIDValue, "test_id")
@@ -258,13 +318,23 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 				}
 
 				if _, err := queries.CreateTemplateComponentTest(ctx, db.CreateTemplateComponentTestParams{
-					TemplateComponentID: component.TemplateComponentID,
+					TemplateComponentID: templateComponentID,
 					TestID:              testID,
 				}); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign test to template component"})
 					return
 				}
 				totalTests++
+			}
+		}
+
+		for _, existingComponent := range existingComponents {
+			if _, keep := keptComponentIDs[existingComponent.TemplateComponentID]; keep {
+				continue
+			}
+			if _, err := queries.DeleteTemplateComponent(ctx, existingComponent.TemplateComponentID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove template component"})
+				return
 			}
 		}
 
@@ -475,7 +545,88 @@ func GetTemplateComponents(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, components)
+		c.JSON(http.StatusOK, dto.NormalizeListData(components))
+	}
+}
+
+func GetTemplateConfiguration(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		templateID, ok := utils.ParseUUIDParam(c, "template_id")
+		if !ok {
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		_, err := queries.GetAssetTemplateByID(ctx, templateID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "template not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch template"})
+			return
+		}
+
+		components, err := queries.GetTemplateComponentsByTemplateID(ctx, templateID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch template components"})
+			return
+		}
+
+		tests, err := queries.GetTemplateComponentTestsWithDetailByTemplateID(ctx, templateID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch template component tests"})
+			return
+		}
+
+		testsByComponent := make(map[uuid.UUID][]dto.TemplateComponentTestDetailResponse, len(components))
+		for _, test := range tests {
+			testsByComponent[test.TemplateComponentID] = append(
+				testsByComponent[test.TemplateComponentID],
+				dto.TemplateComponentTestDetailResponse{
+					TemplateComponentTestID:        test.TemplateComponentTestID.String(),
+					TemplateComponentTestDisplayID: test.TemplateComponentTestDisplayID,
+					TemplateComponentID:            test.TemplateComponentID.String(),
+					TestID:                         test.TestID.String(),
+					Position:                       test.Position,
+					CreatedAt:                      test.CreatedAt,
+					TestName:                       test.TestName,
+					ValidityDuration:               test.ValidityDuration,
+					Description:                    test.Description,
+				},
+			)
+		}
+
+		response := make([]dto.TemplateConfigurationComponentResponse, 0, len(components))
+		for _, component := range components {
+			response = append(response, dto.TemplateConfigurationComponentResponse{
+				TemplateComponentID: component.TemplateComponentID.String(),
+				DisplayID:           component.DisplayID,
+				TemplateID:          component.TemplateID.String(),
+				CategoryID:          component.CategoryID.String(),
+				Position:            component.Position,
+				Name:                component.Name,
+				Description:         component.Description,
+				SerialNumber:        component.SerialNumber,
+				Manufacturer:        component.Manufacturer,
+				EquipmentType:       component.EquipmentType,
+				Structure:           component.Structure,
+				Model:               component.Model,
+				Class:               component.Class,
+				ClassCode:           component.ClassCode,
+				SafetyCritical:      component.SafetyCritical,
+				CreatedAt:           component.CreatedAt,
+				Location:            component.Location,
+				AssignedProject:     component.AssignedProject,
+				Tests:               testsByComponent[component.TemplateComponentID],
+			})
+		}
+
+		c.JSON(http.StatusOK, dto.NormalizeListData(response))
 	}
 }
 
@@ -683,7 +834,7 @@ func GetTemplateComponentTests(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, tests)
+		c.JSON(http.StatusOK, dto.NormalizeListData(tests))
 	}
 }
 

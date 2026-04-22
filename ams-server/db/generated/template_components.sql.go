@@ -263,27 +263,34 @@ func (q *Queries) GetTemplateComponentByID(ctx context.Context, templateComponen
 
 const getTemplateComponentsByTemplateID = `-- name: GetTemplateComponentsByTemplateID :many
 SELECT
-    template_component_id,
-    display_id,
-    template_id,
-    category_id,
-    position,
-    name,
-    description,
-    serial_number,
-    manufacturer,
-    equipment_type,
-    structure,
-    model,
-    class,
-    class_code,
-    safety_critical,
-    created_at,
-    location,
-    assigned_project
-FROM template_components
-WHERE template_id = $1
-ORDER BY position ASC, created_at ASC
+    tc.template_component_id,
+    tc.display_id,
+    tc.template_id,
+    tc.category_id,
+    tc.position,
+    tc.name,
+    tc.description,
+    tc.serial_number,
+    tc.manufacturer,
+    tc.equipment_type,
+    tc.structure,
+    tc.model,
+    tc.class,
+    tc.class_code,
+    tc.safety_critical,
+    tc.created_at,
+    tc.location,
+    tc.assigned_project
+FROM template_components tc
+JOIN categories c ON c.category_id = tc.category_id
+LEFT JOIN main_categories mc ON mc.main_category_id = c.main_category_id
+WHERE tc.template_id = $1
+ORDER BY
+    CASE WHEN mc.sort_order IS NULL THEN 1 ELSE 0 END,
+    mc.sort_order ASC NULLS LAST,
+    c.sort_order ASC,
+    tc.position ASC,
+    tc.created_at ASC
 `
 
 type GetTemplateComponentsByTemplateIDRow struct {

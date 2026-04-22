@@ -10,17 +10,23 @@ import {
   SpaceBetween,
 } from "@cloudscape-design/components";
 import { useMutation } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../../lib/api/ams";
-import { useAuth } from "../../providers/AuthProvider";
+import { useAuth } from "../../providers/auth-context";
+import { useFlashbar } from "../../providers/flashbar-context";
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { login: establishSession } = useAuth();
+  const { clearAll } = useFlashbar();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    clearAll();
+  }, [clearAll]);
 
   const loginMutation = useMutation({
     mutationFn: login,

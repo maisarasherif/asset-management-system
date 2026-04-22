@@ -1,18 +1,93 @@
-import type { ReactNode } from "react";
+/* eslint-disable react-refresh/only-export-components */
+import { Suspense, lazy, type ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import { AppChrome } from "../components/layout/AppShellLayout";
-import { PlaceholderPage } from "../components/shared/PlaceholderPage";
+import { PageLoading } from "../components/shared/PageStates";
 import { RouteErrorPage } from "../components/shared/RouteErrorPage";
-import { AccountPage } from "../features/account/AccountPage";
-import { AssetFormPage } from "../features/assets/AssetFormPage";
-import { AssetsDirectoryPage } from "../features/assets/AssetsDirectoryPage";
-import { AssetWorkspacePage } from "../features/assets/AssetWorkspacePage";
-import { CertificateDetailPage } from "../features/assets/CertificateDetailPage";
-import { CertificateFormPage } from "../features/assets/CertificateFormPage";
-import { ComponentFormPage } from "../features/assets/ComponentFormPage";
-import { LoginPage } from "../features/auth/LoginPage";
-import { DashboardPage } from "../features/dashboard/DashboardPage";
-import { useAuth } from "../providers/AuthProvider";
+import { useAuth } from "../providers/auth-context";
+
+const AppChrome = lazy(() =>
+  import("../components/layout/AppShellLayout").then((module) => ({
+    default: module.AppChrome,
+  }))
+);
+const LoginPage = lazy(() =>
+  import("../features/auth/LoginPage").then((module) => ({
+    default: module.LoginPage,
+  }))
+);
+const DashboardPage = lazy(() =>
+  import("../features/dashboard/DashboardPage").then((module) => ({
+    default: module.DashboardPage,
+  }))
+);
+const AssetsDirectoryPage = lazy(() =>
+  import("../features/assets/AssetsDirectoryPage").then((module) => ({
+    default: module.AssetsDirectoryPage,
+  }))
+);
+const AssetFormPage = lazy(() =>
+  import("../features/assets/AssetFormPage").then((module) => ({
+    default: module.AssetFormPage,
+  }))
+);
+const AssetWorkspacePage = lazy(() =>
+  import("../features/assets/AssetWorkspacePage").then((module) => ({
+    default: module.AssetWorkspacePage,
+  }))
+);
+const ComponentFormPage = lazy(() =>
+  import("../features/assets/ComponentFormPage").then((module) => ({
+    default: module.ComponentFormPage,
+  }))
+);
+const CertificateFormPage = lazy(() =>
+  import("../features/assets/CertificateFormPage").then((module) => ({
+    default: module.CertificateFormPage,
+  }))
+);
+const CertificateDetailPage = lazy(() =>
+  import("../features/assets/CertificateDetailPage").then((module) => ({
+    default: module.CertificateDetailPage,
+  }))
+);
+const TemplatesPage = lazy(() =>
+  import("../features/templates/TemplatesPage").then((module) => ({
+    default: module.TemplatesPage,
+  }))
+);
+const TemplateCreatePage = lazy(() =>
+  import("../features/templates/TemplateCreatePage").then((module) => ({
+    default: module.TemplateCreatePage,
+  }))
+);
+const TemplateDetailPage = lazy(() =>
+  import("../features/templates/TemplateDetailPage").then((module) => ({
+    default: module.TemplateDetailPage,
+  }))
+);
+const TemplateConfigurePage = lazy(() =>
+  import("../features/templates/TemplateConfigurePage").then((module) => ({
+    default: module.TemplateConfigurePage,
+  }))
+);
+const CatalogPage = lazy(() =>
+  import("../features/catalog/CatalogPage").then((module) => ({
+    default: module.CatalogPage,
+  }))
+);
+const AccountPage = lazy(() =>
+  import("../features/account/AccountPage").then((module) => ({
+    default: module.AccountPage,
+  }))
+);
+
+function RouteSuspense({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={<PageLoading>Loading the next page...</PageLoading>}>
+      {children}
+    </Suspense>
+  );
+}
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -40,7 +115,9 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorPage />,
     element: (
       <GuestOnly>
-        <LoginPage />
+        <RouteSuspense>
+          <LoginPage />
+        </RouteSuspense>
       </GuestOnly>
     ),
   },
@@ -49,7 +126,9 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorPage />,
     element: (
       <RequireAuth>
-        <AppChrome />
+        <RouteSuspense>
+          <AppChrome />
+        </RouteSuspense>
       </RequireAuth>
     ),
     children: [
@@ -59,92 +138,131 @@ export const router = createBrowserRouter([
       },
       {
         path: "dashboard",
-        element: <DashboardPage />,
+        element: (
+          <RouteSuspense>
+            <DashboardPage />
+          </RouteSuspense>
+        ),
       },
       {
         path: "assets",
-        element: <AssetsDirectoryPage />,
+        element: (
+          <RouteSuspense>
+            <AssetsDirectoryPage />
+          </RouteSuspense>
+        ),
       },
       {
         path: "assets/new",
-        element: <AssetFormPage />,
+        element: (
+          <RouteSuspense>
+            <AssetFormPage />
+          </RouteSuspense>
+        ),
       },
       {
         path: "assets/:assetId",
-        element: <AssetWorkspacePage />,
+        element: (
+          <RouteSuspense>
+            <AssetWorkspacePage />
+          </RouteSuspense>
+        ),
       },
       {
         path: "assets/:assetId/edit",
-        element: <AssetFormPage />,
+        element: (
+          <RouteSuspense>
+            <AssetFormPage />
+          </RouteSuspense>
+        ),
       },
       {
         path: "assets/:assetId/components/new",
-        element: <ComponentFormPage />,
+        element: (
+          <RouteSuspense>
+            <ComponentFormPage />
+          </RouteSuspense>
+        ),
       },
       {
         path: "assets/:assetId/components/:componentId/edit",
-        element: <ComponentFormPage />,
+        element: (
+          <RouteSuspense>
+            <ComponentFormPage />
+          </RouteSuspense>
+        ),
       },
       {
         path: "assets/:assetId/components/:componentId/certificates/new",
-        element: <CertificateFormPage />,
+        element: (
+          <RouteSuspense>
+            <CertificateFormPage />
+          </RouteSuspense>
+        ),
       },
       {
         path: "assets/:assetId/components/:componentId/certificates/:certificateId",
-        element: <CertificateDetailPage />,
+        element: (
+          <RouteSuspense>
+            <CertificateDetailPage />
+          </RouteSuspense>
+        ),
       },
       {
         path: "assets/:assetId/components/:componentId/certificates/:certificateId/edit",
-        element: <CertificateFormPage />,
+        element: (
+          <RouteSuspense>
+            <CertificateFormPage />
+          </RouteSuspense>
+        ),
       },
       {
         path: "templates",
         element: (
-          <PlaceholderPage
-            description="Templates are planned for the next implementation pass. This route is reserved for the admin template workspace."
-            title="Templates"
-          />
+          <RouteSuspense>
+            <TemplatesPage />
+          </RouteSuspense>
         ),
       },
       {
         path: "templates/new",
         element: (
-          <PlaceholderPage
-            description="Template creation will land in the Phase 2 admin workspace."
-            title="Create template"
-          />
+          <RouteSuspense>
+            <TemplateCreatePage />
+          </RouteSuspense>
         ),
       },
       {
         path: "templates/:templateId",
         element: (
-          <PlaceholderPage
-            description="Template detail will be implemented with the configuration workflow in Phase 2."
-            title="Template detail"
-          />
+          <RouteSuspense>
+            <TemplateDetailPage />
+          </RouteSuspense>
         ),
       },
       {
         path: "templates/:templateId/configure",
         element: (
-          <PlaceholderPage
-            description="Template configuration will use a staged wizard in the next pass."
-            title="Configure template"
-          />
+          <RouteSuspense>
+            <TemplateConfigurePage />
+          </RouteSuspense>
         ),
       },
       {
         path: "catalog",
         element: (
-          <PlaceholderPage
-            description="Catalog management for categories and test types is reserved for the next pass."
-            title="Catalog"
-          />
+          <RouteSuspense>
+            <CatalogPage />
+          </RouteSuspense>
         ),
       },
       {
         path: "account",
-        element: <AccountPage />,
+        element: (
+          <RouteSuspense>
+            <AccountPage />
+          </RouteSuspense>
+        ),
       },
     ],
   },
