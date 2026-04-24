@@ -230,6 +230,24 @@ export interface UpdatePasswordInput {
   new_password: string;
 }
 
+export interface CreateUserInput {
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  role: Role;
+}
+
+export interface UserAccount {
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: Role;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AssetTemplateInput {
   template_name: string;
   description: string;

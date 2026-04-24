@@ -24,6 +24,7 @@ import {
   uploadCertificateFile,
 } from "../../lib/api/ams";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
+import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { CertificateUploadAudit } from "../../types/ams";
 import { certificateStatusType } from "../../utils/status";
@@ -34,6 +35,7 @@ export function CertificateDetailPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { assetId, componentId, certificateId } = useParams();
+  const { isAdmin } = useAuth();
   const { error, success } = useFlashbar();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
@@ -167,15 +169,17 @@ export function CertificateDetailPage() {
               <Button onClick={() => navigate(`/assets/${assetId}?component=${componentId}`)}>
                 Back to asset
               </Button>
-              <Button
-                onClick={() =>
-                  navigate(`/assets/${assetId}/components/${componentId}/certificates/${certificateId}/edit`, {
-                    state: { from: `${location.pathname}${location.search}` },
-                  })
-                }
-              >
-                Edit certificate
-              </Button>
+              {isAdmin ? (
+                <Button
+                  onClick={() =>
+                    navigate(`/assets/${assetId}/components/${componentId}/certificates/${certificateId}/edit`, {
+                      state: { from: `${location.pathname}${location.search}` },
+                    })
+                  }
+                >
+                  Edit certificate
+                </Button>
+              ) : null}
               <Button
                 disabled={!certificateQuery.data.certificate_file}
                 loading={downloadMutation.isPending}
@@ -254,31 +258,33 @@ export function CertificateDetailPage() {
           </Container>
         </ColumnLayout>
 
-        <Container header={<Header variant="h2">Attach or replace document</Header>}>
-          <SpaceBetween direction="vertical" size="m">
-            <Box color="text-body-secondary">
-              Upload PDF, JPEG, PNG, or WEBP files up to 10 MB.
-            </Box>
-            <input
-              key={fileInputKey}
-              className="file-input"
-              type="file"
-              accept=".pdf,image/jpeg,image/png,image/webp"
-              onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-            />
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button
-                disabled={!selectedFile}
-                loading={uploadMutation.isPending}
-                variant="primary"
-                onClick={() => uploadMutation.mutate()}
-              >
-                Upload file
-              </Button>
-              {selectedFile ? <Box>{selectedFile.name}</Box> : null}
+        {isAdmin ? (
+          <Container header={<Header variant="h2">Attach or replace document</Header>}>
+            <SpaceBetween direction="vertical" size="m">
+              <Box color="text-body-secondary">
+                Upload PDF, JPEG, PNG, or WEBP files up to 10 MB.
+              </Box>
+              <input
+                key={fileInputKey}
+                className="file-input"
+                type="file"
+                accept=".pdf,image/jpeg,image/png,image/webp"
+                onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+              />
+              <SpaceBetween direction="horizontal" size="xs">
+                <Button
+                  disabled={!selectedFile}
+                  loading={uploadMutation.isPending}
+                  variant="primary"
+                  onClick={() => uploadMutation.mutate()}
+                >
+                  Upload file
+                </Button>
+                {selectedFile ? <Box>{selectedFile.name}</Box> : null}
+              </SpaceBetween>
             </SpaceBetween>
-          </SpaceBetween>
-        </Container>
+          </Container>
+        ) : null}
 
         <Container header={<Header variant="h2">Upload history</Header>}>
           {uploadsQuery.isError ? (

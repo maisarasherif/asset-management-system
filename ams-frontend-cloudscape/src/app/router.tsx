@@ -99,6 +99,20 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return children;
 }
 
+function RequireAdmin({ children }: { children: ReactNode }) {
+  const { isAdmin, isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate replace to="/login" />;
+  }
+
+  if (!isAdmin) {
+    return <Navigate replace to="/dashboard" />;
+  }
+
+  return children;
+}
+
 function GuestOnly({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
 
@@ -155,9 +169,11 @@ export const router = createBrowserRouter([
       {
         path: "assets/new",
         element: (
-          <RouteSuspense>
-            <AssetFormPage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <AssetFormPage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {
@@ -171,33 +187,41 @@ export const router = createBrowserRouter([
       {
         path: "assets/:assetId/edit",
         element: (
-          <RouteSuspense>
-            <AssetFormPage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <AssetFormPage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {
         path: "assets/:assetId/components/new",
         element: (
-          <RouteSuspense>
-            <ComponentFormPage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <ComponentFormPage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {
         path: "assets/:assetId/components/:componentId/edit",
         element: (
-          <RouteSuspense>
-            <ComponentFormPage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <ComponentFormPage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {
         path: "assets/:assetId/components/:componentId/certificates/new",
         element: (
-          <RouteSuspense>
-            <CertificateFormPage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <CertificateFormPage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {
@@ -211,49 +235,61 @@ export const router = createBrowserRouter([
       {
         path: "assets/:assetId/components/:componentId/certificates/:certificateId/edit",
         element: (
-          <RouteSuspense>
-            <CertificateFormPage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <CertificateFormPage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {
         path: "templates",
         element: (
-          <RouteSuspense>
-            <TemplatesPage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <TemplatesPage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {
         path: "templates/new",
         element: (
-          <RouteSuspense>
-            <TemplateCreatePage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <TemplateCreatePage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {
         path: "templates/:templateId",
         element: (
-          <RouteSuspense>
-            <TemplateDetailPage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <TemplateDetailPage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {
         path: "templates/:templateId/configure",
         element: (
-          <RouteSuspense>
-            <TemplateConfigurePage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <TemplateConfigurePage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {
         path: "catalog",
         element: (
-          <RouteSuspense>
-            <CatalogPage />
-          </RouteSuspense>
+          <RequireAdmin>
+            <RouteSuspense>
+              <CatalogPage />
+            </RouteSuspense>
+          </RequireAdmin>
         ),
       },
       {

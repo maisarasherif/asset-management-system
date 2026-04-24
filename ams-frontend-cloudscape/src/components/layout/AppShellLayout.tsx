@@ -76,7 +76,7 @@ export function AppShellLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { items } = useFlashbar();
-  const { selectedAssetId, setSelectedAssetId } = useAuth();
+  const { isAdmin, selectedAssetId, setSelectedAssetId } = useAuth();
   const [navigationOpen, setNavigationOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
 
@@ -151,8 +151,12 @@ export function AppShellLayout() {
             items={[
               { type: "link", text: "Dashboard", href: "/dashboard" },
               { type: "link", text: "Assets directory", href: "/assets" },
-              { type: "link", text: "Templates", href: "/templates" },
-              { type: "link", text: "Catalog", href: "/catalog" },
+              ...(isAdmin
+                ? [
+                    { type: "link" as const, text: "Templates", href: "/templates" },
+                    { type: "link" as const, text: "Catalog", href: "/catalog" },
+                  ]
+                : []),
               { type: "link", text: "Account", href: "/account" },
             ]}
             onFollow={(event) => {

@@ -25,7 +25,7 @@ type DashboardCertificate = AssetDashboardData["certificates"][number];
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { selectedAssetId, setSelectedAssetId } = useAuth();
+  const { isAdmin, selectedAssetId, setSelectedAssetId } = useAuth();
 
   const assetsQuery = useQuery({
     queryKey: ["assets", "all"],
@@ -62,7 +62,7 @@ export function DashboardPage() {
   if (!assetsQuery.data || assetsQuery.data.length === 0) {
     return (
       <PageEmpty
-        action={<Button onClick={() => navigate("/assets/new")}>Create asset</Button>}
+        action={isAdmin ? <Button onClick={() => navigate("/assets/new")}>Create asset</Button> : undefined}
         description="Add an asset first so the dashboard has a selected asset to summarize."
         title="No assets available"
       />
@@ -148,12 +148,14 @@ export function DashboardPage() {
               <Button onClick={() => navigate(`/assets/${dashboard.asset.asset_id}`)}>
                 Open asset workspace
               </Button>
-              <Button
-                variant="primary"
-                onClick={() => navigate(`/assets/${dashboard.asset.asset_id}/edit`)}
-              >
-                Edit asset
-              </Button>
+              {isAdmin ? (
+                <Button
+                  variant="primary"
+                  onClick={() => navigate(`/assets/${dashboard.asset.asset_id}/edit`)}
+                >
+                  Edit asset
+                </Button>
+              ) : null}
             </SpaceBetween>
           }
           description={`${dashboard.asset.display_id} - ${dashboard.asset.location || "No location set"}`}

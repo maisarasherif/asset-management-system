@@ -183,6 +183,13 @@ function ComponentsPage({ selectedAssetId, initialComponentId, onBackToAssets })
     [certificatesByComponent, selectedComponentId]
   );
 
+  const selectedCertificateNames = useMemo(
+    () => currentCertificates.map(cert => cert.certificate_name || cert.certificate_id || "Unnamed certificate"),
+    [currentCertificates]
+  );
+
+  const assetPhoto = selectedAsset?.photo?.trim() || "";
+
   // Load audit for ALL certificates of this component
   useEffect(() => {
     currentCertificates.forEach(cert => {
@@ -303,13 +310,9 @@ function ComponentsPage({ selectedAssetId, initialComponentId, onBackToAssets })
       {!loading && (
         <div className="comp-layout">
           <aside className="comp-nav">
-            <div className="comp-nav-hero">
-              <div className="comp-nav-title">{selectedAsset?.name || "No Asset"}</div>
-              <div className="comp-nav-tags">
-                <span className="comp-nav-tag">{selectedAsset?.status || "N/A"}</span>
-                {selectedAsset?.location && <span className="comp-nav-tag">{selectedAsset.location}</span>}
-                {selectedAsset?.assigned_project && <span className="comp-nav-tag">{selectedAsset.assigned_project}</span>}
-              </div>
+            <div className="comp-nav-head">
+              <div className="comp-nav-label">Components</div>
+              <div className="comp-nav-count">{componentsForAsset.length}</div>
             </div>
             <div className="comp-nav-list">
               {componentsForAsset.map(component => {
@@ -325,6 +328,64 @@ function ComponentsPage({ selectedAssetId, initialComponentId, onBackToAssets })
             </div>
           </aside>
 
+          <section className="comp-asset-panel">
+            <Card className="comp-asset-card">
+              <div className="comp-asset-shell">
+                <div className="comp-asset-summary">
+                  <div className="comp-asset-summary-head">
+                    <div className="comp-asset-eyebrow">Asset details</div>
+                    <div className="comp-asset-title">{selectedAsset?.name || "No asset selected"}</div>
+                    <div className="comp-asset-subtitle">
+                      {selectedAsset?.description || "Select an asset to review its components, status, and certification activity."}
+                    </div>
+                  </div>
+                  <div className="comp-asset-facts">
+                    <div className="comp-asset-fact">
+                      <span className="comp-asset-fact-label">Status</span>
+                      <span className="comp-asset-fact-value">
+                        {selectedAsset?.status ? <StatusBadge status={selectedAsset.status} /> : "N/A"}
+                      </span>
+                    </div>
+                    <div className="comp-asset-fact">
+                      <span className="comp-asset-fact-label">Assigned project</span>
+                      <span className="comp-asset-fact-value">{selectedAsset?.assigned_project || "Unassigned"}</span>
+                    </div>
+                    <div className="comp-asset-fact">
+                      <span className="comp-asset-fact-label">Components</span>
+                      <span className="comp-asset-fact-value">{componentsForAsset.length}</span>
+                    </div>
+                    <div className="comp-asset-fact">
+                      <span className="comp-asset-fact-label">Selected certificates</span>
+                      <span className="comp-asset-fact-value">{currentCertificates.length}</span>
+                    </div>
+                    <div className="comp-asset-fact">
+                      <span className="comp-asset-fact-label">Location</span>
+                      <span className="comp-asset-fact-value">{selectedAsset?.location || "Not set"}</span>
+                    </div>
+                    <div className="comp-asset-fact comp-asset-fact-list">
+                      <span className="comp-asset-fact-label">Selected certificates</span>
+                      <div className="comp-asset-cert-list">
+                        {selectedCertificateNames.length > 0 ? selectedCertificateNames.map(name => (
+                          <span key={name} className="comp-asset-cert-chip">{name}</span>
+                        )) : <span className="comp-asset-muted">No certificates on the selected component.</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="comp-asset-media">
+                  {assetPhoto ? (
+                    <img src={assetPhoto} alt={`${selectedAsset?.name || "Asset"} photo`} className="comp-asset-photo" />
+                  ) : (
+                    <div className="comp-asset-photo comp-asset-photo-placeholder">
+                      <div className="comp-asset-photo-label">No photo</div>
+                      <div className="comp-asset-photo-copy">Add a photo URL on the asset record to show the image here.</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </section>
+
           <section className="comp-content">
             {certificatesErrorByComponent[selectedComponentId] && (
               <Card style={{ padding: 10, color: "var(--red)", fontSize: 11 }}>
@@ -336,10 +397,11 @@ function ComponentsPage({ selectedAssetId, initialComponentId, onBackToAssets })
               <>
                 <div className="comp-head">
                   <div>
+                    <div className="comp-head-kicker">Component modifications and certifications</div>
                     <div className="comp-head-title">{selectedComponent.name}</div>
                     <div className="comp-head-sub">{selectedComponent.manufacturer || "Unknown manufacturer"} · {selectedComponent.model || "Unknown model"} · {selectedComponent.class || "No class"}</div>
                   </div>
-                  {isAdmin && <div style={{ display: "flex", gap: 8 }}>
+                  {isAdmin && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                     <Button variant="primary" onClick={() => setCertModal("add")}>+ Add Certificate</Button>
                     <Button onClick={() => { setSelected(selectedComponent); setModal("edit"); }}>Edit Component</Button>
                     <Button variant="danger" onClick={() => handleDelete(selectedComponent.component_id, true)}>Delete</Button>
@@ -372,7 +434,6 @@ function ComponentsPage({ selectedAssetId, initialComponentId, onBackToAssets })
                       const isOpen = expandedCertId === cert.certificate_id;
                       return (
                         <div key={cert.certificate_id} style={{ borderBottom: idx < currentCertificates.length - 1 ? "1px solid var(--border)" : "none" }}>
-                          {/* Accordion header — always visible */}
                           <div
                             className="cert-editorial-header"
                             style={{ cursor: "pointer", userSelect: "none" }}
@@ -409,7 +470,6 @@ function ComponentsPage({ selectedAssetId, initialComponentId, onBackToAssets })
                             <span style={{ color: "rgba(240,232,216,0.6)", fontSize: 14, marginLeft: 8, transition: "transform 0.25s", display: "inline-block", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>v</span>
                           </div>
 
-                          {/* Accordion body — slides open/closed */}
                           <div className={`cert-accordion-body${isOpen ? " open" : ""}`}>
                             <div className="cert-accordion-inner">
                               <div className="cert-editorial-fields">

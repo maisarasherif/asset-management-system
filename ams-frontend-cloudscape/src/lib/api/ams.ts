@@ -12,6 +12,7 @@ import type {
   PatchCertificateInput,
   ConfigureTemplateInput,
   ComponentInput,
+  CreateUserInput,
   MainCategoryInput,
   ComponentRecord,
   LoginResponse,
@@ -25,6 +26,7 @@ import type {
   TestTypeInput,
   TestType,
   UpdatePasswordInput,
+  UserAccount,
 } from "../../types/ams";
 import { apiRequest } from "./client";
 
@@ -71,6 +73,13 @@ export function logoutRequest() {
 export function updatePassword(payload: UpdatePasswordInput) {
   return apiRequest<MessageResponse>("/v1/account/password", {
     method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createUser(payload: CreateUserInput) {
+  return apiRequest<UserAccount>("/v1/user", {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 }
