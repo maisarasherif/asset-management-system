@@ -519,6 +519,93 @@ func (q *Queries) GetAllCertificatesWithContextPaginated(ctx context.Context, ar
 	return items, nil
 }
 
+const getAssetComponentCertificateSheetRows = `-- name: GetAssetComponentCertificateSheetRows :many
+SELECT
+    asset.asset_id AS asset_id,
+    asset.display_id AS asset_display_id,
+    asset.name AS asset_name,
+    comp.component_id AS component_id,
+    comp.display_id AS component_display_id,
+    comp.name AS component_name,
+    comp.serial_number AS component_serial_number,
+    COALESCE(cert.display_id, '') AS certificate_number,
+    cert.issue_date,
+    cert.expiry_date,
+    COALESCE(cert.status, '') AS certificate_status,
+    COALESCE(cert.imca_d018, '') AS imca_d018,
+    COALESCE(test.test_name, '') AS test_type
+FROM components comp
+JOIN assets asset ON asset.asset_id = comp.asset_id
+JOIN categories cat ON cat.category_id = comp.category_id
+LEFT JOIN main_categories mc ON mc.main_category_id = cat.main_category_id
+LEFT JOIN template_components tc ON tc.template_component_id = comp.template_component_id
+LEFT JOIN certificates cert ON cert.component_id = comp.component_id
+LEFT JOIN test_types test ON test.test_id = cert.test_id
+LEFT JOIN template_component_tests tct ON tct.template_component_test_id = cert.template_component_test_id
+WHERE comp.asset_id = $1
+ORDER BY
+    CASE WHEN mc.sort_order IS NULL THEN 1 ELSE 0 END,
+    mc.sort_order ASC NULLS LAST,
+    cat.sort_order ASC,
+    tc.position ASC NULLS LAST,
+    comp.created_at ASC,
+    comp.display_id ASC,
+    tct.position ASC NULLS LAST,
+    cert.expiry_date ASC NULLS LAST,
+    cert.created_at ASC NULLS LAST,
+    cert.display_id ASC NULLS LAST
+`
+
+type GetAssetComponentCertificateSheetRowsRow struct {
+	AssetID               uuid.UUID  `json:"asset_id"`
+	AssetDisplayID        string     `json:"asset_display_id"`
+	AssetName             string     `json:"asset_name"`
+	ComponentID           uuid.UUID  `json:"component_id"`
+	ComponentDisplayID    string     `json:"component_display_id"`
+	ComponentName         string     `json:"component_name"`
+	ComponentSerialNumber string     `json:"component_serial_number"`
+	CertificateNumber     string     `json:"certificate_number"`
+	IssueDate             *time.Time `json:"issue_date"`
+	ExpiryDate            *time.Time `json:"expiry_date"`
+	CertificateStatus     string     `json:"certificate_status"`
+	ImcaD018              string     `json:"imca_d018"`
+	TestType              string     `json:"test_type"`
+}
+
+func (q *Queries) GetAssetComponentCertificateSheetRows(ctx context.Context, assetID uuid.UUID) ([]GetAssetComponentCertificateSheetRowsRow, error) {
+	rows, err := q.db.Query(ctx, getAssetComponentCertificateSheetRows, assetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAssetComponentCertificateSheetRowsRow
+	for rows.Next() {
+		var i GetAssetComponentCertificateSheetRowsRow
+		if err := rows.Scan(
+			&i.AssetID,
+			&i.AssetDisplayID,
+			&i.AssetName,
+			&i.ComponentID,
+			&i.ComponentDisplayID,
+			&i.ComponentName,
+			&i.ComponentSerialNumber,
+			&i.CertificateNumber,
+			&i.IssueDate,
+			&i.ExpiryDate,
+			&i.CertificateStatus,
+			&i.ImcaD018,
+			&i.TestType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCertificateByID = `-- name: GetCertificateByID :one
 SELECT
     certificate_id,

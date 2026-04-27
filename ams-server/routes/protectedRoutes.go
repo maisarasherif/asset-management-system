@@ -84,6 +84,7 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	// Asset Routes
 	protected.GET("/assets", controller.GetAssets(pool))
 	protected.GET("/asset/:asset_id", controller.GetAsset(pool))
+	protected.GET("/asset/:asset_id/component-certificate-sheet", controller.GetAssetComponentCertificateSheetPDF(pool))
 
 	// Component Routes
 	protected.GET("/components", controller.GetComponents(pool))

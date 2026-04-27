@@ -96,6 +96,14 @@ export function getAsset(assetId: string) {
   return apiRequest<Asset>(`/v1/asset/${assetId}`);
 }
 
+export function getAssetComponentCertificateSheet(assetId: string) {
+  return apiRequest<Blob>(
+    `/v1/asset/${assetId}/component-certificate-sheet`,
+    {},
+    { responseMode: "blob" }
+  );
+}
+
 export function createAsset(payload: AssetInput) {
   return apiRequest<Asset>("/v1/asset", {
     method: "POST",

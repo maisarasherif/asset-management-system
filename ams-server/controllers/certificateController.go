@@ -827,3 +827,83 @@ func GetCertificatesReportPDF(pool *pgxpool.Pool) gin.HandlerFunc {
 		c.Data(http.StatusOK, "application/pdf", pdfBytes)
 	}
 }
+
+func GetAssetComponentCertificateSheetPDF(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
+		if !ok {
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		asset, err := queries.GetAssetByID(ctx, assetID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch asset"})
+			return
+		}
+
+		rows, err := queries.GetAssetComponentCertificateSheetRows(ctx, assetID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch asset certificate sheet rows"})
+			return
+		}
+
+		reportRows := make([]utils.AssetCertificateSheetRow, 0, len(rows))
+		for _, row := range rows {
+			issueDateStr := ""
+			if row.IssueDate != nil {
+				issueDateStr = row.IssueDate.Format("2006-01-02")
+			}
+			expiryDateStr := ""
+			status := row.CertificateStatus
+			if row.ExpiryDate != nil {
+				expiryDateStr = row.ExpiryDate.Format("2006-01-02")
+				status = computeCertificateStatus(*row.ExpiryDate)
+			}
+			if row.CertificateNumber == "" {
+				status = "NO_CERTIFICATE"
+			} else if status == "" {
+				status = "PENDING"
+			}
+
+			reportRows = append(reportRows, utils.AssetCertificateSheetRow{
+				ComponentName:         row.ComponentName,
+				ComponentID:           row.ComponentDisplayID,
+				ComponentSerialNumber: row.ComponentSerialNumber,
+				CertificateNumber:     row.CertificateNumber,
+				IssueDate:             issueDateStr,
+				ExpiryDate:            expiryDateStr,
+				IMCAD018Details:       row.ImcaD018,
+				TestType:              row.TestType,
+				Status:                status,
+			})
+		}
+
+		generatedAt := time.Now()
+		pdfBytes, err := utils.BuildAssetCertificateSheetPDF(generatedAt, asset.Name, asset.DisplayID, reportRows)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate asset certificate sheet"})
+			return
+		}
+
+		userID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Info().
+			Str("generated_by", userID).
+			Str("asset_id", assetID.String()).
+			Int("row_count", len(reportRows)).
+			Msg("asset component certificate sheet generated")
+
+		filename := fmt.Sprintf("asset-%s-certificate-sheet-%s.pdf", asset.DisplayID, generatedAt.Format("20060102-150405"))
+		c.Header("Content-Type", "application/pdf")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		c.Data(http.StatusOK, "application/pdf", pdfBytes)
+	}
+}
