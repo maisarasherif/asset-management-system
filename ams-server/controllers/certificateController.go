@@ -20,13 +20,31 @@ import (
 )
 
 func computeCertificateStatus(expiryDate time.Time) string {
-	daysUntilExpiry := int(time.Until(expiryDate).Hours() / 24)
+	return computeCertificateStatusAt(expiryDate, time.Now())
+}
+
+func computeCertificateStatusAt(expiryDate time.Time, now time.Time) string {
+	expiryYear, expiryMonth, expiryDay := expiryDate.Date()
+	nowYear, nowMonth, nowDay := now.Date()
+	expiryCalendarDate := time.Date(expiryYear, expiryMonth, expiryDay, 0, 0, 0, 0, time.UTC)
+	todayCalendarDate := time.Date(nowYear, nowMonth, nowDay, 0, 0, 0, 0, time.UTC)
+	daysUntilExpiry := int(expiryCalendarDate.Sub(todayCalendarDate).Hours() / 24)
 	if daysUntilExpiry < 0 {
 		return "EXPIRED"
 	} else if daysUntilExpiry <= 30 {
 		return "EXPIRING_SOON"
 	}
 	return "VALID"
+}
+
+func currentCertificateStatus(storedStatus string, expiryDate *time.Time) string {
+	if expiryDate == nil {
+		if storedStatus == "" {
+			return "PENDING"
+		}
+		return storedStatus
+	}
+	return computeCertificateStatus(*expiryDate)
 }
 
 func GetCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
@@ -44,6 +62,9 @@ func GetCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
 			return
+		}
+		for i := range certificates {
+			certificates[i].Status = currentCertificateStatus(certificates[i].Status, certificates[i].ExpiryDate)
 		}
 
 		total, err := queries.CountCertificates(ctx)
@@ -80,6 +101,7 @@ func GetCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificate"})
 			return
 		}
+		certificate.Status = currentCertificateStatus(certificate.Status, certificate.ExpiryDate)
 
 		c.JSON(http.StatusOK, certificate)
 	}
@@ -133,6 +155,9 @@ func GetCertificatesByComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
 			return
+		}
+		for i := range certificates {
+			certificates[i].Status = currentCertificateStatus(certificates[i].Status, certificates[i].ExpiryDate)
 		}
 
 		total, err := queries.CountCertificatesByComponentID(ctx, componentID)
@@ -735,6 +760,9 @@ func GetCertificatesWithContext(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
 			return
 		}
+		for i := range certificates {
+			certificates[i].Status = currentCertificateStatus(certificates[i].Status, certificates[i].ExpiryDate)
+		}
 
 		total, err := queries.CountAllCertificatesWithContext(ctx)
 		if err != nil {
@@ -775,6 +803,9 @@ func GetCertificatesReportPDF(pool *pgxpool.Pool) gin.HandlerFunc {
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
 				return
+			}
+			for i := range certificates {
+				certificates[i].Status = currentCertificateStatus(certificates[i].Status, certificates[i].ExpiryDate)
 			}
 		}
 
