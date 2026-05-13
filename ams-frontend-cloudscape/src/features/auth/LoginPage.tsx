@@ -87,15 +87,15 @@ export function LoginPage() {
 
           <dl className="login-stats" aria-label="AMS operating indicators">
             <div>
-              <dt>Certification</dt>
+              <dt>Environmental Management Systems</dt>
               <dd>ISO 14001</dd>
             </div>
             <div>
-              <dt>Certification</dt>
+              <dt>Occupational Health and Safety Management Systems</dt>
               <dd>ISO 45001</dd>
             </div>
             <div>
-              <dt>Certification</dt>
+              <dt>Quality Management Systems</dt>
               <dd>ISO 9001</dd>
             </div>
           </dl>
