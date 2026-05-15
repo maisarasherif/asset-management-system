@@ -4,17 +4,14 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { PageLoading } from "../components/shared/PageStates";
 import { RouteErrorPage } from "../components/shared/RouteErrorPage";
 import { useAuth } from "../providers/auth-context";
+import { LoginPage } from "../features/auth/LoginPage";
 
 const AppChrome = lazy(() =>
   import("../components/layout/AppShellLayout").then((module) => ({
     default: module.AppChrome,
   }))
 );
-const LoginPage = lazy(() =>
-  import("../features/auth/LoginPage").then((module) => ({
-    default: module.LoginPage,
-  }))
-);
+
 const DashboardPage = lazy(() =>
   import("../features/dashboard/DashboardPage").then((module) => ({
     default: module.DashboardPage,
