@@ -232,7 +232,7 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			CertificateName:  input.CertificateName,
 			IssueDate:        &issueDate,
 			ExpiryDate:       &expiryDate,
-			CertificateFile:  input.CertificateFile,
+			CertificateFile:  "",
 			IssuingAuthority: input.IssuingAuthority,
 			Status:           computeCertificateStatus(input.ExpiryDate),
 			TestID:           testID,
@@ -335,7 +335,7 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			CertificateName:  input.CertificateName,
 			IssueDate:        &issueDate,
 			ExpiryDate:       &expiryDate,
-			CertificateFile:  input.CertificateFile,
+			CertificateFile:  existing.CertificateFile,
 			IssuingAuthority: input.IssuingAuthority,
 			Status:           newStatus,
 			TestID:           testID,
@@ -487,9 +487,6 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 		if input.ExpiryDate != nil {
 			expiryDate = input.ExpiryDate
 		}
-		if input.CertificateFile != nil {
-			certificateFile = *input.CertificateFile
-		}
 		if input.IssuingAuthority != nil {
 			issuingAuthority = *input.IssuingAuthority
 		}
@@ -624,6 +621,36 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		competentPersonID, err := utils.ParseUUID(c.PostForm("competent_person_id"), "competent_person_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "competent person is required"})
+			return
+		}
+
+		competentPerson, err := queries.GetCompetentPersonByID(ctx, competentPersonID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "competent person not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate competent person"})
+			return
+		}
+		if !competentPerson.Active {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "competent person is inactive"})
+			return
+		}
+
+		competencyCategory, err := queries.GetCompetencyCategoryByID(ctx, competentPerson.CompetencyCategoryID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate competency category"})
+			return
+		}
+		if !competencyCategory.Active {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "competency category is inactive"})
+			return
+		}
+
 		key, err := utils.UploadFile(ctx, file, header, certificateID.String())
 		if err != nil {
 			logger.Log.Error().Err(err).Msg("failed to upload certificate file")
@@ -646,10 +673,11 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		userID, _ := utils.GetUserIdFromContext(c)
 		rows, err = queries.CreateCertificateUploadAuditEntry(ctx, db.CreateCertificateUploadAuditEntryParams{
-			CertificateID: certificateID,
-			FileKey:       key,
-			FileName:      header.Filename,
-			UploadedBy:    userID,
+			CertificateID:     certificateID,
+			FileKey:           key,
+			FileName:          header.Filename,
+			UploadedBy:        userID,
+			CompetentPersonID: &competentPersonID,
 		})
 		if err != nil {
 			logger.Log.Error().Err(err).Msg("failed to write certificate upload audit log")
@@ -704,6 +732,43 @@ func GetCertificateUploadAudit(pool *pgxpool.Pool) gin.HandlerFunc {
 			Data: auditEntries,
 			Meta: utils.BuildMeta(query, total),
 		})
+	}
+}
+
+func GetCertificateUploadFile(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		certificateID, ok := utils.ParseUUIDParam(c, "certificate_id")
+		if !ok {
+			return
+		}
+		uploadID, ok := utils.ParseUUIDParam(c, "upload_id")
+		if !ok {
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		fileKey, err := db.New(pool).GetCertificateUploadAuditFileByID(ctx, db.GetCertificateUploadAuditFileByIDParams{
+			CertificateID: certificateID,
+			Uuid:          uploadID,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "upload history entry not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch upload history entry"})
+			return
+		}
+
+		signedURL, err := utils.GenerateSignedURL(ctx, fileKey)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate download URL"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"url": signedURL})
 	}
 }
 

@@ -1,7 +1,11 @@
-export type Role = "ADMIN" | "USER";
+export type Role = "SUPER_ADMIN" | "ADMIN" | "USER" | "CLIENT";
+export type UserStatus = "ACTIVE" | "SUSPENDED";
+export type ProjectStatus = "ACTIVE" | "ARCHIVED";
+export type ProjectAccessStatus = "ACTIVE" | "SUSPENDED";
 export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE";
 export type CertificateStatus = "VALID" | "EXPIRING_SOON" | "EXPIRED" | "PENDING";
 export type SafetyCritical = "YES" | "NO";
+export type CompetentPersonType = "Internal" | "External";
 
 export interface AuthSession {
   userId: string;
@@ -9,7 +13,9 @@ export interface AuthSession {
   lastName: string;
   email: string;
   role: Role;
+  status: UserStatus;
   token: string;
+  canManageUserPasswords: boolean;
 }
 
 export interface LoginResponse {
@@ -18,8 +24,10 @@ export interface LoginResponse {
   last_name: string;
   email: string;
   role: Role;
+  status: UserStatus;
   token: string;
   refresh_token?: string;
+  can_manage_user_passwords?: boolean;
 }
 
 export interface PaginationMeta {
@@ -48,9 +56,34 @@ export interface Asset {
   status: AssetStatus;
   location: string;
   assigned_project: string;
+  working_hours: number;
+  working_hours_note: string;
+  maintenance_interval_hours: number;
+  next_maintenance_due_hours: number;
+  maintenance_required_at: string | null;
+  last_maintenance_completed_at: string | null;
+  last_maintenance_completed_hours: number;
   template_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type AssetMaintenanceStatus = "REQUIRED" | "COMPLETED" | "CANCELLED";
+
+export interface AssetMaintenanceEvent {
+  maintenance_event_id: string;
+  display_id: string;
+  asset_id: string;
+  due_at_hours: number;
+  triggered_at_hours: number;
+  previous_asset_status: string;
+  status: AssetMaintenanceStatus;
+  clickup_task_id: string;
+  notification_error: string;
+  notified_at: string | null;
+  completed_at: string | null;
+  completion_notes: string;
+  created_at: string;
 }
 
 export interface ComponentRecord {
@@ -164,11 +197,58 @@ export interface TemplateComponentTest {
 }
 
 export interface CertificateUploadAudit {
+  uuid: string;
   certificate_id: string;
   file_key: string;
   file_name: string;
-  uploaded_by: string;
+  uploaded_by_name: string;
   uploaded_at: string | null;
+  competent_person_id: string | null;
+  competent_person_name: string;
+  competent_person_type: CompetentPersonType | "";
+  competency_category_id: string | null;
+  competency_category_code: string;
+  competency_category_name: string;
+  competency_category_description: string;
+}
+
+export interface CompetencyCategory {
+  competency_category_id: string;
+  category_code: string;
+  category_name: string;
+  description: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompetencyCategoryInput {
+  category_code: string;
+  category_name: string;
+  description: string;
+  active: boolean;
+}
+
+export interface CompetentPerson {
+  competent_person_id: string;
+  full_name: string;
+  person_type: CompetentPersonType;
+  organization: string;
+  competency_category_id: string;
+  competency_category_code: string;
+  competency_category_name: string;
+  competency_category_description: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompetentPersonInput {
+  full_name: string;
+  person_type: CompetentPersonType;
+  organization: string;
+  competency_category_id: string;
+  active: boolean;
 }
 
 export interface AssetInput {
@@ -179,7 +259,22 @@ export interface AssetInput {
   status: AssetStatus;
   location: string;
   assigned_project: string;
+  maintenance_interval_hours: number;
   template_id: string | null;
+}
+
+export interface AssetWorkingHoursInput {
+  working_hours: number;
+  note: string;
+}
+
+export interface CompleteAssetMaintenanceInput {
+  completion_notes: string;
+}
+
+export interface AssetMaintenanceUpdateResponse {
+  asset: Asset;
+  maintenance_event: AssetMaintenanceEvent | null;
 }
 
 export interface ComponentInput {
@@ -204,7 +299,6 @@ export interface CertificateInput {
   certificate_name: string;
   issue_date: string;
   expiry_date: string;
-  certificate_file: string;
   issuing_authority: string;
   test_id: string;
   imca_ref: string;
@@ -217,7 +311,6 @@ export interface PatchCertificateInput {
   certificate_name?: string;
   issue_date?: string;
   expiry_date?: string;
-  certificate_file?: string;
   issuing_authority?: string;
   test_id?: string;
   imca_ref?: string;
@@ -230,12 +323,25 @@ export interface UpdatePasswordInput {
   new_password: string;
 }
 
+export interface AdminUpdateUserPasswordInput {
+  new_password: string;
+}
+
 export interface CreateUserInput {
   first_name: string;
   last_name: string;
   email: string;
   password: string;
   role: Role;
+  status: UserStatus;
+}
+
+export interface UpdateUserInput {
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: Role;
+  status: UserStatus;
 }
 
 export interface UserAccount {
@@ -244,8 +350,58 @@ export interface UserAccount {
   last_name: string;
   email: string;
   role: Role;
+  status: UserStatus;
   created_at: string;
   updated_at: string;
+}
+
+export interface UserManagementAuditLog {
+  audit_id: string;
+  actor_user_id: string;
+  actor_email: string;
+  action: string;
+  target_user_id: string;
+  target_email: string;
+  target_role_before: string;
+  target_role_after: string;
+  details: string;
+  ip_address: string;
+  created_at: string;
+}
+
+export interface Project {
+  project_id: string;
+  project_name: string;
+  description: string;
+  status: ProjectStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectInput {
+  project_name: string;
+  description: string;
+  status: ProjectStatus;
+}
+
+export interface UserProjectAccess {
+  access_id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  user_role: Role;
+  user_status: UserStatus;
+  project_id: string;
+  project_name: string;
+  project_status: ProjectStatus;
+  status: ProjectAccessStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserProjectAccessInput {
+  project_id: string;
+  status: ProjectAccessStatus;
 }
 
 export interface AssetTemplateInput {
@@ -313,4 +469,53 @@ export interface AssetDashboardData {
   };
   urgentCertificates: Array<Certificate & { component_name: string }>;
   latestCertificates: Array<Certificate & { component_name: string }>;
+}
+
+export interface ClientCertificate {
+  certificate_id: string;
+  display_id: string;
+  component_id: string;
+  certificate_name: string;
+  issue_date: string | null;
+  expiry_date: string | null;
+  issuing_authority: string;
+  status: CertificateStatus;
+  test_id: string;
+  test_name: string;
+  test_period_days: number;
+  imca_ref: string;
+  imca_d018: string;
+  maintenance_notes: string;
+  has_file: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClientComponent {
+  component_id: string;
+  display_id: string;
+  asset_id: string;
+  category_id: string;
+  main_category_name: string;
+  category_name: string;
+  name: string;
+  serial_number: string;
+  manufacturer: string;
+  description: string;
+  equipment_type: string;
+  structure: string;
+  model: string;
+  class: string;
+  class_code: string;
+  safety_critical: SafetyCritical;
+  location: string;
+  assigned_project: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClientAssetDetail {
+  asset: Asset;
+  components: ClientComponent[];
+  certificates: ClientCertificate[];
 }

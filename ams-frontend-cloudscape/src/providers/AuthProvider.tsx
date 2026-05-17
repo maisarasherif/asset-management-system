@@ -15,7 +15,15 @@ const ASSET_STORAGE_KEY = "ams-cloudscape-selected-asset";
 function readStoredSession(): AuthSession | null {
   try {
     const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as AuthSession) : null;
+    if (!raw) {
+      return null;
+    }
+    const session = JSON.parse(raw) as AuthSession;
+    return {
+      ...session,
+      canManageUserPasswords: Boolean(session.canManageUserPasswords),
+      status: session.status || "ACTIVE",
+    };
   } catch {
     return null;
   }
@@ -80,7 +88,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     () => ({
       session,
       selectedAssetId,
-      isAdmin: session?.role === "ADMIN",
+      isAdmin: session?.role === "ADMIN" || session?.role === "SUPER_ADMIN",
+      isClient: session?.role === "CLIENT",
       isAuthenticated: Boolean(session),
       login,
       logout,

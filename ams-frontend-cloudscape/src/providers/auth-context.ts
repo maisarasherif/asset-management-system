@@ -5,6 +5,7 @@ export interface AuthContextValue {
   session: AuthSession | null;
   selectedAssetId: string | null;
   isAdmin: boolean;
+  isClient: boolean;
   isAuthenticated: boolean;
   login: (session: AuthSession) => void;
   logout: () => void;

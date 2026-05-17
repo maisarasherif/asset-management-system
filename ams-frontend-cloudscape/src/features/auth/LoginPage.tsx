@@ -16,6 +16,8 @@ import { login } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 
+type LoginMode = "staff" | "client";
+
 export function LoginPage() {
   const navigate = useNavigate();
   const { login: establishSession } = useAuth();
@@ -23,6 +25,7 @@ export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [loginMode, setLoginMode] = useState<LoginMode>("staff");
 
   useEffect(() => {
     clearAll();
@@ -31,15 +34,27 @@ export function LoginPage() {
   const loginMutation = useMutation({
     mutationFn: login,
     onSuccess: (session) => {
+      const isClientSession = session.role === "CLIENT";
+      if (loginMode === "client" && !isClientSession) {
+        setErrorMessage("This account is for staff access. Use Staff login.");
+        return;
+      }
+      if (loginMode === "staff" && isClientSession) {
+        setErrorMessage("This account is for client access. Use Client login.");
+        return;
+      }
+
       establishSession({
         userId: session.user_id,
         firstName: session.first_name,
         lastName: session.last_name,
         email: session.email,
         role: session.role,
+        status: session.status,
         token: session.token,
+        canManageUserPasswords: Boolean(session.can_manage_user_passwords),
       });
-      navigate("/dashboard", { replace: true });
+      navigate(isClientSession ? "/client/assets" : "/dashboard", { replace: true });
     },
     onError: (error: Error) => {
       setErrorMessage(error.message);
@@ -112,8 +127,32 @@ export function LoginPage() {
         <div className="login-form-card">
           <SpaceBetween direction="vertical" size="xl">
             <div className="login-form-card__header">
-              <Box variant="h1">Sign in to AMS</Box>
-              <StatusIndicator type="success">Authorized personnel only</StatusIndicator>
+              <Box variant="h1">
+                {loginMode === "client" ? "Client login" : "Staff login"}
+              </Box>
+              <div className="login-mode-switch" aria-label="Choose login type">
+                <Button
+                  variant={loginMode === "staff" ? "primary" : "normal"}
+                  onClick={() => {
+                    setErrorMessage("");
+                    setLoginMode("staff");
+                  }}
+                >
+                  Staff
+                </Button>
+                <Button
+                  variant={loginMode === "client" ? "primary" : "normal"}
+                  onClick={() => {
+                    setErrorMessage("");
+                    setLoginMode("client");
+                  }}
+                >
+                  Client
+                </Button>
+              </div>
+              <StatusIndicator type="success">
+                {loginMode === "client" ? "Project certificate portal" : "Authorized personnel only"}
+              </StatusIndicator>
             </div>
 
             <form onSubmit={handleSubmit}>
@@ -131,8 +170,9 @@ export function LoginPage() {
               >
                 <SpaceBetween direction="vertical" size="l">
                   <Box color="text-body-secondary">
-                    Use your Porto Marine Services AMS account to open the assets
-                    workspace.
+                    {loginMode === "client"
+                      ? "Use your client account to review assigned project assets and certificates."
+                      : "Use your Porto Marine Services AMS account to open the assets workspace."}
                   </Box>
                   {errorMessage ? (
                     <Alert type="error" header="Unable to sign in">

@@ -45,7 +45,6 @@ interface CertificateFormState {
   certificate_name: string;
   issue_date: string;
   expiry_date: string;
-  certificate_file: string;
   issuing_authority: string;
   test_id: string;
   imca_ref: string;
@@ -70,9 +69,6 @@ function buildPatchPayload(
   }
   if (nextForm.expiry_date !== baseForm.expiry_date) {
     payload.expiry_date = nextForm.expiry_date ? toIsoDate(nextForm.expiry_date) : undefined;
-  }
-  if (nextForm.certificate_file.trim() !== baseForm.certificate_file.trim()) {
-    payload.certificate_file = nextForm.certificate_file.trim();
   }
   if (nextForm.issuing_authority.trim() !== baseForm.issuing_authority.trim()) {
     payload.issuing_authority = nextForm.issuing_authority.trim();
@@ -132,7 +128,6 @@ export function CertificateFormPage() {
       certificate_name: certificateQuery.data.certificate_name,
       issue_date: toDateInputValue(certificateQuery.data.issue_date),
       expiry_date: toDateInputValue(certificateQuery.data.expiry_date),
-      certificate_file: certificateQuery.data.certificate_file || "",
       issuing_authority: certificateQuery.data.issuing_authority || "",
       test_id: certificateQuery.data.test_id,
       imca_ref: certificateQuery.data.imca_ref || "",
@@ -144,7 +139,6 @@ export function CertificateFormPage() {
       certificate_name: "",
       issue_date: "",
       expiry_date: "",
-      certificate_file: "",
       issuing_authority: "",
       test_id: "",
       imca_ref: "",
@@ -289,7 +283,6 @@ export function CertificateFormPage() {
       certificate_name: form.certificate_name.trim(),
       issue_date: toIsoDate(form.issue_date),
       expiry_date: toIsoDate(form.expiry_date),
-      certificate_file: form.certificate_file.trim(),
       issuing_authority: form.issuing_authority.trim(),
       test_id: form.test_id,
       imca_ref: form.imca_ref.trim(),
@@ -414,24 +407,6 @@ export function CertificateFormPage() {
               </ColumnLayout>
 
               <ColumnLayout columns={2}>
-                {isEditing ? (
-                  <FormField label="Certificate file path">
-                    <Input value={form.certificate_file || "No file uploaded"} readOnly />
-                  </FormField>
-                ) : (
-                  <FormField label="Certificate file URL">
-                    <Input
-                      type="url"
-                      value={form.certificate_file}
-                      onChange={({ detail }) =>
-                        setForm((current) => ({
-                          ...current,
-                          certificate_file: detail.value,
-                        }))
-                      }
-                    />
-                  </FormField>
-                )}
                 <FormField label="IMCA Ref">
                   <Input
                     value={form.imca_ref}
@@ -440,16 +415,15 @@ export function CertificateFormPage() {
                     }
                   />
                 </FormField>
+                <FormField label="IMCA D018">
+                  <Input
+                    value={form.imca_d018}
+                    onChange={({ detail }) =>
+                      setForm((current) => ({ ...current, imca_d018: detail.value }))
+                    }
+                  />
+                </FormField>
               </ColumnLayout>
-
-              <FormField label="IMCA D018">
-                <Input
-                  value={form.imca_d018}
-                  onChange={({ detail }) =>
-                    setForm((current) => ({ ...current, imca_d018: detail.value }))
-                  }
-                />
-              </FormField>
 
               <FormField label="Maintenance notes">
                 <Textarea

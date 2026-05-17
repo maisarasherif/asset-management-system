@@ -12,6 +12,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const countUserManagementAuditLogs = `-- name: CountUserManagementAuditLogs :one
+SELECT COUNT(*) FROM user_management_audit_logs
+`
+
+func (q *Queries) CountUserManagementAuditLogs(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countUserManagementAuditLogs)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countUsers = `-- name: CountUsers :one
 SELECT COUNT(*) FROM users
 `
@@ -51,8 +62,8 @@ func (q *Queries) CountUsersByEmailExcluding(ctx context.Context, arg CountUsers
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (display_id, first_name, last_name, email, password, role, created_at, updated_at)
-VALUES (next_display_id('user_display_id_seq'), $1, $2, $3, $4, $5, NOW(), NOW())
+INSERT INTO users (display_id, first_name, last_name, email, password, role, status, created_at, updated_at)
+VALUES (next_display_id('user_display_id_seq'), $1, $2, $3, $4, $5, $6, NOW(), NOW())
 RETURNING
     user_id,
     display_id,
@@ -61,6 +72,7 @@ RETURNING
     email,
     password,
     role,
+    status,
     token,
     refresh_token,
     created_at,
@@ -73,6 +85,7 @@ type CreateUserParams struct {
 	Email     string `json:"email"`
 	Password  string `json:"password"`
 	Role      string `json:"role"`
+	Status    string `json:"status"`
 }
 
 type CreateUserRow struct {
@@ -83,6 +96,7 @@ type CreateUserRow struct {
 	Email        string    `json:"email"`
 	Password     string    `json:"password"`
 	Role         string    `json:"role"`
+	Status       string    `json:"status"`
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -96,6 +110,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		arg.Email,
 		arg.Password,
 		arg.Role,
+		arg.Status,
 	)
 	var i CreateUserRow
 	err := row.Scan(
@@ -106,10 +121,79 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.Email,
 		&i.Password,
 		&i.Role,
+		&i.Status,
 		&i.Token,
 		&i.RefreshToken,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createUserManagementAuditLog = `-- name: CreateUserManagementAuditLog :one
+INSERT INTO user_management_audit_logs (
+    actor_user_id,
+    actor_email,
+    action,
+    target_user_id,
+    target_email,
+    target_role_before,
+    target_role_after,
+    details,
+    ip_address
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING
+    audit_id,
+    actor_user_id,
+    actor_email,
+    action,
+    target_user_id,
+    target_email,
+    target_role_before,
+    target_role_after,
+    details,
+    ip_address,
+    created_at
+`
+
+type CreateUserManagementAuditLogParams struct {
+	ActorUserID      *uuid.UUID `json:"actor_user_id"`
+	ActorEmail       string     `json:"actor_email"`
+	Action           string     `json:"action"`
+	TargetUserID     *uuid.UUID `json:"target_user_id"`
+	TargetEmail      string     `json:"target_email"`
+	TargetRoleBefore string     `json:"target_role_before"`
+	TargetRoleAfter  string     `json:"target_role_after"`
+	Details          string     `json:"details"`
+	IpAddress        string     `json:"ip_address"`
+}
+
+func (q *Queries) CreateUserManagementAuditLog(ctx context.Context, arg CreateUserManagementAuditLogParams) (UserManagementAuditLog, error) {
+	row := q.db.QueryRow(ctx, createUserManagementAuditLog,
+		arg.ActorUserID,
+		arg.ActorEmail,
+		arg.Action,
+		arg.TargetUserID,
+		arg.TargetEmail,
+		arg.TargetRoleBefore,
+		arg.TargetRoleAfter,
+		arg.Details,
+		arg.IpAddress,
+	)
+	var i UserManagementAuditLog
+	err := row.Scan(
+		&i.AuditID,
+		&i.ActorUserID,
+		&i.ActorEmail,
+		&i.Action,
+		&i.TargetUserID,
+		&i.TargetEmail,
+		&i.TargetRoleBefore,
+		&i.TargetRoleAfter,
+		&i.Details,
+		&i.IpAddress,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -134,6 +218,7 @@ SELECT
     last_name,
     email,
     role,
+    status,
     created_at,
     updated_at
 FROM users
@@ -153,6 +238,7 @@ type GetAllUsersPaginatedRow struct {
 	LastName  string    `json:"last_name"`
 	Email     string    `json:"email"`
 	Role      string    `json:"role"`
+	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -173,6 +259,7 @@ func (q *Queries) GetAllUsersPaginated(ctx context.Context, arg GetAllUsersPagin
 			&i.LastName,
 			&i.Email,
 			&i.Role,
+			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -195,6 +282,7 @@ SELECT
     email,
     password,
     role,
+    status,
     token,
     refresh_token,
     created_at,
@@ -212,6 +300,7 @@ type GetUserByEmailRow struct {
 	Email        string    `json:"email"`
 	Password     string    `json:"password"`
 	Role         string    `json:"role"`
+	Status       string    `json:"status"`
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -229,6 +318,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Email,
 		&i.Password,
 		&i.Role,
+		&i.Status,
 		&i.Token,
 		&i.RefreshToken,
 		&i.CreatedAt,
@@ -245,6 +335,7 @@ SELECT
     last_name,
     email,
     role,
+    status,
     created_at,
     updated_at
 FROM users
@@ -259,6 +350,7 @@ type GetUserByIDRow struct {
 	LastName  string    `json:"last_name"`
 	Email     string    `json:"email"`
 	Role      string    `json:"role"`
+	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -273,10 +365,66 @@ func (q *Queries) GetUserByID(ctx context.Context, userID uuid.UUID) (GetUserByI
 		&i.LastName,
 		&i.Email,
 		&i.Role,
+		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getUserManagementAuditLogsPaginated = `-- name: GetUserManagementAuditLogsPaginated :many
+SELECT
+    audit_id,
+    actor_user_id,
+    actor_email,
+    action,
+    target_user_id,
+    target_email,
+    target_role_before,
+    target_role_after,
+    details,
+    ip_address,
+    created_at
+FROM user_management_audit_logs
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type GetUserManagementAuditLogsPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) GetUserManagementAuditLogsPaginated(ctx context.Context, arg GetUserManagementAuditLogsPaginatedParams) ([]UserManagementAuditLog, error) {
+	rows, err := q.db.Query(ctx, getUserManagementAuditLogsPaginated, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UserManagementAuditLog
+	for rows.Next() {
+		var i UserManagementAuditLog
+		if err := rows.Scan(
+			&i.AuditID,
+			&i.ActorUserID,
+			&i.ActorEmail,
+			&i.Action,
+			&i.TargetUserID,
+			&i.TargetEmail,
+			&i.TargetRoleBefore,
+			&i.TargetRoleAfter,
+			&i.Details,
+			&i.IpAddress,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUserPasswordByID = `-- name: GetUserPasswordByID :one
@@ -290,10 +438,21 @@ func (q *Queries) GetUserPasswordByID(ctx context.Context, userID uuid.UUID) (st
 	return password, err
 }
 
+const getUserStatusByID = `-- name: GetUserStatusByID :one
+SELECT status FROM users WHERE user_id = $1 LIMIT 1
+`
+
+func (q *Queries) GetUserStatusByID(ctx context.Context, userID uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getUserStatusByID, userID)
+	var status string
+	err := row.Scan(&status)
+	return status, err
+}
+
 const updateUser = `-- name: UpdateUser :execrows
 UPDATE users
-SET first_name = $1, last_name = $2, email = $3, role = $4, updated_at = NOW()
-WHERE user_id = $5
+SET first_name = $1, last_name = $2, email = $3, role = $4, status = $5, updated_at = NOW()
+WHERE user_id = $6
 `
 
 type UpdateUserParams struct {
@@ -301,6 +460,7 @@ type UpdateUserParams struct {
 	LastName  string    `json:"last_name"`
 	Email     string    `json:"email"`
 	Role      string    `json:"role"`
+	Status    string    `json:"status"`
 	UserID    uuid.UUID `json:"user_id"`
 }
 
@@ -310,6 +470,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (int64, 
 		arg.LastName,
 		arg.Email,
 		arg.Role,
+		arg.Status,
 		arg.UserID,
 	)
 	if err != nil {
@@ -331,6 +492,25 @@ type UpdateUserPasswordParams struct {
 
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateUserPassword, arg.Password, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateUserRoleByEmail = `-- name: UpdateUserRoleByEmail :execrows
+UPDATE users
+SET role = $2, status = 'ACTIVE', updated_at = NOW()
+WHERE email = $1
+`
+
+type UpdateUserRoleByEmailParams struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+func (q *Queries) UpdateUserRoleByEmail(ctx context.Context, arg UpdateUserRoleByEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateUserRoleByEmail, arg.Email, arg.Role)
 	if err != nil {
 		return 0, err
 	}

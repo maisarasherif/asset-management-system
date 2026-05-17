@@ -1,9 +1,14 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
@@ -40,10 +45,50 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
+func ActiveUserMiddleware(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := utils.GetUserIdFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			c.Abort()
+			return
+		}
+
+		parsedUserID, err := utils.ParseUUID(userID, "user_id")
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			c.Abort()
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+
+		status, err := db.New(pool).GetUserStatusByID(ctx, parsedUserID)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+				c.Abort()
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate user status"})
+			c.Abort()
+			return
+		}
+		if status != "ACTIVE" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "user account is suspended"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
 func AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, err := utils.GetRoleFromContext(c)
-		if err != nil || role != "ADMIN" {
+		if err != nil || (role != "ADMIN" && role != "SUPER_ADMIN") {
 			userID, _ := utils.GetUserIdFromContext(c)
 			logger.Log.Warn().
 				Str("user_id", userID).
@@ -52,6 +97,30 @@ func AdminMiddleware() gin.HandlerFunc {
 				Str("ip", c.ClientIP()).
 				Msg("unauthorized admin access attempt")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "only ADMINS allowed"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func StaffMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, err := utils.GetRoleFromContext(c)
+		if err != nil || role == "CLIENT" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "staff access required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func ClientMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, err := utils.GetRoleFromContext(c)
+		if err != nil || role != "CLIENT" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "client access required"})
 			c.Abort()
 			return
 		}

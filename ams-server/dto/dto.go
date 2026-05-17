@@ -61,7 +61,8 @@ type RegisterInput struct {
 	LastName  string `json:"last_name" validate:"required,min=2,max=100"`
 	Email     string `json:"email" validate:"required,email"`
 	Password  string `json:"password" validate:"required,min=6"`
-	Role      string `json:"role" validate:"required,oneof=ADMIN USER"`
+	Role      string `json:"role" validate:"required,oneof=SUPER_ADMIN ADMIN USER CLIENT"`
+	Status    string `json:"status" validate:"omitempty,oneof=ACTIVE SUSPENDED"`
 }
 
 type LoginInput struct {
@@ -73,19 +74,25 @@ type UpdateUserInput struct {
 	FirstName string `json:"first_name" validate:"required,min=2,max=100"`
 	LastName  string `json:"last_name" validate:"required,min=2,max=100"`
 	Email     string `json:"email" validate:"required,email"`
-	Role      string `json:"role" validate:"required,oneof=ADMIN USER"`
+	Role      string `json:"role" validate:"required,oneof=SUPER_ADMIN ADMIN USER CLIENT"`
+	Status    string `json:"status" validate:"required,oneof=ACTIVE SUSPENDED"`
 }
 
 type PatchUserInput struct {
 	FirstName *string `json:"first_name" validate:"omitempty,min=2,max=100"`
 	LastName  *string `json:"last_name" validate:"omitempty,min=2,max=100"`
 	Email     *string `json:"email" validate:"omitempty,email"`
-	Role      *string `json:"role" validate:"omitempty,oneof=ADMIN USER"`
+	Role      *string `json:"role" validate:"omitempty,oneof=SUPER_ADMIN ADMIN USER CLIENT"`
+	Status    *string `json:"status" validate:"omitempty,oneof=ACTIVE SUSPENDED"`
 }
 
 type UpdatePasswordInput struct {
 	CurrentPassword string `json:"current_password" validate:"required,min=6"`
 	NewPassword     string `json:"new_password" validate:"required,min=6"`
+}
+
+type AdminUpdateUserPasswordInput struct {
+	NewPassword string `json:"new_password" validate:"required,min=6"`
 }
 
 type UserResponse struct {
@@ -94,18 +101,65 @@ type UserResponse struct {
 	LastName  string    `json:"last_name"`
 	Email     string    `json:"email"`
 	Role      string    `json:"role"`
+	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type LoginResponse struct {
-	UserID       string `json:"user_id"`
-	FirstName    string `json:"first_name"`
-	LastName     string `json:"last_name"`
-	Email        string `json:"email"`
-	Role         string `json:"role"`
-	Token        string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
+	UserID                 string `json:"user_id"`
+	FirstName              string `json:"first_name"`
+	LastName               string `json:"last_name"`
+	Email                  string `json:"email"`
+	Role                   string `json:"role"`
+	Status                 string `json:"status"`
+	Token                  string `json:"token"`
+	RefreshToken           string `json:"refresh_token"`
+	CanManageUserPasswords bool   `json:"can_manage_user_passwords"`
+}
+
+type UserManagementAuditLogResponse struct {
+	AuditID          string    `json:"audit_id"`
+	ActorUserID      string    `json:"actor_user_id"`
+	ActorEmail       string    `json:"actor_email"`
+	Action           string    `json:"action"`
+	TargetUserID     string    `json:"target_user_id"`
+	TargetEmail      string    `json:"target_email"`
+	TargetRoleBefore string    `json:"target_role_before"`
+	TargetRoleAfter  string    `json:"target_role_after"`
+	Details          string    `json:"details"`
+	IPAddress        string    `json:"ip_address"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+// ==================== Project Access DTOs ====================
+
+type ProjectInput struct {
+	ProjectName string `json:"project_name" validate:"required,min=2,max=200"`
+	Description string `json:"description"`
+	Status      string `json:"status" validate:"required,oneof=ACTIVE ARCHIVED"`
+}
+
+type UserProjectAccessInput struct {
+	ProjectID string `json:"project_id" validate:"required,uuid"`
+	Status    string `json:"status" validate:"required,oneof=ACTIVE SUSPENDED"`
+}
+
+// ==================== Competency DTOs ====================
+
+type CompetencyCategoryInput struct {
+	CategoryCode string `json:"category_code" validate:"required,min=2,max=60"`
+	CategoryName string `json:"category_name" validate:"required,min=2,max=120"`
+	Description  string `json:"description"`
+	Active       bool   `json:"active"`
+}
+
+type CompetentPersonInput struct {
+	FullName             string `json:"full_name" validate:"required,min=2,max=160"`
+	PersonType           string `json:"person_type" validate:"required,oneof=Internal External"`
+	Organization         string `json:"organization"`
+	CompetencyCategoryID string `json:"competency_category_id" validate:"required,uuid"`
+	Active               bool   `json:"active"`
 }
 
 // ==================== Category DTOs ====================
@@ -139,24 +193,35 @@ type PatchMainCategoryInput struct {
 // ==================== Asset DTOs ====================
 
 type AssetInput struct {
-	Name            string  `json:"name" validate:"required,min=2,max=200"`
-	Photo           string  `json:"photo" validate:"omitempty,url"`
-	Datasheet       string  `json:"datasheet" validate:"omitempty,url"`
-	Description     string  `json:"description"`
-	Status          string  `json:"status" validate:"required,oneof=ACTIVE INACTIVE MAINTENANCE"`
-	Location        string  `json:"location"`
-	AssignedProject string  `json:"assigned_project"`
-	TemplateID      *string `json:"template_id" validate:"omitempty,uuid"`
+	Name                     string  `json:"name" validate:"required,min=2,max=200"`
+	Photo                    string  `json:"photo" validate:"omitempty,url"`
+	Datasheet                string  `json:"datasheet" validate:"omitempty,url"`
+	Description              string  `json:"description"`
+	Status                   string  `json:"status" validate:"required,oneof=ACTIVE INACTIVE MAINTENANCE"`
+	Location                 string  `json:"location"`
+	AssignedProject          string  `json:"assigned_project"`
+	MaintenanceIntervalHours *int64  `json:"maintenance_interval_hours" validate:"omitempty,min=0"`
+	TemplateID               *string `json:"template_id" validate:"omitempty,uuid"`
 }
 
 type PatchAssetInput struct {
-	Name            *string `json:"name" validate:"omitempty,min=2,max=200"`
-	Photo           *string `json:"photo" validate:"omitempty,url"`
-	Datasheet       *string `json:"datasheet" validate:"omitempty,url"`
-	Description     *string `json:"description"`
-	Status          *string `json:"status" validate:"omitempty,oneof=ACTIVE INACTIVE MAINTENANCE"`
-	Location        *string `json:"location"`
-	AssignedProject *string `json:"assigned_project"`
+	Name                     *string `json:"name" validate:"omitempty,min=2,max=200"`
+	Photo                    *string `json:"photo" validate:"omitempty,url"`
+	Datasheet                *string `json:"datasheet" validate:"omitempty,url"`
+	Description              *string `json:"description"`
+	Status                   *string `json:"status" validate:"omitempty,oneof=ACTIVE INACTIVE MAINTENANCE"`
+	Location                 *string `json:"location"`
+	AssignedProject          *string `json:"assigned_project"`
+	MaintenanceIntervalHours *int64  `json:"maintenance_interval_hours" validate:"omitempty,min=0"`
+}
+
+type AssetWorkingHoursInput struct {
+	WorkingHours int64  `json:"working_hours" validate:"min=0"`
+	Note         string `json:"note"`
+}
+
+type CompleteAssetMaintenanceInput struct {
+	CompletionNotes string `json:"completion_notes"`
 }
 
 // ==================== Component DTOs ====================
@@ -201,7 +266,6 @@ type CertificateInput struct {
 	CertificateName  string    `json:"certificate_name" validate:"required,min=2,max=200"`
 	IssueDate        time.Time `json:"issue_date" validate:"required"`
 	ExpiryDate       time.Time `json:"expiry_date" validate:"required"`
-	CertificateFile  string    `json:"certificate_file" validate:"omitempty,url"`
 	IssuingAuthority string    `json:"issuing_authority" validate:"required,min=2,max=200"`
 	TestID           string    `json:"test_id" validate:"required,uuid"`
 	IMCARef          string    `json:"imca_ref"`
@@ -214,7 +278,6 @@ type PatchCertificateInput struct {
 	CertificateName  *string    `json:"certificate_name" validate:"omitempty,min=2,max=200"`
 	IssueDate        *time.Time `json:"issue_date"`
 	ExpiryDate       *time.Time `json:"expiry_date"`
-	CertificateFile  *string    `json:"certificate_file" validate:"omitempty,url"`
 	IssuingAuthority *string    `json:"issuing_authority" validate:"omitempty,min=2,max=200"`
 	TestID           *string    `json:"test_id" validate:"omitempty,uuid"`
 	IMCARef          *string    `json:"imca_ref"`

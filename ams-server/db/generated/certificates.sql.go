@@ -182,21 +182,30 @@ func (q *Queries) CreateCertificate(ctx context.Context, arg CreateCertificatePa
 }
 
 const createCertificateUploadAuditEntry = `-- name: CreateCertificateUploadAuditEntry :execrows
-INSERT INTO certificate_upload_audit (certificate_id, file_key, file_name, uploaded_by, uploaded_at)
+INSERT INTO certificate_upload_audit (
+    certificate_id,
+    file_key,
+    file_name,
+    uploaded_by,
+    competent_person_id,
+    uploaded_at
+)
 VALUES (
     $1,
     $2,
     $3,
     $4,
+    $5,
     NOW()
 )
 `
 
 type CreateCertificateUploadAuditEntryParams struct {
-	CertificateID uuid.UUID `json:"certificate_id"`
-	FileKey       string    `json:"file_key"`
-	FileName      string    `json:"file_name"`
-	UploadedBy    string    `json:"uploaded_by"`
+	CertificateID     uuid.UUID  `json:"certificate_id"`
+	FileKey           string     `json:"file_key"`
+	FileName          string     `json:"file_name"`
+	UploadedBy        string     `json:"uploaded_by"`
+	CompetentPersonID *uuid.UUID `json:"competent_person_id"`
 }
 
 func (q *Queries) CreateCertificateUploadAuditEntry(ctx context.Context, arg CreateCertificateUploadAuditEntryParams) (int64, error) {
@@ -205,6 +214,7 @@ func (q *Queries) CreateCertificateUploadAuditEntry(ctx context.Context, arg Cre
 		arg.FileKey,
 		arg.FileName,
 		arg.UploadedBy,
+		arg.CompetentPersonID,
 	)
 	if err != nil {
 		return 0, err
@@ -671,14 +681,25 @@ func (q *Queries) GetCertificateByID(ctx context.Context, certificateID uuid.UUI
 
 const getCertificateUploadAuditByCertificateIDPaginated = `-- name: GetCertificateUploadAuditByCertificateIDPaginated :many
 SELECT
-    certificate_id,
-    file_key,
-    file_name,
-    uploaded_by,
-    uploaded_at
-FROM certificate_upload_audit
-WHERE certificate_id = $1
-ORDER BY uploaded_at DESC
+    cua.uuid,
+    cua.certificate_id,
+    cua.file_key,
+    cua.file_name,
+    COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), 'Unknown')::text AS uploaded_by_name,
+    cua.uploaded_at,
+    cua.competent_person_id,
+    COALESCE(cp.full_name, '') AS competent_person_name,
+    COALESCE(cp.person_type, '') AS competent_person_type,
+    cp.competency_category_id,
+    COALESCE(cc.category_code, '') AS competency_category_code,
+    COALESCE(cc.category_name, '') AS competency_category_name,
+    COALESCE(cc.description, '') AS competency_category_description
+FROM certificate_upload_audit cua
+LEFT JOIN users u ON u.user_id::text = cua.uploaded_by
+LEFT JOIN competent_persons cp ON cp.competent_person_id = cua.competent_person_id
+LEFT JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
+WHERE cua.certificate_id = $1
+ORDER BY cua.uploaded_at DESC
 LIMIT $3 OFFSET $2
 `
 
@@ -689,11 +710,19 @@ type GetCertificateUploadAuditByCertificateIDPaginatedParams struct {
 }
 
 type GetCertificateUploadAuditByCertificateIDPaginatedRow struct {
-	CertificateID uuid.UUID          `json:"certificate_id"`
-	FileKey       string             `json:"file_key"`
-	FileName      string             `json:"file_name"`
-	UploadedBy    string             `json:"uploaded_by"`
-	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
+	Uuid                          uuid.UUID          `json:"uuid"`
+	CertificateID                 uuid.UUID          `json:"certificate_id"`
+	FileKey                       string             `json:"file_key"`
+	FileName                      string             `json:"file_name"`
+	UploadedByName                string             `json:"uploaded_by_name"`
+	UploadedAt                    pgtype.Timestamptz `json:"uploaded_at"`
+	CompetentPersonID             *uuid.UUID         `json:"competent_person_id"`
+	CompetentPersonName           string             `json:"competent_person_name"`
+	CompetentPersonType           string             `json:"competent_person_type"`
+	CompetencyCategoryID          *uuid.UUID         `json:"competency_category_id"`
+	CompetencyCategoryCode        string             `json:"competency_category_code"`
+	CompetencyCategoryName        string             `json:"competency_category_name"`
+	CompetencyCategoryDescription string             `json:"competency_category_description"`
 }
 
 func (q *Queries) GetCertificateUploadAuditByCertificateIDPaginated(ctx context.Context, arg GetCertificateUploadAuditByCertificateIDPaginatedParams) ([]GetCertificateUploadAuditByCertificateIDPaginatedRow, error) {
@@ -706,11 +735,19 @@ func (q *Queries) GetCertificateUploadAuditByCertificateIDPaginated(ctx context.
 	for rows.Next() {
 		var i GetCertificateUploadAuditByCertificateIDPaginatedRow
 		if err := rows.Scan(
+			&i.Uuid,
 			&i.CertificateID,
 			&i.FileKey,
 			&i.FileName,
-			&i.UploadedBy,
+			&i.UploadedByName,
 			&i.UploadedAt,
+			&i.CompetentPersonID,
+			&i.CompetentPersonName,
+			&i.CompetentPersonType,
+			&i.CompetencyCategoryID,
+			&i.CompetencyCategoryCode,
+			&i.CompetencyCategoryName,
+			&i.CompetencyCategoryDescription,
 		); err != nil {
 			return nil, err
 		}
@@ -720,6 +757,26 @@ func (q *Queries) GetCertificateUploadAuditByCertificateIDPaginated(ctx context.
 		return nil, err
 	}
 	return items, nil
+}
+
+const getCertificateUploadAuditFileByID = `-- name: GetCertificateUploadAuditFileByID :one
+SELECT file_key
+FROM certificate_upload_audit
+WHERE certificate_id = $1
+  AND uuid = $2
+LIMIT 1
+`
+
+type GetCertificateUploadAuditFileByIDParams struct {
+	CertificateID uuid.UUID `json:"certificate_id"`
+	Uuid          uuid.UUID `json:"uuid"`
+}
+
+func (q *Queries) GetCertificateUploadAuditFileByID(ctx context.Context, arg GetCertificateUploadAuditFileByIDParams) (string, error) {
+	row := q.db.QueryRow(ctx, getCertificateUploadAuditFileByID, arg.CertificateID, arg.Uuid)
+	var file_key string
+	err := row.Scan(&file_key)
+	return file_key, err
 }
 
 const getCertificatesByComponentIDPaginated = `-- name: GetCertificatesByComponentIDPaginated :many

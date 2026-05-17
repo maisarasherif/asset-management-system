@@ -260,6 +260,12 @@ body {
   gap: 8px;
 }
 
+.login-mode-switch {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .login-form-card__footer {
   padding-top: 20px;
   border-top: 1px solid #d5dbdb;
@@ -396,6 +402,234 @@ body {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.client-asset-card {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.3fr) minmax(280px, 0.75fr) minmax(170px, auto);
+  gap: 18px;
+  align-items: center;
+}
+
+.client-asset-card__main,
+.client-asset-card__meta,
+.client-asset-card__actions {
+  min-width: 0;
+}
+
+.client-asset-card__meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.client-asset-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.client-asset-card__media-row {
+  display: block;
+}
+
+.client-asset-card__image-frame,
+.client-asset-card__image-placeholder {
+  width: 100%;
+  min-height: 260px;
+  border: 1px solid #d5dbdb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.client-asset-card__image {
+  display: block;
+  width: 100%;
+  height: 260px;
+  object-fit: contain;
+  background: linear-gradient(180deg, rgba(9, 114, 211, 0.08), rgba(9, 114, 211, 0.02));
+}
+
+.client-asset-card__image-placeholder {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  text-align: center;
+}
+
+.client-asset-card__datasheet {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid #d5dbdb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.client-asset-workspace {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.95fr) minmax(0, 1.35fr);
+  gap: 20px;
+  align-items: start;
+  min-width: 0;
+}
+
+.client-asset-workspace__components {
+  position: sticky;
+  top: 24px;
+  min-width: 0;
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+
+.client-asset-workspace__certificates {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.client-asset-workspace__certificates > *,
+.client-asset-workspace__components > *,
+.client-asset-workspace__certificates [class*="table"],
+.client-asset-workspace__components [class*="table"] {
+  min-width: 0;
+}
+
+.client-component-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.client-component-list__item {
+  width: 100%;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #d5dbdb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #16191f;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+
+.client-component-list__item:hover,
+.client-component-list__item:focus-visible {
+  border-color: #0972d3;
+  box-shadow: 0 0 0 2px rgba(9, 114, 211, 0.16);
+  outline: none;
+}
+
+.client-component-list__item.is-selected {
+  border-color: #0972d3;
+  background: #eff6fc;
+  box-shadow: inset 3px 0 0 #0972d3;
+}
+
+.client-component-list__title {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.client-component-list__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.client-component-list__grid > span,
+.client-certificate-record__field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.client-component-list__label,
+.client-certificate-record__label {
+  color: #5f6b7a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.client-component-list__value,
+.client-certificate-record__value {
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.client-certificate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 920px;
+}
+
+.client-certificate-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 8px;
+}
+
+.client-certificate-record {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns:
+    minmax(220px, 1.45fr)
+    minmax(120px, 0.8fr)
+    minmax(112px, 0.75fr)
+    minmax(104px, 0.7fr)
+    minmax(104px, 0.7fr)
+    minmax(150px, 150px);
+  column-gap: 16px;
+  row-gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #d5dbdb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.client-certificate-record--valid {
+  border-left: 4px solid #037f0c;
+}
+
+.client-certificate-record--expiring-soon {
+  border-left: 4px solid #f89256;
+}
+
+.client-certificate-record--expired {
+  border-left: 4px solid #d91515;
+}
+
+.client-certificate-record--pending {
+  border-left: 4px solid #879596;
+}
+
+.client-certificate-record__field--status {
+  justify-content: flex-start;
+}
+
+.client-certificate-record__field--action {
+  align-items: flex-start;
+}
+
+.client-certificate-record__field--action button {
+  min-width: 126px;
+  white-space: nowrap;
 }
 
 .asset-media-layout {
@@ -738,6 +972,17 @@ body {
   white-space: nowrap;
 }
 
+.upload-history-view-action {
+  display: inline-flex;
+  min-width: 74px;
+  white-space: nowrap;
+}
+
+.upload-history-view-action button {
+  min-width: 74px;
+  white-space: nowrap;
+}
+
 .file-input {
   display: block;
   width: 100%;
@@ -813,7 +1058,26 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .client-asset-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .client-asset-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .client-asset-workspace__components {
+    position: static;
+    max-height: 520px;
+  }
+
+  .client-certificate-record {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .asset-directory-card__meta,
+  .client-asset-card__meta,
   .asset-directory-card__summary,
   .asset-context-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -887,8 +1151,10 @@ body {
   .asset-overview-grid,
   .asset-overview-secondary-grid,
   .asset-directory-card__meta,
+  .client-asset-card__meta,
   .asset-directory-card__summary,
-  .asset-context-strip {
+  .asset-context-strip,
+  .client-certificate-record {
     grid-template-columns: 1fr;
   }
 

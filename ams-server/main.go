@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/gin-gonic/gin"
 	controller "github.com/maisarasherif/asset-management-system/ams-server/controllers"
 	databases "github.com/maisarasherif/asset-management-system/ams-server/database"
@@ -40,8 +42,13 @@ func main() {
 	routes.SetupUnprotectedRoutes(router, pool)
 	routes.SetupProtectedRoutes(router, pool)
 
-	logger.Log.Info().Str("port", "8080").Msg("server starting")
-	if err := router.Run(":8080"); err != nil {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	logger.Log.Info().Str("port", port).Msg("server starting")
+	if err := router.Run(":" + port); err != nil {
 		logger.Log.Fatal().Err(err).Msg("server failed to start")
 	}
 }

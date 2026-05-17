@@ -24,6 +24,59 @@ func HashPassword(password string) (string, error) {
 	return string(hashPassword), nil
 }
 
+func isSuperAdminRole(role string) bool {
+	return role == "SUPER_ADMIN"
+}
+
+func normalizedUserStatus(status string) string {
+	if status == "" {
+		return "ACTIVE"
+	}
+	return status
+}
+
+func userLabel(firstName, lastName, email string) string {
+	if firstName != "" || lastName != "" {
+		return firstName + " " + lastName
+	}
+	return email
+}
+
+func actorEmailFromContext(c *gin.Context) string {
+	email, exists := c.Get("email")
+	if !exists {
+		return ""
+	}
+	if value, ok := email.(string); ok {
+		return value
+	}
+	return ""
+}
+
+func auditUserManagement(ctx context.Context, queries *db.Queries, c *gin.Context, action string, targetUserID *uuid.UUID, targetEmail, targetRoleBefore, targetRoleAfter, details string) {
+	actorID, _ := utils.GetUserIdFromContext(c)
+	var actorUUID *uuid.UUID
+	if actorID != "" {
+		if parsedActorID, err := utils.ParseUUID(actorID, "user_id"); err == nil {
+			actorUUID = &parsedActorID
+		}
+	}
+
+	if _, err := queries.CreateUserManagementAuditLog(ctx, db.CreateUserManagementAuditLogParams{
+		ActorUserID:      actorUUID,
+		ActorEmail:       actorEmailFromContext(c),
+		Action:           action,
+		TargetUserID:     targetUserID,
+		TargetEmail:      targetEmail,
+		TargetRoleBefore: targetRoleBefore,
+		TargetRoleAfter:  targetRoleAfter,
+		Details:          details,
+		IpAddress:        c.ClientIP(),
+	}); err != nil {
+		logger.Log.Error().Err(err).Str("action", action).Msg("failed to write user management audit log")
+	}
+}
+
 func GetUsers(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -56,6 +109,7 @@ func GetUsers(pool *pgxpool.Pool) gin.HandlerFunc {
 				LastName:  u.LastName,
 				Email:     u.Email,
 				Role:      u.Role,
+				Status:    u.Status,
 				CreatedAt: u.CreatedAt,
 				UpdatedAt: u.UpdatedAt,
 			}
@@ -92,8 +146,64 @@ func GetUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			LastName:  user.LastName,
 			Email:     user.Email,
 			Role:      user.Role,
+			Status:    user.Status,
 			CreatedAt: user.CreatedAt,
 			UpdatedAt: user.UpdatedAt,
+		})
+	}
+}
+
+func GetUserManagementAuditLogs(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		limit, offset, query := utils.ParsePagination(c)
+		queries := db.New(pool)
+
+		logs, err := queries.GetUserManagementAuditLogsPaginated(ctx, db.GetUserManagementAuditLogsPaginatedParams{
+			Limit:  limit,
+			Offset: offset,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch user management audit logs"})
+			return
+		}
+
+		total, err := queries.CountUserManagementAuditLogs(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count user management audit logs"})
+			return
+		}
+
+		response := make([]dto.UserManagementAuditLogResponse, len(logs))
+		for i, log := range logs {
+			actorUserID := ""
+			if log.ActorUserID != nil {
+				actorUserID = log.ActorUserID.String()
+			}
+			targetUserID := ""
+			if log.TargetUserID != nil {
+				targetUserID = log.TargetUserID.String()
+			}
+			response[i] = dto.UserManagementAuditLogResponse{
+				AuditID:          log.AuditID.String(),
+				ActorUserID:      actorUserID,
+				ActorEmail:       log.ActorEmail,
+				Action:           log.Action,
+				TargetUserID:     targetUserID,
+				TargetEmail:      log.TargetEmail,
+				TargetRoleBefore: log.TargetRoleBefore,
+				TargetRoleAfter:  log.TargetRoleAfter,
+				Details:          log.Details,
+				IPAddress:        log.IpAddress,
+				CreatedAt:        log.CreatedAt.Time,
+			}
+		}
+
+		c.JSON(http.StatusOK, dto.PaginatedResponse{
+			Data: response,
+			Meta: utils.BuildMeta(query, total),
 		})
 	}
 }
@@ -115,6 +225,16 @@ func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 
 		queries := db.New(pool)
+
+		requestingRole, err := utils.GetRoleFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		if isSuperAdminRole(input.Role) && !isSuperAdminRole(requestingRole) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can grant SUPER ADMIN access"})
+			return
+		}
 
 		count, err := queries.CountUsersByEmail(ctx, input.Email)
 		if err != nil {
@@ -138,6 +258,7 @@ func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			Email:     input.Email,
 			Password:  hashedPassword,
 			Role:      input.Role,
+			Status:    normalizedUserStatus(input.Status),
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
@@ -151,6 +272,7 @@ func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			Str("role", user.Role).
 			Str("created_by", adminID).
 			Msg("new user registered")
+		auditUserManagement(ctx, queries, c, "CREATE_USER", &user.UserID, user.Email, "", user.Role, "Created user "+userLabel(user.FirstName, user.LastName, user.Email))
 
 		c.JSON(http.StatusCreated, dto.UserResponse{
 			UserID:    user.UserID.String(),
@@ -158,6 +280,7 @@ func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			LastName:  user.LastName,
 			Email:     user.Email,
 			Role:      user.Role,
+			Status:    user.Status,
 			CreatedAt: user.CreatedAt,
 			UpdatedAt: user.UpdatedAt,
 		})
@@ -192,6 +315,16 @@ func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		requestingRole, err := utils.GetRoleFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		if (isSuperAdminRole(existingUser.Role) || isSuperAdminRole(input.Role)) && !isSuperAdminRole(requestingRole) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can manage SUPER ADMIN users"})
+			return
+		}
+
 		count, err := queries.CountUsersByEmailExcluding(ctx, db.CountUsersByEmailExcludingParams{
 			Email:  input.Email,
 			UserID: userID,
@@ -210,6 +343,7 @@ func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			LastName:  input.LastName,
 			Email:     input.Email,
 			Role:      input.Role,
+			Status:    input.Status,
 			UserID:    userID,
 		})
 		if err != nil {
@@ -230,6 +364,7 @@ func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
 				Str("changed_by", adminID).
 				Msg("user role changed")
 		}
+		auditUserManagement(ctx, queries, c, "UPDATE_USER", &userID, input.Email, existingUser.Role, input.Role, "Updated user "+userLabel(input.FirstName, input.LastName, input.Email))
 
 		c.JSON(http.StatusOK, gin.H{"message": "user updated successfully"})
 	}
@@ -305,6 +440,99 @@ func UpdatePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
+func AdminUpdateUserPassword(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, ok := utils.ParseUUIDParam(c, "user_id")
+		if !ok {
+			return
+		}
+
+		var input dto.AdminUpdateUserPasswordInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+			return
+		}
+		if err := validate.Struct(input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+
+		requestingUserID, err := utils.GetUserIdFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		requestingUserUUID, err := utils.ParseUUID(requestingUserID, "user_id")
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		requestingUser, err := queries.GetUserByID(ctx, requestingUserUUID)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		if !isSuperAdminRole(requestingUser.Role) {
+			logger.Log.Warn().
+				Str("target_user_id", userID.String()).
+				Str("requested_by", requestingUserID).
+				Msg("blocked non-super-admin password change")
+			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can change user passwords"})
+			return
+		}
+
+		targetUser, err := queries.GetUserByID(ctx, userID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		hashedPassword, err := HashPassword(input.NewPassword)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "hashing password failed"})
+			return
+		}
+
+		rows, err := queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+			Password: hashedPassword,
+			UserID:   userID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
+			return
+		}
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		if err = queries.UpdateUserTokens(ctx, db.UpdateUserTokensParams{
+			Token:        "",
+			RefreshToken: "",
+			UserID:       userID,
+		}); err != nil {
+			logger.Log.Error().Err(err).Str("target_user_id", userID.String()).Msg("failed to clear tokens after password reset")
+		}
+
+		logger.Log.Warn().
+			Str("target_user_id", userID.String()).
+			Str("target_email", targetUser.Email).
+			Str("changed_by", requestingUserID).
+			Msg("user password changed by super admin")
+		auditUserManagement(ctx, queries, c, "RESET_PASSWORD", &userID, targetUser.Email, targetUser.Role, targetUser.Role, "Password reset by SUPER ADMIN")
+
+		c.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
+	}
+}
+
 func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, ok := utils.ParseUUIDParam(c, "user_id")
@@ -338,6 +566,16 @@ func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		requestingRole, err := utils.GetRoleFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		if isSuperAdminRole(targetUser.Role) && !isSuperAdminRole(requestingRole) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can delete SUPER ADMIN users"})
+			return
+		}
+
 		rows, err := queries.DeleteUser(ctx, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
@@ -353,6 +591,7 @@ func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			Str("deleted_email", targetUser.Email).
 			Str("deleted_by", requestingUserID).
 			Msg("user deleted")
+		auditUserManagement(ctx, queries, c, "DELETE_USER", &userID, targetUser.Email, targetUser.Role, "", "Deleted user "+userLabel(targetUser.FirstName, targetUser.LastName, targetUser.Email))
 
 		c.JSON(http.StatusOK, gin.H{"message": "user deleted successfully"})
 	}
@@ -390,6 +629,7 @@ func PatchUser(pool *pgxpool.Pool) gin.HandlerFunc {
 		lastName := existingUser.LastName
 		email := existingUser.Email
 		role := existingUser.Role
+		status := existingUser.Status
 
 		if input.FirstName != nil {
 			firstName = *input.FirstName
@@ -402,6 +642,19 @@ func PatchUser(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		if input.Role != nil {
 			role = *input.Role
+		}
+		if input.Status != nil {
+			status = *input.Status
+		}
+
+		requestingRole, err := utils.GetRoleFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		if (isSuperAdminRole(existingUser.Role) || isSuperAdminRole(role)) && !isSuperAdminRole(requestingRole) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can manage SUPER ADMIN users"})
+			return
 		}
 
 		count, err := queries.CountUsersByEmailExcluding(ctx, db.CountUsersByEmailExcludingParams{
@@ -422,6 +675,7 @@ func PatchUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			LastName:  lastName,
 			Email:     email,
 			Role:      role,
+			Status:    status,
 			UserID:    userID,
 		})
 		if err != nil {
@@ -442,6 +696,7 @@ func PatchUser(pool *pgxpool.Pool) gin.HandlerFunc {
 				Str("changed_by", adminID).
 				Msg("user role changed")
 		}
+		auditUserManagement(ctx, queries, c, "UPDATE_USER", &userID, email, existingUser.Role, role, "Patched user "+userLabel(firstName, lastName, email))
 
 		c.JSON(http.StatusOK, gin.H{"message": "user updated successfully"})
 	}
@@ -479,6 +734,15 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 			return
 		}
+		if foundUser.Status != "ACTIVE" {
+			logger.Log.Warn().
+				Str("user_id", foundUser.UserID.String()).
+				Str("email", foundUser.Email).
+				Str("ip", c.ClientIP()).
+				Msg("blocked login attempt for suspended user")
+			c.JSON(http.StatusForbidden, gin.H{"error": "user account is suspended"})
+			return
+		}
 
 		token, refreshToken, err := utils.GenerateAllTokens(
 			foundUser.Email,
@@ -505,13 +769,15 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			Msg("user logged in")
 
 		c.JSON(http.StatusOK, dto.LoginResponse{
-			UserID:       foundUser.UserID.String(),
-			FirstName:    foundUser.FirstName,
-			LastName:     foundUser.LastName,
-			Email:        foundUser.Email,
-			Role:         foundUser.Role,
-			Token:        token,
-			RefreshToken: refreshToken,
+			UserID:                 foundUser.UserID.String(),
+			FirstName:              foundUser.FirstName,
+			LastName:               foundUser.LastName,
+			Email:                  foundUser.Email,
+			Role:                   foundUser.Role,
+			Status:                 foundUser.Status,
+			Token:                  token,
+			RefreshToken:           refreshToken,
+			CanManageUserPasswords: isSuperAdminRole(foundUser.Role),
 		})
 
 	}
@@ -546,12 +812,22 @@ func SeedAdminUser(pool *pgxpool.Pool) {
 		logger.Log.Fatal().Err(err).Msg("could not check for existing users")
 	}
 
-	if count > 0 {
-		return
-	}
-
 	email := os.Getenv("SEED_ADMIN_EMAIL")
 	password := os.Getenv("SEED_ADMIN_PASSWORD")
+
+	if count > 0 {
+		if email != "" {
+			if rows, err := queries.UpdateUserRoleByEmail(ctx, db.UpdateUserRoleByEmailParams{
+				Email: email,
+				Role:  "SUPER_ADMIN",
+			}); err != nil {
+				logger.Log.Fatal().Err(err).Msg("failed to promote seeded super admin")
+			} else if rows > 0 {
+				logger.Log.Info().Str("email", email).Msg("seeded admin promoted to SUPER_ADMIN")
+			}
+		}
+		return
+	}
 
 	if email == "" || password == "" {
 		logger.Log.Fatal().Msg("SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be set")
@@ -569,7 +845,8 @@ func SeedAdminUser(pool *pgxpool.Pool) {
 		LastName:  "Admin",
 		Email:     email,
 		Password:  hashedPassword,
-		Role:      "ADMIN",
+		Role:      "SUPER_ADMIN",
+		Status:    "ACTIVE",
 	})
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to seed admin user")

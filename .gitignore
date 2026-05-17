@@ -3,9 +3,14 @@
 *.pdf
 /skills
 /themes
-/postman
+/postman/*
+#!/postman/client-asset-certificates.postman_collection.json
+#!/postman/run-client-asset-certificates-newman.ps1
+
 /design-pocs
 node_modules/
+.gocache-newman/
+.gocache-playwright/
 dist/
 playwright-report/
 test-results/

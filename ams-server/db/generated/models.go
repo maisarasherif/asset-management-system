@@ -12,18 +12,41 @@ import (
 )
 
 type Asset struct {
-	Name            string     `json:"name"`
-	Photo           string     `json:"photo"`
-	Datasheet       string     `json:"datasheet"`
-	Description     string     `json:"description"`
-	Status          string     `json:"status"`
-	Location        string     `json:"location"`
-	AssignedProject string     `json:"assigned_project"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	AssetID         uuid.UUID  `json:"asset_id"`
-	DisplayID       string     `json:"display_id"`
-	TemplateID      *uuid.UUID `json:"template_id"`
+	Name                          string     `json:"name"`
+	Photo                         string     `json:"photo"`
+	Datasheet                     string     `json:"datasheet"`
+	Description                   string     `json:"description"`
+	Status                        string     `json:"status"`
+	Location                      string     `json:"location"`
+	AssignedProject               string     `json:"assigned_project"`
+	CreatedAt                     time.Time  `json:"created_at"`
+	UpdatedAt                     time.Time  `json:"updated_at"`
+	AssetID                       uuid.UUID  `json:"asset_id"`
+	DisplayID                     string     `json:"display_id"`
+	TemplateID                    *uuid.UUID `json:"template_id"`
+	WorkingHours                  int64      `json:"working_hours"`
+	WorkingHoursNote              string     `json:"working_hours_note"`
+	MaintenanceIntervalHours      int64      `json:"maintenance_interval_hours"`
+	NextMaintenanceDueHours       int64      `json:"next_maintenance_due_hours"`
+	MaintenanceRequiredAt         *time.Time `json:"maintenance_required_at"`
+	LastMaintenanceCompletedAt    *time.Time `json:"last_maintenance_completed_at"`
+	LastMaintenanceCompletedHours int64      `json:"last_maintenance_completed_hours"`
+}
+
+type AssetMaintenanceEvent struct {
+	MaintenanceEventID  uuid.UUID  `json:"maintenance_event_id"`
+	DisplayID           string     `json:"display_id"`
+	AssetID             uuid.UUID  `json:"asset_id"`
+	DueAtHours          int64      `json:"due_at_hours"`
+	TriggeredAtHours    int64      `json:"triggered_at_hours"`
+	PreviousAssetStatus string     `json:"previous_asset_status"`
+	Status              string     `json:"status"`
+	ClickupTaskID       string     `json:"clickup_task_id"`
+	NotificationError   string     `json:"notification_error"`
+	NotifiedAt          *time.Time `json:"notified_at"`
+	CompletedAt         *time.Time `json:"completed_at"`
+	CompletionNotes     string     `json:"completion_notes"`
+	CreatedAt           time.Time  `json:"created_at"`
 }
 
 type AssetTemplate struct {
@@ -66,12 +89,34 @@ type Certificate struct {
 }
 
 type CertificateUploadAudit struct {
-	FileKey       string             `json:"file_key"`
-	FileName      string             `json:"file_name"`
-	UploadedBy    string             `json:"uploaded_by"`
-	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
-	Uuid          uuid.UUID          `json:"uuid"`
-	CertificateID uuid.UUID          `json:"certificate_id"`
+	FileKey           string             `json:"file_key"`
+	FileName          string             `json:"file_name"`
+	UploadedBy        string             `json:"uploaded_by"`
+	UploadedAt        pgtype.Timestamptz `json:"uploaded_at"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	CertificateID     uuid.UUID          `json:"certificate_id"`
+	CompetentPersonID *uuid.UUID         `json:"competent_person_id"`
+}
+
+type CompetencyCategory struct {
+	CompetencyCategoryID uuid.UUID `json:"competency_category_id"`
+	CategoryCode         string    `json:"category_code"`
+	CategoryName         string    `json:"category_name"`
+	Description          string    `json:"description"`
+	Active               bool      `json:"active"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
+}
+
+type CompetentPerson struct {
+	CompetentPersonID    uuid.UUID `json:"competent_person_id"`
+	FullName             string    `json:"full_name"`
+	PersonType           string    `json:"person_type"`
+	Organization         string    `json:"organization"`
+	CompetencyCategoryID uuid.UUID `json:"competency_category_id"`
+	Active               bool      `json:"active"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 type Component struct {
@@ -104,6 +149,15 @@ type MainCategory struct {
 	MainCategoryID   uuid.UUID `json:"main_category_id"`
 	DisplayID        string    `json:"display_id"`
 	SortOrder        int32     `json:"sort_order"`
+}
+
+type Project struct {
+	ProjectID   uuid.UUID          `json:"project_id"`
+	ProjectName string             `json:"project_name"`
+	Description string             `json:"description"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type ScheduledTask struct {
@@ -166,4 +220,28 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	UserID       uuid.UUID `json:"user_id"`
 	DisplayID    string    `json:"display_id"`
+	Status       string    `json:"status"`
+}
+
+type UserManagementAuditLog struct {
+	AuditID          uuid.UUID          `json:"audit_id"`
+	ActorUserID      *uuid.UUID         `json:"actor_user_id"`
+	ActorEmail       string             `json:"actor_email"`
+	Action           string             `json:"action"`
+	TargetUserID     *uuid.UUID         `json:"target_user_id"`
+	TargetEmail      string             `json:"target_email"`
+	TargetRoleBefore string             `json:"target_role_before"`
+	TargetRoleAfter  string             `json:"target_role_after"`
+	Details          string             `json:"details"`
+	IpAddress        string             `json:"ip_address"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type UserProjectAccess struct {
+	AccessID  uuid.UUID          `json:"access_id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	ProjectID uuid.UUID          `json:"project_id"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }

@@ -19,6 +19,7 @@ import { RouterLink } from "../../components/shared/RouterLink";
 import {
   getAsset,
   getAssetComponentCertificateSheet,
+  listAssetRoutineMaintenance,
   listAllCategories,
   listAllMainCategories,
   listAllCertificatesByComponent,
@@ -77,6 +78,12 @@ export function AssetWorkspacePage() {
   const mainCategoriesQuery = useQuery({
     queryKey: ["main-categories", "all"],
     queryFn: listAllMainCategories,
+  });
+
+  const maintenanceQuery = useQuery({
+    queryKey: ["routine-maintenance", assetId],
+    queryFn: () => listAssetRoutineMaintenance(assetId!),
+    enabled: Boolean(assetId),
   });
 
   const sheetMutation = useMutation({
@@ -271,6 +278,13 @@ export function AssetWorkspacePage() {
       Boolean(certificate && certificate.certificate_id)
   );
   const certificateCount = certificateItems.length;
+  const maintenanceEvents = maintenanceQuery.data || [];
+  const openMaintenanceEvent =
+    maintenanceEvents.find((event) => event.status === "REQUIRED") ?? null;
+  const maintenanceConfigured = assetQuery.data.maintenance_interval_hours > 0;
+  const maintenanceRemaining = maintenanceConfigured
+    ? assetQuery.data.next_maintenance_due_hours - assetQuery.data.working_hours
+    : 0;
 
   return (
     <ContentLayout
@@ -279,6 +293,9 @@ export function AssetWorkspacePage() {
           actions={
             <SpaceBetween direction="horizontal" size="xs">
               <Button onClick={() => navigate("/dashboard")}>Open dashboard</Button>
+              <Button onClick={() => navigate(`/assets/${assetId}/routine-maintenance`)}>
+                Open maintenance
+              </Button>
               <Button
                 loading={sheetMutation.isPending}
                 onClick={() => sheetMutation.mutate()}
@@ -422,6 +439,18 @@ export function AssetWorkspacePage() {
                 <Box variant="awsui-key-label">Components</Box>
                 <Box>{componentCount}</Box>
               </div>
+              <div className="asset-context-strip__item">
+                <Box variant="awsui-key-label">Routine maintenance</Box>
+                {openMaintenanceEvent ? (
+                  <StatusIndicator type="warning">Required</StatusIndicator>
+                ) : maintenanceConfigured ? (
+                  <Box>
+                    {Math.max(maintenanceRemaining, 0).toLocaleString()} h remaining
+                  </Box>
+                ) : (
+                  <Box>Not configured</Box>
+                )}
+              </div>
             </div>
           </Container>
         </div>
@@ -540,6 +569,7 @@ export function AssetWorkspacePage() {
                 />
               )}
             </Container>
+
           </SpaceBetween>
         </div>
       </div>

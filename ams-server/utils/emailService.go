@@ -64,6 +64,56 @@ func sendEmail(recipientEmail, recipientName, assetName, componentName, certific
 	return nil
 }
 
+func SendRoutineMaintenanceEmail(recipientEmail, recipientName, assetName, assetDisplayID string, workingHours, dueAtHours int64) error {
+	smtpHost := os.Getenv("SMTP_HOST")
+	smtpPortStr := os.Getenv("SMTP_PORT")
+	smtpUser := os.Getenv("SMTP_USER")
+	smtpPassword := os.Getenv("SMTP_PASSWORD")
+	fromEmail := os.Getenv("FROM_EMAIL")
+
+	if smtpHost == "" || smtpPortStr == "" || smtpUser == "" || smtpPassword == "" || fromEmail == "" {
+		return fmt.Errorf("SMTP configuration is incomplete")
+	}
+
+	smtpPort, err := strconv.Atoi(smtpPortStr)
+	if err != nil {
+		return fmt.Errorf("invalid SMTP port: %v", err)
+	}
+
+	m := gomail.NewMessage()
+	m.SetHeader("From", fromEmail)
+	m.SetHeader("To", recipientEmail)
+	m.SetHeader("Subject", "Routine Maintenance Required - "+assetName)
+
+	body := fmt.Sprintf(`
+		<html>
+		<body>
+			<h2>Routine Maintenance Required</h2>
+			<p>Dear %s,</p>
+			<p>This is an automated notification that the following asset has reached its routine maintenance target:</p>
+			<ul>
+				<li><strong>Asset:</strong> %s</li>
+				<li><strong>Asset ID:</strong> %s</li>
+				<li><strong>Current Working Hours:</strong> %d</li>
+				<li><strong>Maintenance Due At:</strong> %d</li>
+			</ul>
+			<p>Please arrange routine maintenance and complete the maintenance record in the Asset Management System.</p>
+			<br>
+			<p>Best regards,<br>Asset Management System</p>
+		</body>
+		</html>
+	`, recipientName, assetName, assetDisplayID, workingHours, dueAtHours)
+
+	m.SetBody("text/html", body)
+
+	d := gomail.NewDialer(smtpHost, smtpPort, smtpUser, smtpPassword)
+	if err := d.DialAndSend(m); err != nil {
+		return fmt.Errorf("failed to send email: %v", err)
+	}
+
+	return nil
+}
+
 // notifyExpiring handles all notification channels for a single expiring certificate.
 // Each channel is independent — failure in one does not affect the other.
 func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiringCertificatesWithContextRow, recipientEmail, recipientName string) {

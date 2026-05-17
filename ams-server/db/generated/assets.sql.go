@@ -33,10 +33,25 @@ INSERT INTO assets (
     status,
     location,
     assigned_project,
+    maintenance_interval_hours,
+    next_maintenance_due_hours,
     created_at,
     updated_at
 )
-VALUES (next_display_id('asset_display_id_seq'), $1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+VALUES (
+    next_display_id('asset_display_id_seq'),
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    $8,
+    NOW(),
+    NOW()
+)
 RETURNING
     asset_id,
     display_id,
@@ -47,34 +62,49 @@ RETURNING
     status,
     location,
     assigned_project,
+    working_hours,
+    working_hours_note,
+    maintenance_interval_hours,
+    next_maintenance_due_hours,
+    maintenance_required_at,
+    last_maintenance_completed_at,
+    last_maintenance_completed_hours,
     template_id,
     created_at,
     updated_at
 `
 
 type CreateAssetParams struct {
-	Name            string `json:"name"`
-	Photo           string `json:"photo"`
-	Datasheet       string `json:"datasheet"`
-	Description     string `json:"description"`
-	Status          string `json:"status"`
-	Location        string `json:"location"`
-	AssignedProject string `json:"assigned_project"`
+	Name                     string `json:"name"`
+	Photo                    string `json:"photo"`
+	Datasheet                string `json:"datasheet"`
+	Description              string `json:"description"`
+	Status                   string `json:"status"`
+	Location                 string `json:"location"`
+	AssignedProject          string `json:"assigned_project"`
+	MaintenanceIntervalHours int64  `json:"maintenance_interval_hours"`
 }
 
 type CreateAssetRow struct {
-	AssetID         uuid.UUID  `json:"asset_id"`
-	DisplayID       string     `json:"display_id"`
-	Name            string     `json:"name"`
-	Photo           string     `json:"photo"`
-	Datasheet       string     `json:"datasheet"`
-	Description     string     `json:"description"`
-	Status          string     `json:"status"`
-	Location        string     `json:"location"`
-	AssignedProject string     `json:"assigned_project"`
-	TemplateID      *uuid.UUID `json:"template_id"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	AssetID                       uuid.UUID  `json:"asset_id"`
+	DisplayID                     string     `json:"display_id"`
+	Name                          string     `json:"name"`
+	Photo                         string     `json:"photo"`
+	Datasheet                     string     `json:"datasheet"`
+	Description                   string     `json:"description"`
+	Status                        string     `json:"status"`
+	Location                      string     `json:"location"`
+	AssignedProject               string     `json:"assigned_project"`
+	WorkingHours                  int64      `json:"working_hours"`
+	WorkingHoursNote              string     `json:"working_hours_note"`
+	MaintenanceIntervalHours      int64      `json:"maintenance_interval_hours"`
+	NextMaintenanceDueHours       int64      `json:"next_maintenance_due_hours"`
+	MaintenanceRequiredAt         *time.Time `json:"maintenance_required_at"`
+	LastMaintenanceCompletedAt    *time.Time `json:"last_maintenance_completed_at"`
+	LastMaintenanceCompletedHours int64      `json:"last_maintenance_completed_hours"`
+	TemplateID                    *uuid.UUID `json:"template_id"`
+	CreatedAt                     time.Time  `json:"created_at"`
+	UpdatedAt                     time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (CreateAssetRow, error) {
@@ -86,6 +116,7 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Creat
 		arg.Status,
 		arg.Location,
 		arg.AssignedProject,
+		arg.MaintenanceIntervalHours,
 	)
 	var i CreateAssetRow
 	err := row.Scan(
@@ -98,6 +129,13 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Creat
 		&i.Status,
 		&i.Location,
 		&i.AssignedProject,
+		&i.WorkingHours,
+		&i.WorkingHoursNote,
+		&i.MaintenanceIntervalHours,
+		&i.NextMaintenanceDueHours,
+		&i.MaintenanceRequiredAt,
+		&i.LastMaintenanceCompletedAt,
+		&i.LastMaintenanceCompletedHours,
 		&i.TemplateID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -116,6 +154,8 @@ INSERT INTO assets (
     location,
     assigned_project,
     template_id,
+    maintenance_interval_hours,
+    next_maintenance_due_hours,
     created_at,
     updated_at
 )
@@ -129,6 +169,8 @@ VALUES (
     $6,
     $7,
     $8,
+    $9,
+    $9,
     NOW(),
     NOW()
 )
@@ -142,35 +184,50 @@ RETURNING
     status,
     location,
     assigned_project,
+    working_hours,
+    working_hours_note,
+    maintenance_interval_hours,
+    next_maintenance_due_hours,
+    maintenance_required_at,
+    last_maintenance_completed_at,
+    last_maintenance_completed_hours,
     template_id,
     created_at,
     updated_at
 `
 
 type CreateAssetFromTemplateParams struct {
-	Name            string     `json:"name"`
-	Photo           string     `json:"photo"`
-	Datasheet       string     `json:"datasheet"`
-	Description     string     `json:"description"`
-	Status          string     `json:"status"`
-	Location        string     `json:"location"`
-	AssignedProject string     `json:"assigned_project"`
-	TemplateID      *uuid.UUID `json:"template_id"`
+	Name                     string     `json:"name"`
+	Photo                    string     `json:"photo"`
+	Datasheet                string     `json:"datasheet"`
+	Description              string     `json:"description"`
+	Status                   string     `json:"status"`
+	Location                 string     `json:"location"`
+	AssignedProject          string     `json:"assigned_project"`
+	TemplateID               *uuid.UUID `json:"template_id"`
+	MaintenanceIntervalHours int64      `json:"maintenance_interval_hours"`
 }
 
 type CreateAssetFromTemplateRow struct {
-	AssetID         uuid.UUID  `json:"asset_id"`
-	DisplayID       string     `json:"display_id"`
-	Name            string     `json:"name"`
-	Photo           string     `json:"photo"`
-	Datasheet       string     `json:"datasheet"`
-	Description     string     `json:"description"`
-	Status          string     `json:"status"`
-	Location        string     `json:"location"`
-	AssignedProject string     `json:"assigned_project"`
-	TemplateID      *uuid.UUID `json:"template_id"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	AssetID                       uuid.UUID  `json:"asset_id"`
+	DisplayID                     string     `json:"display_id"`
+	Name                          string     `json:"name"`
+	Photo                         string     `json:"photo"`
+	Datasheet                     string     `json:"datasheet"`
+	Description                   string     `json:"description"`
+	Status                        string     `json:"status"`
+	Location                      string     `json:"location"`
+	AssignedProject               string     `json:"assigned_project"`
+	WorkingHours                  int64      `json:"working_hours"`
+	WorkingHoursNote              string     `json:"working_hours_note"`
+	MaintenanceIntervalHours      int64      `json:"maintenance_interval_hours"`
+	NextMaintenanceDueHours       int64      `json:"next_maintenance_due_hours"`
+	MaintenanceRequiredAt         *time.Time `json:"maintenance_required_at"`
+	LastMaintenanceCompletedAt    *time.Time `json:"last_maintenance_completed_at"`
+	LastMaintenanceCompletedHours int64      `json:"last_maintenance_completed_hours"`
+	TemplateID                    *uuid.UUID `json:"template_id"`
+	CreatedAt                     time.Time  `json:"created_at"`
+	UpdatedAt                     time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) CreateAssetFromTemplate(ctx context.Context, arg CreateAssetFromTemplateParams) (CreateAssetFromTemplateRow, error) {
@@ -183,6 +240,7 @@ func (q *Queries) CreateAssetFromTemplate(ctx context.Context, arg CreateAssetFr
 		arg.Location,
 		arg.AssignedProject,
 		arg.TemplateID,
+		arg.MaintenanceIntervalHours,
 	)
 	var i CreateAssetFromTemplateRow
 	err := row.Scan(
@@ -195,6 +253,13 @@ func (q *Queries) CreateAssetFromTemplate(ctx context.Context, arg CreateAssetFr
 		&i.Status,
 		&i.Location,
 		&i.AssignedProject,
+		&i.WorkingHours,
+		&i.WorkingHoursNote,
+		&i.MaintenanceIntervalHours,
+		&i.NextMaintenanceDueHours,
+		&i.MaintenanceRequiredAt,
+		&i.LastMaintenanceCompletedAt,
+		&i.LastMaintenanceCompletedHours,
 		&i.TemplateID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -225,6 +290,13 @@ SELECT
     status,
     location,
     assigned_project,
+    working_hours,
+    working_hours_note,
+    maintenance_interval_hours,
+    next_maintenance_due_hours,
+    maintenance_required_at,
+    last_maintenance_completed_at,
+    last_maintenance_completed_hours,
     template_id,
     created_at,
     updated_at
@@ -239,18 +311,25 @@ type GetAllAssetsPaginatedParams struct {
 }
 
 type GetAllAssetsPaginatedRow struct {
-	AssetID         uuid.UUID  `json:"asset_id"`
-	DisplayID       string     `json:"display_id"`
-	Name            string     `json:"name"`
-	Photo           string     `json:"photo"`
-	Datasheet       string     `json:"datasheet"`
-	Description     string     `json:"description"`
-	Status          string     `json:"status"`
-	Location        string     `json:"location"`
-	AssignedProject string     `json:"assigned_project"`
-	TemplateID      *uuid.UUID `json:"template_id"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	AssetID                       uuid.UUID  `json:"asset_id"`
+	DisplayID                     string     `json:"display_id"`
+	Name                          string     `json:"name"`
+	Photo                         string     `json:"photo"`
+	Datasheet                     string     `json:"datasheet"`
+	Description                   string     `json:"description"`
+	Status                        string     `json:"status"`
+	Location                      string     `json:"location"`
+	AssignedProject               string     `json:"assigned_project"`
+	WorkingHours                  int64      `json:"working_hours"`
+	WorkingHoursNote              string     `json:"working_hours_note"`
+	MaintenanceIntervalHours      int64      `json:"maintenance_interval_hours"`
+	NextMaintenanceDueHours       int64      `json:"next_maintenance_due_hours"`
+	MaintenanceRequiredAt         *time.Time `json:"maintenance_required_at"`
+	LastMaintenanceCompletedAt    *time.Time `json:"last_maintenance_completed_at"`
+	LastMaintenanceCompletedHours int64      `json:"last_maintenance_completed_hours"`
+	TemplateID                    *uuid.UUID `json:"template_id"`
+	CreatedAt                     time.Time  `json:"created_at"`
+	UpdatedAt                     time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetAllAssetsPaginated(ctx context.Context, arg GetAllAssetsPaginatedParams) ([]GetAllAssetsPaginatedRow, error) {
@@ -272,6 +351,13 @@ func (q *Queries) GetAllAssetsPaginated(ctx context.Context, arg GetAllAssetsPag
 			&i.Status,
 			&i.Location,
 			&i.AssignedProject,
+			&i.WorkingHours,
+			&i.WorkingHoursNote,
+			&i.MaintenanceIntervalHours,
+			&i.NextMaintenanceDueHours,
+			&i.MaintenanceRequiredAt,
+			&i.LastMaintenanceCompletedAt,
+			&i.LastMaintenanceCompletedHours,
 			&i.TemplateID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -297,6 +383,13 @@ SELECT
     status,
     location,
     assigned_project,
+    working_hours,
+    working_hours_note,
+    maintenance_interval_hours,
+    next_maintenance_due_hours,
+    maintenance_required_at,
+    last_maintenance_completed_at,
+    last_maintenance_completed_hours,
     template_id,
     created_at,
     updated_at
@@ -306,18 +399,25 @@ LIMIT 1
 `
 
 type GetAssetByIDRow struct {
-	AssetID         uuid.UUID  `json:"asset_id"`
-	DisplayID       string     `json:"display_id"`
-	Name            string     `json:"name"`
-	Photo           string     `json:"photo"`
-	Datasheet       string     `json:"datasheet"`
-	Description     string     `json:"description"`
-	Status          string     `json:"status"`
-	Location        string     `json:"location"`
-	AssignedProject string     `json:"assigned_project"`
-	TemplateID      *uuid.UUID `json:"template_id"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	AssetID                       uuid.UUID  `json:"asset_id"`
+	DisplayID                     string     `json:"display_id"`
+	Name                          string     `json:"name"`
+	Photo                         string     `json:"photo"`
+	Datasheet                     string     `json:"datasheet"`
+	Description                   string     `json:"description"`
+	Status                        string     `json:"status"`
+	Location                      string     `json:"location"`
+	AssignedProject               string     `json:"assigned_project"`
+	WorkingHours                  int64      `json:"working_hours"`
+	WorkingHoursNote              string     `json:"working_hours_note"`
+	MaintenanceIntervalHours      int64      `json:"maintenance_interval_hours"`
+	NextMaintenanceDueHours       int64      `json:"next_maintenance_due_hours"`
+	MaintenanceRequiredAt         *time.Time `json:"maintenance_required_at"`
+	LastMaintenanceCompletedAt    *time.Time `json:"last_maintenance_completed_at"`
+	LastMaintenanceCompletedHours int64      `json:"last_maintenance_completed_hours"`
+	TemplateID                    *uuid.UUID `json:"template_id"`
+	CreatedAt                     time.Time  `json:"created_at"`
+	UpdatedAt                     time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetAssetByID(ctx context.Context, assetID uuid.UUID) (GetAssetByIDRow, error) {
@@ -333,6 +433,13 @@ func (q *Queries) GetAssetByID(ctx context.Context, assetID uuid.UUID) (GetAsset
 		&i.Status,
 		&i.Location,
 		&i.AssignedProject,
+		&i.WorkingHours,
+		&i.WorkingHoursNote,
+		&i.MaintenanceIntervalHours,
+		&i.NextMaintenanceDueHours,
+		&i.MaintenanceRequiredAt,
+		&i.LastMaintenanceCompletedAt,
+		&i.LastMaintenanceCompletedHours,
 		&i.TemplateID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -340,26 +447,79 @@ func (q *Queries) GetAssetByID(ctx context.Context, assetID uuid.UUID) (GetAsset
 	return i, err
 }
 
-const updateAsset = `-- name: UpdateAsset :execrows
+const updateAsset = `-- name: UpdateAsset :one
 UPDATE assets
 SET name = $1, photo = $2, datasheet = $3,
-    description = $4, status = $5, location = $6, assigned_project = $7, updated_at = NOW()
-WHERE asset_id = $8
+    description = $4,
+    status = $5,
+    location = $6,
+    assigned_project = $7,
+    maintenance_interval_hours = $8,
+    next_maintenance_due_hours = CASE
+        WHEN $8::bigint > 0
+            THEN last_maintenance_completed_hours + $8::bigint
+        ELSE 0
+    END,
+    updated_at = NOW()
+WHERE asset_id = $9
+RETURNING
+    asset_id,
+    display_id,
+    name,
+    photo,
+    datasheet,
+    description,
+    status,
+    location,
+    assigned_project,
+    working_hours,
+    working_hours_note,
+    maintenance_interval_hours,
+    next_maintenance_due_hours,
+    maintenance_required_at,
+    last_maintenance_completed_at,
+    last_maintenance_completed_hours,
+    template_id,
+    created_at,
+    updated_at
 `
 
 type UpdateAssetParams struct {
-	Name            string    `json:"name"`
-	Photo           string    `json:"photo"`
-	Datasheet       string    `json:"datasheet"`
-	Description     string    `json:"description"`
-	Status          string    `json:"status"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
-	AssetID         uuid.UUID `json:"asset_id"`
+	Name                     string    `json:"name"`
+	Photo                    string    `json:"photo"`
+	Datasheet                string    `json:"datasheet"`
+	Description              string    `json:"description"`
+	Status                   string    `json:"status"`
+	Location                 string    `json:"location"`
+	AssignedProject          string    `json:"assigned_project"`
+	MaintenanceIntervalHours int64     `json:"maintenance_interval_hours"`
+	AssetID                  uuid.UUID `json:"asset_id"`
 }
 
-func (q *Queries) UpdateAsset(ctx context.Context, arg UpdateAssetParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateAsset,
+type UpdateAssetRow struct {
+	AssetID                       uuid.UUID  `json:"asset_id"`
+	DisplayID                     string     `json:"display_id"`
+	Name                          string     `json:"name"`
+	Photo                         string     `json:"photo"`
+	Datasheet                     string     `json:"datasheet"`
+	Description                   string     `json:"description"`
+	Status                        string     `json:"status"`
+	Location                      string     `json:"location"`
+	AssignedProject               string     `json:"assigned_project"`
+	WorkingHours                  int64      `json:"working_hours"`
+	WorkingHoursNote              string     `json:"working_hours_note"`
+	MaintenanceIntervalHours      int64      `json:"maintenance_interval_hours"`
+	NextMaintenanceDueHours       int64      `json:"next_maintenance_due_hours"`
+	MaintenanceRequiredAt         *time.Time `json:"maintenance_required_at"`
+	LastMaintenanceCompletedAt    *time.Time `json:"last_maintenance_completed_at"`
+	LastMaintenanceCompletedHours int64      `json:"last_maintenance_completed_hours"`
+	TemplateID                    *uuid.UUID `json:"template_id"`
+	CreatedAt                     time.Time  `json:"created_at"`
+	UpdatedAt                     time.Time  `json:"updated_at"`
+}
+
+func (q *Queries) UpdateAsset(ctx context.Context, arg UpdateAssetParams) (UpdateAssetRow, error) {
+	row := q.db.QueryRow(ctx, updateAsset,
 		arg.Name,
 		arg.Photo,
 		arg.Datasheet,
@@ -367,10 +527,30 @@ func (q *Queries) UpdateAsset(ctx context.Context, arg UpdateAssetParams) (int64
 		arg.Status,
 		arg.Location,
 		arg.AssignedProject,
+		arg.MaintenanceIntervalHours,
 		arg.AssetID,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	var i UpdateAssetRow
+	err := row.Scan(
+		&i.AssetID,
+		&i.DisplayID,
+		&i.Name,
+		&i.Photo,
+		&i.Datasheet,
+		&i.Description,
+		&i.Status,
+		&i.Location,
+		&i.AssignedProject,
+		&i.WorkingHours,
+		&i.WorkingHoursNote,
+		&i.MaintenanceIntervalHours,
+		&i.NextMaintenanceDueHours,
+		&i.MaintenanceRequiredAt,
+		&i.LastMaintenanceCompletedAt,
+		&i.LastMaintenanceCompletedHours,
+		&i.TemplateID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

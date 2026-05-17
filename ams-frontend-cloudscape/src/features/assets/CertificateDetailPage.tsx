@@ -5,10 +5,13 @@ import {
   ColumnLayout,
   Container,
   ContentLayout,
+  FormField,
   Header,
+  Select,
   SpaceBetween,
   StatusIndicator,
   Table,
+  type SelectProps,
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,7 +21,9 @@ import {
   getAsset,
   getCertificate,
   getCertificateDownloadUrl,
+  getCertificateUploadDownloadUrl,
   getComponent,
+  listActiveCompetentPersons,
   listCertificateUploads,
   listTestTypes,
   uploadCertificateFile,
@@ -38,6 +43,7 @@ export function CertificateDetailPage() {
   const { isAdmin } = useAuth();
   const { error, success } = useFlashbar();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedCompetentPersonId, setSelectedCompetentPersonId] = useState("");
   const [fileInputKey, setFileInputKey] = useState(0);
 
   const assetQuery = useQuery({
@@ -69,6 +75,12 @@ export function CertificateDetailPage() {
     enabled: Boolean(certificateId),
   });
 
+  const competentPersonsQuery = useQuery({
+    queryKey: ["competent-persons", "active"],
+    queryFn: listActiveCompetentPersons,
+    enabled: isAdmin,
+  });
+
   const testTypeName = !certificateQuery.data?.test_id
     ? "Not set"
     : testTypesQuery.data?.find((testType) => testType.test_id === certificateQuery.data?.test_id)
@@ -86,14 +98,15 @@ export function CertificateDetailPage() {
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
-      if (!certificateId || !selectedFile) {
-        throw new Error("Choose a file before uploading.");
+      if (!certificateId || !selectedFile || !selectedCompetentPersonId) {
+        throw new Error("Choose a file and competent person before uploading.");
       }
 
-      return uploadCertificateFile(certificateId, selectedFile);
+      return uploadCertificateFile(certificateId, selectedFile, selectedCompetentPersonId);
     },
     onSuccess: async () => {
       setSelectedFile(null);
+      setSelectedCompetentPersonId("");
       setFileInputKey((current) => current + 1);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["uploads", certificateId] }),
@@ -104,6 +117,17 @@ export function CertificateDetailPage() {
     },
     onError: (mutationError: Error) => {
       error("Upload failed", mutationError.message);
+    },
+  });
+
+  const uploadViewMutation = useMutation({
+    mutationFn: async (uploadId: string) =>
+      getCertificateUploadDownloadUrl(certificateId!, uploadId),
+    onSuccess: (response) => {
+      window.open(response.url, "_blank", "noopener,noreferrer");
+    },
+    onError: (mutationError: Error) => {
+      error("View failed", mutationError.message);
     },
   });
 
@@ -142,6 +166,20 @@ export function CertificateDetailPage() {
     );
   }
 
+  const competentPersonOptions: SelectProps.Option[] = (competentPersonsQuery.data || []).map(
+    (person) => ({
+      label: person.full_name,
+      value: person.competent_person_id,
+      description: `${person.person_type} - ${person.competency_category_name}`,
+    })
+  );
+  const selectedCompetentPerson =
+    competentPersonsQuery.data?.find(
+      (person) => person.competent_person_id === selectedCompetentPersonId
+    ) ?? null;
+  const selectedCompetentPersonOption =
+    competentPersonOptions.find((option) => option.value === selectedCompetentPersonId) ?? null;
+
   const uploadColumns: TableProps<CertificateUploadAudit>["columnDefinitions"] = [
     {
       id: "file",
@@ -151,12 +189,38 @@ export function CertificateDetailPage() {
     {
       id: "uploadedBy",
       header: "Uploaded by",
-      cell: (item) => item.uploaded_by,
+      cell: (item) => item.uploaded_by_name || "Unknown",
+    },
+    {
+      id: "competentPerson",
+      header: "Competent Person",
+      cell: (item) => item.competent_person_name || "Not recorded",
+    },
+    {
+      id: "competencyCategory",
+      header: "Competency category",
+      cell: (item) => item.competency_category_name || "Not recorded",
     },
     {
       id: "uploadedAt",
       header: "Uploaded at",
       cell: (item) => formatDateTime(item.uploaded_at),
+    },
+    {
+      id: "view",
+      header: "View",
+      width: 120,
+      minWidth: 120,
+      cell: (item) => (
+        <span className="upload-history-view-action">
+          <Button
+            loading={uploadViewMutation.isPending}
+            onClick={() => uploadViewMutation.mutate(item.uuid)}
+          >
+            View
+          </Button>
+        </span>
+      ),
     },
   ];
 
@@ -245,8 +309,8 @@ export function CertificateDetailPage() {
                 <Box>{certificateQuery.data.imca_d018 || "Not set"}</Box>
               </div>
               <div className="summary-row">
-                <Box variant="awsui-key-label">Stored file key</Box>
-                <Box>{certificateQuery.data.certificate_file || "No file uploaded"}</Box>
+                <Box variant="awsui-key-label">Certificate file</Box>
+                <Box>{certificateQuery.data.certificate_file ? "Attached" : "No file uploaded"}</Box>
               </div>
             </SpaceBetween>
           </Container>
@@ -271,9 +335,28 @@ export function CertificateDetailPage() {
                 accept=".pdf,image/jpeg,image/png,image/webp"
                 onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
               />
+              <FormField label="Competent Person">
+                <Select
+                  options={competentPersonOptions}
+                  placeholder="Select competent person"
+                  selectedOption={selectedCompetentPersonOption}
+                  statusType={competentPersonsQuery.isLoading ? "loading" : "finished"}
+                  loadingText="Loading competent persons"
+                  empty="No active competent persons are available."
+                  onChange={({ detail }) =>
+                    setSelectedCompetentPersonId(detail.selectedOption.value || "")
+                  }
+                />
+              </FormField>
+              {selectedCompetentPerson ? (
+                <Box color="text-body-secondary">
+                  {selectedCompetentPerson.competency_category_name}:{" "}
+                  {selectedCompetentPerson.competency_category_description}
+                </Box>
+              ) : null}
               <SpaceBetween direction="horizontal" size="xs">
                 <Button
-                  disabled={!selectedFile}
+                  disabled={!selectedFile || !selectedCompetentPersonId}
                   loading={uploadMutation.isPending}
                   variant="primary"
                   onClick={() => uploadMutation.mutate()}
@@ -298,6 +381,7 @@ export function CertificateDetailPage() {
               loadingText="Loading upload history"
               trackBy="file_key"
               variant="embedded"
+              wrapLines={false}
             />
           )}
         </Container>

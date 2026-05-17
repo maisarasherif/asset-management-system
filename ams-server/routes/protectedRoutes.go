@@ -11,18 +11,29 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 
 	// ===================Admin-Protected Routes======================================================
 	admin := router.Group("/v1")
-	admin.Use(middleware.AuthMiddleware(), middleware.AdminMiddleware())
+	admin.Use(middleware.AuthMiddleware(), middleware.ActiveUserMiddleware(pool), middleware.AdminMiddleware())
 
 	// User Routes
 	admin.POST("/user", controller.RegisterUser(pool))
 	admin.PUT("/user/:user_id", controller.UpdateUser(pool))
 	admin.PATCH("/user/:user_id", controller.PatchUser(pool))
+	admin.PUT("/user/:user_id/password", controller.AdminUpdateUserPassword(pool))
 	admin.DELETE("/user/:user_id", controller.DeleteUser(pool))
+	admin.GET("/user-management-audit-logs", controller.GetUserManagementAuditLogs(pool))
+	admin.GET("/projects", controller.GetProjects(pool))
+	admin.POST("/project", controller.AddProject(pool))
+	admin.PUT("/project/:project_id", controller.UpdateProject(pool))
+	admin.GET("/user-project-access", controller.GetUserProjectAccess(pool))
+	admin.POST("/user/:user_id/project-access", controller.UpsertUserProjectAccess(pool))
+	admin.PUT("/user-project-access/:access_id", controller.UpdateUserProjectAccess(pool))
+	admin.DELETE("/user-project-access/:access_id", controller.DeleteUserProjectAccess(pool))
 
 	// Asset Routes
 	admin.POST("/asset", controller.AddAsset(pool))
 	admin.PUT("/asset/:asset_id", controller.UpdateAsset(pool))
 	admin.PATCH("/asset/:asset_id", controller.PatchAsset(pool))
+	admin.PATCH("/asset/:asset_id/working-hours", controller.UpdateAssetWorkingHours(pool))
+	admin.POST("/asset/:asset_id/routine-maintenance/complete", controller.CompleteAssetRoutineMaintenance(pool))
 	admin.DELETE("/asset/:asset_id", controller.DeleteAsset(pool))
 
 	// Component Routes
@@ -56,6 +67,14 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	admin.PATCH("/test-type/:test_id", controller.PatchTestType(pool))
 	admin.DELETE("/test-type/:test_id", controller.DeleteTestType(pool))
 
+	// Competency Routes
+	admin.GET("/competency-categories", controller.GetCompetencyCategories(pool))
+	admin.POST("/competency-category", controller.AddCompetencyCategory(pool))
+	admin.PUT("/competency-category/:competency_category_id", controller.UpdateCompetencyCategory(pool))
+	admin.GET("/competent-persons", controller.GetCompetentPersons(pool))
+	admin.POST("/competent-person", controller.AddCompetentPerson(pool))
+	admin.PUT("/competent-person/:competent_person_id", controller.UpdateCompetentPerson(pool))
+
 	// Template Routes
 	admin.POST("/template", controller.AddTemplate(pool))
 	admin.PUT("/template/:template_id", controller.UpdateTemplate(pool))
@@ -71,19 +90,24 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	admin.POST("/template-component/:template_component_id/test", controller.AddTemplateComponentTest(pool))
 	admin.DELETE("/template-component-test/:template_component_test_id", controller.DeleteTemplateComponentTest(pool))
 
-	// ===================Protected Routes======================================================
+	// ===================Authenticated Account Routes======================================================
+	account := router.Group("/v1")
+	account.Use(middleware.AuthMiddleware(), middleware.ActiveUserMiddleware(pool))
+	account.PUT("/account/password", controller.UpdatePassword(pool))
+	account.POST("/logout", controller.LogoutUser(pool))
+
+	// ===================Protected Staff Routes======================================================
 	protected := router.Group("/v1")
-	protected.Use(middleware.AuthMiddleware())
+	protected.Use(middleware.AuthMiddleware(), middleware.ActiveUserMiddleware(pool), middleware.StaffMiddleware())
 
 	// User Routes
 	protected.GET("/users", controller.GetUsers(pool))
 	protected.GET("/user/:user_id", controller.GetUser(pool))
-	protected.PUT("/account/password", controller.UpdatePassword(pool))
-	protected.POST("/logout", controller.LogoutUser(pool))
 
 	// Asset Routes
 	protected.GET("/assets", controller.GetAssets(pool))
 	protected.GET("/asset/:asset_id", controller.GetAsset(pool))
+	protected.GET("/asset/:asset_id/routine-maintenance", controller.GetAssetRoutineMaintenance(pool))
 	protected.GET("/asset/:asset_id/component-certificate-sheet", controller.GetAssetComponentCertificateSheetPDF(pool))
 
 	// Component Routes
@@ -100,6 +124,7 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	protected.GET("/certificates/report", controller.GetCertificatesReportPDF(pool))
 	protected.GET("/certificate/:certificate_id/file", controller.GetCertificateFile(pool))
 	protected.GET("/certificate/:certificate_id/uploads", controller.GetCertificateUploadAudit(pool))
+	protected.GET("/certificate/:certificate_id/uploads/:upload_id/file", controller.GetCertificateUploadFile(pool))
 
 	// Main Category Routes
 	protected.GET("/main-categories", controller.GetMainCategories(pool))
@@ -113,10 +138,22 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	// Test Type Routes
 	protected.GET("/test-types", controller.GetTestTypes(pool))
 
+	// Competency Routes
+	protected.GET("/competency-categories/active", controller.GetActiveCompetencyCategories(pool))
+	protected.GET("/competent-persons/active", controller.GetActiveCompetentPersons(pool))
+
 	// Template Routes
 	protected.GET("/templates", controller.GetTemplates(pool))
 	protected.GET("/template/:template_id", controller.GetTemplate(pool))
 	protected.GET("/template/:template_id/configuration", controller.GetTemplateConfiguration(pool))
 	protected.GET("/template/:template_id/components", controller.GetTemplateComponents(pool))
 	protected.GET("/template-component/:template_component_id/tests", controller.GetTemplateComponentTests(pool))
+
+	// ===================Client Routes======================================================
+	client := router.Group("/v1/client")
+	client.Use(middleware.AuthMiddleware(), middleware.ActiveUserMiddleware(pool), middleware.ClientMiddleware())
+
+	client.GET("/assets", controller.GetClientAssets(pool))
+	client.GET("/asset/:asset_id", controller.GetClientAsset(pool))
+	client.GET("/certificate/:certificate_id/file", controller.GetClientCertificateFile(pool))
 }

@@ -25,6 +25,15 @@ export function AssetsDirectoryPage() {
     queryFn: listAllAssets,
   });
 
+  const assets = assetsQuery.data || [];
+  const assetDashboardQueries = useQueries({
+    queries: assets.map((asset) => ({
+      queryKey: ["asset-dashboard", asset.asset_id],
+      queryFn: () => getAssetDashboard(asset.asset_id),
+      staleTime: 60_000,
+    })),
+  });
+
   if (assetsQuery.isLoading) {
     return <PageLoading>Loading the assets directory...</PageLoading>;
   }
@@ -38,7 +47,7 @@ export function AssetsDirectoryPage() {
     );
   }
 
-  if (!assetsQuery.data || assetsQuery.data.length === 0) {
+  if (assets.length === 0) {
     return (
       <PageEmpty
         action={isAdmin ? <Button onClick={() => navigate("/assets/new")}>Create asset</Button> : undefined}
@@ -47,14 +56,6 @@ export function AssetsDirectoryPage() {
       />
     );
   }
-
-  const assetDashboardQueries = useQueries({
-    queries: assetsQuery.data.map((asset) => ({
-      queryKey: ["asset-dashboard", asset.asset_id],
-      queryFn: () => getAssetDashboard(asset.asset_id),
-      staleTime: 60_000,
-    })),
-  });
 
   return (
     <ContentLayout
@@ -76,7 +77,7 @@ export function AssetsDirectoryPage() {
     >
       <SpaceBetween direction="vertical" size="l">
         <Header
-          counter={`(${assetsQuery.data.length})`}
+          counter={`(${assets.length})`}
           description="Open a specific asset to work inside its component and certificate workspace."
           variant="h2"
         >
@@ -84,7 +85,7 @@ export function AssetsDirectoryPage() {
         </Header>
 
         <div className="asset-directory-list">
-          {assetsQuery.data.map((asset, index) => {
+          {assets.map((asset, index) => {
             const dashboardQuery = assetDashboardQueries[index];
             const statusCounts = dashboardQuery.data?.statusCounts;
             const componentCount = dashboardQuery.data?.components.length;
@@ -151,6 +152,14 @@ export function AssetsDirectoryPage() {
                       <div className="asset-directory-card__stat">
                         <Box variant="awsui-key-label">Expiring / expired</Box>
                         <Box>{urgentCount ?? "..."}</Box>
+                      </div>
+                      <div className="asset-directory-card__stat">
+                        <Box variant="awsui-key-label">Routine hours</Box>
+                        <Box>
+                          {asset.maintenance_interval_hours > 0
+                            ? `${asset.working_hours.toLocaleString()} / ${asset.next_maintenance_due_hours.toLocaleString()} h`
+                            : "Not configured"}
+                        </Box>
                       </div>
                     </div>
 

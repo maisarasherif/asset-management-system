@@ -245,15 +245,33 @@ ORDER BY
 
 -- name: GetCertificateUploadAuditByCertificateIDPaginated :many
 SELECT
-    certificate_id,
-    file_key,
-    file_name,
-    uploaded_by,
-    uploaded_at
+    cua.uuid,
+    cua.certificate_id,
+    cua.file_key,
+    cua.file_name,
+    COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), 'Unknown')::text AS uploaded_by_name,
+    cua.uploaded_at,
+    cua.competent_person_id,
+    COALESCE(cp.full_name, '') AS competent_person_name,
+    COALESCE(cp.person_type, '') AS competent_person_type,
+    cp.competency_category_id,
+    COALESCE(cc.category_code, '') AS competency_category_code,
+    COALESCE(cc.category_name, '') AS competency_category_name,
+    COALESCE(cc.description, '') AS competency_category_description
+FROM certificate_upload_audit cua
+LEFT JOIN users u ON u.user_id::text = cua.uploaded_by
+LEFT JOIN competent_persons cp ON cp.competent_person_id = cua.competent_person_id
+LEFT JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
+WHERE cua.certificate_id = sqlc.arg(certificate_id)
+ORDER BY cua.uploaded_at DESC
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+
+-- name: GetCertificateUploadAuditFileByID :one
+SELECT file_key
 FROM certificate_upload_audit
 WHERE certificate_id = sqlc.arg(certificate_id)
-ORDER BY uploaded_at DESC
-LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+  AND uuid = sqlc.arg(uuid)
+LIMIT 1;
 
 -- name: CountCertificateUploadAuditByCertificateID :one
 SELECT COUNT(*)
@@ -306,11 +324,19 @@ SET issue_date = $1, expiry_date = $2, issuing_authority = $3,
 WHERE certificate_id = $8;
 
 -- name: CreateCertificateUploadAuditEntry :execrows
-INSERT INTO certificate_upload_audit (certificate_id, file_key, file_name, uploaded_by, uploaded_at)
+INSERT INTO certificate_upload_audit (
+    certificate_id,
+    file_key,
+    file_name,
+    uploaded_by,
+    competent_person_id,
+    uploaded_at
+)
 VALUES (
     sqlc.arg(certificate_id),
     sqlc.arg(file_key),
     sqlc.arg(file_name),
     sqlc.arg(uploaded_by),
+    sqlc.arg(competent_person_id),
     NOW()
 );

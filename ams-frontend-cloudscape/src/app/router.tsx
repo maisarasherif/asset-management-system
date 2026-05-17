@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Suspense, lazy, type ReactNode } from "react";
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, useLocation } from "react-router-dom";
 import { PageLoading } from "../components/shared/PageStates";
 import { RouteErrorPage } from "../components/shared/RouteErrorPage";
 import { useAuth } from "../providers/auth-context";
@@ -30,6 +30,11 @@ const AssetFormPage = lazy(() =>
 const AssetWorkspacePage = lazy(() =>
   import("../features/assets/AssetWorkspacePage").then((module) => ({
     default: module.AssetWorkspacePage,
+  }))
+);
+const AssetRoutineMaintenancePage = lazy(() =>
+  import("../features/assets/AssetRoutineMaintenancePage").then((module) => ({
+    default: module.AssetRoutineMaintenancePage,
   }))
 );
 const ComponentFormPage = lazy(() =>
@@ -77,6 +82,26 @@ const AccountPage = lazy(() =>
     default: module.AccountPage,
   }))
 );
+const AdministrationPage = lazy(() =>
+  import("../features/admin/AdministrationPage").then((module) => ({
+    default: module.AdministrationPage,
+  }))
+);
+const ClientAccessPage = lazy(() =>
+  import("../features/admin/ClientAccessPage").then((module) => ({
+    default: module.ClientAccessPage,
+  }))
+);
+const ClientAssetsPage = lazy(() =>
+  import("../features/client/ClientAssetsPage").then((module) => ({
+    default: module.ClientAssetsPage,
+  }))
+);
+const ClientAssetViewPage = lazy(() =>
+  import("../features/client/ClientAssetViewPage").then((module) => ({
+    default: module.ClientAssetViewPage,
+  }))
+);
 
 function RouteSuspense({ children }: { children: ReactNode }) {
   return (
@@ -87,10 +112,15 @@ function RouteSuspense({ children }: { children: ReactNode }) {
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isClient } = useAuth();
+  const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate replace to="/login" />;
+  }
+
+  if (isClient && !location.pathname.startsWith("/client") && location.pathname !== "/account") {
+    return <Navigate replace to="/client/assets" />;
   }
 
   return children;
@@ -148,6 +178,22 @@ export const router = createBrowserRouter([
         element: <Navigate replace to="/dashboard" />,
       },
       {
+        path: "client/assets",
+        element: (
+          <RouteSuspense>
+            <ClientAssetsPage />
+          </RouteSuspense>
+        ),
+      },
+      {
+        path: "client/assets/:assetId",
+        element: (
+          <RouteSuspense>
+            <ClientAssetViewPage />
+          </RouteSuspense>
+        ),
+      },
+      {
         path: "dashboard",
         element: (
           <RouteSuspense>
@@ -178,6 +224,14 @@ export const router = createBrowserRouter([
         element: (
           <RouteSuspense>
             <AssetWorkspacePage />
+          </RouteSuspense>
+        ),
+      },
+      {
+        path: "assets/:assetId/routine-maintenance",
+        element: (
+          <RouteSuspense>
+            <AssetRoutineMaintenancePage />
           </RouteSuspense>
         ),
       },
@@ -285,6 +339,26 @@ export const router = createBrowserRouter([
           <RequireAdmin>
             <RouteSuspense>
               <CatalogPage />
+            </RouteSuspense>
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: "administration",
+        element: (
+          <RequireAdmin>
+            <RouteSuspense>
+              <AdministrationPage />
+            </RouteSuspense>
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: "client-access",
+        element: (
+          <RequireAdmin>
+            <RouteSuspense>
+              <ClientAccessPage />
             </RouteSuspense>
           </RequireAdmin>
         ),

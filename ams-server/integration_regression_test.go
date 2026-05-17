@@ -244,6 +244,112 @@ func TestPatchAsset(t *testing.T) {
 	assertField(t, fetched, "description", "Patch me")
 }
 
+func TestRoutineMaintenanceThresholdFlowIsIdempotent(t *testing.T) {
+	h := setupIntegrationTest(t)
+	disableExternalMaintenanceNotifications(t)
+
+	created := createAsset(t, h, map[string]any{
+		"name":                       "Routine Maintenance Asset",
+		"photo":                      "",
+		"datasheet":                  "",
+		"description":                "Tracks maintenance by working hours",
+		"status":                     "ACTIVE",
+		"location":                   "Engine Room",
+		"assigned_project":           "Project Maintenance",
+		"maintenance_interval_hours": 100,
+	})
+	assetID := stringField(t, created, "asset_id")
+	assertField(t, created, "maintenance_interval_hours", 100)
+	assertField(t, created, "next_maintenance_due_hours", 100)
+
+	belowThreshold := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID+"/working-hours", map[string]any{
+		"working_hours": 90,
+		"note":          "Below threshold",
+	}, http.StatusOK))
+	belowAsset := objectField(t, belowThreshold, "asset")
+	assertField(t, belowAsset, "working_hours", 90)
+	if belowThreshold["maintenance_event"] != nil {
+		t.Fatalf("expected no maintenance event below threshold, got %v", belowThreshold["maintenance_event"])
+	}
+
+	events := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/asset/"+assetID+"/routine-maintenance", nil, http.StatusOK))
+	if len(events) != 0 {
+		t.Fatalf("expected no routine maintenance events below threshold, got %d", len(events))
+	}
+
+	triggered := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID+"/working-hours", map[string]any{
+		"working_hours": 100,
+		"note":          "Reached threshold",
+	}, http.StatusOK))
+	triggeredAsset := objectField(t, triggered, "asset")
+	assertField(t, triggeredAsset, "status", "MAINTENANCE")
+	assertField(t, triggeredAsset, "working_hours", 100)
+	triggeredEvent := objectField(t, triggered, "maintenance_event")
+	assertField(t, triggeredEvent, "status", "REQUIRED")
+	assertField(t, triggeredEvent, "due_at_hours", 100)
+	assertField(t, triggeredEvent, "triggered_at_hours", 100)
+	eventID := stringField(t, triggeredEvent, "maintenance_event_id")
+
+	duplicate := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID+"/working-hours", map[string]any{
+		"working_hours": 125,
+		"note":          "Same maintenance cycle",
+	}, http.StatusOK))
+	if duplicate["maintenance_event"] != nil {
+		t.Fatalf("expected duplicate threshold update to return no new event, got %v", duplicate["maintenance_event"])
+	}
+
+	events = decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/asset/"+assetID+"/routine-maintenance", nil, http.StatusOK))
+	if len(events) != 1 {
+		t.Fatalf("expected exactly one open routine maintenance event, got %d", len(events))
+	}
+	assertField(t, events[0], "maintenance_event_id", eventID)
+	assertField(t, events[0], "status", "REQUIRED")
+
+	completed := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/asset/"+assetID+"/routine-maintenance/complete", map[string]any{
+		"completion_notes": "Routine service completed",
+	}, http.StatusOK))
+	completedAsset := objectField(t, completed, "asset")
+	assertField(t, completedAsset, "status", "ACTIVE")
+	assertField(t, completedAsset, "last_maintenance_completed_hours", 125)
+	assertField(t, completedAsset, "next_maintenance_due_hours", 225)
+	completedEvent := objectField(t, completed, "maintenance_event")
+	assertField(t, completedEvent, "status", "COMPLETED")
+	assertField(t, completedEvent, "completion_notes", "Routine service completed")
+
+	events = decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/asset/"+assetID+"/routine-maintenance", nil, http.StatusOK))
+	if len(events) != 1 {
+		t.Fatalf("expected completed event history to remain available, got %d events", len(events))
+	}
+	assertField(t, events[0], "status", "COMPLETED")
+}
+
+func TestWorkingHoursCannotDecrease(t *testing.T) {
+	h := setupIntegrationTest(t)
+	disableExternalMaintenanceNotifications(t)
+
+	assetID := stringField(t, createAsset(t, h, map[string]any{
+		"name":                       "Counter Guard Asset",
+		"photo":                      "",
+		"datasheet":                  "",
+		"description":                "Protects monotonic working hours",
+		"status":                     "ACTIVE",
+		"location":                   "Deck",
+		"assigned_project":           "Project Counter",
+		"maintenance_interval_hours": 500,
+	}), "asset_id")
+
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID+"/working-hours", map[string]any{
+		"working_hours": 200,
+		"note":          "Initial reading",
+	}, http.StatusOK)
+
+	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID+"/working-hours", map[string]any{
+		"working_hours": 199,
+		"note":          "Invalid lower reading",
+	}, http.StatusBadRequest))
+	assertField(t, body, "error", "working hours cannot be lower than the current counter")
+}
+
 func TestDeleteAsset(t *testing.T) {
 	h := setupIntegrationTest(t)
 	created := createAsset(t, h, map[string]any{
@@ -467,8 +573,11 @@ func TestUploadCertificateFile(t *testing.T) {
 
 	componentID, testID := createComponentFixture(t, h, "Upload Component")
 	certificateID := stringField(t, createCertificate(t, h, certificatePayload(componentID, testID, 90)), "certificate_id")
+	competentPersonID := createCompetentPersonFixture(t, h.pool, "Upload Competent Person")
 
-	performMultipartRequest(t, h.router, h.adminToken, "/v1/certificate/"+certificateID+"/file", "file", "certificate.pdf", []byte("%PDF-1.4 test document"), http.StatusOK)
+	performMultipartRequest(t, h.router, h.adminToken, "/v1/certificate/"+certificateID+"/file", "file", "certificate.pdf", []byte("%PDF-1.4 test document"), map[string]string{
+		"competent_person_id": competentPersonID,
+	}, http.StatusOK)
 
 	audit := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/certificate/"+certificateID+"/uploads?page=1&limit=20", nil, http.StatusOK))
 	if paginatedCount(t, audit) != 1 {
@@ -482,8 +591,11 @@ func TestGetCertificateSignedURL(t *testing.T) {
 
 	componentID, testID := createComponentFixture(t, h, "Signed URL Component")
 	certificateID := stringField(t, createCertificate(t, h, certificatePayload(componentID, testID, 90)), "certificate_id")
+	competentPersonID := createCompetentPersonFixture(t, h.pool, "Signed URL Competent Person")
 
-	performMultipartRequest(t, h.router, h.adminToken, "/v1/certificate/"+certificateID+"/file", "file", "certificate.pdf", []byte("%PDF-1.4 signed url document"), http.StatusOK)
+	performMultipartRequest(t, h.router, h.adminToken, "/v1/certificate/"+certificateID+"/file", "file", "certificate.pdf", []byte("%PDF-1.4 signed url document"), map[string]string{
+		"competent_person_id": competentPersonID,
+	}, http.StatusOK)
 
 	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/certificate/"+certificateID+"/file", nil, http.StatusOK))
 	url := stringField(t, body, "url")
@@ -503,10 +615,11 @@ func TestDeleteCertificate(t *testing.T) {
 	queries := db.New(h.pool)
 
 	if _, err := queries.CreateCertificateUploadAuditEntry(context.Background(), db.CreateCertificateUploadAuditEntryParams{
-		CertificateID: parsedCertificateID,
-		FileKey:       "certificates/manual.pdf",
-		FileName:      "manual.pdf",
-		UploadedBy:    adminUserID(t, h.pool),
+		CertificateID:     parsedCertificateID,
+		FileKey:           "certificates/manual.pdf",
+		FileName:          "manual.pdf",
+		UploadedBy:        adminUserID(t, h.pool),
+		CompetentPersonID: nil,
 	}); err != nil {
 		t.Fatalf("failed to seed certificate upload audit: %v", err)
 	}
@@ -729,6 +842,99 @@ func TestUpdatePassword(t *testing.T) {
 	}
 }
 
+func TestSuperAdminCanChangeUserPassword(t *testing.T) {
+	h := setupIntegrationTest(t)
+	createIntegrationUser(t, h.pool, "Managed", "User", "managed-password@example.com", "old-password", "USER")
+	targetUser := mustGetIntegrationUserByEmail(t, h.pool, "managed-password@example.com")
+
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/user/"+targetUser.UserID.String()+"/password", map[string]any{
+		"new_password": "new-password",
+	}, http.StatusOK)
+
+	performJSONRequest(t, h.router, "", http.MethodPost, "/v1/login", map[string]any{
+		"email":    "managed-password@example.com",
+		"password": "old-password",
+	}, http.StatusUnauthorized)
+
+	body := decodeObject(t, performJSONRequest(t, h.router, "", http.MethodPost, "/v1/login", map[string]any{
+		"email":    "managed-password@example.com",
+		"password": "new-password",
+	}, http.StatusOK))
+	if strings.TrimSpace(stringField(t, body, "token")) == "" {
+		t.Fatal("expected token after super admin password change")
+	}
+}
+
+func TestAdminCannotChangeUserPassword(t *testing.T) {
+	h := setupIntegrationTest(t)
+	adminToken := createIntegrationUserToken(t, h.pool, "Other", "Admin", "non-seeded-admin@example.com", "admin-password", "ADMIN")
+	createIntegrationUser(t, h.pool, "Managed", "User", "blocked-password@example.com", "old-password", "USER")
+	targetUser := mustGetIntegrationUserByEmail(t, h.pool, "blocked-password@example.com")
+
+	body := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodPut, "/v1/user/"+targetUser.UserID.String()+"/password", map[string]any{
+		"new_password": "new-password",
+	}, http.StatusForbidden))
+	assertField(t, body, "error", "only SUPER ADMIN can change user passwords")
+
+	performJSONRequest(t, h.router, "", http.MethodPost, "/v1/login", map[string]any{
+		"email":    "blocked-password@example.com",
+		"password": "new-password",
+	}, http.StatusUnauthorized)
+
+	body = decodeObject(t, performJSONRequest(t, h.router, "", http.MethodPost, "/v1/login", map[string]any{
+		"email":    "blocked-password@example.com",
+		"password": "old-password",
+	}, http.StatusOK))
+	if strings.TrimSpace(stringField(t, body, "token")) == "" {
+		t.Fatal("expected old password to remain valid")
+	}
+}
+
+func TestUserManagementAuditLogsRecordAdminActions(t *testing.T) {
+	h := setupIntegrationTest(t)
+
+	created := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/user", map[string]any{
+		"first_name": "Audit",
+		"last_name":  "User",
+		"email":      "audit-user@example.com",
+		"password":   "audit-password",
+		"role":       "USER",
+	}, http.StatusCreated))
+	userID := stringField(t, created, "user_id")
+
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/user/"+userID, map[string]any{
+		"first_name": "Audit",
+		"last_name":  "Admin",
+		"email":      "audit-user@example.com",
+		"role":       "ADMIN",
+		"status":     "ACTIVE",
+	}, http.StatusOK)
+
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/user/"+userID+"/password", map[string]any{
+		"new_password": "changed-password",
+	}, http.StatusOK)
+
+	performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, "/v1/user/"+userID, nil, http.StatusOK)
+
+	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/user-management-audit-logs?page=1&limit=20", nil, http.StatusOK))
+	events := dataArray(t, body)
+	if len(events) < 4 {
+		t.Fatalf("expected at least 4 audit log events, got %d", len(events))
+	}
+
+	seen := map[string]bool{}
+	for _, event := range events {
+		if stringField(t, event, "target_email") == "audit-user@example.com" {
+			seen[stringField(t, event, "action")] = true
+		}
+	}
+	for _, action := range []string{"CREATE_USER", "UPDATE_USER", "RESET_PASSWORD", "DELETE_USER"} {
+		if !seen[action] {
+			t.Fatalf("expected audit action %s in events %v", action, seen)
+		}
+	}
+}
+
 func setupIntegrationTest(t *testing.T) *integrationHarness {
 	t.Helper()
 
@@ -743,6 +949,7 @@ func setupIntegrationTest(t *testing.T) *integrationHarness {
 	if os.Getenv("SECRET_REFRESH_KEY") == "" {
 		_ = os.Setenv("SECRET_REFRESH_KEY", "integration-refresh-secret-key")
 	}
+	_ = os.Setenv("SEED_ADMIN_EMAIL", "integration-admin@example.com")
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -780,6 +987,7 @@ func resetIntegrationDatabase(t *testing.T, pool *pgxpool.Pool) {
 
 	const truncateSQL = `
 TRUNCATE TABLE
+  asset_maintenance_events,
   scheduled_tasks,
   certificate_upload_audit,
   certificates,
@@ -788,21 +996,36 @@ TRUNCATE TABLE
   template_component_tests,
   template_components,
   asset_templates,
-  categories,
-  main_categories,
-  test_types,
-  users
+	  categories,
+	  main_categories,
+	  test_types,
+	  competent_persons,
+	  competency_categories,
+	  user_management_audit_logs,
+	  users
 RESTART IDENTITY CASCADE;
 `
 
 	if _, err := pool.Exec(context.Background(), truncateSQL); err != nil {
 		t.Fatalf("failed to reset test database: %v", err)
 	}
+
+	if _, err := pool.Exec(context.Background(), "ALTER SEQUENCE IF EXISTS asset_maintenance_event_display_id_seq RESTART WITH 1"); err != nil {
+		t.Fatalf("failed to reset asset maintenance event display sequence: %v", err)
+	}
+}
+
+func disableExternalMaintenanceNotifications(t *testing.T) {
+	t.Helper()
+
+	t.Setenv("ALERT_RECIPIENT_EMAIL", "")
+	t.Setenv("CLICKUP_API_TOKEN", "")
+	t.Setenv("CLICKUP_LIST_ID", "")
 }
 
 func createIntegrationAdmin(t *testing.T, pool *pgxpool.Pool) string {
 	t.Helper()
-	return createIntegrationUserToken(t, pool, "Integration", "Admin", "integration-admin@example.com", "admin-password", "ADMIN")
+	return createIntegrationUserToken(t, pool, "Integration", "Admin", "integration-admin@example.com", "admin-password", "SUPER_ADMIN")
 }
 
 func createIntegrationUserToken(t *testing.T, pool *pgxpool.Pool, firstName, lastName, email, password, role string) string {
@@ -831,9 +1054,21 @@ func createIntegrationUser(t *testing.T, pool *pgxpool.Pool, firstName, lastName
 		Email:     email,
 		Password:  hashedPassword,
 		Role:      role,
+		Status:    "ACTIVE",
 	})
 	if err != nil {
 		t.Fatalf("failed to create integration user: %v", err)
+	}
+	return user
+}
+
+func mustGetIntegrationUserByEmail(t *testing.T, pool *pgxpool.Pool, email string) db.GetUserByEmailRow {
+	t.Helper()
+
+	queries := db.New(pool)
+	user, err := queries.GetUserByEmail(context.Background(), email)
+	if err != nil {
+		t.Fatalf("failed to get integration user by email: %v", err)
 	}
 	return user
 }
@@ -946,6 +1181,34 @@ func createComponentFixture(t *testing.T, h *integrationHarness, componentName s
 	return componentID, testID
 }
 
+func createCompetentPersonFixture(t *testing.T, pool *pgxpool.Pool, name string) string {
+	t.Helper()
+
+	queries := db.New(pool)
+	category, err := queries.CreateCompetencyCategory(context.Background(), db.CreateCompetencyCategoryParams{
+		CategoryCode: "TEST_" + strings.ReplaceAll(strings.ToUpper(name), " ", "_"),
+		CategoryName: name + " Category",
+		Description:  "Integration competency category",
+		Active:       true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create competency category: %v", err)
+	}
+
+	person, err := queries.CreateCompetentPerson(context.Background(), db.CreateCompetentPersonParams{
+		FullName:             name,
+		PersonType:           "Internal",
+		Organization:         "Integration",
+		CompetencyCategoryID: category.CompetencyCategoryID,
+		Active:               true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create competent person: %v", err)
+	}
+
+	return person.CompetentPersonID.String()
+}
+
 func baseAssetPayload(name string) map[string]any {
 	return map[string]any{
 		"name":             name,
@@ -1021,11 +1284,11 @@ func requireStorageIntegrationEnv(t *testing.T) {
 	t.Helper()
 
 	required := []string{
-		"SUPABASE_S3_ENDPOINT",
-		"SUPABASE_S3_REGION",
-		"SUPABASE_S3_ACCESS_KEY",
-		"SUPABASE_S3_SECRET_KEY",
-		"SUPABASE_S3_BUCKET",
+		"R2_S3_ENDPOINT",
+		"R2_S3_REGION",
+		"R2_S3_ACCESS_KEY_ID",
+		"R2_S3_SECRET_ACCESS_KEY",
+		"R2_S3_BUCKET",
 	}
 	for _, key := range required {
 		if strings.TrimSpace(os.Getenv(key)) == "" {
@@ -1066,11 +1329,16 @@ func performJSONRequest(t *testing.T, router *gin.Engine, token, method, path st
 	return recorder.Body.Bytes()
 }
 
-func performMultipartRequest(t *testing.T, router *gin.Engine, token, path string, fieldName, fileName string, fileContent []byte, expectedStatus int) []byte {
+func performMultipartRequest(t *testing.T, router *gin.Engine, token, path string, fieldName, fileName string, fileContent []byte, fields map[string]string, expectedStatus int) []byte {
 	t.Helper()
 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
+	for key, value := range fields {
+		if err := writer.WriteField(key, value); err != nil {
+			t.Fatalf("failed to write multipart field: %v", err)
+		}
+	}
 
 	contentType := mime.TypeByExtension(filepath.Ext(fileName))
 	if contentType == "" {
@@ -1155,6 +1423,16 @@ func unwrapEmbeddedObject(body map[string]any, key string) map[string]any {
 		}
 	}
 	return body
+}
+
+func objectField(t *testing.T, body map[string]any, key string) map[string]any {
+	t.Helper()
+
+	value, ok := body[key].(map[string]any)
+	if !ok {
+		t.Fatalf("expected %q to be an object in %v", key, body)
+	}
+	return value
 }
 
 func stringField(t *testing.T, body map[string]any, key string) string {

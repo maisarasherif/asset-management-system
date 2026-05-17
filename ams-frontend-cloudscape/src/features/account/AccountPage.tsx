@@ -35,6 +35,12 @@ export function AccountPage() {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState<Role>("USER");
+  const canManageSuperAdmins = session?.role === "SUPER_ADMIN";
+  const roleOptions = [
+    { label: "User", value: "USER" },
+    { label: "Admin", value: "ADMIN" },
+    ...(canManageSuperAdmins ? [{ label: "Super Admin", value: "SUPER_ADMIN" }] : []),
+  ];
 
   const passwordMutation = useMutation({
     mutationFn: updatePassword,
@@ -121,6 +127,7 @@ export function AccountPage() {
       email: newUserEmail.trim(),
       password: newUserPassword,
       role: newUserRole,
+      status: "ACTIVE",
     });
   };
 
@@ -250,10 +257,7 @@ export function AccountPage() {
                       label: humanizeEnum(newUserRole),
                       value: newUserRole,
                     }}
-                    options={[
-                      { label: "User", value: "USER" },
-                      { label: "Admin", value: "ADMIN" },
-                    ]}
+                    options={roleOptions}
                     onChange={({ detail }) => setNewUserRole((detail.selectedOption.value as Role) || "USER")}
                   />
                 </FormField>

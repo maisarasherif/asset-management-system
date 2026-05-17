@@ -11,7 +11,7 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { listAllAssets, logoutRequest } from "../../lib/api/ams";
+import { listAllAssets, listAllClientAssets, logoutRequest } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 
@@ -41,6 +41,14 @@ function getHelpPanelContent(pathname: string) {
     };
   }
 
+  if (pathname.includes("/routine-maintenance")) {
+    return {
+      title: "Routine maintenance",
+      content:
+        "Track working hours, review maintenance thresholds, and close routine maintenance events for the selected asset.",
+    };
+  }
+
   if (pathname.startsWith("/assets/")) {
     return {
       title: "Asset workspace",
@@ -65,6 +73,22 @@ function getHelpPanelContent(pathname: string) {
     };
   }
 
+  if (pathname.startsWith("/client-access")) {
+    return {
+      title: "Client access",
+      content:
+        "Create project records, connect client users to active projects, and suspend access when a project closes.",
+    };
+  }
+
+  if (pathname.startsWith("/administration")) {
+    return {
+      title: "Administration",
+      content:
+        "Manage system users, competent persons, and competency categories that are required for certificate upload audit history.",
+    };
+  }
+
   return {
     title: "AMS Cloudscape",
     content:
@@ -76,13 +100,13 @@ export function AppShellLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { items } = useFlashbar();
-  const { isAdmin, selectedAssetId, setSelectedAssetId } = useAuth();
+  const { isAdmin, isClient, selectedAssetId, setSelectedAssetId } = useAuth();
   const [navigationOpen, setNavigationOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
 
   const assetsQuery = useQuery({
-    queryKey: ["assets", "all"],
-    queryFn: listAllAssets,
+    queryKey: [isClient ? "client-assets" : "assets", "all"],
+    queryFn: isClient ? listAllClientAssets : listAllAssets,
   });
 
   useEffect(() => {
@@ -106,11 +130,17 @@ export function AppShellLayout() {
   const helpPanel = getHelpPanelContent(location.pathname);
   const activeHref = location.pathname.startsWith("/assets")
     ? "/assets"
+    : location.pathname.startsWith("/client/assets")
+      ? "/client/assets"
     : location.pathname.startsWith("/templates")
-      ? "/templates"
+        ? "/templates"
       : location.pathname.startsWith("/catalog")
         ? "/catalog"
-        : location.pathname;
+        : location.pathname.startsWith("/client-access")
+          ? "/client-access"
+        : location.pathname.startsWith("/administration")
+          ? "/administration"
+          : location.pathname;
 
   return (
     <AppLayout
@@ -133,10 +163,17 @@ export function AppShellLayout() {
 
                 if (!nextAssetId) return;
 
-                if (
-                  location.pathname.startsWith("/assets/") &&
-                  !location.pathname.endsWith("/new")
-                ) {
+                if (isClient) {
+                  navigate(`/client/assets/${nextAssetId}`);
+                  return;
+                }
+
+                if (location.pathname.includes("/routine-maintenance")) {
+                  navigate(`/assets/${nextAssetId}/routine-maintenance`);
+                  return;
+                }
+
+                if (location.pathname.startsWith("/assets/") && !location.pathname.endsWith("/new")) {
                   navigate(`/assets/${nextAssetId}`);
                   return;
                 }
@@ -147,18 +184,27 @@ export function AppShellLayout() {
           </div>
           <SideNavigation
             activeHref={activeHref}
-            header={{ href: "/dashboard", text: "AMS Cloudscape" }}
-            items={[
-              { type: "link", text: "Dashboard", href: "/dashboard" },
-              { type: "link", text: "Assets directory", href: "/assets" },
-              ...(isAdmin
+            header={{ href: isClient ? "/client/assets" : "/dashboard", text: "AMS Cloudscape" }}
+            items={
+              isClient
                 ? [
-                    { type: "link" as const, text: "Templates", href: "/templates" },
-                    { type: "link" as const, text: "Catalog", href: "/catalog" },
+                    { type: "link", text: "My assets", href: "/client/assets" },
+                    { type: "link", text: "Account", href: "/account" },
                   ]
-                : []),
-              { type: "link", text: "Account", href: "/account" },
-            ]}
+                : [
+                    { type: "link", text: "Dashboard", href: "/dashboard" },
+                    { type: "link", text: "Assets directory", href: "/assets" },
+                    ...(isAdmin
+                      ? [
+                          { type: "link" as const, text: "Templates", href: "/templates" },
+                          { type: "link" as const, text: "Catalog", href: "/catalog" },
+                          { type: "link" as const, text: "Administration", href: "/administration" },
+                          { type: "link" as const, text: "Client access", href: "/client-access" },
+                        ]
+                      : []),
+                    { type: "link", text: "Account", href: "/account" },
+                  ]
+            }
             onFollow={(event) => {
               event.preventDefault();
               if (event.detail.href) {
@@ -204,11 +250,11 @@ export function AppChrome() {
         <TopNavigation
           i18nStrings={TOP_NAV_I18N}
           identity={{
-            href: "/dashboard",
+            href: session?.role === "CLIENT" ? "/client/assets" : "/dashboard",
             title: "Asset Management System",
             onFollow: (event) => {
               event.preventDefault();
-              navigate("/dashboard");
+              navigate(session?.role === "CLIENT" ? "/client/assets" : "/dashboard");
             },
           }}
           utilities={[

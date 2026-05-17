@@ -2,17 +2,29 @@ import type {
   Asset,
   AssetDashboardData,
   AssetInput,
+  AssetMaintenanceEvent,
+  AssetMaintenanceUpdateResponse,
+  AssetWorkingHoursInput,
   AssetTemplateInput,
+  AdminUpdateUserPasswordInput,
   AssetTemplate,
   CategoryInput,
   Category,
   Certificate,
   CertificateInput,
   CertificateUploadAudit,
+  ClientAssetDetail,
+  CompetencyCategory,
+  CompetencyCategoryInput,
+  CompetentPerson,
+  CompetentPersonInput,
   PatchCertificateInput,
   ConfigureTemplateInput,
   ComponentInput,
+  CompleteAssetMaintenanceInput,
   CreateUserInput,
+  Project,
+  ProjectInput,
   MainCategoryInput,
   ComponentRecord,
   LoginResponse,
@@ -26,7 +38,11 @@ import type {
   TestTypeInput,
   TestType,
   UpdatePasswordInput,
+  UpdateUserInput,
   UserAccount,
+  UserManagementAuditLog,
+  UserProjectAccess,
+  UserProjectAccessInput,
 } from "../../types/ams";
 import { apiRequest } from "./client";
 
@@ -84,12 +100,167 @@ export function createUser(payload: CreateUserInput) {
   });
 }
 
+export function listProjects() {
+  return apiRequest<Project[]>("/v1/projects");
+}
+
+export function createProject(payload: ProjectInput) {
+  return apiRequest<Project>("/v1/project", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProject(projectId: string, payload: ProjectInput) {
+  return apiRequest<MessageResponse>(`/v1/project/${projectId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listUserProjectAccess() {
+  return apiRequest<UserProjectAccess[]>("/v1/user-project-access");
+}
+
+export function upsertUserProjectAccess(userId: string, payload: UserProjectAccessInput) {
+  return apiRequest<UserProjectAccess>(`/v1/user/${userId}/project-access`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateUserProjectAccess(accessId: string, payload: UserProjectAccessInput) {
+  return apiRequest<MessageResponse>(`/v1/user-project-access/${accessId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteUserProjectAccess(accessId: string) {
+  return apiRequest<MessageResponse>(`/v1/user-project-access/${accessId}`, {
+    method: "DELETE",
+  });
+}
+
+export function listUsers(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<UserAccount>>(`/v1/users?page=${page}&limit=${limit}`);
+}
+
+export function listAllUsers() {
+  return fetchAllPages((page) => listUsers(page));
+}
+
+export function updateUser(userId: string, payload: UpdateUserInput) {
+  return apiRequest<MessageResponse>(`/v1/user/${userId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateUserPassword(userId: string, payload: AdminUpdateUserPasswordInput) {
+  return apiRequest<MessageResponse>(`/v1/user/${userId}/password`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteUser(userId: string) {
+  return apiRequest<MessageResponse>(`/v1/user/${userId}`, {
+    method: "DELETE",
+  });
+}
+
+export function listUserManagementAuditLogs(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<UserManagementAuditLog>>(
+    `/v1/user-management-audit-logs?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllUserManagementAuditLogs() {
+  return fetchAllPages((page) => listUserManagementAuditLogs(page));
+}
+
+export function listCompetencyCategories(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<CompetencyCategory>>(
+    `/v1/competency-categories?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllCompetencyCategories() {
+  return fetchAllPages((page) => listCompetencyCategories(page));
+}
+
+export function listActiveCompetencyCategories() {
+  return apiRequest<CompetencyCategory[]>("/v1/competency-categories/active");
+}
+
+export function createCompetencyCategory(payload: CompetencyCategoryInput) {
+  return apiRequest<CompetencyCategory>("/v1/competency-category", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCompetencyCategory(
+  competencyCategoryId: string,
+  payload: CompetencyCategoryInput
+) {
+  return apiRequest<MessageResponse>(`/v1/competency-category/${competencyCategoryId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listCompetentPersons(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<CompetentPerson>>(
+    `/v1/competent-persons?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllCompetentPersons() {
+  return fetchAllPages((page) => listCompetentPersons(page));
+}
+
+export function listActiveCompetentPersons() {
+  return apiRequest<CompetentPerson[]>("/v1/competent-persons/active");
+}
+
+export function createCompetentPerson(payload: CompetentPersonInput) {
+  return apiRequest<CompetentPerson>("/v1/competent-person", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCompetentPerson(competentPersonId: string, payload: CompetentPersonInput) {
+  return apiRequest<MessageResponse>(`/v1/competent-person/${competentPersonId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listAssets(page = 1, limit = 100) {
   return apiRequest<PaginatedResponse<Asset>>(`/v1/assets?page=${page}&limit=${limit}`);
 }
 
 export function listAllAssets() {
   return fetchAllPages((page) => listAssets(page));
+}
+
+export function listClientAssets(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<Asset>>(`/v1/client/assets?page=${page}&limit=${limit}`);
+}
+
+export function listAllClientAssets() {
+  return fetchAllPages((page) => listClientAssets(page));
+}
+
+export function getClientAsset(assetId: string) {
+  return apiRequest<ClientAssetDetail>(`/v1/client/asset/${assetId}`);
+}
+
+export function getClientCertificateDownloadUrl(certificateId: string) {
+  return apiRequest<{ url: string }>(`/v1/client/certificate/${certificateId}/file`);
 }
 
 export function getAsset(assetId: string) {
@@ -116,6 +287,30 @@ export function updateAsset(assetId: string, payload: AssetInput) {
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export function updateAssetWorkingHours(assetId: string, payload: AssetWorkingHoursInput) {
+  return apiRequest<AssetMaintenanceUpdateResponse>(`/v1/asset/${assetId}/working-hours`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listAssetRoutineMaintenance(assetId: string) {
+  return apiRequest<AssetMaintenanceEvent[]>(`/v1/asset/${assetId}/routine-maintenance`);
+}
+
+export function completeAssetRoutineMaintenance(
+  assetId: string,
+  payload: CompleteAssetMaintenanceInput
+) {
+  return apiRequest<AssetMaintenanceUpdateResponse>(
+    `/v1/asset/${assetId}/routine-maintenance/complete`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
 }
 
 export function listComponentsByAsset(assetId: string, page = 1, limit = 100) {
@@ -375,9 +570,14 @@ export function patchCertificate(certificateId: string, payload: PatchCertificat
   });
 }
 
-export function uploadCertificateFile(certificateId: string, file: File) {
+export function uploadCertificateFile(
+  certificateId: string,
+  file: File,
+  competentPersonId: string
+) {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("competent_person_id", competentPersonId);
 
   return apiRequest<MessageResponse>(
     `/v1/certificate/${certificateId}/file`,
@@ -395,6 +595,12 @@ export function getCertificateDownloadUrl(certificateId: string) {
 export function listCertificateUploads(certificateId: string, page = 1, limit = 20) {
   return apiRequest<PaginatedResponse<CertificateUploadAudit>>(
     `/v1/certificate/${certificateId}/uploads?page=${page}&limit=${limit}`
+  );
+}
+
+export function getCertificateUploadDownloadUrl(certificateId: string, uploadId: string) {
+  return apiRequest<{ url: string }>(
+    `/v1/certificate/${certificateId}/uploads/${uploadId}/file`
   );
 }
 

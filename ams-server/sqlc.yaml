@@ -36,6 +36,24 @@ sql:
           go_type: "time.Time"
         - column: "assets.updated_at"
           go_type: "time.Time"
+        - column: "assets.maintenance_required_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "assets.last_maintenance_completed_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "asset_maintenance_events.created_at"
+          go_type: "time.Time"
+        - column: "asset_maintenance_events.notified_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "asset_maintenance_events.completed_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
         - column: "components.created_at"
           go_type: "time.Time"
         - column: "components.updated_at"
@@ -61,4 +79,12 @@ sql:
         - column: "main_categories.created_at"
           go_type: "time.Time"
         - column: "main_categories.updated_at"
+          go_type: "time.Time"
+        - column: "competency_categories.created_at"
+          go_type: "time.Time"
+        - column: "competency_categories.updated_at"
+          go_type: "time.Time"
+        - column: "competent_persons.created_at"
+          go_type: "time.Time"
+        - column: "competent_persons.updated_at"
           go_type: "time.Time"
