@@ -96,12 +96,35 @@ func safeFileName(fileName string) string {
 	return safeName
 }
 
-func certificateObjectKey(certificateID string, fileName string) string {
-	timestamp := time.Now().UTC().Format("20060102-150405")
-	return fmt.Sprintf("certificates/%s/%s-%s-%s", certificateID, timestamp, uuid.NewString(), safeFileName(fileName))
+func storageExtension(contentType string) string {
+	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case "application/pdf":
+		return ".pdf"
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".bin"
+	}
 }
 
-func UploadFile(ctx context.Context, file multipart.File, header *multipart.FileHeader, certificateID string) (string, error) {
+func certificateObjectKey(contentType string) string {
+	now := time.Now().UTC()
+	objectID := strings.ReplaceAll(uuid.NewString(), "-", "")
+	return fmt.Sprintf(
+		"certificate-files/%04d/%02d/%02d/cert_%s%s",
+		now.Year(),
+		now.Month(),
+		now.Day(),
+		objectID,
+		storageExtension(contentType),
+	)
+}
+
+func UploadFile(ctx context.Context, file multipart.File, header *multipart.FileHeader) (string, error) {
 	if header == nil {
 		return "", errors.New("file header is required")
 	}
@@ -111,13 +134,14 @@ func UploadFile(ctx context.Context, file multipart.File, header *multipart.File
 		return "", err
 	}
 	client := newS3Client(config)
-	key := certificateObjectKey(certificateID, header.Filename)
+	contentType := header.Header.Get("Content-Type")
+	key := certificateObjectKey(contentType)
 
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(config.bucket),
 		Key:           aws.String(key),
 		Body:          file,
-		ContentType:   aws.String(header.Header.Get("Content-Type")),
+		ContentType:   aws.String(contentType),
 		ContentLength: aws.Int64(header.Size),
 	})
 	if err != nil {
@@ -127,7 +151,22 @@ func UploadFile(ctx context.Context, file multipart.File, header *multipart.File
 	return key, nil
 }
 
-func GenerateSignedURL(ctx context.Context, key string) (string, error) {
+func SignedURLFileName(fileName string, key string) string {
+	safeName := safeFileName(fileName)
+	if safeName != "certificate-file" {
+		return safeName
+	}
+
+	ext := strings.ToLower(filepath.Ext(key))
+	switch ext {
+	case ".pdf", ".jpg", ".jpeg", ".png", ".webp":
+		return "certificate-file" + ext
+	default:
+		return "certificate-file"
+	}
+}
+
+func GenerateSignedURL(ctx context.Context, key string, fileName string) (string, error) {
 	config, err := loadStorageConfig()
 	if err != nil {
 		return "", err
@@ -137,8 +176,9 @@ func GenerateSignedURL(ctx context.Context, key string) (string, error) {
 	presignClient := s3.NewPresignClient(client)
 
 	req, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(config.bucket),
-		Key:    aws.String(key),
+		Bucket:                     aws.String(config.bucket),
+		Key:                        aws.String(key),
+		ResponseContentDisposition: aws.String(fmt.Sprintf(`inline; filename="%s"`, SignedURLFileName(fileName, key))),
 	}, s3.WithPresignExpires(5*time.Minute))
 	if err != nil {
 		return "", fmt.Errorf("failed to generate signed URL: %w", err)

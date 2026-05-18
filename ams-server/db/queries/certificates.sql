@@ -267,7 +267,7 @@ ORDER BY cua.uploaded_at DESC
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: GetCertificateUploadAuditFileByID :one
-SELECT file_key
+SELECT file_key, file_name
 FROM certificate_upload_audit
 WHERE certificate_id = sqlc.arg(certificate_id)
   AND uuid = sqlc.arg(uuid)

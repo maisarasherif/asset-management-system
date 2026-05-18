@@ -152,7 +152,7 @@ func GetClientCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		signedURL, err := utils.GenerateSignedURL(ctx, fileKey)
+		signedURL, err := utils.GenerateSignedURL(ctx, fileKey, "")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate view URL"})
 			return

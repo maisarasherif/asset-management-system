@@ -760,7 +760,7 @@ func (q *Queries) GetCertificateUploadAuditByCertificateIDPaginated(ctx context.
 }
 
 const getCertificateUploadAuditFileByID = `-- name: GetCertificateUploadAuditFileByID :one
-SELECT file_key
+SELECT file_key, file_name
 FROM certificate_upload_audit
 WHERE certificate_id = $1
   AND uuid = $2
@@ -772,11 +772,16 @@ type GetCertificateUploadAuditFileByIDParams struct {
 	Uuid          uuid.UUID `json:"uuid"`
 }
 
-func (q *Queries) GetCertificateUploadAuditFileByID(ctx context.Context, arg GetCertificateUploadAuditFileByIDParams) (string, error) {
+type GetCertificateUploadAuditFileByIDRow struct {
+	FileKey  string `json:"file_key"`
+	FileName string `json:"file_name"`
+}
+
+func (q *Queries) GetCertificateUploadAuditFileByID(ctx context.Context, arg GetCertificateUploadAuditFileByIDParams) (GetCertificateUploadAuditFileByIDRow, error) {
 	row := q.db.QueryRow(ctx, getCertificateUploadAuditFileByID, arg.CertificateID, arg.Uuid)
-	var file_key string
-	err := row.Scan(&file_key)
-	return file_key, err
+	var i GetCertificateUploadAuditFileByIDRow
+	err := row.Scan(&i.FileKey, &i.FileName)
+	return i, err
 }
 
 const getCertificatesByComponentIDPaginated = `-- name: GetCertificatesByComponentIDPaginated :many

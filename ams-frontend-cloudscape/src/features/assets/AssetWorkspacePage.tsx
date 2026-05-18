@@ -11,7 +11,7 @@ import {
   Table,
   type TableProps,
 } from "@cloudscape-design/components";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
@@ -23,8 +23,10 @@ import {
   listAllMainCategories,
   listAllCertificatesByComponent,
   listAllComponentsByAsset,
+  getCertificateDownloadUrl,
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
+import { useFlashbar } from "../../providers/flashbar-context";
 import type { Certificate, ComponentRecord } from "../../types/ams";
 import { formatDate, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
@@ -33,6 +35,7 @@ export function AssetWorkspacePage() {
   const navigate = useNavigate();
   const { assetId } = useParams();
   const { isAdmin, setSelectedAssetId } = useAuth();
+  const { error } = useFlashbar();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedComponentId = searchParams.get("component");
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -95,6 +98,16 @@ export function AssetWorkspacePage() {
     queryKey: ["certificates", selectedComponentId],
     queryFn: () => listAllCertificatesByComponent(selectedComponentId!),
     enabled: Boolean(selectedComponentId),
+  });
+
+  const certificateFileMutation = useMutation({
+    mutationFn: (certificateId: string) => getCertificateDownloadUrl(certificateId),
+    onSuccess: (response) => {
+      window.open(response.url, "_blank", "noopener,noreferrer");
+    },
+    onError: (mutationError: Error) => {
+      error("View failed", mutationError.message);
+    },
   });
 
   const categoryMap = useMemo(
@@ -231,6 +244,22 @@ export function AssetWorkspacePage() {
         <StatusIndicator type={certificateStatusType(item.status)}>
           {humanizeEnum(item.status)}
         </StatusIndicator>
+      ),
+    },
+    {
+      id: "file",
+      header: "View file",
+      cell: (item) => (
+        <Button
+          disabled={!item.certificate_file}
+          loading={
+            certificateFileMutation.isPending &&
+            certificateFileMutation.variables === item.certificate_id
+          }
+          onClick={() => certificateFileMutation.mutate(item.certificate_id)}
+        >
+          View file
+        </Button>
       ),
     },
   ];

@@ -651,7 +651,7 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		key, err := utils.UploadFile(ctx, file, header, certificateID.String())
+		key, err := utils.UploadFile(ctx, file, header)
 		if err != nil {
 			logger.Log.Error().Err(err).Msg("failed to upload certificate file")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload file"})
@@ -749,7 +749,7 @@ func GetCertificateUploadFile(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		fileKey, err := db.New(pool).GetCertificateUploadAuditFileByID(ctx, db.GetCertificateUploadAuditFileByIDParams{
+		uploadFile, err := db.New(pool).GetCertificateUploadAuditFileByID(ctx, db.GetCertificateUploadAuditFileByIDParams{
 			CertificateID: certificateID,
 			Uuid:          uploadID,
 		})
@@ -762,7 +762,7 @@ func GetCertificateUploadFile(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		signedURL, err := utils.GenerateSignedURL(ctx, fileKey)
+		signedURL, err := utils.GenerateSignedURL(ctx, uploadFile.FileKey, uploadFile.FileName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate download URL"})
 			return
@@ -799,7 +799,7 @@ func GetCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		signedURL, err := utils.GenerateSignedURL(ctx, certificate.CertificateFile)
+		signedURL, err := utils.GenerateSignedURL(ctx, certificate.CertificateFile, "")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate download URL"})
 			return
