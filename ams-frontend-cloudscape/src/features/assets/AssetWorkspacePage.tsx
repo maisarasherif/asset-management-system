@@ -11,14 +11,13 @@ import {
   Table,
   type TableProps,
 } from "@cloudscape-design/components";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
 import {
   getAsset,
-  getAssetComponentCertificateSheet,
   listAssetRoutineMaintenance,
   listAllCategories,
   listAllMainCategories,
@@ -26,34 +25,14 @@ import {
   listAllComponentsByAsset,
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
-import { useFlashbar } from "../../providers/flashbar-context";
 import type { Certificate, ComponentRecord } from "../../types/ams";
 import { formatDate, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
-
-function filenameSegment(value: string | null | undefined) {
-  return (value || "asset")
-    .trim()
-    .replace(/[^a-zA-Z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "asset";
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
 
 export function AssetWorkspacePage() {
   const navigate = useNavigate();
   const { assetId } = useParams();
   const { isAdmin, setSelectedAssetId } = useAuth();
-  const { error } = useFlashbar();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedComponentId = searchParams.get("component");
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -84,17 +63,6 @@ export function AssetWorkspacePage() {
     queryKey: ["routine-maintenance", assetId],
     queryFn: () => listAssetRoutineMaintenance(assetId!),
     enabled: Boolean(assetId),
-  });
-
-  const sheetMutation = useMutation({
-    mutationFn: () => getAssetComponentCertificateSheet(assetId!),
-    onSuccess: (blob) => {
-      const assetSegment = filenameSegment(assetQuery.data?.display_id || assetId);
-      downloadBlob(blob, `asset-${assetSegment}-certificate-sheet.pdf`);
-    },
-    onError: (mutationError: Error) => {
-      error("Download failed", mutationError.message);
-    },
   });
 
   useEffect(() => {
@@ -290,12 +258,6 @@ export function AssetWorkspacePage() {
               <Button onClick={() => navigate("/dashboard")}>Open dashboard</Button>
               <Button onClick={() => navigate(`/assets/${assetId}/routine-maintenance`)}>
                 Open maintenance
-              </Button>
-              <Button
-                loading={sheetMutation.isPending}
-                onClick={() => sheetMutation.mutate()}
-              >
-                Download sheet
               </Button>
               <Button
                 disabled={!assetQuery.data.datasheet}

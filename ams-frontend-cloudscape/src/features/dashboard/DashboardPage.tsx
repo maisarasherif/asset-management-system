@@ -9,13 +9,18 @@ import {
   Table,
   type TableProps,
 } from "@cloudscape-design/components";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
-import { getAssetDashboard, listAllAssets } from "../../lib/api/ams";
+import {
+  getAssetComponentCertificateSheet,
+  getAssetDashboard,
+  listAllAssets,
+} from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
+import { useFlashbar } from "../../providers/flashbar-context";
 import type { AssetDashboardData } from "../../types/ams";
 import { formatDate, humanizeEnum } from "../../utils/format";
 import { certificateStatusType } from "../../utils/status";
@@ -23,9 +28,28 @@ import { CertificateDonut } from "./CertificateDonut";
 
 type DashboardCertificate = AssetDashboardData["certificates"][number];
 
+function filenameSegment(value: string | null | undefined) {
+  return (value || "asset")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "asset";
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const { isAdmin, selectedAssetId, setSelectedAssetId } = useAuth();
+  const { error } = useFlashbar();
 
   const assetsQuery = useQuery({
     queryKey: ["assets", "all"],
@@ -44,6 +68,17 @@ export function DashboardPage() {
     queryKey: ["dashboard", activeAssetId],
     queryFn: () => getAssetDashboard(activeAssetId!),
     enabled: Boolean(activeAssetId),
+  });
+
+  const trackerMutation = useMutation({
+    mutationFn: () => getAssetComponentCertificateSheet(activeAssetId!),
+    onSuccess: (blob) => {
+      const assetSegment = filenameSegment(dashboardQuery.data?.asset.display_id || activeAssetId);
+      downloadBlob(blob, `asset-${assetSegment}-certification-tracker.pdf`);
+    },
+    onError: (mutationError: Error) => {
+      error("Download failed", mutationError.message);
+    },
   });
 
   if (assetsQuery.isLoading || (activeAssetId && dashboardQuery.isLoading)) {
@@ -147,6 +182,12 @@ export function DashboardPage() {
             <SpaceBetween direction="horizontal" size="xs">
               <Button onClick={() => navigate(`/assets/${dashboard.asset.asset_id}`)}>
                 Open asset workspace
+              </Button>
+              <Button
+                loading={trackerMutation.isPending}
+                onClick={() => trackerMutation.mutate()}
+              >
+                Download Certification Tracker
               </Button>
               {isAdmin ? (
                 <Button
