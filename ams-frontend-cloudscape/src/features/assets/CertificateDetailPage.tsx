@@ -26,6 +26,7 @@ import {
   listActiveCompetentPersons,
   listCertificateUploads,
   listTestTypes,
+  patchCertificate,
   uploadCertificateFile,
 } from "../../lib/api/ams";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
@@ -33,7 +34,26 @@ import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { CertificateUploadAudit } from "../../types/ams";
 import { certificateStatusType } from "../../utils/status";
-import { formatDate, formatDateTime, humanizeEnum } from "../../utils/format";
+import {
+  formatDate,
+  formatDateTime,
+  humanizeEnum,
+  toDateInputValue,
+  toIsoDate,
+} from "../../utils/format";
+
+function addMonths(dateValue: string, months: number) {
+  const nextDate = new Date(`${dateValue}T00:00:00.000Z`);
+  if (Number.isNaN(nextDate.getTime())) {
+    return "";
+  }
+
+  const targetYear = nextDate.getUTCFullYear();
+  const targetMonth = nextDate.getUTCMonth() + months;
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  nextDate.setUTCMonth(targetMonth, Math.min(nextDate.getUTCDate(), lastDayOfTargetMonth));
+  return nextDate.toISOString().slice(0, 10);
+}
 
 export function CertificateDetailPage() {
   const navigate = useNavigate();
@@ -44,6 +64,8 @@ export function CertificateDetailPage() {
   const { error, success } = useFlashbar();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedCompetentPersonId, setSelectedCompetentPersonId] = useState("");
+  const [renewalIssueDate, setRenewalIssueDate] = useState("");
+  const [renewalExpiryDate, setRenewalExpiryDate] = useState("");
   const [fileInputKey, setFileInputKey] = useState(0);
 
   const assetQuery = useQuery({
@@ -85,6 +107,13 @@ export function CertificateDetailPage() {
     ? "Not set"
     : testTypesQuery.data?.find((testType) => testType.test_id === certificateQuery.data?.test_id)
         ?.test_name || certificateQuery.data.test_id;
+  const selectedTestType =
+    testTypesQuery.data?.find((testType) => testType.test_id === certificateQuery.data?.test_id) ??
+    null;
+  const renewalIssueDateValue =
+    renewalIssueDate || toDateInputValue(certificateQuery.data?.issue_date);
+  const renewalExpiryDateValue =
+    renewalExpiryDate || toDateInputValue(certificateQuery.data?.expiry_date);
 
   const downloadMutation = useMutation({
     mutationFn: async () => getCertificateDownloadUrl(certificateId!),
@@ -101,19 +130,35 @@ export function CertificateDetailPage() {
       if (!certificateId || !selectedFile || !selectedCompetentPersonId) {
         throw new Error("Choose a file and competent person before uploading.");
       }
+      if (!renewalIssueDateValue || !renewalExpiryDateValue) {
+        throw new Error("Choose issue date and expiry date before uploading.");
+      }
+      if (
+        new Date(renewalExpiryDateValue).getTime() <
+        new Date(renewalIssueDateValue).getTime()
+      ) {
+        throw new Error("Expiry date must be on or after the issue date.");
+      }
 
+      await patchCertificate(certificateId, {
+        issue_date: toIsoDate(renewalIssueDateValue),
+        expiry_date: toIsoDate(renewalExpiryDateValue),
+      });
       return uploadCertificateFile(certificateId, selectedFile, selectedCompetentPersonId);
     },
     onSuccess: async () => {
       setSelectedFile(null);
       setSelectedCompetentPersonId("");
+      setRenewalIssueDate("");
+      setRenewalExpiryDate("");
       setFileInputKey((current) => current + 1);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["uploads", certificateId] }),
         queryClient.invalidateQueries({ queryKey: ["certificate", certificateId] }),
+        queryClient.invalidateQueries({ queryKey: ["certificates", componentId] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
       ]);
-      success("File uploaded", "The certificate document is now attached to this record.");
+      success("Certificate renewed", "The certificate dates and document have been updated.");
     },
     onError: (mutationError: Error) => {
       error("Upload failed", mutationError.message);
@@ -297,10 +342,6 @@ export function CertificateDetailPage() {
                 <Box>{componentQuery.data.name}</Box>
               </div>
               <div className="summary-row">
-                <Box variant="awsui-key-label">Certificate display ID</Box>
-                <Box>{certificateQuery.data.display_id}</Box>
-              </div>
-              <div className="summary-row">
                 <Box variant="awsui-key-label">IMCA Ref</Box>
                 <Box>{certificateQuery.data.imca_ref || "Not set"}</Box>
               </div>
@@ -323,7 +364,7 @@ export function CertificateDetailPage() {
         </ColumnLayout>
 
         {isAdmin ? (
-          <Container header={<Header variant="h2">Attach or replace document</Header>}>
+          <Container header={<Header variant="h2">Renew/change certificate</Header>}>
             <SpaceBetween direction="vertical" size="m">
               <Box color="text-body-secondary">
                 Upload PDF, JPEG, PNG, or WEBP files up to 10 MB.
@@ -335,6 +376,39 @@ export function CertificateDetailPage() {
                 accept=".pdf,image/jpeg,image/png,image/webp"
                 onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
               />
+              <ColumnLayout columns={2}>
+                <FormField label="Issue date">
+                  <input
+                    className="app-native-input"
+                    value={renewalIssueDateValue}
+                    type="date"
+                    onChange={(event) => {
+                      const nextIssueDate = event.target.value;
+                      setRenewalIssueDate(nextIssueDate);
+                      setRenewalExpiryDate(
+                        nextIssueDate && selectedTestType
+                          ? addMonths(nextIssueDate, selectedTestType.validity_duration)
+                          : renewalExpiryDateValue
+                      );
+                    }}
+                  />
+                </FormField>
+                <FormField
+                  description={
+                    selectedTestType && renewalIssueDateValue
+                      ? "Auto-filled from the selected certificate test validity."
+                      : undefined
+                  }
+                  label="Expiry date"
+                >
+                  <input
+                    className="app-native-input"
+                    value={renewalExpiryDateValue}
+                    type="date"
+                    onChange={(event) => setRenewalExpiryDate(event.target.value)}
+                  />
+                </FormField>
+              </ColumnLayout>
               <FormField label="Competent Person">
                 <Select
                   options={competentPersonOptions}
@@ -356,12 +430,17 @@ export function CertificateDetailPage() {
               ) : null}
               <SpaceBetween direction="horizontal" size="xs">
                 <Button
-                  disabled={!selectedFile || !selectedCompetentPersonId}
+                  disabled={
+                    !selectedFile ||
+                    !selectedCompetentPersonId ||
+                    !renewalIssueDateValue ||
+                    !renewalExpiryDateValue
+                  }
                   loading={uploadMutation.isPending}
                   variant="primary"
                   onClick={() => uploadMutation.mutate()}
                 >
-                  Upload file
+                  Renew/change certificate
                 </Button>
                 {selectedFile ? <Box>{selectedFile.name}</Box> : null}
               </SpaceBetween>

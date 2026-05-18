@@ -198,7 +198,7 @@ test.describe("template and catalog browser flow", () => {
       await page.getByRole("button", { name: "Create test type" }).click();
       const testDialog = page.getByRole("dialog");
       await testDialog.getByLabel("Test type name").fill(names.testName);
-      await testDialog.getByLabel("Validity duration (days)").fill("365");
+      await testDialog.getByLabel("Validity duration (months)").fill("12");
       await testDialog
         .getByLabel("Description")
         .fill("Created by Playwright to verify the test type flow.");

@@ -125,7 +125,7 @@ SELECT
     cert.status,
     cert.test_id,
     COALESCE(test.test_name, '') AS test_name,
-    COALESCE(test.validity_duration, 0)::int AS test_period_days,
+    COALESCE(test.validity_duration, 0)::int AS test_period_months,
     cert.imca_ref,
     cert.imca_d018,
     cert.maintenance_notes,

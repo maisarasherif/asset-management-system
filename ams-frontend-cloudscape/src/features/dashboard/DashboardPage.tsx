@@ -113,11 +113,6 @@ export function DashboardPage() {
   ];
   const latestColumns: TableProps<DashboardCertificate>["columnDefinitions"] = [
     {
-      id: "display",
-      header: "Display ID",
-      cell: (item) => item.display_id,
-    },
-    {
       id: "name",
       header: "Certificate",
       cell: (item) => item.certificate_name,
@@ -131,6 +126,11 @@ export function DashboardPage() {
       id: "issue",
       header: "Issue date",
       cell: (item) => formatDate(item.issue_date),
+    },
+    {
+      id: "expiry",
+      header: "Expiry date",
+      cell: (item) => formatDate(item.expiry_date),
     },
     {
       id: "authority",

@@ -260,7 +260,7 @@ SELECT
     cert.status,
     cert.test_id,
     COALESCE(test.test_name, '') AS test_name,
-    COALESCE(test.validity_duration, 0)::int AS test_period_days,
+    COALESCE(test.validity_duration, 0)::int AS test_period_months,
     cert.imca_ref,
     cert.imca_d018,
     cert.maintenance_notes,
@@ -302,7 +302,7 @@ type GetClientCertificatesByAssetRow struct {
 	Status           string     `json:"status"`
 	TestID           uuid.UUID  `json:"test_id"`
 	TestName         string     `json:"test_name"`
-	TestPeriodDays   int32      `json:"test_period_days"`
+	TestPeriodMonths int32      `json:"test_period_months"`
 	ImcaRef          string     `json:"imca_ref"`
 	ImcaD018         string     `json:"imca_d018"`
 	MaintenanceNotes string     `json:"maintenance_notes"`
@@ -331,7 +331,7 @@ func (q *Queries) GetClientCertificatesByAsset(ctx context.Context, arg GetClien
 			&i.Status,
 			&i.TestID,
 			&i.TestName,
-			&i.TestPeriodDays,
+			&i.TestPeriodMonths,
 			&i.ImcaRef,
 			&i.ImcaD018,
 			&i.MaintenanceNotes,

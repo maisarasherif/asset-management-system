@@ -17,7 +17,7 @@ import {
   getClientAsset,
   getClientCertificateDownloadUrl,
 } from "../../lib/api/ams";
-import { formatDate, humanizeEnum } from "../../utils/format";
+import { formatDate, formatMonthDuration, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
 import { useFlashbar } from "../../providers/flashbar-context";
 
@@ -208,9 +208,7 @@ export function ClientAssetViewPage() {
                         <div className="client-certificate-record__field">
                           <span className="client-certificate-record__label">Test period</span>
                           <span className="client-certificate-record__value">
-                            {certificate.test_period_days > 0
-                              ? `${certificate.test_period_days} days`
-                              : "Not set"}
+                            {formatMonthDuration(certificate.test_period_months)}
                           </span>
                         </div>
                         <div className="client-certificate-record__field">

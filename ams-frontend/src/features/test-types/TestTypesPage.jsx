@@ -24,7 +24,7 @@ function TestTypeModalForm({ mode, initialForm, submitting, onClose, onSave }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {mode === "create" && <Input label="Test ID" value={form.test_id} onChange={(v) => setForm((p) => ({ ...p, test_id: v }))} required />}
         <Input label="Test Name" value={form.test_name} onChange={(v) => setForm((p) => ({ ...p, test_name: v }))} required />
-        <Input label="Validity Duration (days)" type="number" value={String(form.validity_duration ?? "")} onChange={(v) => setForm((p) => ({ ...p, validity_duration: v }))} required />
+        <Input label="Validity Duration (months)" type="number" value={String(form.validity_duration ?? "")} onChange={(v) => setForm((p) => ({ ...p, validity_duration: v }))} required />
         <Input label="Description" type="textarea" value={form.description} onChange={(v) => setForm((p) => ({ ...p, description: v }))} />
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
           <Button onClick={onClose} disabled={submitting}>Cancel</Button>
@@ -121,7 +121,7 @@ function TestTypesPage() {
           columns={[
             { key: "test_id", label: "ID", render: (v) => <span style={{ color: "var(--text-2)" }}>{v}</span> },
             { key: "test_name", label: "Name", render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
-            { key: "validity_duration", label: "Validity (days)", render: (v) => <span style={{ color: "var(--amber)" }}>{v}d</span> },
+            { key: "validity_duration", label: "Validity (months)", render: (v) => <span style={{ color: "var(--amber)" }}>{v}m</span> },
             { key: "description", label: "Description" },
             isAdmin ? {
               key: "test_id",

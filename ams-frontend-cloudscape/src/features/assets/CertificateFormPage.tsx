@@ -28,15 +28,18 @@ import {
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { CertificateInput, PatchCertificateInput } from "../../types/ams";
-import { toDateInputValue, toIsoDate } from "../../utils/format";
+import { formatMonthDuration, toDateInputValue, toIsoDate } from "../../utils/format";
 
-function addDays(dateValue: string, days: number) {
+function addMonths(dateValue: string, months: number) {
   const nextDate = new Date(`${dateValue}T00:00:00.000Z`);
   if (Number.isNaN(nextDate.getTime())) {
     return "";
   }
 
-  nextDate.setUTCDate(nextDate.getUTCDate() + days);
+  const targetYear = nextDate.getUTCFullYear();
+  const targetMonth = nextDate.getUTCMonth() + months;
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  nextDate.setUTCMonth(targetMonth, Math.min(nextDate.getUTCDate(), lastDayOfTargetMonth));
   return nextDate.toISOString().slice(0, 10);
 }
 
@@ -63,12 +66,6 @@ function buildPatchPayload(
   }
   if (nextForm.certificate_name.trim() !== baseForm.certificate_name.trim()) {
     payload.certificate_name = nextForm.certificate_name.trim();
-  }
-  if (nextForm.issue_date !== baseForm.issue_date) {
-    payload.issue_date = nextForm.issue_date ? toIsoDate(nextForm.issue_date) : undefined;
-  }
-  if (nextForm.expiry_date !== baseForm.expiry_date) {
-    payload.expiry_date = nextForm.expiry_date ? toIsoDate(nextForm.expiry_date) : undefined;
   }
   if (nextForm.issuing_authority.trim() !== baseForm.issuing_authority.trim()) {
     payload.issuing_authority = nextForm.issuing_authority.trim();
@@ -151,7 +148,7 @@ export function CertificateFormPage() {
     () =>
       (testTypesQuery.data || []).map((testType) => ({
         label: testType.test_name,
-        description: `${testType.validity_duration} day validity window`,
+        description: `${formatMonthDuration(testType.validity_duration)} validity window`,
         value: testType.test_id,
       })),
     [testTypesQuery.data]
@@ -162,8 +159,8 @@ export function CertificateFormPage() {
   const selectedTestTypeOption =
     testTypeOptions.find((option) => option.value === form.test_id) ?? null;
   const suggestedExpiry =
-    form.issue_date && selectedTestType
-      ? addDays(form.issue_date, selectedTestType.validity_duration)
+    !isEditing && form.issue_date && selectedTestType
+      ? addMonths(form.issue_date, selectedTestType.validity_duration)
       : "";
   const cancelTarget =
     typeof location.state === "object" &&
@@ -262,14 +259,16 @@ export function CertificateFormPage() {
       return;
     }
 
-    if (!form.issue_date || !form.expiry_date) {
-      setErrorMessage("Issue date and expiry date are required.");
-      return;
-    }
+    if (!isEditing) {
+      if (!form.issue_date || !form.expiry_date) {
+        setErrorMessage("Issue date and expiry date are required.");
+        return;
+      }
 
-    if (new Date(form.expiry_date).getTime() < new Date(form.issue_date).getTime()) {
-      setErrorMessage("Expiry date must be on or after the issue date.");
-      return;
+      if (new Date(form.expiry_date).getTime() < new Date(form.issue_date).getTime()) {
+        setErrorMessage("Expiry date must be on or after the issue date.");
+        return;
+      }
     }
 
     setErrorMessage("");
@@ -338,8 +337,8 @@ export function CertificateFormPage() {
                           (testType) => testType.test_id === nextTestId
                         );
                         const nextExpiry =
-                          current.issue_date && nextTestType
-                            ? addDays(current.issue_date, nextTestType.validity_duration)
+                          !isEditing && current.issue_date && nextTestType
+                            ? addMonths(current.issue_date, nextTestType.validity_duration)
                             : current.expiry_date;
 
                         return {
@@ -364,47 +363,49 @@ export function CertificateFormPage() {
                 </FormField>
               </ColumnLayout>
 
-              <ColumnLayout columns={2}>
-                <FormField label="Issue date">
-                  <input
-                    className="app-native-input"
-                    value={form.issue_date}
-                    type="date"
-                    onChange={(event) =>
-                      setForm((current) => {
-                        const nextIssueDate = event.target.value;
-                        const nextExpiry =
-                          nextIssueDate && selectedTestType
-                            ? addDays(nextIssueDate, selectedTestType.validity_duration)
-                            : current.expiry_date;
+              {!isEditing ? (
+                <ColumnLayout columns={2}>
+                  <FormField label="Issue date">
+                    <input
+                      className="app-native-input"
+                      value={form.issue_date}
+                      type="date"
+                      onChange={(event) =>
+                        setForm((current) => {
+                          const nextIssueDate = event.target.value;
+                          const nextExpiry =
+                            nextIssueDate && selectedTestType
+                              ? addMonths(nextIssueDate, selectedTestType.validity_duration)
+                              : current.expiry_date;
 
-                        return {
-                          ...current,
-                          issue_date: nextIssueDate,
-                          expiry_date: nextExpiry,
-                        };
-                      })
+                          return {
+                            ...current,
+                            issue_date: nextIssueDate,
+                            expiry_date: nextExpiry,
+                          };
+                        })
+                      }
+                    />
+                  </FormField>
+                  <FormField
+                    description={
+                      suggestedExpiry
+                        ? `Auto-filled from test validity: ${suggestedExpiry}`
+                        : "Choose a test type and issue date to auto-fill expiry."
                     }
-                  />
-                </FormField>
-                <FormField
-                  description={
-                    suggestedExpiry
-                      ? `Auto-filled from test validity: ${suggestedExpiry}`
-                      : "Choose a test type and issue date to auto-fill expiry."
-                  }
-                  label="Expiry date"
-                >
-                  <input
-                    className="app-native-input"
-                    value={form.expiry_date}
-                    type="date"
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, expiry_date: event.target.value }))
-                    }
-                  />
-                </FormField>
-              </ColumnLayout>
+                    label="Expiry date"
+                  >
+                    <input
+                      className="app-native-input"
+                      value={form.expiry_date}
+                      type="date"
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, expiry_date: event.target.value }))
+                      }
+                    />
+                  </FormField>
+                </ColumnLayout>
+              ) : null}
 
               <ColumnLayout columns={2}>
                 <FormField label="IMCA Ref">
@@ -453,14 +454,10 @@ export function CertificateFormPage() {
                 <Box>{componentQuery.data?.name}</Box>
               </div>
               <div className="summary-row">
-                <Box variant="awsui-key-label">Component display ID</Box>
-                <Box>{componentQuery.data?.display_id}</Box>
-              </div>
-              <div className="summary-row">
                 <Box variant="awsui-key-label">Test validity</Box>
                 <Box>
                   {selectedTestType
-                    ? `${selectedTestType.validity_duration} days`
+                    ? formatMonthDuration(selectedTestType.validity_duration)
                     : "Not selected"}
                 </Box>
               </div>

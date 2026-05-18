@@ -41,7 +41,7 @@ import type {
   TemplateComponentInput,
   TemplateConfigurationComponent,
 } from "../../types/ams";
-import { humanizeEnum } from "../../utils/format";
+import { formatMonthDuration, humanizeEnum } from "../../utils/format";
 
 type EditorMode = "create" | "edit";
 
@@ -199,7 +199,7 @@ export function TemplateConfigurePage() {
       (testTypesQuery.data || []).map((testType) => ({
         label: testType.test_name,
         value: testType.test_id,
-        description: `${testType.validity_duration} day validity`,
+        description: `${formatMonthDuration(testType.validity_duration)} validity`,
       })),
     [testTypesQuery.data]
   );

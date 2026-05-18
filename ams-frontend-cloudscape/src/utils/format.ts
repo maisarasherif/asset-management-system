@@ -40,6 +40,11 @@ export function formatDateTime(value: unknown): string {
   return "Not available";
 }
 
+export function formatMonthDuration(value?: number | null): string {
+  if (!value || value < 1) return "Not set";
+  return `${value} ${value === 1 ? "month" : "months"}`;
+}
+
 export function humanizeEnum(
   value: AssetStatus | CertificateStatus | SafetyCritical | string
 ): string {

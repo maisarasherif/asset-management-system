@@ -252,11 +252,6 @@ export function AssetWorkspacePage() {
       ),
     },
     {
-      id: "display",
-      header: "Display ID",
-      cell: (item) => item.display_id,
-    },
-    {
       id: "expiry",
       header: "Expiry",
       cell: (item) => formatDate(item.expiry_date),
@@ -498,10 +493,6 @@ export function AssetWorkspacePage() {
             >
               {selectedComponent ? (
                 <ColumnLayout columns={3} variant="text-grid">
-                  <div className="summary-row">
-                    <Box variant="awsui-key-label">Display ID</Box>
-                    <Box>{selectedComponent.display_id}</Box>
-                  </div>
                   <div className="summary-row">
                     <Box variant="awsui-key-label">Manufacturer</Box>
                     <Box>{selectedComponent.manufacturer || "Not set"}</Box>

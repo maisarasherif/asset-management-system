@@ -35,6 +35,7 @@ import {
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { Category, MainCategory, TestType } from "../../types/ams";
+import { formatMonthDuration } from "../../utils/format";
 
 type MainCategoryEditor =
   | {
@@ -385,7 +386,7 @@ function TestTypeEditorModal({
             }
           />
         </FormField>
-        <FormField label="Validity duration (days)">
+        <FormField label="Validity duration (months)">
           <Input
             inputMode="numeric"
             value={draft?.validity_duration || ""}
@@ -816,7 +817,7 @@ export function CatalogPage() {
       header: "Validity duration",
       width: 180,
       minWidth: 160,
-      cell: (item) => `${item.validity_duration} days`,
+      cell: (item) => formatMonthDuration(item.validity_duration),
     },
     {
       id: "description",
@@ -915,7 +916,7 @@ export function CatalogPage() {
     }
 
     if (!Number.isFinite(validityDuration) || validityDuration < 1) {
-      setModalError("Validity duration must be a positive number of days.");
+      setModalError("Validity duration must be a positive number of months.");
       return;
     }
 
@@ -1082,7 +1083,7 @@ export function CatalogPage() {
                       setTestTypeEditor({
                         mode: "create",
                         test_name: "",
-                        validity_duration: "365",
+                        validity_duration: "12",
                         description: "",
                       });
                     }}

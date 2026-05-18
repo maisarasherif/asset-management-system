@@ -482,7 +482,7 @@ export interface ClientCertificate {
   status: CertificateStatus;
   test_id: string;
   test_name: string;
-  test_period_days: number;
+  test_period_months: number;
   imca_ref: string;
   imca_d018: string;
   maintenance_notes: string;

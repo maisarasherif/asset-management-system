@@ -14,7 +14,7 @@ body {
 }
 
 .navigation-panel {
-  padding: 8px 4px;
+  padding: 40px 4px 8px;
 }
 
 .login-page {
@@ -299,22 +299,46 @@ body {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 12px;
 }
 
 .metric-card {
+  min-width: 0;
   padding: 12px;
   border: 1px solid #d5dbdb;
   border-radius: 12px;
   background: #ffffff;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .summary-row {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+.summary-row > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.summary-row > :first-child,
+.summary-row > span {
+  min-width: max-content;
+}
+
+.summary-row span {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .asset-directory-list {
@@ -370,14 +394,25 @@ body {
 
 .asset-directory-card__header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+.asset-directory-card__header > span,
+.asset-directory-card__header span {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .asset-directory-card__meta {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 12px;
 }
 
@@ -386,15 +421,19 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
   padding: 14px 16px;
   border: 1px solid #d5dbdb;
   border-radius: 12px;
   background: #ffffff;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .asset-directory-card__summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 12px;
 }
 
@@ -419,7 +458,7 @@ body {
 
 .client-asset-card__meta {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 12px;
 }
 
@@ -701,19 +740,24 @@ body {
 .certificate-donut__legend-grid {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 12px;
 }
 
 .certificate-donut__legend-card {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   padding: 12px 14px;
   border: 1px solid #d5dbdb;
   border-radius: 12px;
   background: #ffffff;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .dashboard-top-grid {
@@ -761,7 +805,7 @@ body {
 
 .asset-context-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 12px;
 }
 
@@ -769,6 +813,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .asset-workspace-grid__detail {
@@ -778,13 +826,13 @@ body {
 
 .asset-overview-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 12px;
 }
 
 .asset-overview-secondary-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 12px;
 }
 
@@ -1047,11 +1095,11 @@ body {
   }
 
   .asset-overview-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   }
 
   .asset-overview-secondary-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   }
 
   .asset-directory-card {
@@ -1073,14 +1121,14 @@ body {
   }
 
   .client-certificate-record {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
   }
 
   .asset-directory-card__meta,
   .client-asset-card__meta,
   .asset-directory-card__summary,
   .asset-context-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   }
 
   .workspace-detail-pane {

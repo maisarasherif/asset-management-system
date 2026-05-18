@@ -42,8 +42,8 @@ func TestTemplateConfigurationAndSpinUpRegression(t *testing.T) {
 
 	mainCategoryID := createMainCategory(t, h, "Mechanical Systems")
 	categoryID := createCategory(t, h, mainCategoryID, "Lifting Equipment")
-	testOneID := createTestType(t, h, "Annual Inspection", 365)
-	testTwoID := createTestType(t, h, "Load Test", 180)
+	testOneID := createTestType(t, h, "Annual Inspection", 12)
+	testTwoID := createTestType(t, h, "Load Test", 6)
 	templateID := createTemplate(t, h, "Offshore Crane Template")
 
 	configureResponse := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPut, fmt.Sprintf("/v1/template/%s/configuration", templateID), map[string]any{
@@ -371,7 +371,7 @@ func TestDeleteAssetBlockedWhenTemplateInUse(t *testing.T) {
 	h := setupIntegrationTest(t)
 	mainCategoryID := createMainCategory(t, h, "Operations")
 	categoryID := createCategory(t, h, mainCategoryID, "Winches")
-	testID := createTestType(t, h, "Inspection", 180)
+	testID := createTestType(t, h, "Inspection", 6)
 	templateID := createConfiguredTemplate(t, h, categoryID, "Operational Template", "Configured Part", []string{testID})
 	createAsset(t, h, map[string]any{
 		"name":             "Asset Using Template",
@@ -650,7 +650,7 @@ func TestDeleteCategoryBlockedWhenTemplateComponentsExist(t *testing.T) {
 	h := setupIntegrationTest(t)
 	mainCategoryID := createMainCategory(t, h, "Mechanical")
 	categoryID := createCategory(t, h, mainCategoryID, "Hooks")
-	testID := createTestType(t, h, "Inspection", 365)
+	testID := createTestType(t, h, "Inspection", 12)
 	createConfiguredTemplate(t, h, categoryID, "Category Guard Template", "Blocking Template Component", []string{testID})
 
 	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, "/v1/category/"+categoryID, nil, http.StatusConflict))
@@ -678,7 +678,7 @@ func TestConfigureTemplateWithDuplicateTestIDs(t *testing.T) {
 	h := setupIntegrationTest(t)
 	mainCategoryID := createMainCategory(t, h, "Mechanical")
 	categoryID := createCategory(t, h, mainCategoryID, "Hooks")
-	testID := createTestType(t, h, "Inspection", 365)
+	testID := createTestType(t, h, "Inspection", 12)
 	templateID := createTemplate(t, h, "Duplicate Tests Template")
 
 	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/template/"+templateID+"/configuration", map[string]any{
@@ -692,7 +692,7 @@ func TestConfigureTemplateWithDuplicateTestIDs(t *testing.T) {
 
 func TestConfigureTemplateWithNonExistentCategory(t *testing.T) {
 	h := setupIntegrationTest(t)
-	testID := createTestType(t, h, "Inspection", 365)
+	testID := createTestType(t, h, "Inspection", 12)
 	templateID := createTemplate(t, h, "Missing Category Template")
 	missingCategoryID := uuid.NewString()
 
@@ -725,7 +725,7 @@ func TestReconfigureTemplateReplacesComponents(t *testing.T) {
 	h := setupIntegrationTest(t)
 	mainCategoryID := createMainCategory(t, h, "Mechanical")
 	categoryID := createCategory(t, h, mainCategoryID, "Hooks")
-	testID := createTestType(t, h, "Inspection", 365)
+	testID := createTestType(t, h, "Inspection", 12)
 	templateID := createTemplate(t, h, "Replace Template")
 
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/template/"+templateID+"/configuration", map[string]any{
@@ -752,7 +752,7 @@ func TestDeleteTemplateBlockedWhenAssetsExist(t *testing.T) {
 	h := setupIntegrationTest(t)
 	mainCategoryID := createMainCategory(t, h, "Mechanical")
 	categoryID := createCategory(t, h, mainCategoryID, "Hooks")
-	testID := createTestType(t, h, "Inspection", 365)
+	testID := createTestType(t, h, "Inspection", 12)
 	templateID := createConfiguredTemplate(t, h, categoryID, "Delete Guard Template", "Configured Component", []string{testID})
 	createAsset(t, h, map[string]any{
 		"name":             "Asset Using Template",
@@ -1175,7 +1175,7 @@ func createComponentFixture(t *testing.T, h *integrationHarness, componentName s
 
 	mainCategoryID := createMainCategory(t, h, componentName+" Main Category")
 	categoryID := createCategory(t, h, mainCategoryID, componentName+" Category")
-	testID := createTestType(t, h, componentName+" Test", 365)
+	testID := createTestType(t, h, componentName+" Test", 12)
 	assetID := stringField(t, createAsset(t, h, baseAssetPayload(componentName+" Asset")), "asset_id")
 	componentID := stringField(t, createComponent(t, h, componentPayload(assetID, categoryID, componentName)), "component_id")
 	return componentID, testID
