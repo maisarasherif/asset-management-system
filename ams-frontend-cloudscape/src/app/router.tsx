@@ -151,11 +151,7 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 function GuestOnly({ children }: { children: ReactNode }) {
 	const { isAuthenticated, isSessionLoading } = useAuth();
 
-	if (isSessionLoading) {
-		return <PageLoading>Checking your session...</PageLoading>;
-	}
-
-	if (isAuthenticated) {
+	if (!isSessionLoading && isAuthenticated) {
 		return <Navigate replace to="/dashboard" />;
   }
 

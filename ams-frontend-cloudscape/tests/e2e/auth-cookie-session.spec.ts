@@ -35,4 +35,12 @@ test.describe("HTTP-only cookie session", () => {
     await expect(page).toHaveURL(/\/login$/);
     await expect(secondTab).toHaveURL(/\/login$/);
   });
+
+  test("renders the login page immediately on a fresh anonymous visit", async ({ page }) => {
+    await page.goto("/login");
+
+    await expect(page.getByRole("heading", { name: "Staff login" })).toBeVisible();
+    await expect(page.getByText("Checking your session...")).toHaveCount(0);
+    await expect(page.getByText("Loading the next page...")).toHaveCount(0);
+  });
 });
