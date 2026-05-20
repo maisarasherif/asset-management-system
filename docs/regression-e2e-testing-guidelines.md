@@ -20,7 +20,7 @@ Use the isolated test runner instead:
 bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
 ```
 
-The runner creates a temporary database named `ams_e2e_*`, runs migrations, runs Newman API regression and browser E2E tests against it, and drops it at the end.
+The runner creates a temporary database named `ams_e2e_*`, runs migrations, runs Newman API regression, recreates a fresh isolated database for browser E2E, and drops it at the end.
 
 ## What The Isolated Runner Verifies
 
@@ -36,10 +36,11 @@ The runner performs this sequence:
 8. Runs Newman API regression collections.
 9. Recreates the isolated DB after Newman when Playwright is enabled.
 10. Seeds a fresh test-only super-admin for Playwright.
-11. Builds the Cloudscape frontend against the isolated API.
-12. Starts an isolated static frontend server on `127.0.0.1`.
-13. Runs live API smoke and Playwright browser E2E specs.
-14. Stops isolated processes and drops the isolated DB.
+11. Builds and starts a fresh isolated API binary with `go build -buildvcs=false`.
+12. Builds the Cloudscape frontend against the isolated API.
+13. Starts an isolated static frontend server on `127.0.0.1`.
+14. Runs live API smoke and Playwright browser E2E specs.
+15. Stops isolated processes and drops the isolated DB.
 
 Successful final output should include passing Newman collections, passing Playwright specs, and:
 
@@ -233,6 +234,26 @@ bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
 
 The runner checks port availability before starting isolated servers.
 
+The runner builds the API into `.vps-test-run/ams-server-e2e` and runs that binary directly. This avoids `go run` leaving a compiled child process in `.cache/go-build` that can keep the API port busy after the parent process exits. It uses `-buildvcs=false` because VCS stamping is not needed for the temporary E2E binary and can fail when the test user has limited Git metadata access.
+
+The Linux user running the script must be able to write:
+
+```text
+.vps-test-run/
+ams-frontend-cloudscape/dist/
+ams-frontend-cloudscape/test-results/
+ams-frontend-cloudscape/playwright-report/
+ams-frontend-cloudscape/tsconfig.app.tsbuildinfo
+```
+
+For the VPS test checkout, the simplest fix is usually:
+
+```bash
+sudo chown -R ams_test_runner:ams_test_runner \
+  /home/pms/ams-testing/asset-management-system/ams-frontend-cloudscape \
+  /home/pms/ams-testing/asset-management-system/.vps-test-run
+```
+
 ## Running Only Newman API Regression
 
 Useful when you only want API regression without browser E2E:
@@ -365,6 +386,42 @@ ss -ltnp | grep ':18085'
 ```
 
 Then stop it or rerun with a fresh `API_PORT`.
+
+### Every API Port Looks Busy
+
+Check the port:
+
+```bash
+ss -ltnp | grep ':18086'
+```
+
+Older versions of the runner used `go run .`, which can leave a compiled child process running under `.cache/go-build`. If you see one, inspect and kill only stale isolated test API processes:
+
+```bash
+ps -u ams_test_runner -f | grep '.cache/go-build' | grep -v grep
+kill <PID>
+```
+
+The current runner builds and executes `.vps-test-run/ams-server-e2e` directly, so this should not recur after stale old processes are cleaned once.
+
+### TypeScript Build Info Permission Denied
+
+Example:
+
+```text
+Could not write file '.../ams-frontend-cloudscape/tsconfig.app.tsbuildinfo': EACCES
+```
+
+Cause: the frontend folder or build artifacts are owned by a different Linux user.
+
+Fix:
+
+```bash
+sudo chown -R ams_test_runner:ams_test_runner \
+  /home/pms/ams-testing/asset-management-system/ams-frontend-cloudscape
+```
+
+Then rerun the isolated test script as `ams_test_runner`.
 
 ## Production Deployment Checks
 

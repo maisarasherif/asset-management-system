@@ -2,7 +2,7 @@
 
 Use this workflow on the VPS to verify auth/session changes without touching the production database.
 
-The runner creates a temporary PostgreSQL database whose name must start with `ams_e2e_`, applies migrations, runs Newman/Postman API regression against that database, starts an isolated API/frontend on localhost-only ports, runs Playwright API/browser checks, and then drops the database.
+The runner creates a temporary PostgreSQL database whose name must start with `ams_e2e_`, applies migrations, runs Newman/Postman API regression, recreates a fresh isolated database for Playwright API/browser checks, and then drops the database.
 
 ## One-Time VPS Setup
 
@@ -35,6 +35,14 @@ If Newman is missing:
 
 ```bash
 sudo npm install -g newman
+```
+
+The test user must own the frontend build workspace and `.vps-test-run`:
+
+```bash
+sudo chown -R ams_test_runner:ams_test_runner \
+  /home/pms/ams-testing/asset-management-system/ams-frontend-cloudscape \
+  /home/pms/ams-testing/asset-management-system/.vps-test-run
 ```
 
 ## Required Env
@@ -97,6 +105,17 @@ RUN_GO_REGRESSION=1 bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-test
 Use that only if Go integration tests are configured and you intentionally want to run them. The normal API regression path is Newman/Postman under `tests/api/postman/`.
 
 Everything runs against an isolated DB and local-only ports.
+
+The runner builds the API as `.vps-test-run/ams-server-e2e` using `go build -buildvcs=false`, then executes that binary directly. This avoids stale `go run` child processes keeping `180xx` API ports busy.
+
+If an old port is stuck from a previous runner version:
+
+```bash
+ps -u ams_test_runner -f | grep '.cache/go-build' | grep -v grep
+kill <PID>
+```
+
+Do not kill the production API on `:8080`.
 
 ## Run Only Newman API Regression
 
