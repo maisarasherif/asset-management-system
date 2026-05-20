@@ -2,6 +2,7 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 	type PropsWithChildren,
 } from "react";
@@ -18,20 +19,29 @@ function readStoredAsset(): string | null {
 	return sessionStorage.getItem(ASSET_STORAGE_KEY);
 }
 
+function shouldBlockForInitialSessionCheck() {
+	return window.location.pathname !== "/login";
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
 	const [session, setSession] = useState<AuthSession | null>(null);
-	const [isSessionLoading, setIsSessionLoading] = useState(true);
+	const [isSessionLoading, setIsSessionLoading] = useState(() =>
+		shouldBlockForInitialSessionCheck()
+	);
+	const sessionVersion = useRef(0);
 	const [selectedAssetId, setSelectedAssetIdState] = useState<string | null>(() =>
 		readStoredAsset()
 	);
 
 	const clearSession = useCallback(() => {
+		sessionVersion.current += 1;
 		setSession(null);
 		sessionStorage.removeItem(ASSET_STORAGE_KEY);
 		setSelectedAssetIdState(null);
 	}, []);
 
 	const establishSession = useCallback((nextSession: AuthSession | null) => {
+		sessionVersion.current += 1;
 		setSession(nextSession);
 	}, []);
 
@@ -69,6 +79,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
 	useEffect(() => {
 		let cancelled = false;
+		const requestVersion = sessionVersion.current;
 
 		getSession()
 			.then((response) => {
@@ -77,7 +88,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 				}
 			})
 			.catch(() => {
-				if (!cancelled) {
+				if (!cancelled && sessionVersion.current === requestVersion) {
 					clearSession();
 				}
 			})

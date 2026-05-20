@@ -42,5 +42,7 @@ test.describe("HTTP-only cookie session", () => {
     await expect(page.getByRole("heading", { name: "Staff login" })).toBeVisible();
     await expect(page.getByText("Checking your session...")).toHaveCount(0);
     await expect(page.getByText("Loading the next page...")).toHaveCount(0);
+    await page.waitForTimeout(500);
+    await expect(page.getByText("Checking your session...")).toHaveCount(0);
   });
 });
