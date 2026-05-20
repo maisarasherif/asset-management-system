@@ -1,65 +1,51 @@
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type PropsWithChildren,
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+	type PropsWithChildren,
 } from "react";
+import { getSession } from "../lib/api/ams";
 import { configureApiClient } from "../lib/api/client";
+import { sessionFromLoginResponse } from "./auth-session";
 import { AuthContext, type AuthContextValue } from "./auth-context";
 import type { AuthSession } from "../types/ams";
 
-const SESSION_STORAGE_KEY = "ams-cloudscape-session";
 const ASSET_STORAGE_KEY = "ams-cloudscape-selected-asset";
-
-function readStoredSession(): AuthSession | null {
-  try {
-    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-    const session = JSON.parse(raw) as AuthSession;
-    return {
-      ...session,
-      canManageUserPasswords: Boolean(session.canManageUserPasswords),
-      status: session.status || "ACTIVE",
-    };
-  } catch {
-    return null;
-  }
-}
+const LOGOUT_BROADCAST_KEY = "ams-cloudscape-logout";
 
 function readStoredAsset(): string | null {
-  return sessionStorage.getItem(ASSET_STORAGE_KEY);
+	return sessionStorage.getItem(ASSET_STORAGE_KEY);
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [session, setSession] = useState<AuthSession | null>(() => readStoredSession());
-  const [selectedAssetId, setSelectedAssetIdState] = useState<string | null>(() =>
-    readStoredAsset()
-  );
+	const [session, setSession] = useState<AuthSession | null>(null);
+	const [isSessionLoading, setIsSessionLoading] = useState(true);
+	const [selectedAssetId, setSelectedAssetIdState] = useState<string | null>(() =>
+		readStoredAsset()
+	);
 
-  const persistSession = useCallback((nextSession: AuthSession | null) => {
-    setSession(nextSession);
-    if (nextSession) {
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
-      return;
-    }
-    sessionStorage.removeItem(SESSION_STORAGE_KEY);
-  }, []);
+	const clearSession = useCallback(() => {
+		setSession(null);
+		sessionStorage.removeItem(ASSET_STORAGE_KEY);
+		setSelectedAssetIdState(null);
+	}, []);
 
-  const login = useCallback(
-    (nextSession: AuthSession) => {
-      persistSession(nextSession);
-    },
-    [persistSession]
-  );
+	const establishSession = useCallback((nextSession: AuthSession | null) => {
+		setSession(nextSession);
+	}, []);
 
-  const logout = useCallback(() => {
-    persistSession(null);
-    sessionStorage.removeItem(ASSET_STORAGE_KEY);
-    setSelectedAssetIdState(null);
-  }, [persistSession]);
+	const login = useCallback(
+		(nextSession: AuthSession) => {
+			establishSession(nextSession);
+		},
+		[establishSession]
+	);
+
+	const logout = useCallback(() => {
+		clearSession();
+		localStorage.setItem(LOGOUT_BROADCAST_KEY, String(Date.now()));
+	}, [clearSession]);
 
   const setSelectedAssetId = useCallback((assetId: string | null) => {
     setSelectedAssetIdState(assetId);
@@ -70,33 +56,70 @@ export function AuthProvider({ children }: PropsWithChildren) {
     sessionStorage.removeItem(ASSET_STORAGE_KEY);
   }, []);
 
-  useEffect(() => {
-    configureApiClient({
-      getToken: () => sessionStorage.getItem(SESSION_STORAGE_KEY)
-        ? readStoredSession()?.token || null
-        : null,
-      onUnauthorized: () => {
-        logout();
-        if (window.location.pathname !== "/login") {
-          window.location.replace("/login");
-        }
-      },
-    });
-  }, [logout]);
+	useEffect(() => {
+		configureApiClient({
+			onUnauthorized: () => {
+				logout();
+				if (window.location.pathname !== "/login") {
+					window.location.replace("/login");
+				}
+			},
+		});
+	}, [logout]);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		getSession()
+			.then((response) => {
+				if (!cancelled) {
+					establishSession(sessionFromLoginResponse(response));
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					clearSession();
+				}
+			})
+			.finally(() => {
+				if (!cancelled) {
+					setIsSessionLoading(false);
+				}
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [clearSession, establishSession]);
+
+	useEffect(() => {
+		const handleStorage = (event: StorageEvent) => {
+			if (event.key === LOGOUT_BROADCAST_KEY) {
+				clearSession();
+				if (window.location.pathname !== "/login") {
+					window.location.replace("/login");
+				}
+			}
+		};
+
+		window.addEventListener("storage", handleStorage);
+		return () => window.removeEventListener("storage", handleStorage);
+	}, [clearSession]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
       selectedAssetId,
       isAdmin: session?.role === "ADMIN" || session?.role === "SUPER_ADMIN",
-      isClient: session?.role === "CLIENT",
-      isAuthenticated: Boolean(session),
-      login,
-      logout,
-      setSelectedAssetId,
-    }),
-    [login, logout, selectedAssetId, session, setSelectedAssetId]
-  );
+			isClient: session?.role === "CLIENT",
+			isAuthenticated: Boolean(session),
+			isSessionLoading,
+			login,
+			logout,
+			setSelectedAssetId,
+		}),
+		[isSessionLoading, login, logout, selectedAssetId, session, setSelectedAssetId]
+	);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

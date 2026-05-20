@@ -93,6 +93,7 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	// ===================Authenticated Account Routes======================================================
 	account := router.Group("/v1")
 	account.Use(middleware.AuthMiddleware(), middleware.ActiveUserMiddleware(pool))
+	account.GET("/session", controller.GetSession())
 	account.PUT("/account/password", controller.UpdatePassword(pool))
 	account.POST("/logout", controller.LogoutUser(pool))
 

@@ -781,9 +781,86 @@ func TestLoginSuccess(t *testing.T) {
 	if strings.TrimSpace(stringField(t, body, "token")) == "" {
 		t.Fatal("expected token in login response")
 	}
-	if strings.TrimSpace(stringField(t, body, "refresh_token")) == "" {
-		t.Fatal("expected refresh_token in login response")
+	if _, ok := body["refresh_token"]; ok {
+		t.Fatal("expected login response not to expose refresh token")
 	}
+}
+
+func TestLoginSetsAccessTokenCookieAndSessionReadsIt(t *testing.T) {
+	h := setupIntegrationTest(t)
+	createIntegrationUser(t, h.pool, "Cookie", "User", "login-cookie@example.com", "user-password", "USER")
+
+	raw, err := json.Marshal(map[string]any{
+		"email":    "login-cookie@example.com",
+		"password": "user-password",
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal request payload: %v", err)
+	}
+	loginReq := httptest.NewRequest(http.MethodPost, "/v1/login", bytes.NewReader(raw))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRecorder := httptest.NewRecorder()
+	h.router.ServeHTTP(loginRecorder, loginReq)
+	if loginRecorder.Code != http.StatusOK {
+		t.Fatalf("login returned %d, expected %d: %s", loginRecorder.Code, http.StatusOK, loginRecorder.Body.String())
+	}
+
+	var accessCookie *http.Cookie
+	for _, cookie := range loginRecorder.Result().Cookies() {
+		if cookie.Name == utils.AccessTokenCookieName {
+			accessCookie = cookie
+			break
+		}
+	}
+	if accessCookie == nil {
+		t.Fatal("expected access token cookie")
+	}
+	if !accessCookie.HttpOnly {
+		t.Fatal("expected access token cookie to be HTTP-only")
+	}
+	if accessCookie.Value == "" {
+		t.Fatal("expected access token cookie value")
+	}
+	if accessCookie.MaxAge != 0 {
+		t.Fatal("expected access token cookie to be session scoped")
+	}
+
+	sessionReq := httptest.NewRequest(http.MethodGet, "/v1/session", nil)
+	sessionReq.AddCookie(accessCookie)
+	sessionRecorder := httptest.NewRecorder()
+	h.router.ServeHTTP(sessionRecorder, sessionReq)
+	if sessionRecorder.Code != http.StatusOK {
+		t.Fatalf("session returned %d, expected %d: %s", sessionRecorder.Code, http.StatusOK, sessionRecorder.Body.String())
+	}
+
+	body := decodeObject(t, sessionRecorder.Body.Bytes())
+	assertField(t, body, "email", "login-cookie@example.com")
+	if _, ok := body["token"]; ok {
+		t.Fatal("expected session response not to expose token")
+	}
+}
+
+func TestLogoutClearsAccessTokenCookie(t *testing.T) {
+	h := setupIntegrationTest(t)
+	token := createIntegrationUserToken(t, h.pool, "Logout", "User", "logout-cookie@example.com", "user-password", "USER")
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/logout", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	recorder := httptest.NewRecorder()
+	h.router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("logout returned %d, expected %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	for _, cookie := range recorder.Result().Cookies() {
+		if cookie.Name == utils.AccessTokenCookieName {
+			if cookie.MaxAge >= 0 {
+				t.Fatalf("expected logout cookie to clear access token, got MaxAge %d", cookie.MaxAge)
+			}
+			return
+		}
+	}
+	t.Fatal("expected logout to clear access token cookie")
 }
 
 func TestLoginWrongPassword(t *testing.T) {

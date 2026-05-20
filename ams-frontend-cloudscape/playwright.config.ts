@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -9,7 +11,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:4174",
-    channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
+    ...(browserChannel ? { channel: browserChannel } : {}),
     headless: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

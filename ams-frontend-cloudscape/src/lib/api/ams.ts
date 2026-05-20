@@ -72,18 +72,22 @@ async function fetchAllPages<T>(
 }
 
 export function login(payload: LoginPayload) {
-  return apiRequest<LoginResponse>(
+	return apiRequest<LoginResponse>(
     "/v1/login",
     {
       method: "POST",
       body: JSON.stringify(payload),
     },
     { auth: false }
-  );
+	);
+}
+
+export function getSession() {
+	return apiRequest<LoginResponse>("/v1/session");
 }
 
 export function logoutRequest() {
-  return apiRequest<MessageResponse>("/v1/logout", { method: "POST" });
+	return apiRequest<MessageResponse>("/v1/logout", { method: "POST" });
 }
 
 export function updatePassword(payload: UpdatePasswordInput) {

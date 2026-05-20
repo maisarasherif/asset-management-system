@@ -11,23 +11,22 @@ export interface AuthSession {
   userId: string;
   firstName: string;
   lastName: string;
-  email: string;
-  role: Role;
-  status: UserStatus;
-  token: string;
-  canManageUserPasswords: boolean;
+	email: string;
+	role: Role;
+	status: UserStatus;
+	canManageUserPasswords: boolean;
 }
 
 export interface LoginResponse {
   user_id: string;
   first_name: string;
   last_name: string;
-  email: string;
-  role: Role;
-  status: UserStatus;
-  token: string;
-  refresh_token?: string;
-  can_manage_user_passwords?: boolean;
+	email: string;
+	role: Role;
+	status: UserStatus;
+	token?: string;
+	refresh_token?: string;
+	can_manage_user_passwords?: boolean;
 }
 
 export interface PaginationMeta {

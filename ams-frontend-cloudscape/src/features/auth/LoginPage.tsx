@@ -12,7 +12,8 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { login } from "../../lib/api/ams";
+import { login, logoutRequest } from "../../lib/api/ams";
+import { sessionFromLoginResponse } from "../../providers/auth-session";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 
@@ -31,29 +32,22 @@ export function LoginPage() {
     clearAll();
   }, [clearAll]);
 
-  const loginMutation = useMutation({
-    mutationFn: login,
-    onSuccess: (session) => {
-      const isClientSession = session.role === "CLIENT";
-      if (loginMode === "client" && !isClientSession) {
-        setErrorMessage("This account is for staff access. Use Staff login.");
-        return;
-      }
-      if (loginMode === "staff" && isClientSession) {
-        setErrorMessage("This account is for client access. Use Client login.");
-        return;
-      }
+	const loginMutation = useMutation({
+		mutationFn: login,
+		onSuccess: (session) => {
+			const isClientSession = session.role === "CLIENT";
+			if (loginMode === "client" && !isClientSession) {
+				void logoutRequest().catch(() => undefined);
+				setErrorMessage("This account is for staff access. Use Staff login.");
+				return;
+			}
+			if (loginMode === "staff" && isClientSession) {
+				void logoutRequest().catch(() => undefined);
+				setErrorMessage("This account is for client access. Use Client login.");
+				return;
+			}
 
-      establishSession({
-        userId: session.user_id,
-        firstName: session.first_name,
-        lastName: session.last_name,
-        email: session.email,
-        role: session.role,
-        status: session.status,
-        token: session.token,
-        canManageUserPasswords: Boolean(session.can_manage_user_passwords),
-      });
+      establishSession(sessionFromLoginResponse(session));
       navigate(isClientSession ? "/client/assets" : "/dashboard", { replace: true });
     },
     onError: (error: Error) => {

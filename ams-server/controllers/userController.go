@@ -28,6 +28,13 @@ func isSuperAdminRole(role string) bool {
 	return role == "SUPER_ADMIN"
 }
 
+func stringFromContext(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
+}
+
 func normalizedUserStatus(status string) string {
 	if status == "" {
 		return "ACTIVE"
@@ -760,6 +767,7 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update tokens"})
 			return
 		}
+		utils.SetAccessTokenCookie(c, token)
 
 		logger.Log.Info().
 			Str("user_id", foundUser.UserID.String()).
@@ -776,10 +784,38 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			Role:                   foundUser.Role,
 			Status:                 foundUser.Status,
 			Token:                  token,
-			RefreshToken:           refreshToken,
 			CanManageUserPasswords: isSuperAdminRole(foundUser.Role),
 		})
 
+	}
+}
+
+func GetSession() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := utils.GetUserIdFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "could not identify requesting user"})
+			return
+		}
+
+		email, _ := c.Get("email")
+		firstName, _ := c.Get("firstName")
+		lastName, _ := c.Get("lastName")
+		role, err := utils.GetRoleFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "could not identify requesting user role"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.LoginResponse{
+			UserID:                 userID,
+			FirstName:              stringFromContext(firstName),
+			LastName:               stringFromContext(lastName),
+			Email:                  stringFromContext(email),
+			Role:                   role,
+			Status:                 "ACTIVE",
+			CanManageUserPasswords: isSuperAdminRole(role),
+		})
 	}
 }
 
@@ -796,6 +832,7 @@ func LogoutUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		utils.ClearAccessTokenCookie(c)
 		logger.Log.Info().Str("user_id", userID).Msg("user logged out successfully")
 		c.JSON(http.StatusOK, gin.H{"message": "user logged out successfully"})
 	}

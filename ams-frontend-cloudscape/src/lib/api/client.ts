@@ -18,18 +18,15 @@ interface RequestOptions {
 }
 
 const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8080"
+	import.meta.env.VITE_API_BASE_URL || "http://localhost:8080"
 ).replace(/\/$/, "");
 
-let readToken: (() => string | null) | null = null;
 let unauthorizedHandler: (() => void) | null = null;
 
 export function configureApiClient(config: {
-  getToken: () => string | null;
-  onUnauthorized: () => void;
+	onUnauthorized: () => void;
 }) {
-  readToken = config.getToken;
-  unauthorizedHandler = config.onUnauthorized;
+	unauthorizedHandler = config.onUnauthorized;
 }
 
 async function parseBody(response: Response): Promise<unknown> {
@@ -53,22 +50,18 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const auth = options.auth ?? true;
   const responseMode = options.responseMode ?? "json";
-  const headers = new Headers(init.headers);
-  const body = init.body;
+	const headers = new Headers(init.headers);
+	const body = init.body;
 
-  if (auth) {
-    const token = readToken?.();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-  }
+	if (body && !(body instanceof FormData) && !headers.has("Content-Type")) {
+		headers.set("Content-Type", "application/json");
+	}
 
-  if (body && !(body instanceof FormData) && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-  });
+	const response = await fetch(`${API_BASE_URL}${path}`, {
+		...init,
+		credentials: "include",
+		headers,
+	});
 
   if (response.status === 401 && auth) {
     unauthorizedHandler?.();

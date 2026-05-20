@@ -3,7 +3,9 @@ package utils
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 )
+
+const AccessTokenCookieName = "ams_access_token"
 
 type SignedDetails struct {
 	Email     string
@@ -29,7 +33,40 @@ func getSecretRefreshKey() []byte {
 	return []byte(os.Getenv("SECRET_REFRESH_KEY"))
 }
 
+func AccessTokenTTL() time.Duration {
+	return time.Hour
+}
+
+func isSecureCookie() bool {
+	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	return appEnv != "dev" && appEnv != "development" && appEnv != "local" && appEnv != "test"
+}
+
+func SetAccessTokenCookie(c *gin.Context, token string) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     AccessTokenCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   isSecureCookie(),
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func ClearAccessTokenCookie(c *gin.Context) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     AccessTokenCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   isSecureCookie(),
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 func GenerateAllTokens(email, firstName, lastName, role, userId string) (string, string, error) {
+	now := time.Now()
 	claims := &SignedDetails{
 		Email:     email,
 		FirstName: firstName,
@@ -38,8 +75,8 @@ func GenerateAllTokens(email, firstName, lastName, role, userId string) (string,
 		UserId:    userId,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "AMS",
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(AccessTokenTTL())),
 		},
 	}
 
@@ -119,9 +156,13 @@ func ValidateToken(tokenString string) (*SignedDetails, error) {
 }
 
 func GetAccessToken(c *gin.Context) (string, error) {
+	if token, err := c.Cookie(AccessTokenCookieName); err == nil && strings.TrimSpace(token) != "" {
+		return token, nil
+	}
+
 	authHeader := c.Request.Header.Get("Authorization")
 	if authHeader == "" {
-		return "", errors.New("authorization header is required")
+		return "", errors.New("access token cookie or authorization header is required")
 	}
 
 	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {

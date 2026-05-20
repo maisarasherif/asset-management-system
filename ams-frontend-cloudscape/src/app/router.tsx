@@ -112,12 +112,16 @@ function RouteSuspense({ children }: { children: ReactNode }) {
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isClient } = useAuth();
-  const location = useLocation();
+	const { isAuthenticated, isClient, isSessionLoading } = useAuth();
+	const location = useLocation();
 
-  if (!isAuthenticated) {
-    return <Navigate replace to="/login" />;
-  }
+	if (isSessionLoading) {
+		return <PageLoading>Checking your session...</PageLoading>;
+	}
+
+	if (!isAuthenticated) {
+		return <Navigate replace to="/login" />;
+	}
 
   if (isClient && !location.pathname.startsWith("/client") && location.pathname !== "/account") {
     return <Navigate replace to="/client/assets" />;
@@ -127,11 +131,15 @@ function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 function RequireAdmin({ children }: { children: ReactNode }) {
-  const { isAdmin, isAuthenticated } = useAuth();
+	const { isAdmin, isAuthenticated, isSessionLoading } = useAuth();
 
-  if (!isAuthenticated) {
-    return <Navigate replace to="/login" />;
-  }
+	if (isSessionLoading) {
+		return <PageLoading>Checking your session...</PageLoading>;
+	}
+
+	if (!isAuthenticated) {
+		return <Navigate replace to="/login" />;
+	}
 
   if (!isAdmin) {
     return <Navigate replace to="/dashboard" />;
@@ -141,10 +149,14 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 }
 
 function GuestOnly({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
+	const { isAuthenticated, isSessionLoading } = useAuth();
 
-  if (isAuthenticated) {
-    return <Navigate replace to="/dashboard" />;
+	if (isSessionLoading) {
+		return <PageLoading>Checking your session...</PageLoading>;
+	}
+
+	if (isAuthenticated) {
+		return <Navigate replace to="/dashboard" />;
   }
 
   return children;
