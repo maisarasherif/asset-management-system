@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "$FRONTEND_DIR/.." && pwd)"
 SERVER_DIR="$REPO_ROOT/ams-server"
 SERVER_ENV="$SERVER_DIR/.env"
 RUN_DIR="$REPO_ROOT/.vps-test-run"
+API_BINARY="$RUN_DIR/ams-server-e2e"
 
 DATABASE_NAME="${DATABASE_NAME:-ams_e2e_$(date +%Y%m%d%H%M%S)}"
 API_PORT="${API_PORT:-18082}"
@@ -188,16 +189,17 @@ start_api() {
   echo "Starting isolated API on $API_BASE_URL"
   (
     cd "$SERVER_DIR"
-    APP_ENV=test \
-      DATABASE_URL="$TEST_DATABASE_URL" \
-      PORT="$API_PORT" \
-      ALLOWED_ORIGIN="$FRONTEND_BASE_URL" \
-      SEED_ADMIN_EMAIL="$ADMIN_EMAIL" \
-      SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-      ALERT_RECIPIENT_EMAIL="" \
-      CLICKUP_API_TOKEN="" \
-      CLICKUP_LIST_ID="" \
-      go run . >"$RUN_DIR/api.out.log" 2>"$RUN_DIR/api.err.log"
+    go build -o "$API_BINARY" .
+    export APP_ENV=test
+    export DATABASE_URL="$TEST_DATABASE_URL"
+    export PORT="$API_PORT"
+    export ALLOWED_ORIGIN="$FRONTEND_BASE_URL"
+    export SEED_ADMIN_EMAIL="$ADMIN_EMAIL"
+    export SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD"
+    export ALERT_RECIPIENT_EMAIL=""
+    export CLICKUP_API_TOKEN=""
+    export CLICKUP_LIST_ID=""
+    exec "$API_BINARY" >"$RUN_DIR/api.out.log" 2>"$RUN_DIR/api.err.log"
   ) &
   API_PID="$!"
   wait_for_http "$API_BASE_URL/health" "API" "$RUN_DIR/api.err.log"
