@@ -189,7 +189,7 @@ start_api() {
   echo "Starting isolated API on $API_BASE_URL"
   (
     cd "$SERVER_DIR"
-    go build -o "$API_BINARY" .
+    go build -buildvcs=false -o "$API_BINARY" .
     export APP_ENV=test
     export DATABASE_URL="$TEST_DATABASE_URL"
     export PORT="$API_PORT"
