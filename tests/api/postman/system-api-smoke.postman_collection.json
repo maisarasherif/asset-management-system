@@ -1339,7 +1339,7 @@
 	                {
 	                  "key": "file",
 	                  "type": "file",
-	                  "src": "postman/fixtures/sample-certificate.pdf"
+	                  "src": "tests/api/postman/fixtures/sample-certificate.pdf"
 	                },
 	                {
 	                  "key": "competent_person_id",

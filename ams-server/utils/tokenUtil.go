@@ -156,25 +156,25 @@ func ValidateToken(tokenString string) (*SignedDetails, error) {
 }
 
 func GetAccessToken(c *gin.Context) (string, error) {
+	authHeader := c.Request.Header.Get("Authorization")
+	if strings.TrimSpace(authHeader) != "" {
+		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+			return "", errors.New("invalid authorization header format")
+		}
+
+		token := authHeader[7:]
+		if token == "" {
+			return "", errors.New("bearer token is required")
+		}
+
+		return token, nil
+	}
+
 	if token, err := c.Cookie(AccessTokenCookieName); err == nil && strings.TrimSpace(token) != "" {
 		return token, nil
 	}
 
-	authHeader := c.Request.Header.Get("Authorization")
-	if authHeader == "" {
-		return "", errors.New("access token cookie or authorization header is required")
-	}
-
-	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		return "", errors.New("invalid authorization header format")
-	}
-
-	token := authHeader[7:]
-	if token == "" {
-		return "", errors.New("bearer token is required")
-	}
-
-	return token, nil
+	return "", errors.New("authorization header or access token cookie is required")
 }
 
 func GetUserIdFromContext(c *gin.Context) (string, error) {

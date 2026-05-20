@@ -8,6 +8,7 @@ These are the maintained Postman collections used by the isolated VPS regression
 system-api-smoke.postman_collection.json
 routine-maintenance.postman_collection.json
 client-asset-certificates.postman_collection.json
+fixtures/sample-certificate.pdf
 ```
 
 The older `postman/` folder is kept as a reference/archive area for manual or legacy collections. Do not add those collections to the automated VPS suite until they are checked against the current API contract.
