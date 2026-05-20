@@ -174,16 +174,71 @@ wait_for_http() {
   fail "$name did not become ready at $url. See $log_path"
 }
 
+stop_api() {
+  if [[ -n "$API_PID" ]]; then
+    kill "$API_PID" >/dev/null 2>&1 || true
+    wait "$API_PID" >/dev/null 2>&1 || true
+    API_PID=""
+  fi
+}
+
+start_api() {
+  ensure_port_free "$API_PORT" || fail "API port $API_PORT is already in use. Stop the old process or rerun with API_PORT=<free-port>."
+
+  echo "Starting isolated API on $API_BASE_URL"
+  (
+    cd "$SERVER_DIR"
+    APP_ENV=test \
+      DATABASE_URL="$TEST_DATABASE_URL" \
+      PORT="$API_PORT" \
+      ALLOWED_ORIGIN="$FRONTEND_BASE_URL" \
+      SEED_ADMIN_EMAIL="$ADMIN_EMAIL" \
+      SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+      ALERT_RECIPIENT_EMAIL="" \
+      CLICKUP_API_TOKEN="" \
+      CLICKUP_LIST_ID="" \
+      go run . >"$RUN_DIR/api.out.log" 2>"$RUN_DIR/api.err.log"
+  ) &
+  API_PID="$!"
+  wait_for_http "$API_BASE_URL/health" "API" "$RUN_DIR/api.err.log"
+}
+
+verify_admin_login() {
+  echo "Verifying isolated admin login"
+  LOGIN_STATUS="$(
+    curl --silent --output "$RUN_DIR/login-check.json" --write-out "%{http_code}" \
+      --request POST "$API_BASE_URL/login" \
+      --header "Content-Type: application/json" \
+      --data "$(python3 - "$ADMIN_EMAIL" "$ADMIN_PASSWORD" <<'PY'
+import json
+import sys
+
+print(json.dumps({"email": sys.argv[1], "password": sys.argv[2]}))
+PY
+)"
+  )"
+  if [[ "$LOGIN_STATUS" != "200" ]]; then
+    echo "Login check failed with HTTP $LOGIN_STATUS"
+    echo "Response body:"
+    cat "$RUN_DIR/login-check.json"
+    echo
+    echo "Seed admin row in isolated database:"
+    psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "SELECT email, role, status, length(password) AS password_hash_length FROM users WHERE email = '$ADMIN_EMAIL';" || true
+    echo "Recent API stdout:"
+    tail -n 50 "$RUN_DIR/api.out.log" | sed -E 's/(password=)[^ ]+/\1[redacted]/g' || true
+    echo "Recent API stderr:"
+    tail -n 50 "$RUN_DIR/api.err.log" | sed -E 's/(password=)[^ ]+/\1[redacted]/g' || true
+    fail "Isolated API did not accept SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD from $SERVER_ENV"
+  fi
+}
+
 cleanup() {
   set +e
   if [[ -n "$FRONTEND_PID" ]]; then
     kill "$FRONTEND_PID" >/dev/null 2>&1
     wait "$FRONTEND_PID" >/dev/null 2>&1
   fi
-  if [[ -n "$API_PID" ]]; then
-    kill "$API_PID" >/dev/null 2>&1
-    wait "$API_PID" >/dev/null 2>&1
-  fi
+  stop_api
   if [[ "${KEEP_DB}" != "1" && -n "${MAINTENANCE_DATABASE_URL:-}" && -n "${QUOTED_DATABASE_NAME:-}" ]]; then
     echo "Dropping isolated database: $DATABASE_NAME"
     run_sql "$MAINTENANCE_DATABASE_URL" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DATABASE_NAME';" || true
@@ -247,52 +302,10 @@ fi
 echo "Seeding isolated test admin"
 seed_e2e_admin
 
-ensure_port_free "$API_PORT" || fail "API port $API_PORT is already in use. Stop the old process or rerun with API_PORT=<free-port>."
 ensure_port_free "$FRONTEND_PORT" || fail "Frontend port $FRONTEND_PORT is already in use. Stop the old process or rerun with FRONTEND_PORT=<free-port>."
 
-echo "Starting isolated API on $API_BASE_URL"
-(
-  cd "$SERVER_DIR"
-  APP_ENV=test \
-    DATABASE_URL="$TEST_DATABASE_URL" \
-    PORT="$API_PORT" \
-    ALLOWED_ORIGIN="$FRONTEND_BASE_URL" \
-    SEED_ADMIN_EMAIL="$ADMIN_EMAIL" \
-    SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-    ALERT_RECIPIENT_EMAIL="" \
-    CLICKUP_API_TOKEN="" \
-    CLICKUP_LIST_ID="" \
-    go run . >"$RUN_DIR/api.out.log" 2>"$RUN_DIR/api.err.log"
-) &
-API_PID="$!"
-wait_for_http "$API_BASE_URL/health" "API" "$RUN_DIR/api.err.log"
-
-echo "Verifying isolated admin login"
-LOGIN_STATUS="$(
-  curl --silent --output "$RUN_DIR/login-check.json" --write-out "%{http_code}" \
-    --request POST "$API_BASE_URL/login" \
-    --header "Content-Type: application/json" \
-    --data "$(python3 - "$ADMIN_EMAIL" "$ADMIN_PASSWORD" <<'PY'
-import json
-import sys
-
-print(json.dumps({"email": sys.argv[1], "password": sys.argv[2]}))
-PY
-)"
-)"
-if [[ "$LOGIN_STATUS" != "200" ]]; then
-  echo "Login check failed with HTTP $LOGIN_STATUS"
-  echo "Response body:"
-  cat "$RUN_DIR/login-check.json"
-  echo
-  echo "Seed admin row in isolated database:"
-  psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "SELECT email, role, status, length(password) AS password_hash_length FROM users WHERE email = '$ADMIN_EMAIL';" || true
-  echo "Recent API stdout:"
-  tail -n 50 "$RUN_DIR/api.out.log" | sed -E 's/(password=)[^ ]+/\1[redacted]/g' || true
-  echo "Recent API stderr:"
-  tail -n 50 "$RUN_DIR/api.err.log" | sed -E 's/(password=)[^ ]+/\1[redacted]/g' || true
-  fail "Isolated API did not accept SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD from $SERVER_ENV"
-fi
+start_api
+verify_admin_login
 
 if [[ "$RUN_NEWMAN" == "1" ]]; then
   echo "Running Newman API regression collections"
@@ -304,9 +317,19 @@ if [[ "$RUN_NEWMAN" == "1" ]]; then
         --working-dir "$REPO_ROOT" \
         --env-var "baseUrl=$API_BASE_URL" \
         --env-var "adminEmail=$ADMIN_EMAIL" \
-        --env-var "adminPassword=$ADMIN_PASSWORD"
+      --env-var "adminPassword=$ADMIN_PASSWORD"
     )
   done
+
+  if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
+    echo "Recreating isolated database for Playwright E2E"
+    stop_api
+    prepare_database
+    echo "Seeding isolated test admin"
+    seed_e2e_admin
+    start_api
+    verify_admin_login
+  fi
 fi
 
 if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then

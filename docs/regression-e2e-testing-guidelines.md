@@ -34,10 +34,12 @@ The runner performs this sequence:
 6. Starts an isolated API on `127.0.0.1`.
 7. Verifies admin login with `curl`.
 8. Runs Newman API regression collections.
-9. Builds the Cloudscape frontend against the isolated API.
-10. Starts an isolated static frontend server on `127.0.0.1`.
-11. Runs live API smoke and Playwright browser E2E specs.
-12. Stops isolated processes and drops the isolated DB.
+9. Recreates the isolated DB after Newman when Playwright is enabled.
+10. Seeds a fresh test-only super-admin for Playwright.
+11. Builds the Cloudscape frontend against the isolated API.
+12. Starts an isolated static frontend server on `127.0.0.1`.
+13. Runs live API smoke and Playwright browser E2E specs.
+14. Stops isolated processes and drops the isolated DB.
 
 Successful final output should include passing Newman collections, passing Playwright specs, and:
 

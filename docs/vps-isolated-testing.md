@@ -79,7 +79,7 @@ From the repo root:
 bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
 ```
 
-This runs the current Newman API regression collections and Playwright browser/API smoke tests:
+This runs the current Newman API regression collections, then recreates the isolated DB and runs Playwright browser/API smoke tests on a fresh isolated state:
 
 ```bash
 newman run tests/api/postman/system-api-smoke.postman_collection.json
