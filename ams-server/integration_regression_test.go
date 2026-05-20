@@ -1166,6 +1166,7 @@ func createMainCategory(t *testing.T, h *integrationHarness, name string) string
 	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/main-category", map[string]any{
 		"main_category_name": name,
 		"description":        name + " description",
+		"sort_order":         1,
 	}, http.StatusCreated))
 	stringField(t, body, "display_id")
 	id := stringField(t, body, "main_category_id")
@@ -1179,6 +1180,7 @@ func createCategory(t *testing.T, h *integrationHarness, mainCategoryID, name st
 		"main_category_id": mainCategoryID,
 		"category_name":    name,
 		"description":      name + " description",
+		"sort_order":       1,
 	}, http.StatusCreated))
 	stringField(t, body, "display_id")
 	id := stringField(t, body, "category_id")

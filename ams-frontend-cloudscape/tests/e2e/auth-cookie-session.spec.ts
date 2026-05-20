@@ -26,7 +26,7 @@ test.describe("HTTP-only cookie session", () => {
     await secondTab.goto("/assets");
     await expect(secondTab).toHaveURL(/\/assets$/);
     await expect(
-      secondTab.getByRole("heading", { name: "Assets directory" })
+      secondTab.getByRole("link", { name: "Account" })
     ).toBeVisible();
 
     await page.goto("/account");

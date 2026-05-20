@@ -1,0 +1,400 @@
+{
+  "info": {
+    "_postman_id": "8f7c6b37-13f7-4dd2-a8d7-93f59f782f13",
+    "name": "AMS Routine Maintenance Regression",
+    "description": "Focused Newman regression for asset routine-maintenance thresholds. Run against a local/test API with ALERT_RECIPIENT_EMAIL, CLICKUP_API_TOKEN, and CLICKUP_LIST_ID blank when you do not want real notification side effects.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "runSuffix",
+      "value": ""
+    },
+    {
+      "key": "routineAssetName",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "asset_id",
+      "value": ""
+    },
+    {
+      "key": "maintenance_event_id",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const suffix = pm.collectionVariables.get('runSuffix') || Date.now().toString();",
+          "pm.collectionVariables.set('runSuffix', suffix);",
+          "pm.collectionVariables.set('routineAssetName', `Routine Maintenance Newman ${suffix}`);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Login Admin",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin login succeeds', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.token).to.be.a('string').and.not.empty;",
+              "  pm.collectionVariables.set('token', body.token);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Create Asset With Maintenance Interval",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{routineAssetName}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Newman routine maintenance regression asset\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Newman Test Yard\",\n  \"assigned_project\": \"Routine Maintenance QA\",\n  \"maintenance_interval_hours\": 100\n}"
+        },
+        "url": "{{baseUrl}}/asset"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('asset is created with interval threshold', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const envelope = pm.response.json();",
+              "  const asset = envelope.asset || envelope;",
+              "  pm.expect(asset.asset_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(asset.name).to.eql(pm.collectionVariables.get('routineAssetName'));",
+              "  pm.expect(asset.status).to.eql('ACTIVE');",
+              "  pm.expect(asset.working_hours).to.eql(0);",
+              "  pm.expect(asset.maintenance_interval_hours).to.eql(100);",
+              "  pm.expect(asset.next_maintenance_due_hours).to.eql(100);",
+              "  pm.collectionVariables.set('asset_id', asset.asset_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Update Hours Below Threshold",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"working_hours\": 90,\n  \"note\": \"Newman below threshold\"\n}"
+        },
+        "url": "{{baseUrl}}/asset/{{asset_id}}/working-hours"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('below threshold does not create required maintenance', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.asset.working_hours).to.eql(90);",
+              "  pm.expect(body.asset.status).to.eql('ACTIVE');",
+              "  pm.expect(body.asset.next_maintenance_due_hours).to.eql(100);",
+              "  pm.expect(body.maintenance_event).to.satisfy((value) => value === null || value === undefined);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 List Events Before Threshold",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/asset/{{asset_id}}/routine-maintenance"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('no maintenance events exist before the threshold', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const events = pm.response.json();",
+              "  pm.expect(events).to.be.an('array').with.length(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Update Hours At Threshold",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"working_hours\": 100,\n  \"note\": \"Newman threshold reached\"\n}"
+        },
+        "url": "{{baseUrl}}/asset/{{asset_id}}/working-hours"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('threshold creates a required maintenance event', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.asset.working_hours).to.eql(100);",
+              "  pm.expect(body.asset.status).to.eql('MAINTENANCE');",
+              "  pm.expect(body.asset.maintenance_required_at).to.be.a('string').and.not.empty;",
+              "  pm.expect(body.maintenance_event).to.be.an('object');",
+              "  pm.expect(body.maintenance_event.maintenance_event_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(body.maintenance_event.status).to.eql('REQUIRED');",
+              "  pm.expect(body.maintenance_event.due_at_hours).to.eql(100);",
+              "  pm.expect(body.maintenance_event.triggered_at_hours).to.eql(100);",
+              "  pm.collectionVariables.set('maintenance_event_id', body.maintenance_event.maintenance_event_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Repeat Hours Above Threshold",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"working_hours\": 125,\n  \"note\": \"Newman idempotency repeat\"\n}"
+        },
+        "url": "{{baseUrl}}/asset/{{asset_id}}/working-hours"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('open required event makes repeat trigger idempotent', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.asset.working_hours).to.eql(125);",
+              "  pm.expect(body.asset.status).to.eql('MAINTENANCE');",
+              "  pm.expect(body.maintenance_event).to.satisfy((value) => value === null || value === undefined);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 List Events After Repeat",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/asset/{{asset_id}}/routine-maintenance"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('repeat trigger did not create a duplicate event', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const events = pm.response.json();",
+              "  pm.expect(events).to.be.an('array').with.length(1);",
+              "  pm.expect(events[0].maintenance_event_id).to.eql(pm.collectionVariables.get('maintenance_event_id'));",
+              "  pm.expect(events[0].status).to.eql('REQUIRED');",
+              "  pm.expect(events[0].due_at_hours).to.eql(100);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Reject Decreasing Working Hours",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"working_hours\": 124,\n  \"note\": \"Newman invalid decrease\"\n}"
+        },
+        "url": "{{baseUrl}}/asset/{{asset_id}}/working-hours"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('working hours counter cannot decrease', function () {",
+              "  pm.response.to.have.status(400);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.error).to.eql('working hours cannot be lower than the current counter');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Complete Routine Maintenance",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"completion_notes\": \"Completed by Newman regression\"\n}"
+        },
+        "url": "{{baseUrl}}/asset/{{asset_id}}/routine-maintenance/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('completion closes required maintenance and advances next due hours', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.maintenance_event.maintenance_event_id).to.eql(pm.collectionVariables.get('maintenance_event_id'));",
+              "  pm.expect(body.maintenance_event.status).to.eql('COMPLETED');",
+              "  pm.expect(body.maintenance_event.completion_notes).to.eql('Completed by Newman regression');",
+              "  pm.expect(body.asset.status).to.eql('ACTIVE');",
+              "  pm.expect(body.asset.working_hours).to.eql(125);",
+              "  pm.expect(body.asset.last_maintenance_completed_hours).to.eql(125);",
+              "  pm.expect(body.asset.next_maintenance_due_hours).to.eql(225);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 List Events After Completion",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/asset/{{asset_id}}/routine-maintenance"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('maintenance history keeps completed event only', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const events = pm.response.json();",
+              "  pm.expect(events).to.be.an('array').with.length(1);",
+              "  pm.expect(events[0].maintenance_event_id).to.eql(pm.collectionVariables.get('maintenance_event_id'));",
+              "  pm.expect(events[0].status).to.eql('COMPLETED');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Delete Regression Asset",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/asset/{{asset_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('regression asset cleanup succeeds', function () {",
+              "  pm.expect([200, 404]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

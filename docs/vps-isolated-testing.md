@@ -2,7 +2,7 @@
 
 Use this workflow on the VPS to verify auth/session changes without touching the production database.
 
-The runner creates a temporary PostgreSQL database whose name must start with `ams_e2e_`, applies migrations, runs the Go regression tests against that database, starts an isolated API/frontend on localhost-only ports, runs Playwright, and then drops the database.
+The runner creates a temporary PostgreSQL database whose name must start with `ams_e2e_`, applies migrations, runs Newman/Postman API regression against that database, starts an isolated API/frontend on localhost-only ports, runs Playwright API/browser checks, and then drops the database.
 
 ## One-Time VPS Setup
 
@@ -12,7 +12,7 @@ From the repo root on the VPS:
 cd /path/to/asset-management-system
 cd ams-frontend-cloudscape
 npm ci
-npx playwright install --with-deps chromium
+npx playwright install chromium
 cd ../ams-server
 go mod download
 ```
@@ -24,9 +24,18 @@ psql --version
 migrate -version
 go version
 npm --version
+newman --version
 ```
 
 If `migrate` is missing, install `golang-migrate` for your VPS OS before running the tests.
+
+Fedora note: do not use `npx playwright install --with-deps chromium`. On Fedora, Playwright falls back to Ubuntu dependency installation and tries `apt-get`. Install OS packages with `dnf`, then run `npx playwright install chromium` as the same Linux user that will run the test script.
+
+If Newman is missing:
+
+```bash
+sudo npm install -g newman
+```
 
 ## Required Env
 
@@ -48,6 +57,20 @@ SECRET_REFRESH_KEY=...
 
 It uses `DATABASE_URL` only as a connection template. It replaces the database name with a temporary `ams_e2e_*` database before running anything destructive.
 
+For Unix-socket PostgreSQL with peer auth, use a libpq URI like:
+
+```text
+DATABASE_URL=postgresql:///postgres?host=/var/run/postgresql&user=ams_test_runner
+```
+
+Run the test script as the matching Linux user for peer auth, for example:
+
+```bash
+sudo -iu ams_test_runner
+cd /home/pms/ams-testing/asset-management-system
+bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+```
+
 ## Run Everything
 
 From the repo root:
@@ -56,19 +79,43 @@ From the repo root:
 bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
 ```
 
-This runs:
+This runs the current Newman API regression collections and Playwright browser/API smoke tests:
 
 ```bash
-go test ./...
-npx playwright test tests/e2e/auth-cookie-session.spec.ts tests/e2e/routine-maintenance.spec.ts tests/e2e/client-asset-certificates.spec.ts
+newman run tests/api/postman/system-api-smoke.postman_collection.json
+newman run tests/api/postman/routine-maintenance.postman_collection.json
+newman run tests/api/postman/client-asset-certificates.postman_collection.json
+npx playwright test tests/e2e/api-auth-smoke.spec.ts tests/e2e/auth-cookie-session.spec.ts tests/e2e/routine-maintenance.spec.ts tests/e2e/client-asset-certificates.spec.ts
 ```
 
-All against an isolated DB and local-only ports.
+Go integration tests are optional:
+
+```bash
+RUN_GO_REGRESSION=1 bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+```
+
+Use that only if Go integration tests are configured and you intentionally want to run them. The normal API regression path is Newman/Postman under `tests/api/postman/`.
+
+Everything runs against an isolated DB and local-only ports.
+
+## Run Only Newman API Regression
+
+```bash
+RUN_PLAYWRIGHT=0 bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+```
+
+Run one Postman collection:
+
+```bash
+RUN_PLAYWRIGHT=0 \
+NEWMAN_COLLECTIONS="tests/api/postman/system-api-smoke.postman_collection.json" \
+bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+```
 
 ## Run Only The Auth Cookie E2E
 
 ```bash
-E2E_SPECS="tests/e2e/auth-cookie-session.spec.ts" \
+E2E_SPECS="tests/e2e/api-auth-smoke.spec.ts tests/e2e/auth-cookie-session.spec.ts" \
 bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
 ```
 
