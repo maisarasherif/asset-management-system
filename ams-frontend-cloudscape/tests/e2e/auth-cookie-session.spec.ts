@@ -36,13 +36,20 @@ test.describe("HTTP-only cookie session", () => {
     await expect(secondTab).toHaveURL(/\/login$/);
   });
 
-  test("renders the login page immediately on a fresh anonymous visit", async ({ page }) => {
+  test("shows a neutral authentication check before a fresh anonymous login", async ({ page }) => {
+    await page.route("**/session", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await route.continue();
+    });
+
     await page.goto("/login");
 
-    await expect(page.getByRole("heading", { name: "Staff login" })).toBeVisible();
+    await expect(page.getByText("Checking authentication")).toBeVisible();
+    await expect(page.locator(".auth-check-page")).toBeVisible();
+    await expect(page.locator(".login-page")).toHaveCount(0);
     await expect(page.getByText("Checking your session...")).toHaveCount(0);
-    await expect(page.getByText("Loading the next page...")).toHaveCount(0);
-    await page.waitForTimeout(500);
+
+    await expect(page.getByRole("heading", { name: "Staff login" })).toBeVisible();
     await expect(page.getByText("Checking your session...")).toHaveCount(0);
   });
 });

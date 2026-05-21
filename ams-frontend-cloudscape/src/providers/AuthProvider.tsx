@@ -19,15 +19,9 @@ function readStoredAsset(): string | null {
 	return sessionStorage.getItem(ASSET_STORAGE_KEY);
 }
 
-function shouldBlockForInitialSessionCheck() {
-	return window.location.pathname !== "/login";
-}
-
 export function AuthProvider({ children }: PropsWithChildren) {
 	const [session, setSession] = useState<AuthSession | null>(null);
-	const [isSessionLoading, setIsSessionLoading] = useState(() =>
-		shouldBlockForInitialSessionCheck()
-	);
+	const [isSessionLoading, setIsSessionLoading] = useState(true);
 	const sessionVersion = useRef(0);
 	const [selectedAssetId, setSelectedAssetIdState] = useState<string | null>(() =>
 		readStoredAsset()

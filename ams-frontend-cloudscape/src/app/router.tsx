@@ -111,12 +111,23 @@ function RouteSuspense({ children }: { children: ReactNode }) {
   );
 }
 
+function AuthCheckPage() {
+  return (
+    <main className="auth-check-page" aria-busy="true" aria-live="polite">
+      <div className="auth-check-page__content">
+        <div className="auth-check-page__spinner" aria-hidden="true" />
+        <div className="auth-check-page__title">Checking authentication</div>
+      </div>
+    </main>
+  );
+}
+
 function RequireAuth({ children }: { children: ReactNode }) {
 	const { isAuthenticated, isClient, isSessionLoading } = useAuth();
 	const location = useLocation();
 
 	if (isSessionLoading) {
-		return <PageLoading>Checking your session...</PageLoading>;
+		return <AuthCheckPage />;
 	}
 
 	if (!isAuthenticated) {
@@ -134,7 +145,7 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 	const { isAdmin, isAuthenticated, isSessionLoading } = useAuth();
 
 	if (isSessionLoading) {
-		return <PageLoading>Checking your session...</PageLoading>;
+		return <AuthCheckPage />;
 	}
 
 	if (!isAuthenticated) {
@@ -151,7 +162,11 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 function GuestOnly({ children }: { children: ReactNode }) {
 	const { isAuthenticated, isSessionLoading } = useAuth();
 
-	if (!isSessionLoading && isAuthenticated) {
+	if (isSessionLoading) {
+		return <AuthCheckPage />;
+	}
+
+	if (isAuthenticated) {
 		return <Navigate replace to="/dashboard" />;
   }
 
