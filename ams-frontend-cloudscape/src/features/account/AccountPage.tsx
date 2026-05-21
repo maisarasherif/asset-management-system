@@ -38,7 +38,7 @@ export function AccountPage() {
   const canManageSuperAdmins = session?.role === "SUPER_ADMIN";
   const roleOptions = [
     { label: "User", value: "USER" },
-    { label: "Admin", value: "ADMIN" },
+    ...(canManageSuperAdmins ? [{ label: "Admin", value: "ADMIN" }] : []),
     ...(canManageSuperAdmins ? [{ label: "Super Admin", value: "SUPER_ADMIN" }] : []),
   ];
 

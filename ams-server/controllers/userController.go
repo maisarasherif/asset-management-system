@@ -28,6 +28,14 @@ func isSuperAdminRole(role string) bool {
 	return role == "SUPER_ADMIN"
 }
 
+func isAdminRole(role string) bool {
+	return role == "ADMIN" || role == "SUPER_ADMIN"
+}
+
+func canManageRole(requestingRole, targetRole string) bool {
+	return isSuperAdminRole(requestingRole) || !isAdminRole(targetRole)
+}
+
 func stringFromContext(value any) string {
 	if text, ok := value.(string); ok {
 		return text
@@ -238,8 +246,8 @@ func RegisterUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
-		if isSuperAdminRole(input.Role) && !isSuperAdminRole(requestingRole) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can grant SUPER ADMIN access"})
+		if !canManageRole(requestingRole, input.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can create admin users"})
 			return
 		}
 
@@ -327,8 +335,8 @@ func UpdateUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
-		if (isSuperAdminRole(existingUser.Role) || isSuperAdminRole(input.Role)) && !isSuperAdminRole(requestingRole) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can manage SUPER ADMIN users"})
+		if (!canManageRole(requestingRole, existingUser.Role)) || (!canManageRole(requestingRole, input.Role)) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can manage admin users"})
 			return
 		}
 
@@ -578,8 +586,8 @@ func DeleteUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
-		if isSuperAdminRole(targetUser.Role) && !isSuperAdminRole(requestingRole) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can delete SUPER ADMIN users"})
+		if !canManageRole(requestingRole, targetUser.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can delete admin users"})
 			return
 		}
 
@@ -659,8 +667,8 @@ func PatchUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
-		if (isSuperAdminRole(existingUser.Role) || isSuperAdminRole(role)) && !isSuperAdminRole(requestingRole) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can manage SUPER ADMIN users"})
+		if (!canManageRole(requestingRole, existingUser.Role)) || (!canManageRole(requestingRole, role)) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN can manage admin users"})
 			return
 		}
 

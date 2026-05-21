@@ -151,7 +151,7 @@ function UserEditorModal({
 
   const roleOptions = canManageSuperAdmins
     ? ROLE_OPTIONS
-    : ROLE_OPTIONS.filter((option) => option.value !== "SUPER_ADMIN");
+    : ROLE_OPTIONS.filter((option) => option.value !== "ADMIN" && option.value !== "SUPER_ADMIN");
   const selectedRoleOption =
     roleOptions.find((option) => option.value === draft?.role) ?? roleOptions[0];
   const selectedStatusOption =
@@ -636,6 +636,8 @@ export function AdministrationPage() {
   }
 
   const canManageSuperAdmins = session?.role === "SUPER_ADMIN";
+  const canManageUserAccount = (user: UserAccount) =>
+    canManageSuperAdmins || (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN");
 
   const userColumns: TableProps<UserAccount>["columnDefinitions"] = [
     {
@@ -652,10 +654,11 @@ export function AdministrationPage() {
       header: "Actions",
       cell: (item) => (
         <SpaceBetween direction="horizontal" size="xs">
-	          <Button
-	            onClick={() => {
-	              setModalError("");
-	              setUserEditor({
+          <Button
+            disabled={!canManageUserAccount(item)}
+            onClick={() => {
+              setModalError("");
+              setUserEditor({
                 mode: "edit",
                 id: item.user_id,
                 first_name: item.first_name,
@@ -666,27 +669,28 @@ export function AdministrationPage() {
                 status: item.status,
               });
             }}
-	          >
-	            Edit
-	          </Button>
-	          {canManageSuperAdmins || session?.canManageUserPasswords ? (
-	            <Button
-	              onClick={() => {
-	                setModalError("");
-	                setPasswordChangeTarget({
-	                  id: item.user_id,
-	                  label: `${item.first_name} ${item.last_name}`.trim() || item.email,
-	                  newPassword: "",
-	                  confirmPassword: "",
-	                });
-	              }}
-	            >
-	              Change password
-	            </Button>
-	          ) : null}
-	          <Button
-	            onClick={() =>
-	              setDeleteUserTarget({
+          >
+            Edit
+          </Button>
+          {session?.canManageUserPasswords ? (
+            <Button
+              onClick={() => {
+                setModalError("");
+                setPasswordChangeTarget({
+                  id: item.user_id,
+                  label: `${item.first_name} ${item.last_name}`.trim() || item.email,
+                  newPassword: "",
+                  confirmPassword: "",
+                });
+              }}
+            >
+              Change password
+            </Button>
+          ) : null}
+          <Button
+            disabled={!canManageUserAccount(item)}
+            onClick={() =>
+              setDeleteUserTarget({
                 id: item.user_id,
                 label: `${item.first_name} ${item.last_name}`.trim() || item.email,
               })
@@ -786,8 +790,8 @@ export function AdministrationPage() {
       setModalError("Temporary password must be at least 6 characters.");
       return;
     }
-    if (editor.role === "SUPER_ADMIN" && !canManageSuperAdmins) {
-      setModalError("Only Super Admin users can grant Super Admin access.");
+    if ((editor.role === "ADMIN" || editor.role === "SUPER_ADMIN") && !canManageSuperAdmins) {
+      setModalError("Only Super Admin users can create or edit admin users.");
       return;
     }
     setModalError("");

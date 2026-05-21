@@ -942,6 +942,29 @@ func TestSuperAdminCanChangeUserPassword(t *testing.T) {
 	}
 }
 
+func TestSuperAdminCanChangeAdminPassword(t *testing.T) {
+	h := setupIntegrationTest(t)
+	createIntegrationUser(t, h.pool, "Managed", "Admin", "managed-admin-password@example.com", "old-password", "ADMIN")
+	targetUser := mustGetIntegrationUserByEmail(t, h.pool, "managed-admin-password@example.com")
+
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/user/"+targetUser.UserID.String()+"/password", map[string]any{
+		"new_password": "new-password",
+	}, http.StatusOK)
+
+	performJSONRequest(t, h.router, "", http.MethodPost, "/v1/login", map[string]any{
+		"email":    "managed-admin-password@example.com",
+		"password": "old-password",
+	}, http.StatusUnauthorized)
+
+	body := decodeObject(t, performJSONRequest(t, h.router, "", http.MethodPost, "/v1/login", map[string]any{
+		"email":    "managed-admin-password@example.com",
+		"password": "new-password",
+	}, http.StatusOK))
+	if strings.TrimSpace(stringField(t, body, "token")) == "" {
+		t.Fatal("expected token after super admin password change")
+	}
+}
+
 func TestAdminCannotChangeUserPassword(t *testing.T) {
 	h := setupIntegrationTest(t)
 	adminToken := createIntegrationUserToken(t, h.pool, "Other", "Admin", "non-seeded-admin@example.com", "admin-password", "ADMIN")
@@ -964,6 +987,71 @@ func TestAdminCannotChangeUserPassword(t *testing.T) {
 	}, http.StatusOK))
 	if strings.TrimSpace(stringField(t, body, "token")) == "" {
 		t.Fatal("expected old password to remain valid")
+	}
+}
+
+func TestAdminCannotCreateAdminUser(t *testing.T) {
+	h := setupIntegrationTest(t)
+	adminToken := createIntegrationUserToken(t, h.pool, "Create", "Admin", "create-admin-actor@example.com", "admin-password", "ADMIN")
+
+	body := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodPost, "/v1/user", map[string]any{
+		"first_name": "Target",
+		"last_name":  "Admin",
+		"email":      "created-admin@example.com",
+		"password":   "admin-password",
+		"role":       "ADMIN",
+		"status":     "ACTIVE",
+	}, http.StatusForbidden))
+	assertField(t, body, "error", "only SUPER ADMIN can create admin users")
+
+	performJSONRequest(t, h.router, "", http.MethodPost, "/v1/login", map[string]any{
+		"email":    "created-admin@example.com",
+		"password": "admin-password",
+	}, http.StatusUnauthorized)
+}
+
+func TestAdminCannotPromoteOrEditAdminUsers(t *testing.T) {
+	h := setupIntegrationTest(t)
+	adminToken := createIntegrationUserToken(t, h.pool, "Edit", "Admin", "edit-admin-actor@example.com", "admin-password", "ADMIN")
+	createIntegrationUser(t, h.pool, "Managed", "User", "promote-blocked@example.com", "user-password", "USER")
+	createIntegrationUser(t, h.pool, "Managed", "Admin", "edit-blocked-admin@example.com", "admin-password", "ADMIN")
+	userTarget := mustGetIntegrationUserByEmail(t, h.pool, "promote-blocked@example.com")
+	adminTarget := mustGetIntegrationUserByEmail(t, h.pool, "edit-blocked-admin@example.com")
+
+	body := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodPut, "/v1/user/"+userTarget.UserID.String(), map[string]any{
+		"first_name": "Managed",
+		"last_name":  "User",
+		"email":      "promote-blocked@example.com",
+		"role":       "ADMIN",
+		"status":     "ACTIVE",
+	}, http.StatusForbidden))
+	assertField(t, body, "error", "only SUPER ADMIN can manage admin users")
+
+	body = decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodPut, "/v1/user/"+adminTarget.UserID.String(), map[string]any{
+		"first_name": "Managed",
+		"last_name":  "Admin Updated",
+		"email":      "edit-blocked-admin@example.com",
+		"role":       "ADMIN",
+		"status":     "ACTIVE",
+	}, http.StatusForbidden))
+	assertField(t, body, "error", "only SUPER ADMIN can manage admin users")
+}
+
+func TestAdminCannotDeleteAdminUser(t *testing.T) {
+	h := setupIntegrationTest(t)
+	adminToken := createIntegrationUserToken(t, h.pool, "Delete", "Admin", "delete-admin-actor@example.com", "admin-password", "ADMIN")
+	createIntegrationUser(t, h.pool, "Delete", "Target", "delete-blocked-admin@example.com", "admin-password", "ADMIN")
+	target := mustGetIntegrationUserByEmail(t, h.pool, "delete-blocked-admin@example.com")
+
+	body := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodDelete, "/v1/user/"+target.UserID.String(), nil, http.StatusForbidden))
+	assertField(t, body, "error", "only SUPER ADMIN can delete admin users")
+
+	body = decodeObject(t, performJSONRequest(t, h.router, "", http.MethodPost, "/v1/login", map[string]any{
+		"email":    "delete-blocked-admin@example.com",
+		"password": "admin-password",
+	}, http.StatusOK))
+	if strings.TrimSpace(stringField(t, body, "token")) == "" {
+		t.Fatal("expected admin account to remain active")
 	}
 }
 

@@ -17,7 +17,7 @@ RUN_GO_REGRESSION="${RUN_GO_REGRESSION:-${RUN_REGRESSION:-0}}"
 RUN_NEWMAN="${RUN_NEWMAN:-1}"
 NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/api/postman/system-api-smoke.postman_collection.json tests/api/postman/routine-maintenance.postman_collection.json tests/api/postman/client-asset-certificates.postman_collection.json}"
 RUN_PLAYWRIGHT="${RUN_PLAYWRIGHT:-1}"
-E2E_SPECS="${E2E_SPECS:-tests/e2e/api-auth-smoke.spec.ts tests/e2e/auth-cookie-session.spec.ts tests/e2e/routine-maintenance.spec.ts tests/e2e/client-asset-certificates.spec.ts}"
+E2E_SPECS="${E2E_SPECS:-tests/e2e/api-auth-smoke.spec.ts tests/e2e/auth-cookie-session.spec.ts tests/e2e/routine-maintenance.spec.ts tests/e2e/client-asset-certificates.spec.ts tests/e2e/user-management-permissions.spec.ts}"
 
 API_PID=""
 FRONTEND_PID=""
