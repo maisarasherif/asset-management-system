@@ -165,7 +165,7 @@ test.describe("single-asset equipment flow", () => {
       await selectCloudscapeMultiOption(page, "single-equipment-test-types", visualTestName);
       await selectCloudscapeMultiOption(page, "single-equipment-test-types", loadTestName);
 
-      await expect(page.getByText("Certificate slots")).toBeVisible();
+      await expect(page.getByText("Certificate slots", { exact: true })).toBeVisible();
       await expect(page.getByText("2", { exact: true }).first()).toBeVisible();
 
       await page.getByRole("button", { name: "Create asset" }).click();

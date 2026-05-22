@@ -59,6 +59,21 @@ async function getTestTypes(request: APIRequestContext, token: string) {
   return (await response.json()) as Array<{ test_id: string; test_name: string }>;
 }
 
+async function getTemplateConfiguration(
+  request: APIRequestContext,
+  token: string,
+  templateId: string
+) {
+  const response = await request.get(`${API_BASE_URL}/template/${templateId}/configuration`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as Array<{
+    name: string;
+    tests: Array<{ test_id: string; test_name: string }>;
+  }>;
+}
+
 async function deleteIfPresent(
   request: APIRequestContext,
   token: string,
@@ -238,7 +253,14 @@ test.describe("template and catalog browser flow", () => {
       await componentDialog.getByRole("button", { name: "Save" }).click();
 
       await expect(page.getByText(componentName, { exact: true }).first()).toBeVisible();
-      await expect(page.getByText(names.testName, { exact: true }).first()).toBeVisible();
+      const templateId = page.url().match(/\/templates\/([^/]+)\/configure$/)?.[1];
+      expect(templateId).toBeTruthy();
+      const configuration = await getTemplateConfiguration(cleanupRequest, token, templateId!);
+      const savedComponent = configuration.find((component) => component.name === componentName);
+      expect(savedComponent).toBeTruthy();
+      expect(savedComponent!.tests.map((assignedTest) => assignedTest.test_name)).toContain(
+        names.testName
+      );
       await page.getByRole("button", { name: "Back to template" }).click();
       await expect(page).toHaveURL(/\/templates\/[^/]+$/);
       await expect(
