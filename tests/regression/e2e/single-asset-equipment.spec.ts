@@ -155,7 +155,6 @@ test.describe("single-asset equipment flow", () => {
 
       await page.goto("/assets/new");
       await page.getByLabel("Asset name").fill(assetName);
-      await page.getByLabel("Assigned project").fill("PW Single Equipment Project");
       await page.getByLabel("Location").fill("PW Single Yard");
       await page
         .getByLabel("Description")

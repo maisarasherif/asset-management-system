@@ -82,7 +82,7 @@ async function deleteIfPresent(request: APIRequestContext, token: string, path: 
 }
 
 async function selectCertificate(page: Page, certificateName: string) {
-  await page.getByLabel("Select certificate").click();
+  await page.getByRole("button", { name: "Certificate Select" }).click();
 
   const optionByRole = page.getByRole("option", {
     name: new RegExp(escapeRegExp(certificateName)),

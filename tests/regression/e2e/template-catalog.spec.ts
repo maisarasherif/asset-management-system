@@ -224,26 +224,22 @@ test.describe("template and catalog browser flow", () => {
         page.getByRole("heading", { name: new RegExp(`Configure ${escapeRegExp(names.templateName)}`) })
       ).toBeVisible();
 
-      await page.getByRole("button", { name: "Start component setup" }).click();
-      await page.getByRole("button", { name: "Add component" }).click();
+      await page.getByRole("button", { name: "Add first component" }).click();
 
-      await page.getByLabel("Component name").fill(componentName);
-      await page
+      const componentDialog = page.getByRole("dialog", { name: "Add template component" });
+      await expect(componentDialog).toBeVisible();
+      await componentDialog.getByLabel("Component name").fill(componentName);
+      await componentDialog
         .locator("textarea")
         .first()
         .fill("Configured by Playwright to verify component setup.");
-      await selectCloudscapeOption(page, "template-component-0-category", names.categoryName);
-      await selectCloudscapeMultiOption(page, "template-component-0-tests", names.testName);
+      await selectCloudscapeOption(page, "template-component-category", names.categoryName);
+      await selectCloudscapeMultiOption(page, "template-component-tests", names.testName);
+      await componentDialog.getByRole("button", { name: "Save" }).click();
 
-      await page.getByRole("button", { name: "Review blueprint" }).click();
       await expect(page.getByText(componentName, { exact: true }).first()).toBeVisible();
       await expect(page.getByText(names.testName, { exact: true }).first()).toBeVisible();
-
-      await page
-        .getByTestId("review-save-configuration")
-        .getByRole("button", { name: "Save configuration" })
-        .click();
-
+      await page.getByRole("button", { name: "Back to template" }).click();
       await expect(page).toHaveURL(/\/templates\/[^/]+$/);
       await expect(
         page.getByRole("heading", { name: new RegExp(`^${escapeRegExp(names.templateName)}$`) })

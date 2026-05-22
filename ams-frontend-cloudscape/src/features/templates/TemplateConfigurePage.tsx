@@ -576,17 +576,19 @@ export function TemplateConfigurePage() {
               />
             </FormField>
             <FormField label="Category">
-              <Select
-                options={categoryOptions}
-                placeholder="Select category"
-                selectedOption={selectedCategory}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({
-                    ...current,
-                    category_id: detail.selectedOption.value || "",
-                  }));
-                }}
-              />
+              <div data-testid="template-component-category">
+                <Select
+                  options={categoryOptions}
+                  placeholder="Select category"
+                  selectedOption={selectedCategory}
+                  onChange={({ detail }) => {
+                    setDraft((current) => ({
+                      ...current,
+                      category_id: detail.selectedOption.value || "",
+                    }));
+                  }}
+                />
+              </div>
             </FormField>
           </ColumnLayout>
 
@@ -698,19 +700,21 @@ export function TemplateConfigurePage() {
               description="These are the default certificate tests for this template component."
               label="Assigned test types"
             >
-              <Multiselect
-                options={testOptions}
-                placeholder="Select test types"
-                selectedOptions={selectedTests}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({
-                    ...current,
-                    test_ids: detail.selectedOptions
-                      .map((option) => option.value || "")
-                      .filter(Boolean),
-                  }));
-                }}
-              />
+              <div data-testid="template-component-tests">
+                <Multiselect
+                  options={testOptions}
+                  placeholder="Select test types"
+                  selectedOptions={selectedTests}
+                  onChange={({ detail }) => {
+                    setDraft((current) => ({
+                      ...current,
+                      test_ids: detail.selectedOptions
+                        .map((option) => option.value || "")
+                        .filter(Boolean),
+                    }));
+                  }}
+                />
+              </div>
             </FormField>
           </ColumnLayout>
         </SpaceBetween>
