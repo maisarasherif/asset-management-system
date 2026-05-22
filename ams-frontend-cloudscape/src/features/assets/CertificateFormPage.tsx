@@ -5,6 +5,7 @@ import {
   ColumnLayout,
   Container,
   ContentLayout,
+  FileUpload,
   Form,
   FormField,
   Header,
@@ -22,8 +23,10 @@ import {
   getAsset,
   getCertificate,
   getComponent,
+  listActiveCompetentPersons,
   listTestTypes,
   patchCertificate,
+  uploadCertificateFile,
 } from "../../lib/api/ams";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useFlashbar } from "../../providers/flashbar-context";
@@ -95,6 +98,8 @@ export function CertificateFormPage() {
   const isEditing = Boolean(certificateId);
   const [errorMessage, setErrorMessage] = useState("");
   const [formDraft, setForm] = useState<Partial<CertificateFormState>>({});
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedCompetentPersonId, setSelectedCompetentPersonId] = useState("");
 
   const assetQuery = useQuery({
     queryKey: ["asset", assetId],
@@ -111,6 +116,12 @@ export function CertificateFormPage() {
   const testTypesQuery = useQuery({
     queryKey: ["test-types"],
     queryFn: listTestTypes,
+  });
+
+  const competentPersonsQuery = useQuery({
+    queryKey: ["competent-persons", "active"],
+    queryFn: listActiveCompetentPersons,
+    enabled: !isEditing,
   });
 
   const certificateQuery = useQuery({
@@ -158,6 +169,21 @@ export function CertificateFormPage() {
     testTypesQuery.data?.find((testType) => testType.test_id === form.test_id) ?? null;
   const selectedTestTypeOption =
     testTypeOptions.find((option) => option.value === form.test_id) ?? null;
+  const competentPersonOptions = useMemo<SelectProps.Option[]>(
+    () =>
+      (competentPersonsQuery.data || []).map((person) => ({
+        label: person.full_name,
+        value: person.competent_person_id,
+        description: `${person.person_type} - ${person.competency_category_name}`,
+      })),
+    [competentPersonsQuery.data]
+  );
+  const selectedCompetentPerson =
+    competentPersonsQuery.data?.find(
+      (person) => person.competent_person_id === selectedCompetentPersonId
+    ) ?? null;
+  const selectedCompetentPersonOption =
+    competentPersonOptions.find((option) => option.value === selectedCompetentPersonId) ?? null;
   const suggestedExpiry =
     !isEditing && form.issue_date && selectedTestType
       ? addMonths(form.issue_date, selectedTestType.validity_duration)
@@ -187,10 +213,41 @@ export function CertificateFormPage() {
       ]);
 
       if (createdCertificate) {
-        success("Certificate created", `${createdCertificate.certificate_name} is ready for review.`);
+        let uploadFailedMessage = "";
+
+        if (selectedFile && selectedCompetentPersonId) {
+          try {
+            await uploadCertificateFile(
+              createdCertificate.certificate_id,
+              selectedFile,
+              selectedCompetentPersonId
+            );
+            await queryClient.invalidateQueries({
+              queryKey: ["uploads", createdCertificate.certificate_id],
+            });
+          } catch (uploadError) {
+            uploadFailedMessage =
+              uploadError instanceof Error
+                ? uploadError.message
+                : "The selected file could not be uploaded.";
+          }
+        }
+
+        setSelectedFile(null);
+        setSelectedCompetentPersonId("");
         navigate(
           `/assets/${assetId}/components/${componentId}/certificates/${createdCertificate.certificate_id}`,
           { replace: true }
+        );
+        if (uploadFailedMessage) {
+          error("Certificate created, upload failed", uploadFailedMessage);
+          return;
+        }
+        success(
+          "Certificate created",
+          selectedFile
+            ? `${createdCertificate.certificate_name} and its document are ready for review.`
+            : `${createdCertificate.certificate_name} is ready for review.`
         );
         return;
       }
@@ -267,6 +324,16 @@ export function CertificateFormPage() {
 
       if (new Date(form.expiry_date).getTime() < new Date(form.issue_date).getTime()) {
         setErrorMessage("Expiry date must be on or after the issue date.");
+        return;
+      }
+
+      if (selectedFile && !selectedCompetentPersonId) {
+        setErrorMessage("Choose a competent person for the selected certificate file.");
+        return;
+      }
+
+      if (!selectedFile && selectedCompetentPersonId) {
+        setErrorMessage("Choose a certificate file before selecting a competent person.");
         return;
       }
     }
@@ -438,6 +505,48 @@ export function CertificateFormPage() {
                   }
                 />
               </FormField>
+
+              {!isEditing ? (
+                <SpaceBetween direction="vertical" size="m">
+                  <Header variant="h3">Certificate file</Header>
+                  <SpaceBetween direction="vertical" size="m">
+                    <FileUpload
+                      accept=".pdf,image/jpeg,image/png,image/webp"
+                      constraintText="Upload PDF, JPEG, PNG, or WEBP files up to 10 MB."
+                      i18nStrings={{
+                        uploadButtonText: () => "Choose file",
+                        dropzoneText: () => "Drop certificate file to upload",
+                        removeFileAriaLabel: (_, fileName) => `Remove ${fileName}`,
+                        limitShowFewer: "Show fewer files",
+                        limitShowMore: "Show more files",
+                        errorIconAriaLabel: "Error",
+                        warningIconAriaLabel: "Warning",
+                      }}
+                      value={selectedFile ? [selectedFile] : []}
+                      onChange={({ detail }) => setSelectedFile(detail.value[0] ?? null)}
+                    />
+                    <FormField label="Competent Person">
+                      <Select
+                        options={competentPersonOptions}
+                        placeholder="Select competent person"
+                        selectedOption={selectedCompetentPersonOption}
+                        statusType={competentPersonsQuery.isLoading ? "loading" : "finished"}
+                        loadingText="Loading competent persons"
+                        empty="No active competent persons are available."
+                        onChange={({ detail }) =>
+                          setSelectedCompetentPersonId(detail.selectedOption.value || "")
+                        }
+                      />
+                    </FormField>
+                    {selectedCompetentPerson ? (
+                      <Box color="text-body-secondary">
+                        {selectedCompetentPerson.competency_category_name}:{" "}
+                        {selectedCompetentPerson.competency_category_description}
+                      </Box>
+                    ) : null}
+                  </SpaceBetween>
+                </SpaceBetween>
+              ) : null}
             </SpaceBetween>
           </Form>
         </Container>
@@ -470,7 +579,7 @@ export function CertificateFormPage() {
                 The certificate will appear in the selected component's right-hand certificate table immediately after save.
               </Box>
               <Box color="text-body-secondary">
-                File uploads happen from the certificate detail page so the record exists before a document is attached.
+                You can attach the certificate file now or renew/change it later from the certificate detail page.
               </Box>
             </SpaceBetween>
           </Container>

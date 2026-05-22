@@ -98,6 +98,19 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		assetKind := assetInputKind(input)
+		if assetKind == "SINGLE_EQUIPMENT" && templateID != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "single-asset equipment cannot be created from a template"})
+			return
+		}
+		if assetKind == "SINGLE_EQUIPMENT" && input.SingleEquipment == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "single_equipment is required for single-asset equipment"})
+			return
+		}
+		if assetKind == "COMPONENTIZED" && input.SingleEquipment != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "single_equipment is only valid for single-asset equipment"})
+			return
+		}
 
 		if templateID != nil {
 			tx, err := pool.Begin(ctx)
@@ -160,6 +173,123 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		queries := db.New(pool)
+		if assetKind == "SINGLE_EQUIPMENT" {
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin asset creation transaction"})
+				return
+			}
+			defer tx.Rollback(ctx)
+
+			queries := db.New(tx)
+			equipmentTypeID, err := utils.ParseUUID(input.SingleEquipment.EquipmentTypeID, "equipment_type_id")
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			if _, err := queries.GetEquipmentTypeByID(ctx, equipmentTypeID); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					c.JSON(http.StatusNotFound, gin.H{"error": "equipment type not found"})
+					return
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate equipment type"})
+				return
+			}
+
+			testIDs := make([]uuid.UUID, 0, len(input.SingleEquipment.TestTypeIDs))
+			seenTestIDs := map[uuid.UUID]struct{}{}
+			for _, rawTestID := range input.SingleEquipment.TestTypeIDs {
+				testID, err := utils.ParseUUID(rawTestID, "test_type_id")
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+					return
+				}
+				if _, seen := seenTestIDs[testID]; seen {
+					continue
+				}
+				if _, err := queries.GetTestTypeByID(ctx, testID); err != nil {
+					if errors.Is(err, pgx.ErrNoRows) {
+						c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
+						return
+					}
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate test type"})
+					return
+				}
+				seenTestIDs[testID] = struct{}{}
+				testIDs = append(testIDs, testID)
+			}
+			if len(testIDs) == 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "at least one test type is required"})
+				return
+			}
+
+			asset, err := queries.CreateAsset(ctx, db.CreateAssetParams{
+				Name:                     input.Name,
+				Photo:                    input.Photo,
+				Datasheet:                input.Datasheet,
+				Description:              input.Description,
+				Status:                   input.Status,
+				AssetKind:                assetKind,
+				Location:                 input.Location,
+				AssignedProject:          input.AssignedProject,
+				MaintenanceIntervalHours: assetInputMaintenanceInterval(input),
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add asset"})
+				return
+			}
+
+			equipment, err := queries.CreateSingleAssetEquipment(ctx, db.CreateSingleAssetEquipmentParams{
+				AssetID:         asset.AssetID,
+				EquipmentTypeID: equipmentTypeID,
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add single-asset equipment"})
+				return
+			}
+
+			selfComponent, err := queries.CreateSelfComponent(ctx, db.CreateSelfComponentParams{
+				AssetID:                asset.AssetID,
+				SingleAssetEquipmentID: &equipment.SingleAssetEquipmentID,
+				Name:                   input.Name,
+				Description:            input.Description,
+				Location:               input.Location,
+				AssignedProject:        input.AssignedProject,
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add equipment certificate bridge"})
+				return
+			}
+
+			for _, testID := range testIDs {
+				testType, err := queries.GetTestTypeByID(ctx, testID)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch test type"})
+					return
+				}
+				if _, err := queries.CreatePendingCertificate(ctx, db.CreatePendingCertificateParams{
+					ComponentID:     selfComponent.ComponentID,
+					CertificateName: testType.TestName,
+					TestID:          testID,
+				}); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add equipment certificate"})
+					return
+				}
+			}
+
+			if err := tx.Commit(ctx); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit asset creation"})
+				return
+			}
+
+			logger.Log.Info().
+				Str("asset_id", asset.AssetID.String()).
+				Str("single_asset_equipment_id", equipment.SingleAssetEquipmentID.String()).
+				Msg("single-asset equipment created successfully")
+
+			c.JSON(http.StatusCreated, asset)
+			return
+		}
 
 		asset, err := queries.CreateAsset(ctx, db.CreateAssetParams{
 			Name:                     input.Name,
@@ -167,6 +297,7 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			Datasheet:                input.Datasheet,
 			Description:              input.Description,
 			Status:                   input.Status,
+			AssetKind:                assetKind,
 			Location:                 input.Location,
 			AssignedProject:          input.AssignedProject,
 			MaintenanceIntervalHours: assetInputMaintenanceInterval(input),
@@ -683,4 +814,11 @@ func assetInputMaintenanceInterval(input dto.AssetInput) int64 {
 		return 0
 	}
 	return *input.MaintenanceIntervalHours
+}
+
+func assetInputKind(input dto.AssetInput) string {
+	if input.AssetKind == "" {
+		return "COMPONENTIZED"
+	}
+	return input.AssetKind
 }

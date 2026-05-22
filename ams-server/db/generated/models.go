@@ -31,6 +31,7 @@ type Asset struct {
 	MaintenanceRequiredAt         *time.Time `json:"maintenance_required_at"`
 	LastMaintenanceCompletedAt    *time.Time `json:"last_maintenance_completed_at"`
 	LastMaintenanceCompletedHours int64      `json:"last_maintenance_completed_hours"`
+	AssetKind                     string     `json:"asset_kind"`
 }
 
 type AssetMaintenanceEvent struct {
@@ -120,25 +121,37 @@ type CompetentPerson struct {
 }
 
 type Component struct {
-	Name                string     `json:"name"`
-	SerialNumber        string     `json:"serial_number"`
-	Manufacturer        string     `json:"manufacturer"`
-	Description         string     `json:"description"`
-	EquipmentType       string     `json:"equipment_type"`
-	Structure           string     `json:"structure"`
-	Model               string     `json:"model"`
-	Class               string     `json:"class"`
-	ClassCode           string     `json:"class_code"`
-	SafetyCritical      string     `json:"safety_critical"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
-	Location            string     `json:"location"`
-	AssignedProject     string     `json:"assigned_project"`
-	ComponentID         uuid.UUID  `json:"component_id"`
-	DisplayID           string     `json:"display_id"`
-	AssetID             uuid.UUID  `json:"asset_id"`
-	CategoryID          uuid.UUID  `json:"category_id"`
-	TemplateComponentID *uuid.UUID `json:"template_component_id"`
+	Name                   string     `json:"name"`
+	SerialNumber           string     `json:"serial_number"`
+	Manufacturer           string     `json:"manufacturer"`
+	Description            string     `json:"description"`
+	EquipmentType          string     `json:"equipment_type"`
+	Structure              string     `json:"structure"`
+	Model                  string     `json:"model"`
+	Class                  string     `json:"class"`
+	ClassCode              string     `json:"class_code"`
+	SafetyCritical         string     `json:"safety_critical"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+	Location               string     `json:"location"`
+	AssignedProject        string     `json:"assigned_project"`
+	ComponentID            uuid.UUID  `json:"component_id"`
+	DisplayID              string     `json:"display_id"`
+	AssetID                uuid.UUID  `json:"asset_id"`
+	CategoryID             *uuid.UUID `json:"category_id"`
+	TemplateComponentID    *uuid.UUID `json:"template_component_id"`
+	ComponentKind          string     `json:"component_kind"`
+	SingleAssetEquipmentID *uuid.UUID `json:"single_asset_equipment_id"`
+}
+
+type EquipmentType struct {
+	EquipmentTypeID   uuid.UUID `json:"equipment_type_id"`
+	DisplayID         string    `json:"display_id"`
+	SortOrder         int32     `json:"sort_order"`
+	EquipmentTypeName string    `json:"equipment_type_name"`
+	Description       string    `json:"description"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 type MainCategory struct {
@@ -149,6 +162,16 @@ type MainCategory struct {
 	MainCategoryID   uuid.UUID `json:"main_category_id"`
 	DisplayID        string    `json:"display_id"`
 	SortOrder        int32     `json:"sort_order"`
+}
+
+type NotificationFailure struct {
+	ID             uuid.UUID          `json:"id"`
+	CertificateID  uuid.UUID          `json:"certificate_id"`
+	IdempotencyKey string             `json:"idempotency_key"`
+	Channel        string             `json:"channel"`
+	Tier           string             `json:"tier"`
+	ErrorMessage   string             `json:"error_message"`
+	FailedAt       pgtype.Timestamptz `json:"failed_at"`
 }
 
 type Project struct {
@@ -168,6 +191,17 @@ type ScheduledTask struct {
 	TaskID         uuid.UUID `json:"task_id"`
 	DisplayID      string    `json:"display_id"`
 	CertificateID  uuid.UUID `json:"certificate_id"`
+	IdempotencyKey string    `json:"idempotency_key"`
+	Tier           string    `json:"tier"`
+}
+
+type SingleAssetEquipment struct {
+	SingleAssetEquipmentID uuid.UUID `json:"single_asset_equipment_id"`
+	DisplayID              string    `json:"display_id"`
+	AssetID                uuid.UUID `json:"asset_id"`
+	EquipmentTypeID        uuid.UUID `json:"equipment_type_id"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 type TemplateComponent struct {

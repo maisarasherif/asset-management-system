@@ -92,6 +92,11 @@ const ClientAccessPage = lazy(() =>
     default: module.ClientAccessPage,
   }))
 );
+const SchedulerManagementPage = lazy(() =>
+  import("../features/admin/SchedulerManagementPage").then((module) => ({
+    default: module.SchedulerManagementPage,
+  }))
+);
 const ClientAssetsPage = lazy(() =>
   import("../features/client/ClientAssetsPage").then((module) => ({
     default: module.ClientAssetsPage,
@@ -382,6 +387,16 @@ export const router = createBrowserRouter([
           <RequireAdmin>
             <RouteSuspense>
               <ClientAccessPage />
+            </RouteSuspense>
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: "scheduler",
+        element: (
+          <RequireAdmin>
+            <RouteSuspense>
+              <SchedulerManagementPage />
             </RouteSuspense>
           </RequireAdmin>
         ),

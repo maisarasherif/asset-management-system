@@ -10,81 +10,380 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createScheduledTask = `-- name: CreateScheduledTask :one
-INSERT INTO scheduled_tasks (display_id, certificate_id, type, status, external_task_id, sent_at)
+const claimNotificationSlot = `-- name: ClaimNotificationSlot :one
+INSERT INTO scheduled_tasks (
+    display_id,
+    certificate_id,
+    type,
+    tier,
+    status,
+    external_task_id,
+    idempotency_key,
+    sent_at
+)
 VALUES (
     next_display_id('scheduled_task_display_id_seq'),
     $1,
     $2,
     $3,
+    'PENDING',
+    '',
     $4,
     NOW()
 )
+ON CONFLICT (idempotency_key) DO NOTHING
 RETURNING
     task_id,
     display_id,
     certificate_id,
     type,
+    tier,
     status,
     sent_at,
-    external_task_id
+    external_task_id,
+    idempotency_key
 `
 
-type CreateScheduledTaskParams struct {
+type ClaimNotificationSlotParams struct {
 	CertificateID  uuid.UUID `json:"certificate_id"`
 	Type           string    `json:"type"`
-	Status         string    `json:"status"`
-	ExternalTaskID string    `json:"external_task_id"`
+	Tier           string    `json:"tier"`
+	IdempotencyKey string    `json:"idempotency_key"`
 }
 
-type CreateScheduledTaskRow struct {
+type ClaimNotificationSlotRow struct {
 	TaskID         uuid.UUID `json:"task_id"`
 	DisplayID      string    `json:"display_id"`
 	CertificateID  uuid.UUID `json:"certificate_id"`
 	Type           string    `json:"type"`
+	Tier           string    `json:"tier"`
 	Status         string    `json:"status"`
 	SentAt         time.Time `json:"sent_at"`
 	ExternalTaskID string    `json:"external_task_id"`
+	IdempotencyKey string    `json:"idempotency_key"`
 }
 
-func (q *Queries) CreateScheduledTask(ctx context.Context, arg CreateScheduledTaskParams) (CreateScheduledTaskRow, error) {
-	row := q.db.QueryRow(ctx, createScheduledTask,
+func (q *Queries) ClaimNotificationSlot(ctx context.Context, arg ClaimNotificationSlotParams) (ClaimNotificationSlotRow, error) {
+	row := q.db.QueryRow(ctx, claimNotificationSlot,
 		arg.CertificateID,
 		arg.Type,
-		arg.Status,
-		arg.ExternalTaskID,
+		arg.Tier,
+		arg.IdempotencyKey,
 	)
-	var i CreateScheduledTaskRow
+	var i ClaimNotificationSlotRow
 	err := row.Scan(
 		&i.TaskID,
 		&i.DisplayID,
 		&i.CertificateID,
 		&i.Type,
+		&i.Tier,
 		&i.Status,
 		&i.SentAt,
 		&i.ExternalTaskID,
+		&i.IdempotencyKey,
 	)
 	return i, err
 }
 
-const hasRecentScheduledTask = `-- name: HasRecentScheduledTask :one
-SELECT COUNT(*) FROM scheduled_tasks
-WHERE certificate_id = $1
-  AND type = $2
-  AND status = 'SENT'
-  AND sent_at >= NOW() - INTERVAL '6 months'
+const countCertificateNotificationFailures = `-- name: CountCertificateNotificationFailures :one
+SELECT COUNT(*) FROM notification_failures
 `
 
-type HasRecentScheduledTaskParams struct {
-	CertificateID uuid.UUID `json:"certificate_id"`
-	Type          string    `json:"type"`
-}
-
-func (q *Queries) HasRecentScheduledTask(ctx context.Context, arg HasRecentScheduledTaskParams) (int64, error) {
-	row := q.db.QueryRow(ctx, hasRecentScheduledTask, arg.CertificateID, arg.Type)
+func (q *Queries) CountCertificateNotificationFailures(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificateNotificationFailures)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const countCertificateNotificationTasks = `-- name: CountCertificateNotificationTasks :one
+SELECT COUNT(*)
+FROM scheduled_tasks
+WHERE idempotency_key LIKE 'cert-expiry:%'
+`
+
+func (q *Queries) CountCertificateNotificationTasks(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificateNotificationTasks)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const deleteScheduledTasksByKeyPrefix = `-- name: DeleteScheduledTasksByKeyPrefix :execrows
+DELETE FROM scheduled_tasks
+WHERE certificate_id = $1
+  AND idempotency_key LIKE $2
+`
+
+type DeleteScheduledTasksByKeyPrefixParams struct {
+	CertificateID  uuid.UUID `json:"certificate_id"`
+	IdempotencyKey string    `json:"idempotency_key"`
+}
+
+func (q *Queries) DeleteScheduledTasksByKeyPrefix(ctx context.Context, arg DeleteScheduledTasksByKeyPrefixParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteScheduledTasksByKeyPrefix, arg.CertificateID, arg.IdempotencyKey)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const finalizeNotificationSlot = `-- name: FinalizeNotificationSlot :exec
+UPDATE scheduled_tasks
+SET
+    status = 'SENT',
+    external_task_id = $1,
+    sent_at = NOW()
+WHERE task_id = $2
+`
+
+type FinalizeNotificationSlotParams struct {
+	ExternalTaskID string    `json:"external_task_id"`
+	TaskID         uuid.UUID `json:"task_id"`
+}
+
+func (q *Queries) FinalizeNotificationSlot(ctx context.Context, arg FinalizeNotificationSlotParams) error {
+	_, err := q.db.Exec(ctx, finalizeNotificationSlot, arg.ExternalTaskID, arg.TaskID)
+	return err
+}
+
+const getCertificateNotificationFailuresPaginated = `-- name: GetCertificateNotificationFailuresPaginated :many
+SELECT
+    nf.id,
+    nf.certificate_id,
+    cert.display_id AS certificate_display_id,
+    cert.certificate_name,
+    cert.expiry_date,
+    comp.component_id,
+    comp.display_id AS component_display_id,
+    comp.name AS component_name,
+    asset.asset_id,
+    asset.display_id AS asset_display_id,
+    asset.name AS asset_name,
+    nf.idempotency_key,
+    nf.channel,
+    nf.tier,
+    nf.error_message,
+    nf.failed_at
+FROM notification_failures nf
+JOIN certificates cert ON cert.certificate_id = nf.certificate_id
+JOIN components comp ON comp.component_id = cert.component_id
+JOIN assets asset ON asset.asset_id = comp.asset_id
+ORDER BY nf.failed_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type GetCertificateNotificationFailuresPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type GetCertificateNotificationFailuresPaginatedRow struct {
+	ID                   uuid.UUID          `json:"id"`
+	CertificateID        uuid.UUID          `json:"certificate_id"`
+	CertificateDisplayID string             `json:"certificate_display_id"`
+	CertificateName      string             `json:"certificate_name"`
+	ExpiryDate           *time.Time         `json:"expiry_date"`
+	ComponentID          uuid.UUID          `json:"component_id"`
+	ComponentDisplayID   string             `json:"component_display_id"`
+	ComponentName        string             `json:"component_name"`
+	AssetID              uuid.UUID          `json:"asset_id"`
+	AssetDisplayID       string             `json:"asset_display_id"`
+	AssetName            string             `json:"asset_name"`
+	IdempotencyKey       string             `json:"idempotency_key"`
+	Channel              string             `json:"channel"`
+	Tier                 string             `json:"tier"`
+	ErrorMessage         string             `json:"error_message"`
+	FailedAt             pgtype.Timestamptz `json:"failed_at"`
+}
+
+func (q *Queries) GetCertificateNotificationFailuresPaginated(ctx context.Context, arg GetCertificateNotificationFailuresPaginatedParams) ([]GetCertificateNotificationFailuresPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, getCertificateNotificationFailuresPaginated, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCertificateNotificationFailuresPaginatedRow
+	for rows.Next() {
+		var i GetCertificateNotificationFailuresPaginatedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CertificateID,
+			&i.CertificateDisplayID,
+			&i.CertificateName,
+			&i.ExpiryDate,
+			&i.ComponentID,
+			&i.ComponentDisplayID,
+			&i.ComponentName,
+			&i.AssetID,
+			&i.AssetDisplayID,
+			&i.AssetName,
+			&i.IdempotencyKey,
+			&i.Channel,
+			&i.Tier,
+			&i.ErrorMessage,
+			&i.FailedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCertificateNotificationTasksPaginated = `-- name: GetCertificateNotificationTasksPaginated :many
+SELECT
+    st.task_id,
+    st.display_id,
+    st.certificate_id,
+    cert.display_id AS certificate_display_id,
+    cert.certificate_name,
+    cert.expiry_date,
+    comp.component_id,
+    comp.display_id AS component_display_id,
+    comp.name AS component_name,
+    asset.asset_id,
+    asset.display_id AS asset_display_id,
+    asset.name AS asset_name,
+    st.type,
+    st.tier,
+    st.status,
+    st.external_task_id,
+    st.idempotency_key,
+    st.sent_at
+FROM scheduled_tasks st
+JOIN certificates cert ON cert.certificate_id = st.certificate_id
+JOIN components comp ON comp.component_id = cert.component_id
+JOIN assets asset ON asset.asset_id = comp.asset_id
+WHERE st.idempotency_key LIKE 'cert-expiry:%'
+ORDER BY st.sent_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type GetCertificateNotificationTasksPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type GetCertificateNotificationTasksPaginatedRow struct {
+	TaskID               uuid.UUID  `json:"task_id"`
+	DisplayID            string     `json:"display_id"`
+	CertificateID        uuid.UUID  `json:"certificate_id"`
+	CertificateDisplayID string     `json:"certificate_display_id"`
+	CertificateName      string     `json:"certificate_name"`
+	ExpiryDate           *time.Time `json:"expiry_date"`
+	ComponentID          uuid.UUID  `json:"component_id"`
+	ComponentDisplayID   string     `json:"component_display_id"`
+	ComponentName        string     `json:"component_name"`
+	AssetID              uuid.UUID  `json:"asset_id"`
+	AssetDisplayID       string     `json:"asset_display_id"`
+	AssetName            string     `json:"asset_name"`
+	Type                 string     `json:"type"`
+	Tier                 string     `json:"tier"`
+	Status               string     `json:"status"`
+	ExternalTaskID       string     `json:"external_task_id"`
+	IdempotencyKey       string     `json:"idempotency_key"`
+	SentAt               time.Time  `json:"sent_at"`
+}
+
+func (q *Queries) GetCertificateNotificationTasksPaginated(ctx context.Context, arg GetCertificateNotificationTasksPaginatedParams) ([]GetCertificateNotificationTasksPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, getCertificateNotificationTasksPaginated, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCertificateNotificationTasksPaginatedRow
+	for rows.Next() {
+		var i GetCertificateNotificationTasksPaginatedRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.DisplayID,
+			&i.CertificateID,
+			&i.CertificateDisplayID,
+			&i.CertificateName,
+			&i.ExpiryDate,
+			&i.ComponentID,
+			&i.ComponentDisplayID,
+			&i.ComponentName,
+			&i.AssetID,
+			&i.AssetDisplayID,
+			&i.AssetName,
+			&i.Type,
+			&i.Tier,
+			&i.Status,
+			&i.ExternalTaskID,
+			&i.IdempotencyKey,
+			&i.SentAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const recordNotificationFailure = `-- name: RecordNotificationFailure :exec
+INSERT INTO notification_failures (
+    certificate_id,
+    idempotency_key,
+    channel,
+    tier,
+    error_message
+)
+VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5
+)
+`
+
+type RecordNotificationFailureParams struct {
+	CertificateID  uuid.UUID `json:"certificate_id"`
+	IdempotencyKey string    `json:"idempotency_key"`
+	Channel        string    `json:"channel"`
+	Tier           string    `json:"tier"`
+	ErrorMessage   string    `json:"error_message"`
+}
+
+func (q *Queries) RecordNotificationFailure(ctx context.Context, arg RecordNotificationFailureParams) error {
+	_, err := q.db.Exec(ctx, recordNotificationFailure,
+		arg.CertificateID,
+		arg.IdempotencyKey,
+		arg.Channel,
+		arg.Tier,
+		arg.ErrorMessage,
+	)
+	return err
+}
+
+const releaseNotificationSlot = `-- name: ReleaseNotificationSlot :exec
+DELETE FROM scheduled_tasks
+WHERE task_id = $1
+`
+
+func (q *Queries) ReleaseNotificationSlot(ctx context.Context, taskID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, releaseNotificationSlot, taskID)
+	return err
+}
+
+const releaseStalePendingSlots = `-- name: ReleaseStalePendingSlots :exec
+DELETE FROM scheduled_tasks
+WHERE status = 'PENDING'
+  AND sent_at < NOW() - $1::int * INTERVAL '1 minute'
+`
+
+func (q *Queries) ReleaseStalePendingSlots(ctx context.Context, staleMinutes int32) error {
+	_, err := q.db.Exec(ctx, releaseStalePendingSlots, staleMinutes)
+	return err
 }

@@ -20,21 +20,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import {
-  createCategory,
-  createMainCategory,
-  createTestType,
-  deleteCategory,
-  deleteMainCategory,
+	  createCategory,
+	  createEquipmentType,
+	  createMainCategory,
+	  createTestType,
+	  deleteCategory,
+	  deleteEquipmentType,
+	  deleteMainCategory,
   deleteTestType,
-  listAllCategories,
-  listAllMainCategories,
-  listTestTypes,
-  updateCategory,
-  updateMainCategory,
+	  listAllCategories,
+	  listAllEquipmentTypes,
+	  listAllMainCategories,
+	  listTestTypes,
+	  updateCategory,
+	  updateEquipmentType,
+	  updateMainCategory,
   updateTestType,
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { Category, MainCategory, TestType } from "../../types/ams";
+import type { Category, EquipmentType, MainCategory, TestType } from "../../types/ams";
 import { formatMonthDuration } from "../../utils/format";
 
 type MainCategoryEditor =
@@ -66,11 +70,21 @@ type TestTypeEditor =
       validity_duration: string;
       description: string;
     }
+	  | null;
+
+type EquipmentTypeEditor =
+  | {
+      mode: "create" | "edit";
+      id?: string;
+      equipment_type_name: string;
+      sort_order: string;
+      description: string;
+    }
   | null;
 
 type DeleteTarget =
   | {
-      type: "main-category" | "category" | "test-type";
+      type: "main-category" | "category" | "test-type" | "equipment-type";
       id: string;
       label: string;
     }
@@ -95,6 +109,13 @@ function getNextCategorySortOrder(categories: Category[], mainCategoryId: string
   return categories
     .filter((category) => category.main_category_id === mainCategoryId)
     .reduce((maxSortOrder, category) => Math.max(maxSortOrder, category.sort_order), 0) + 1;
+}
+
+function getNextEquipmentTypeSortOrder(equipmentTypes: EquipmentType[]) {
+  return equipmentTypes.reduce(
+    (maxSortOrder, equipmentType) => Math.max(maxSortOrder, equipmentType.sort_order),
+    0
+  ) + 1;
 }
 
 function MainCategoryEditorModal({
@@ -423,12 +444,106 @@ function TestTypeEditorModal({
   );
 }
 
+function EquipmentTypeEditorModal({
+  editor,
+  visible,
+  errorMessage,
+  loading,
+  onDismiss,
+  onSubmit,
+}: {
+  editor: EquipmentTypeEditor;
+  visible: boolean;
+  errorMessage: string;
+  loading: boolean;
+  onDismiss: () => void;
+  onSubmit: (editor: NonNullable<EquipmentTypeEditor>) => void;
+}) {
+  const [draft, setDraft] = useState<NonNullable<EquipmentTypeEditor> | null>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
+
+  return (
+    <Modal
+      visible={visible}
+      header={draft?.mode === "edit" ? "Edit equipment type" : "Create equipment type"}
+      onDismiss={onDismiss}
+      footer={
+        <SpaceBetween direction="horizontal" size="xs">
+          <Button onClick={onDismiss}>Cancel</Button>
+          <Button
+            loading={loading}
+            variant="primary"
+            onClick={() => draft && onSubmit(draft)}
+          >
+            {draft?.mode === "edit" ? "Save changes" : "Create equipment type"}
+          </Button>
+        </SpaceBetween>
+      }
+    >
+      <SpaceBetween direction="vertical" size="l">
+        {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
+        <FormField label="Equipment type name">
+          <Input
+            value={draft?.equipment_type_name || ""}
+            onChange={({ detail }) =>
+              setDraft((current) =>
+                current
+                  ? {
+                      ...current,
+                      equipment_type_name: detail.value,
+                    }
+                  : current
+              )
+            }
+          />
+        </FormField>
+        <FormField label="Equipment type order">
+          <Input
+            inputMode="numeric"
+            value={draft?.sort_order || ""}
+            onChange={({ detail }) =>
+              setDraft((current) =>
+                current
+                  ? {
+                      ...current,
+                      sort_order: detail.value,
+                    }
+                  : current
+              )
+            }
+          />
+        </FormField>
+        <FormField label="Description">
+          <Textarea
+            rows={6}
+            value={draft?.description || ""}
+            onChange={({ detail }) =>
+              setDraft((current) =>
+                current
+                  ? {
+                      ...current,
+                      description: detail.value,
+                    }
+                  : current
+              )
+            }
+          />
+        </FormField>
+      </SpaceBetween>
+    </Modal>
+  );
+}
+
 export function CatalogPage() {
   const queryClient = useQueryClient();
   const { error, success } = useFlashbar();
   const [mainCategoryEditor, setMainCategoryEditor] = useState<MainCategoryEditor>(null);
   const [categoryEditor, setCategoryEditor] = useState<CategoryEditor>(null);
   const [testTypeEditor, setTestTypeEditor] = useState<TestTypeEditor>(null);
+  const [equipmentTypeEditor, setEquipmentTypeEditor] = useState<EquipmentTypeEditor>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [modalError, setModalError] = useState("");
 
@@ -445,6 +560,11 @@ export function CatalogPage() {
   const testTypesQuery = useQuery({
     queryKey: ["test-types"],
     queryFn: listTestTypes,
+  });
+
+  const equipmentTypesQuery = useQuery({
+    queryKey: ["equipment-types", "all"],
+    queryFn: listAllEquipmentTypes,
   });
 
   const mainCategoryMap = useMemo(
@@ -586,14 +706,47 @@ export function CatalogPage() {
     },
   });
 
+  const saveEquipmentTypeMutation = useMutation({
+    mutationFn: async (editor: NonNullable<EquipmentTypeEditor>) => {
+      const payload = {
+        equipment_type_name: editor.equipment_type_name.trim(),
+        sort_order: Number(editor.sort_order),
+        description: editor.description.trim(),
+      };
+
+      if (editor.mode === "create") {
+        return createEquipmentType(payload);
+      }
+
+      return updateEquipmentType(editor.id!, payload);
+    },
+    onSuccess: async (_, editor) => {
+      await queryClient.invalidateQueries({ queryKey: ["equipment-types"] });
+      setEquipmentTypeEditor(null);
+      setModalError("");
+      success(
+        editor.mode === "create" ? "Equipment type created" : "Equipment type updated",
+        "The equipment type catalog is ready for single-asset equipment."
+      );
+    },
+    onError: (mutationError: Error) => {
+      setModalError(mutationError.message);
+      error("Equipment type save failed", mutationError.message);
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (target: NonNullable<DeleteTarget>) => {
       if (target.type === "main-category") {
         return deleteMainCategory(target.id);
       }
 
-      if (target.type === "category") {
-        return deleteCategory(target.id);
+	      if (target.type === "category") {
+	        return deleteCategory(target.id);
+	      }
+
+      if (target.type === "equipment-type") {
+        return deleteEquipmentType(target.id);
       }
 
       return deleteTestType(target.id);
@@ -601,9 +754,10 @@ export function CatalogPage() {
     onSuccess: async (_, target) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["main-categories"] }),
-        queryClient.invalidateQueries({ queryKey: ["categories"] }),
-        queryClient.invalidateQueries({ queryKey: ["test-types"] }),
-      ]);
+	        queryClient.invalidateQueries({ queryKey: ["categories"] }),
+	        queryClient.invalidateQueries({ queryKey: ["test-types"] }),
+	        queryClient.invalidateQueries({ queryKey: ["equipment-types"] }),
+	      ]);
       setDeleteTarget(null);
       setModalError("");
       success("Catalog entry deleted", `${target.label} has been removed.`);
@@ -616,27 +770,31 @@ export function CatalogPage() {
 
   if (
     mainCategoriesQuery.isLoading ||
-    categoriesQuery.isLoading ||
-    testTypesQuery.isLoading
-  ) {
+	    categoriesQuery.isLoading ||
+	    testTypesQuery.isLoading ||
+	    equipmentTypesQuery.isLoading
+	  ) {
     return <PageLoading>Loading the admin catalog...</PageLoading>;
   }
 
   if (
     mainCategoriesQuery.isError ||
-    categoriesQuery.isError ||
-    testTypesQuery.isError ||
-    !mainCategoriesQuery.data ||
-    !categoriesQuery.data ||
-    !testTypesQuery.data
-  ) {
+	    categoriesQuery.isError ||
+	    testTypesQuery.isError ||
+	    equipmentTypesQuery.isError ||
+	    !mainCategoriesQuery.data ||
+	    !categoriesQuery.data ||
+	    !testTypesQuery.data ||
+	    !equipmentTypesQuery.data
+	  ) {
     return (
       <PageError
         description="The catalog workspace could not be loaded."
         onRetry={() => {
           void mainCategoriesQuery.refetch();
-          void categoriesQuery.refetch();
-          void testTypesQuery.refetch();
+	          void categoriesQuery.refetch();
+	          void testTypesQuery.refetch();
+	          void equipmentTypesQuery.refetch();
         }}
       />
     );
@@ -863,6 +1021,65 @@ export function CatalogPage() {
     },
   ];
 
+  const equipmentTypeColumns: TableProps<EquipmentType>["columnDefinitions"] = [
+    {
+      id: "name",
+      header: "Equipment type",
+      width: "24%",
+      minWidth: 190,
+      cell: (item) => <TruncatedCell value={item.equipment_type_name} />,
+    },
+    {
+      id: "order",
+      header: "Order",
+      width: 110,
+      minWidth: 100,
+      cell: (item) => item.sort_order,
+    },
+    {
+      id: "description",
+      header: "Description",
+      width: "32%",
+      minWidth: 220,
+      cell: (item) => <TruncatedCell value={item.description || "No description"} />,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      width: 220,
+      minWidth: 220,
+      cell: (item) => (
+        <div className="catalog-table__actions">
+          <Button
+            onClick={() => {
+              setModalError("");
+              setEquipmentTypeEditor({
+                mode: "edit",
+                id: item.equipment_type_id,
+                equipment_type_name: item.equipment_type_name,
+                sort_order: String(item.sort_order),
+                description: item.description || "",
+              });
+            }}
+          >
+            Edit
+          </Button>
+          <Button
+            onClick={() =>
+              setDeleteTarget({
+                type: "equipment-type",
+                id: item.equipment_type_id,
+                label: item.equipment_type_name,
+              })
+            }
+          >
+            Delete
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   const saveMainCategory = (editor: NonNullable<MainCategoryEditor>) => {
     if (!editor) {
       return;
@@ -923,6 +1140,25 @@ export function CatalogPage() {
     setModalError("");
     saveTestTypeMutation.mutate(editor);
   };
+
+  const saveEquipmentType = (editor: NonNullable<EquipmentTypeEditor>) => {
+    if (!editor) {
+      return;
+    }
+
+    const sortOrder = Number(editor.sort_order);
+    if (editor.equipment_type_name.trim().length < 2) {
+      setModalError("Equipment type name must be at least 2 characters.");
+      return;
+    }
+    if (!Number.isFinite(sortOrder) || sortOrder < 1) {
+      setModalError("Equipment type order must be a positive number.");
+      return;
+    }
+
+    setModalError("");
+    saveEquipmentTypeMutation.mutate(editor);
+  };
   const hasMainCategories = mainCategoriesQuery.data.length > 0;
 
   const dismissMainCategoryEditor = () => {
@@ -938,6 +1174,11 @@ export function CatalogPage() {
   const dismissTestTypeEditor = () => {
     setModalError("");
     setTestTypeEditor(null);
+  };
+
+  const dismissEquipmentTypeEditor = () => {
+    setModalError("");
+    setEquipmentTypeEditor(null);
   };
 
   const dismissDeleteTarget = () => {
@@ -958,7 +1199,7 @@ export function CatalogPage() {
         }
       >
         <SpaceBetween direction="vertical" size="l">
-          <ColumnLayout columns={3} variant="text-grid">
+	          <ColumnLayout columns={4} variant="text-grid">
             <Container header={<Header variant="h2">Main categories</Header>}>
               <Box fontSize="display-l" fontWeight="bold">
                 {mainCategoriesQuery.data.length}
@@ -975,19 +1216,27 @@ export function CatalogPage() {
                 Component classifications used by templates and asset components.
               </Box>
             </Container>
-            <Container header={<Header variant="h2">Test types</Header>}>
-              <Box fontSize="display-l" fontWeight="bold">
-                {testTypesQuery.data.length}
-              </Box>
-              <Box color="text-body-secondary">
-                Default certificate test definitions and validity windows.
-              </Box>
-            </Container>
-          </ColumnLayout>
+	            <Container header={<Header variant="h2">Test types</Header>}>
+	              <Box fontSize="display-l" fontWeight="bold">
+	                {testTypesQuery.data.length}
+	              </Box>
+	              <Box color="text-body-secondary">
+	                Default certificate test definitions and validity windows.
+	              </Box>
+	            </Container>
+	            <Container header={<Header variant="h2">Equipment types</Header>}>
+	              <Box fontSize="display-l" fontWeight="bold">
+	                {equipmentTypesQuery.data.length}
+	              </Box>
+	              <Box color="text-body-secondary">
+	                Single-asset equipment classifications.
+	              </Box>
+	            </Container>
+	          </ColumnLayout>
 
-          <Container
-            header={
-              <Header
+	          <Container
+	            header={
+	              <Header
                 actions={
                   <Button
                     variant="primary"
@@ -1106,10 +1355,47 @@ export function CatalogPage() {
               trackBy="test_id"
               variant="embedded"
               wrapLines={false}
-            />
-          </Container>
-        </SpaceBetween>
-      </ContentLayout>
+	            />
+	          </Container>
+
+	          <Container
+	            header={
+	              <Header
+	                actions={
+	                  <Button
+	                    variant="primary"
+	                    onClick={() => {
+	                      setModalError("");
+	                      setEquipmentTypeEditor({
+	                        mode: "create",
+	                        equipment_type_name: "",
+	                        sort_order: String(getNextEquipmentTypeSortOrder(equipmentTypesQuery.data)),
+	                        description: "",
+	                      });
+	                    }}
+	                  >
+	                    Create equipment type
+	                  </Button>
+	                }
+	                counter={`(${equipmentTypesQuery.data.length})`}
+	                description="Equipment types classify single-asset equipment without using component categories."
+	                variant="h2"
+	              >
+	                Equipment types
+	              </Header>
+	            }
+	          >
+	            <Table
+	              columnDefinitions={equipmentTypeColumns}
+	              empty={<Box color="text-body-secondary">No equipment types are defined yet.</Box>}
+	              items={equipmentTypesQuery.data}
+	              trackBy="equipment_type_id"
+	              variant="embedded"
+	              wrapLines={false}
+	            />
+	          </Container>
+	        </SpaceBetween>
+	      </ContentLayout>
 
       <MainCategoryEditorModal
         editor={mainCategoryEditor}
@@ -1131,14 +1417,23 @@ export function CatalogPage() {
         onSubmit={saveCategory}
       />
 
-      <TestTypeEditorModal
+	      <TestTypeEditorModal
         editor={testTypeEditor}
         visible={Boolean(testTypeEditor)}
         errorMessage={modalError}
         loading={saveTestTypeMutation.isPending}
         onDismiss={dismissTestTypeEditor}
         onSubmit={saveTestType}
-      />
+	      />
+
+	      <EquipmentTypeEditorModal
+	        editor={equipmentTypeEditor}
+	        visible={Boolean(equipmentTypeEditor)}
+	        errorMessage={modalError}
+	        loading={saveEquipmentTypeMutation.isPending}
+	        onDismiss={dismissEquipmentTypeEditor}
+	        onSubmit={saveEquipmentType}
+	      />
 
       <Modal
         visible={Boolean(deleteTarget)}

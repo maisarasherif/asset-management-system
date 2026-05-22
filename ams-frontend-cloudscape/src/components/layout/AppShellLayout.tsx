@@ -81,6 +81,14 @@ function getHelpPanelContent(pathname: string) {
     };
   }
 
+  if (pathname.startsWith("/scheduler")) {
+    return {
+      title: "Scheduler management",
+      content:
+        "Review certificate notification outcomes, inspect send failures, and clear notification history for a certificate when an administrator needs the scheduler to notify again.",
+    };
+  }
+
   if (pathname.startsWith("/administration")) {
     return {
       title: "Administration",
@@ -132,15 +140,17 @@ export function AppShellLayout() {
     ? "/assets"
     : location.pathname.startsWith("/client/assets")
       ? "/client/assets"
-    : location.pathname.startsWith("/templates")
+      : location.pathname.startsWith("/templates")
         ? "/templates"
-      : location.pathname.startsWith("/catalog")
-        ? "/catalog"
-        : location.pathname.startsWith("/client-access")
-          ? "/client-access"
-        : location.pathname.startsWith("/administration")
-          ? "/administration"
-          : location.pathname;
+        : location.pathname.startsWith("/catalog")
+          ? "/catalog"
+          : location.pathname.startsWith("/client-access")
+            ? "/client-access"
+            : location.pathname.startsWith("/scheduler")
+              ? "/scheduler"
+              : location.pathname.startsWith("/administration")
+                ? "/administration"
+                : location.pathname;
 
   return (
     <AppLayout
@@ -195,12 +205,13 @@ export function AppShellLayout() {
                     { type: "link", text: "Dashboard", href: "/dashboard" },
                     { type: "link", text: "Assets directory", href: "/assets" },
                     ...(isAdmin
-                      ? [
-                          { type: "link" as const, text: "Templates", href: "/templates" },
-                          { type: "link" as const, text: "Catalog", href: "/catalog" },
-                          { type: "link" as const, text: "Administration", href: "/administration" },
-                          { type: "link" as const, text: "Client access", href: "/client-access" },
-                        ]
+	                      ? [
+	                          { type: "link" as const, text: "Templates", href: "/templates" },
+	                          { type: "link" as const, text: "Catalog", href: "/catalog" },
+	                          { type: "link" as const, text: "Administration", href: "/administration" },
+	                          { type: "link" as const, text: "Client access", href: "/client-access" },
+	                          { type: "link" as const, text: "Scheduler", href: "/scheduler" },
+	                        ]
                       : []),
                     { type: "link", text: "Account", href: "/account" },
                   ]

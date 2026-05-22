@@ -40,6 +40,7 @@ SELECT
     a.datasheet,
     a.description,
     a.status,
+    a.asset_kind,
     a.location,
     a.assigned_project,
     a.working_hours,
@@ -77,6 +78,7 @@ type GetClientAssetByIDRow struct {
 	Datasheet                     string     `json:"datasheet"`
 	Description                   string     `json:"description"`
 	Status                        string     `json:"status"`
+	AssetKind                     string     `json:"asset_kind"`
 	Location                      string     `json:"location"`
 	AssignedProject               string     `json:"assigned_project"`
 	WorkingHours                  int64      `json:"working_hours"`
@@ -102,6 +104,7 @@ func (q *Queries) GetClientAssetByID(ctx context.Context, arg GetClientAssetByID
 		&i.Datasheet,
 		&i.Description,
 		&i.Status,
+		&i.AssetKind,
 		&i.Location,
 		&i.AssignedProject,
 		&i.WorkingHours,
@@ -127,6 +130,7 @@ SELECT DISTINCT
     a.datasheet,
     a.description,
     a.status,
+    a.asset_kind,
     a.location,
     a.assigned_project,
     a.working_hours,
@@ -165,6 +169,7 @@ type GetClientAssetsPaginatedRow struct {
 	Datasheet                     string     `json:"datasheet"`
 	Description                   string     `json:"description"`
 	Status                        string     `json:"status"`
+	AssetKind                     string     `json:"asset_kind"`
 	Location                      string     `json:"location"`
 	AssignedProject               string     `json:"assigned_project"`
 	WorkingHours                  int64      `json:"working_hours"`
@@ -196,6 +201,7 @@ func (q *Queries) GetClientAssetsPaginated(ctx context.Context, arg GetClientAss
 			&i.Datasheet,
 			&i.Description,
 			&i.Status,
+			&i.AssetKind,
 			&i.Location,
 			&i.AssignedProject,
 			&i.WorkingHours,
@@ -355,6 +361,8 @@ SELECT
     c.display_id,
     c.asset_id,
     c.category_id,
+    c.component_kind,
+    c.single_asset_equipment_id,
     COALESCE(mc.main_category_name, '') AS main_category_name,
     COALESCE(cat.category_name, '') AS category_name,
     c.name,
@@ -372,7 +380,7 @@ SELECT
     c.location,
     c.assigned_project
 FROM components c
-JOIN categories cat ON cat.category_id = c.category_id
+LEFT JOIN categories cat ON cat.category_id = c.category_id
 LEFT JOIN main_categories mc ON mc.main_category_id = cat.main_category_id
 WHERE c.asset_id = $1
   AND EXISTS (
@@ -396,26 +404,28 @@ type GetClientComponentsByAssetParams struct {
 }
 
 type GetClientComponentsByAssetRow struct {
-	ComponentID      uuid.UUID `json:"component_id"`
-	DisplayID        string    `json:"display_id"`
-	AssetID          uuid.UUID `json:"asset_id"`
-	CategoryID       uuid.UUID `json:"category_id"`
-	MainCategoryName string    `json:"main_category_name"`
-	CategoryName     string    `json:"category_name"`
-	Name             string    `json:"name"`
-	SerialNumber     string    `json:"serial_number"`
-	Manufacturer     string    `json:"manufacturer"`
-	Description      string    `json:"description"`
-	EquipmentType    string    `json:"equipment_type"`
-	Structure        string    `json:"structure"`
-	Model            string    `json:"model"`
-	Class            string    `json:"class"`
-	ClassCode        string    `json:"class_code"`
-	SafetyCritical   string    `json:"safety_critical"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	Location         string    `json:"location"`
-	AssignedProject  string    `json:"assigned_project"`
+	ComponentID            uuid.UUID  `json:"component_id"`
+	DisplayID              string     `json:"display_id"`
+	AssetID                uuid.UUID  `json:"asset_id"`
+	CategoryID             *uuid.UUID `json:"category_id"`
+	ComponentKind          string     `json:"component_kind"`
+	SingleAssetEquipmentID *uuid.UUID `json:"single_asset_equipment_id"`
+	MainCategoryName       string     `json:"main_category_name"`
+	CategoryName           string     `json:"category_name"`
+	Name                   string     `json:"name"`
+	SerialNumber           string     `json:"serial_number"`
+	Manufacturer           string     `json:"manufacturer"`
+	Description            string     `json:"description"`
+	EquipmentType          string     `json:"equipment_type"`
+	Structure              string     `json:"structure"`
+	Model                  string     `json:"model"`
+	Class                  string     `json:"class"`
+	ClassCode              string     `json:"class_code"`
+	SafetyCritical         string     `json:"safety_critical"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+	Location               string     `json:"location"`
+	AssignedProject        string     `json:"assigned_project"`
 }
 
 func (q *Queries) GetClientComponentsByAsset(ctx context.Context, arg GetClientComponentsByAssetParams) ([]GetClientComponentsByAssetRow, error) {
@@ -432,6 +442,8 @@ func (q *Queries) GetClientComponentsByAsset(ctx context.Context, arg GetClientC
 			&i.DisplayID,
 			&i.AssetID,
 			&i.CategoryID,
+			&i.ComponentKind,
+			&i.SingleAssetEquipmentID,
 			&i.MainCategoryName,
 			&i.CategoryName,
 			&i.Name,

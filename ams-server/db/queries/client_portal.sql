@@ -7,6 +7,7 @@ SELECT
     a.datasheet,
     a.description,
     a.status,
+    a.asset_kind,
     a.location,
     a.assigned_project,
     a.working_hours,
@@ -39,6 +40,7 @@ SELECT DISTINCT
     a.datasheet,
     a.description,
     a.status,
+    a.asset_kind,
     a.location,
     a.assigned_project,
     a.working_hours,
@@ -79,6 +81,8 @@ SELECT
     c.display_id,
     c.asset_id,
     c.category_id,
+    c.component_kind,
+    c.single_asset_equipment_id,
     COALESCE(mc.main_category_name, '') AS main_category_name,
     COALESCE(cat.category_name, '') AS category_name,
     c.name,
@@ -96,7 +100,7 @@ SELECT
     c.location,
     c.assigned_project
 FROM components c
-JOIN categories cat ON cat.category_id = c.category_id
+LEFT JOIN categories cat ON cat.category_id = c.category_id
 LEFT JOIN main_categories mc ON mc.main_category_id = cat.main_category_id
 WHERE c.asset_id = sqlc.arg(asset_id)
   AND EXISTS (

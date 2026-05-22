@@ -17,8 +17,9 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
 import {
-  getAsset,
-  listAssetRoutineMaintenance,
+	  getAsset,
+	  getSingleAssetEquipment,
+	  listAssetRoutineMaintenance,
   listAllCategories,
   listAllMainCategories,
   listAllCertificatesByComponent,
@@ -90,14 +91,22 @@ export function AssetWorkspacePage() {
     setSearchParams(nextParams, { replace: true });
   }, [componentsQuery.data, searchParams, selectedComponentId, setSearchParams]);
 
-  const selectedComponent =
-    componentsQuery.data?.find((component) => component.component_id === selectedComponentId) ??
-    null;
+  const isSingleEquipment = assetQuery.data?.asset_kind === "SINGLE_EQUIPMENT";
+  const equipmentQuery = useQuery({
+    queryKey: ["single-equipment", assetId],
+    queryFn: () => getSingleAssetEquipment(assetId!),
+    enabled: Boolean(assetId && isSingleEquipment),
+  });
+
+  const selectedComponent = isSingleEquipment
+    ? componentsQuery.data?.find((component) => component.component_kind === "SELF") ?? null
+    : componentsQuery.data?.find((component) => component.component_id === selectedComponentId) ??
+      null;
 
   const certificatesQuery = useQuery({
-    queryKey: ["certificates", selectedComponentId],
-    queryFn: () => listAllCertificatesByComponent(selectedComponentId!),
-    enabled: Boolean(selectedComponentId),
+    queryKey: ["certificates", selectedComponent?.component_id],
+    queryFn: () => listAllCertificatesByComponent(selectedComponent!.component_id),
+    enabled: Boolean(selectedComponent?.component_id),
   });
 
   const certificateFileMutation = useMutation({
@@ -152,7 +161,12 @@ export function AssetWorkspacePage() {
     }> = [];
 
     for (const component of componentsQuery.data || []) {
-      const category = categoryDetailMap.get(component.category_id);
+	      if (component.component_kind === "SELF") {
+	        continue;
+	      }
+	      const category = component.category_id
+	        ? categoryDetailMap.get(component.category_id)
+	        : undefined;
       const categoryName = category?.category_name || "Uncategorized";
       const mainCategoryName =
         (category?.main_category_id && mainCategoryMap.get(category.main_category_id)) ||
@@ -197,7 +211,12 @@ export function AssetWorkspacePage() {
     return <PageError description="The asset route is missing." title="Invalid route" />;
   }
 
-  if (assetQuery.isLoading || componentsQuery.isLoading || mainCategoriesQuery.isLoading) {
+  if (
+    assetQuery.isLoading ||
+    componentsQuery.isLoading ||
+    mainCategoriesQuery.isLoading ||
+    (isSingleEquipment && equipmentQuery.isLoading)
+  ) {
     return <PageLoading>Loading the asset workspace...</PageLoading>;
   }
 
@@ -205,6 +224,7 @@ export function AssetWorkspacePage() {
     assetQuery.isError ||
     componentsQuery.isError ||
     mainCategoriesQuery.isError ||
+    (isSingleEquipment && equipmentQuery.isError) ||
     !assetQuery.data ||
     !componentsQuery.data
   ) {
@@ -213,8 +233,11 @@ export function AssetWorkspacePage() {
         description="The asset workspace could not be loaded."
         onRetry={() => {
           void assetQuery.refetch();
-          void componentsQuery.refetch();
-          void mainCategoriesQuery.refetch();
+              void componentsQuery.refetch();
+              void mainCategoriesQuery.refetch();
+              if (isSingleEquipment) {
+                void equipmentQuery.refetch();
+              }
         }}
       />
     );
@@ -264,7 +287,9 @@ export function AssetWorkspacePage() {
     },
   ];
 
-  const componentCount = componentsQuery.data.length;
+  const componentCount = isSingleEquipment
+    ? 1
+    : componentsQuery.data.filter((component) => component.component_kind !== "SELF").length;
   const certificateItems = (certificatesQuery.data || []).filter(
     (certificate): certificate is Certificate =>
       Boolean(certificate && certificate.certificate_id)
@@ -298,7 +323,7 @@ export function AssetWorkspacePage() {
               {isAdmin ? (
                 <Button onClick={() => navigate(`/assets/${assetId}/edit`)}>Edit asset</Button>
               ) : null}
-              {isAdmin ? (
+              {isAdmin && !isSingleEquipment ? (
                 <Button variant="primary" onClick={() => navigate(`/assets/${assetId}/components/new`)}>
                   Add component
                 </Button>
@@ -312,7 +337,8 @@ export function AssetWorkspacePage() {
         </Header>
       }
     >
-      <div className="asset-workspace-grid">
+      <div className={`asset-workspace-grid${isSingleEquipment ? " asset-workspace-grid--single" : ""}`}>
+        {!isSingleEquipment ? (
         <div className="asset-workspace-grid__nav">
           <Container
             header={
@@ -403,6 +429,7 @@ export function AssetWorkspacePage() {
             )}
           </Container>
         </div>
+        ) : null}
 
         <div className="asset-workspace-grid__summary">
           <Container>
@@ -421,10 +448,16 @@ export function AssetWorkspacePage() {
                 <Box variant="awsui-key-label">Assigned project</Box>
                 <Box>{assetQuery.data.assigned_project || "Not set"}</Box>
               </div>
-              <div className="asset-context-strip__item">
-                <Box variant="awsui-key-label">Components</Box>
-                <Box>{componentCount}</Box>
-              </div>
+	              <div className="asset-context-strip__item">
+	                <Box variant="awsui-key-label">
+	                  {isSingleEquipment ? "Equipment type" : "Components"}
+	                </Box>
+	                <Box>
+	                  {isSingleEquipment
+	                    ? equipmentQuery.data?.equipment_type_name || "Not set"
+	                    : componentCount}
+	                </Box>
+	              </div>
               <div className="asset-context-strip__item">
                 <Box variant="awsui-key-label">Routine maintenance</Box>
                 {openMaintenanceEvent ? (
@@ -447,18 +480,20 @@ export function AssetWorkspacePage() {
               header={
                 <Header
                   actions={
-                    selectedComponent && isAdmin ? (
-                      <SpaceBetween direction="horizontal" size="xs">
-                        <Button
-                          onClick={() =>
-                            navigate(
-                              `/assets/${assetId}/components/${selectedComponent.component_id}/edit`
-                            )
-                          }
-                        >
-                          Edit component
-                        </Button>
-                        <Button
+	                    selectedComponent && isAdmin ? (
+	                      <SpaceBetween direction="horizontal" size="xs">
+	                        {!isSingleEquipment ? (
+	                          <Button
+	                            onClick={() =>
+	                              navigate(
+	                                `/assets/${assetId}/components/${selectedComponent.component_id}/edit`
+	                              )
+	                            }
+	                          >
+	                            Edit component
+	                          </Button>
+	                        ) : null}
+	                        <Button
                           variant="primary"
                           onClick={() =>
                             navigate(
@@ -471,43 +506,84 @@ export function AssetWorkspacePage() {
                       </SpaceBetween>
                     ) : undefined
                   }
-                  description={
-                    selectedComponent
-                      ? categoryMap.get(selectedComponent.category_id) || "Component detail"
-                      : "Select a component from the left pane."
-                  }
+	                  description={
+	                    selectedComponent
+	                      ? isSingleEquipment
+	                        ? equipmentQuery.data?.equipment_type_name || "Equipment detail"
+	                        : (selectedComponent.category_id &&
+	                            categoryMap.get(selectedComponent.category_id)) ||
+	                          "Component detail"
+	                      : isSingleEquipment
+	                        ? "Equipment context could not be loaded."
+	                        : "Select a component from the left pane."
+	                  }
                   variant="h2"
                 >
-                  {selectedComponent ? selectedComponent.name : "Component details"}
+	                  {selectedComponent
+	                    ? isSingleEquipment
+	                      ? "Equipment details"
+	                      : selectedComponent.name
+	                    : "Component details"}
                 </Header>
               }
             >
-              {selectedComponent ? (
-                <ColumnLayout columns={3} variant="text-grid">
-                  <div className="summary-row">
-                    <Box variant="awsui-key-label">Manufacturer</Box>
-                    <Box>{selectedComponent.manufacturer || "Not set"}</Box>
-                  </div>
-                  <div className="summary-row">
-                    <Box variant="awsui-key-label">Model</Box>
-                    <Box>{selectedComponent.model || "Not set"}</Box>
-                  </div>
-                  <div className="summary-row">
-                    <Box variant="awsui-key-label">Safety critical</Box>
-                    <Box>{humanizeEnum(selectedComponent.safety_critical)}</Box>
-                  </div>
-                  <div className="summary-row">
-                    <Box variant="awsui-key-label">Location</Box>
-                    <Box>{selectedComponent.location || "Not set"}</Box>
-                  </div>
-                  <div className="summary-row">
-                    <Box variant="awsui-key-label">Project</Box>
-                    <Box>{selectedComponent.assigned_project || "Not set"}</Box>
-                  </div>
-                </ColumnLayout>
-              ) : (
+	              {selectedComponent ? (
+	                isSingleEquipment ? (
+	                  <ColumnLayout columns={3} variant="text-grid">
+	                    <div className="summary-row">
+	                      <Box variant="awsui-key-label">Equipment type</Box>
+	                      <Box>{equipmentQuery.data?.equipment_type_name || "Not set"}</Box>
+	                    </div>
+	                    <div className="summary-row">
+	                      <Box variant="awsui-key-label">Equipment reference</Box>
+	                      <Box>{equipmentQuery.data?.display_id || "Not set"}</Box>
+	                    </div>
+	                    <div className="summary-row">
+	                      <Box variant="awsui-key-label">Certificate bridge</Box>
+	                      <Box>{selectedComponent.display_id}</Box>
+	                    </div>
+	                    <div className="summary-row">
+	                      <Box variant="awsui-key-label">Location</Box>
+	                      <Box>{selectedComponent.location || assetQuery.data.location || "Not set"}</Box>
+	                    </div>
+	                    <div className="summary-row">
+	                      <Box variant="awsui-key-label">Project</Box>
+	                      <Box>
+	                        {selectedComponent.assigned_project ||
+	                          assetQuery.data.assigned_project ||
+	                          "Not set"}
+	                      </Box>
+	                    </div>
+	                  </ColumnLayout>
+	                ) : (
+	                  <ColumnLayout columns={3} variant="text-grid">
+	                    <div className="summary-row">
+	                      <Box variant="awsui-key-label">Manufacturer</Box>
+	                      <Box>{selectedComponent.manufacturer || "Not set"}</Box>
+	                    </div>
+	                    <div className="summary-row">
+	                      <Box variant="awsui-key-label">Model</Box>
+	                      <Box>{selectedComponent.model || "Not set"}</Box>
+	                    </div>
+	                    <div className="summary-row">
+	                      <Box variant="awsui-key-label">Safety critical</Box>
+	                      <Box>{humanizeEnum(selectedComponent.safety_critical)}</Box>
+	                    </div>
+	                    <div className="summary-row">
+	                      <Box variant="awsui-key-label">Location</Box>
+	                      <Box>{selectedComponent.location || "Not set"}</Box>
+	                    </div>
+	                    <div className="summary-row">
+	                      <Box variant="awsui-key-label">Project</Box>
+	                      <Box>{selectedComponent.assigned_project || "Not set"}</Box>
+	                    </div>
+	                  </ColumnLayout>
+	                )
+	              ) : (
                 <Box color="text-body-secondary">
-                  Choose a component to show its certificate records here.
+	                  {isSingleEquipment
+	                    ? "Equipment details are not available yet."
+	                    : "Choose a component to show its certificate records here."}
                 </Box>
               )}
             </Container>
@@ -516,20 +592,26 @@ export function AssetWorkspacePage() {
               header={
                 <Header
                   counter={selectedComponent ? `(${certificateCount})` : undefined}
-                  description={
-                    selectedComponent
-                      ? "Certificate records for the selected component."
-                      : "A component must be selected before certificates can be shown."
-                  }
+	                  description={
+	                    selectedComponent
+	                      ? isSingleEquipment
+	                        ? "Certificate records for this asset."
+	                        : "Certificate records for the selected component."
+	                      : isSingleEquipment
+	                        ? "The equipment bridge must load before certificates can be shown."
+	                        : "A component must be selected before certificates can be shown."
+	                  }
                   variant="h2"
                 >
-                  Certificates
+	                  {isSingleEquipment ? "Asset certificates" : "Certificates"}
                 </Header>
               }
             >
               {!selectedComponent ? (
                 <Box color="text-body-secondary">
-                  Select a component from the left pane to review its certificates.
+		                  {isSingleEquipment
+		                    ? "Equipment certificates will appear once the equipment context is loaded."
+		                    : "Select a component from the left pane to review its certificates."}
                 </Box>
               ) : certificatesQuery.isError ? (
                 <Alert type="error">
@@ -540,7 +622,9 @@ export function AssetWorkspacePage() {
                   columnDefinitions={certificateColumns}
                   empty={
                     <Box color="text-body-secondary">
-                      No certificates exist for this component yet.
+	                      {isSingleEquipment
+	                        ? "No certificates exist for this asset yet."
+	                        : "No certificates exist for this component yet."}
                     </Box>
                   }
                   items={certificateItems}

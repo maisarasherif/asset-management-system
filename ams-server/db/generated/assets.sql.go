@@ -31,6 +31,7 @@ INSERT INTO assets (
     datasheet,
     description,
     status,
+    asset_kind,
     location,
     assigned_project,
     maintenance_interval_hours,
@@ -45,10 +46,11 @@ VALUES (
     $3,
     $4,
     $5,
+    $8,
     $6,
     $7,
-    $8,
-    $8,
+    $9,
+    $9,
     NOW(),
     NOW()
 )
@@ -60,6 +62,7 @@ RETURNING
     datasheet,
     description,
     status,
+    asset_kind,
     location,
     assigned_project,
     working_hours,
@@ -82,6 +85,7 @@ type CreateAssetParams struct {
 	Status                   string `json:"status"`
 	Location                 string `json:"location"`
 	AssignedProject          string `json:"assigned_project"`
+	AssetKind                string `json:"asset_kind"`
 	MaintenanceIntervalHours int64  `json:"maintenance_interval_hours"`
 }
 
@@ -93,6 +97,7 @@ type CreateAssetRow struct {
 	Datasheet                     string     `json:"datasheet"`
 	Description                   string     `json:"description"`
 	Status                        string     `json:"status"`
+	AssetKind                     string     `json:"asset_kind"`
 	Location                      string     `json:"location"`
 	AssignedProject               string     `json:"assigned_project"`
 	WorkingHours                  int64      `json:"working_hours"`
@@ -116,6 +121,7 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Creat
 		arg.Status,
 		arg.Location,
 		arg.AssignedProject,
+		arg.AssetKind,
 		arg.MaintenanceIntervalHours,
 	)
 	var i CreateAssetRow
@@ -127,6 +133,7 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Creat
 		&i.Datasheet,
 		&i.Description,
 		&i.Status,
+		&i.AssetKind,
 		&i.Location,
 		&i.AssignedProject,
 		&i.WorkingHours,
@@ -151,6 +158,7 @@ INSERT INTO assets (
     datasheet,
     description,
     status,
+    asset_kind,
     location,
     assigned_project,
     template_id,
@@ -166,6 +174,7 @@ VALUES (
     $3,
     $4,
     $5,
+    'COMPONENTIZED',
     $6,
     $7,
     $8,
@@ -182,6 +191,7 @@ RETURNING
     datasheet,
     description,
     status,
+    asset_kind,
     location,
     assigned_project,
     working_hours,
@@ -216,6 +226,7 @@ type CreateAssetFromTemplateRow struct {
 	Datasheet                     string     `json:"datasheet"`
 	Description                   string     `json:"description"`
 	Status                        string     `json:"status"`
+	AssetKind                     string     `json:"asset_kind"`
 	Location                      string     `json:"location"`
 	AssignedProject               string     `json:"assigned_project"`
 	WorkingHours                  int64      `json:"working_hours"`
@@ -251,6 +262,7 @@ func (q *Queries) CreateAssetFromTemplate(ctx context.Context, arg CreateAssetFr
 		&i.Datasheet,
 		&i.Description,
 		&i.Status,
+		&i.AssetKind,
 		&i.Location,
 		&i.AssignedProject,
 		&i.WorkingHours,
@@ -288,6 +300,7 @@ SELECT
     datasheet,
     description,
     status,
+    asset_kind,
     location,
     assigned_project,
     working_hours,
@@ -318,6 +331,7 @@ type GetAllAssetsPaginatedRow struct {
 	Datasheet                     string     `json:"datasheet"`
 	Description                   string     `json:"description"`
 	Status                        string     `json:"status"`
+	AssetKind                     string     `json:"asset_kind"`
 	Location                      string     `json:"location"`
 	AssignedProject               string     `json:"assigned_project"`
 	WorkingHours                  int64      `json:"working_hours"`
@@ -349,6 +363,7 @@ func (q *Queries) GetAllAssetsPaginated(ctx context.Context, arg GetAllAssetsPag
 			&i.Datasheet,
 			&i.Description,
 			&i.Status,
+			&i.AssetKind,
 			&i.Location,
 			&i.AssignedProject,
 			&i.WorkingHours,
@@ -381,6 +396,7 @@ SELECT
     datasheet,
     description,
     status,
+    asset_kind,
     location,
     assigned_project,
     working_hours,
@@ -406,6 +422,7 @@ type GetAssetByIDRow struct {
 	Datasheet                     string     `json:"datasheet"`
 	Description                   string     `json:"description"`
 	Status                        string     `json:"status"`
+	AssetKind                     string     `json:"asset_kind"`
 	Location                      string     `json:"location"`
 	AssignedProject               string     `json:"assigned_project"`
 	WorkingHours                  int64      `json:"working_hours"`
@@ -431,6 +448,7 @@ func (q *Queries) GetAssetByID(ctx context.Context, assetID uuid.UUID) (GetAsset
 		&i.Datasheet,
 		&i.Description,
 		&i.Status,
+		&i.AssetKind,
 		&i.Location,
 		&i.AssignedProject,
 		&i.WorkingHours,
@@ -470,6 +488,7 @@ RETURNING
     datasheet,
     description,
     status,
+    asset_kind,
     location,
     assigned_project,
     working_hours,
@@ -504,6 +523,7 @@ type UpdateAssetRow struct {
 	Datasheet                     string     `json:"datasheet"`
 	Description                   string     `json:"description"`
 	Status                        string     `json:"status"`
+	AssetKind                     string     `json:"asset_kind"`
 	Location                      string     `json:"location"`
 	AssignedProject               string     `json:"assigned_project"`
 	WorkingHours                  int64      `json:"working_hours"`
@@ -539,6 +559,7 @@ func (q *Queries) UpdateAsset(ctx context.Context, arg UpdateAssetParams) (Updat
 		&i.Datasheet,
 		&i.Description,
 		&i.Status,
+		&i.AssetKind,
 		&i.Location,
 		&i.AssignedProject,
 		&i.WorkingHours,

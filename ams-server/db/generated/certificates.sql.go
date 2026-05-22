@@ -546,7 +546,7 @@ SELECT
     COALESCE(test.test_name, '') AS test_type
 FROM components comp
 JOIN assets asset ON asset.asset_id = comp.asset_id
-JOIN categories cat ON cat.category_id = comp.category_id
+LEFT JOIN categories cat ON cat.category_id = comp.category_id
 LEFT JOIN main_categories mc ON mc.main_category_id = cat.main_category_id
 LEFT JOIN template_components tc ON tc.template_component_id = comp.template_component_id
 LEFT JOIN certificates cert ON cert.component_id = comp.component_id
@@ -959,7 +959,7 @@ SELECT
 FROM certificates cert
 JOIN components comp ON comp.component_id = cert.component_id
 JOIN assets asset ON asset.asset_id = comp.asset_id
-WHERE cert.expiry_date <= $1 AND cert.expiry_date >= NOW()
+WHERE cert.expiry_date <= $1
 ORDER BY cert.expiry_date ASC
 `
 

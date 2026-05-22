@@ -5,8 +5,10 @@
 /skills
 /themes
 /postman/*
-#!/postman/client-asset-certificates.postman_collection.json
-#!/postman/run-client-asset-certificates-newman.ps1
+/docs/question*
+/docs/cert*
+/docs/*.html
+
 
 /design-pocs
 node_modules/

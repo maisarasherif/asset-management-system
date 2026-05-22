@@ -821,6 +821,13 @@ body {
   align-items: start;
 }
 
+.asset-workspace-grid--single {
+  grid-template-areas:
+    "summary"
+    "detail";
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .asset-workspace-grid__nav {
   grid-area: nav;
   display: flex;
@@ -1128,6 +1135,12 @@ body {
       "nav"
       "detail";
     grid-template-rows: auto;
+  }
+
+  .asset-workspace-grid--single {
+    grid-template-areas:
+      "summary"
+      "detail";
   }
 
   .asset-overview-grid {

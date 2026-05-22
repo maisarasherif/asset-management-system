@@ -3,8 +3,10 @@ export type UserStatus = "ACTIVE" | "SUSPENDED";
 export type ProjectStatus = "ACTIVE" | "ARCHIVED";
 export type ProjectAccessStatus = "ACTIVE" | "SUSPENDED";
 export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE";
+export type AssetKind = "COMPONENTIZED" | "SINGLE_EQUIPMENT";
 export type CertificateStatus = "VALID" | "EXPIRING_SOON" | "EXPIRED" | "PENDING";
 export type SafetyCritical = "YES" | "NO";
+export type ComponentKind = "NORMAL" | "SELF";
 export type CompetentPersonType = "Internal" | "External";
 
 export interface AuthSession {
@@ -53,6 +55,7 @@ export interface Asset {
   datasheet: string;
   description: string;
   status: AssetStatus;
+  asset_kind: AssetKind;
   location: string;
   assigned_project: string;
   working_hours: number;
@@ -89,7 +92,9 @@ export interface ComponentRecord {
   component_id: string;
   display_id: string;
   asset_id: string;
-  category_id: string;
+  category_id: string | null;
+  component_kind: ComponentKind;
+  single_asset_equipment_id: string | null;
   name: string;
   serial_number: string;
   manufacturer: string;
@@ -124,6 +129,75 @@ export interface Certificate {
   updated_at: string;
 }
 
+export interface CertificateWithContext {
+  certificate_id: string;
+  certificate_display_id: string;
+  certificate_name: string;
+  issue_date: string | null;
+  expiry_date: string | null;
+  status: CertificateStatus;
+  issuing_authority: string;
+  test_id: string;
+  imca_ref: string;
+  imca_d018: string;
+  maintenance_notes: string;
+  certificate_file: string;
+  component_id: string;
+  component_display_id: string;
+  component_name: string;
+  asset_id: string;
+  asset_display_id: string;
+  asset_name: string;
+}
+
+export type NotificationChannel = "EMAIL" | "CLICKUP";
+export type NotificationTier = "expired" | "1d" | "7d" | "30d";
+export type NotificationStatus = "PENDING" | "SENT" | "FAILED";
+
+export interface CertificateNotificationTask {
+  task_id: string;
+  display_id: string;
+  certificate_id: string;
+  certificate_display_id: string;
+  certificate_name: string;
+  expiry_date: string | null;
+  component_id: string;
+  component_display_id: string;
+  component_name: string;
+  asset_id: string;
+  asset_display_id: string;
+  asset_name: string;
+  type: NotificationChannel;
+  tier: NotificationTier;
+  status: NotificationStatus;
+  external_task_id: string;
+  idempotency_key: string;
+  sent_at: string;
+}
+
+export interface CertificateNotificationFailure {
+  id: string;
+  certificate_id: string;
+  certificate_display_id: string;
+  certificate_name: string;
+  expiry_date: string | null;
+  component_id: string;
+  component_display_id: string;
+  component_name: string;
+  asset_id: string;
+  asset_display_id: string;
+  asset_name: string;
+  idempotency_key: string;
+  channel: NotificationChannel;
+  tier: NotificationTier;
+  error_message: string;
+  failed_at: string;
+}
+
+export interface ForceRenotifyResponse extends MessageResponse {
+  cleared_tasks: number;
+}
+
 export interface Category {
   category_id: string;
   display_id: string;
@@ -151,6 +225,30 @@ export interface TestType {
   test_name: string;
   validity_duration: number;
   description: string;
+}
+
+export interface EquipmentType {
+  equipment_type_id: string;
+  display_id: string;
+  sort_order: number;
+  equipment_type_name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SingleAssetEquipment {
+  single_asset_equipment_id: string;
+  display_id: string;
+  asset_id: string;
+  equipment_type_id: string;
+  equipment_type_display_id: string;
+  equipment_type_name: string;
+  equipment_type_description: string;
+  self_component_id: string;
+  self_component_display_id: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AssetTemplate {
@@ -256,10 +354,15 @@ export interface AssetInput {
   datasheet: string;
   description: string;
   status: AssetStatus;
+  asset_kind: AssetKind;
   location: string;
   assigned_project: string;
   maintenance_interval_hours: number;
   template_id: string | null;
+  single_equipment?: {
+    equipment_type_id: string;
+    test_type_ids: string[];
+  };
 }
 
 export interface AssetWorkingHoursInput {
@@ -456,6 +559,12 @@ export interface TestTypeInput {
   description: string;
 }
 
+export interface EquipmentTypeInput {
+  equipment_type_name: string;
+  description: string;
+  sort_order: number;
+}
+
 export interface AssetDashboardData {
   asset: Asset;
   components: ComponentRecord[];
@@ -494,7 +603,9 @@ export interface ClientComponent {
   component_id: string;
   display_id: string;
   asset_id: string;
-  category_id: string;
+  category_id: string | null;
+  component_kind: ComponentKind;
+  single_asset_equipment_id: string | null;
   main_category_name: string;
   category_name: string;
   name: string;

@@ -12,13 +12,18 @@ import type {
   Category,
   Certificate,
   CertificateInput,
+  CertificateNotificationFailure,
+  CertificateNotificationTask,
   CertificateUploadAudit,
+  CertificateWithContext,
   ClientAssetDetail,
   CompetencyCategory,
   CompetencyCategoryInput,
-  CompetentPerson,
-  CompetentPersonInput,
-  PatchCertificateInput,
+	  CompetentPerson,
+	  CompetentPersonInput,
+	  EquipmentType,
+	  EquipmentTypeInput,
+	  PatchCertificateInput,
   ConfigureTemplateInput,
   ComponentInput,
   CompleteAssetMaintenanceInput,
@@ -27,6 +32,7 @@ import type {
   ProjectInput,
   MainCategoryInput,
   ComponentRecord,
+  ForceRenotifyResponse,
   LoginResponse,
   MainCategory,
   MessageResponse,
@@ -35,8 +41,9 @@ import type {
   TemplateComponent,
   TemplateComponentInput,
   TemplateComponentTest,
-  TestTypeInput,
-  TestType,
+	  TestTypeInput,
+	  TestType,
+	  SingleAssetEquipment,
   UpdatePasswordInput,
   UpdateUserInput,
   UserAccount,
@@ -293,6 +300,12 @@ export function updateAsset(assetId: string, payload: AssetInput) {
   });
 }
 
+export function deleteAsset(assetId: string) {
+  return apiRequest<MessageResponse>(`/v1/asset/${assetId}`, {
+    method: "DELETE",
+  });
+}
+
 export function updateAssetWorkingHours(assetId: string, payload: AssetWorkingHoursInput) {
   return apiRequest<AssetMaintenanceUpdateResponse>(`/v1/asset/${assetId}/working-hours`, {
     method: "PATCH",
@@ -315,6 +328,10 @@ export function completeAssetRoutineMaintenance(
       body: JSON.stringify(payload),
     }
   );
+}
+
+export function getSingleAssetEquipment(assetId: string) {
+  return apiRequest<SingleAssetEquipment>(`/v1/asset/${assetId}/single-equipment`);
 }
 
 export function listComponentsByAsset(assetId: string, page = 1, limit = 100) {
@@ -428,6 +445,36 @@ export function updateTestType(testId: string, payload: TestTypeInput) {
 
 export function deleteTestType(testId: string) {
   return apiRequest<MessageResponse>(`/v1/test-type/${testId}`, {
+    method: "DELETE",
+  });
+}
+
+export function listEquipmentTypes(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<EquipmentType>>(
+    `/v1/equipment-types?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllEquipmentTypes() {
+  return fetchAllPages((page) => listEquipmentTypes(page));
+}
+
+export function createEquipmentType(payload: EquipmentTypeInput) {
+  return apiRequest<EquipmentType>("/v1/equipment-type", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateEquipmentType(equipmentTypeId: string, payload: EquipmentTypeInput) {
+  return apiRequest<MessageResponse>(`/v1/equipment-type/${equipmentTypeId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteEquipmentType(equipmentTypeId: string) {
+  return apiRequest<MessageResponse>(`/v1/equipment-type/${equipmentTypeId}`, {
     method: "DELETE",
   });
 }
@@ -547,6 +594,42 @@ export function listCertificatesByComponent(
 
 export function listAllCertificatesByComponent(componentId: string) {
   return fetchAllPages((page) => listCertificatesByComponent(componentId, page));
+}
+
+export function listCertificatesWithContext(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<CertificateWithContext>>(
+    `/v1/certificates/dashboard?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllCertificatesWithContext() {
+  return fetchAllPages((page) => listCertificatesWithContext(page));
+}
+
+export function listCertificateNotificationTasks(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<CertificateNotificationTask>>(
+    `/v1/scheduler/certificate-notifications?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllCertificateNotificationTasks() {
+  return fetchAllPages((page) => listCertificateNotificationTasks(page));
+}
+
+export function listCertificateNotificationFailures(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<CertificateNotificationFailure>>(
+    `/v1/scheduler/notification-failures?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllCertificateNotificationFailures() {
+  return fetchAllPages((page) => listCertificateNotificationFailures(page));
+}
+
+export function forceRenotifyCertificate(certificateId: string) {
+  return apiRequest<ForceRenotifyResponse>(`/v1/certificates/${certificateId}/notifications`, {
+    method: "DELETE",
+  });
 }
 
 export function getCertificate(certificateId: string) {

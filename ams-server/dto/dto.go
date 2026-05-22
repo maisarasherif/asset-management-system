@@ -132,6 +132,46 @@ type UserManagementAuditLogResponse struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
+type CertificateNotificationTaskResponse struct {
+	TaskID               string     `json:"task_id"`
+	DisplayID            string     `json:"display_id"`
+	CertificateID        string     `json:"certificate_id"`
+	CertificateDisplayID string     `json:"certificate_display_id"`
+	CertificateName      string     `json:"certificate_name"`
+	ExpiryDate           *time.Time `json:"expiry_date"`
+	ComponentID          string     `json:"component_id"`
+	ComponentDisplayID   string     `json:"component_display_id"`
+	ComponentName        string     `json:"component_name"`
+	AssetID              string     `json:"asset_id"`
+	AssetDisplayID       string     `json:"asset_display_id"`
+	AssetName            string     `json:"asset_name"`
+	Type                 string     `json:"type"`
+	Tier                 string     `json:"tier"`
+	Status               string     `json:"status"`
+	ExternalTaskID       string     `json:"external_task_id"`
+	IdempotencyKey       string     `json:"idempotency_key"`
+	SentAt               time.Time  `json:"sent_at"`
+}
+
+type CertificateNotificationFailureResponse struct {
+	ID                   string     `json:"id"`
+	CertificateID        string     `json:"certificate_id"`
+	CertificateDisplayID string     `json:"certificate_display_id"`
+	CertificateName      string     `json:"certificate_name"`
+	ExpiryDate           *time.Time `json:"expiry_date"`
+	ComponentID          string     `json:"component_id"`
+	ComponentDisplayID   string     `json:"component_display_id"`
+	ComponentName        string     `json:"component_name"`
+	AssetID              string     `json:"asset_id"`
+	AssetDisplayID       string     `json:"asset_display_id"`
+	AssetName            string     `json:"asset_name"`
+	IdempotencyKey       string     `json:"idempotency_key"`
+	Channel              string     `json:"channel"`
+	Tier                 string     `json:"tier"`
+	ErrorMessage         string     `json:"error_message"`
+	FailedAt             time.Time  `json:"failed_at"`
+}
+
 // ==================== Project Access DTOs ====================
 
 type ProjectInput struct {
@@ -193,15 +233,17 @@ type PatchMainCategoryInput struct {
 // ==================== Asset DTOs ====================
 
 type AssetInput struct {
-	Name                     string  `json:"name" validate:"required,min=2,max=200"`
-	Photo                    string  `json:"photo" validate:"omitempty,url"`
-	Datasheet                string  `json:"datasheet" validate:"omitempty,url"`
-	Description              string  `json:"description"`
-	Status                   string  `json:"status" validate:"required,oneof=ACTIVE INACTIVE MAINTENANCE"`
-	Location                 string  `json:"location"`
-	AssignedProject          string  `json:"assigned_project"`
-	MaintenanceIntervalHours *int64  `json:"maintenance_interval_hours" validate:"omitempty,min=0"`
-	TemplateID               *string `json:"template_id" validate:"omitempty,uuid"`
+	Name                     string                           `json:"name" validate:"required,min=2,max=200"`
+	Photo                    string                           `json:"photo" validate:"omitempty,url"`
+	Datasheet                string                           `json:"datasheet" validate:"omitempty,url"`
+	Description              string                           `json:"description"`
+	Status                   string                           `json:"status" validate:"required,oneof=ACTIVE INACTIVE MAINTENANCE"`
+	AssetKind                string                           `json:"asset_kind" validate:"omitempty,oneof=COMPONENTIZED SINGLE_EQUIPMENT"`
+	Location                 string                           `json:"location"`
+	AssignedProject          string                           `json:"assigned_project"`
+	MaintenanceIntervalHours *int64                           `json:"maintenance_interval_hours" validate:"omitempty,min=0"`
+	TemplateID               *string                          `json:"template_id" validate:"omitempty,uuid"`
+	SingleEquipment          *SingleAssetEquipmentCreateInput `json:"single_equipment" validate:"omitempty"`
 }
 
 type PatchAssetInput struct {
@@ -213,6 +255,11 @@ type PatchAssetInput struct {
 	Location                 *string `json:"location"`
 	AssignedProject          *string `json:"assigned_project"`
 	MaintenanceIntervalHours *int64  `json:"maintenance_interval_hours" validate:"omitempty,min=0"`
+}
+
+type SingleAssetEquipmentCreateInput struct {
+	EquipmentTypeID string   `json:"equipment_type_id" validate:"required,uuid"`
+	TestTypeIDs     []string `json:"test_type_ids" validate:"required,min=1,dive,uuid"`
 }
 
 type AssetWorkingHoursInput struct {
@@ -297,6 +344,20 @@ type PatchTestTypeInput struct {
 	TestName         *string `json:"test_name" validate:"omitempty,min=2,max=100"`
 	ValidityDuration *int32  `json:"validity_duration" validate:"omitempty,min=1"`
 	Description      *string `json:"description"`
+}
+
+// ==================== Equipment Type DTOs ====================
+
+type EquipmentTypeInput struct {
+	SortOrder         int32  `json:"sort_order" validate:"required,min=1"`
+	EquipmentTypeName string `json:"equipment_type_name" validate:"required,min=2,max=120"`
+	Description       string `json:"description"`
+}
+
+type PatchEquipmentTypeInput struct {
+	SortOrder         *int32  `json:"sort_order" validate:"omitempty,min=1"`
+	EquipmentTypeName *string `json:"equipment_type_name" validate:"omitempty,min=2,max=120"`
+	Description       *string `json:"description"`
 }
 
 // ==================== Asset Template DTOs ====================

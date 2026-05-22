@@ -42,7 +42,7 @@ FROM components
 WHERE category_id = $1
 `
 
-func (q *Queries) CountComponentsByCategoryID(ctx context.Context, categoryID uuid.UUID) (int64, error) {
+func (q *Queries) CountComponentsByCategoryID(ctx context.Context, categoryID *uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countComponentsByCategoryID, categoryID)
 	var count int64
 	err := row.Scan(&count)
@@ -80,6 +80,8 @@ RETURNING
     display_id,
     asset_id,
     category_id,
+    component_kind,
+    single_asset_equipment_id,
     name,
     serial_number,
     manufacturer,
@@ -97,41 +99,43 @@ RETURNING
 `
 
 type CreateComponentParams struct {
-	AssetID         uuid.UUID `json:"asset_id"`
-	CategoryID      uuid.UUID `json:"category_id"`
-	Name            string    `json:"name"`
-	SerialNumber    string    `json:"serial_number"`
-	Manufacturer    string    `json:"manufacturer"`
-	Description     string    `json:"description"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
-	EquipmentType   string    `json:"equipment_type"`
-	Structure       string    `json:"structure"`
-	Model           string    `json:"model"`
-	Class           string    `json:"class"`
-	ClassCode       string    `json:"class_code"`
-	SafetyCritical  string    `json:"safety_critical"`
+	AssetID         uuid.UUID  `json:"asset_id"`
+	CategoryID      *uuid.UUID `json:"category_id"`
+	Name            string     `json:"name"`
+	SerialNumber    string     `json:"serial_number"`
+	Manufacturer    string     `json:"manufacturer"`
+	Description     string     `json:"description"`
+	Location        string     `json:"location"`
+	AssignedProject string     `json:"assigned_project"`
+	EquipmentType   string     `json:"equipment_type"`
+	Structure       string     `json:"structure"`
+	Model           string     `json:"model"`
+	Class           string     `json:"class"`
+	ClassCode       string     `json:"class_code"`
+	SafetyCritical  string     `json:"safety_critical"`
 }
 
 type CreateComponentRow struct {
-	ComponentID     uuid.UUID `json:"component_id"`
-	DisplayID       string    `json:"display_id"`
-	AssetID         uuid.UUID `json:"asset_id"`
-	CategoryID      uuid.UUID `json:"category_id"`
-	Name            string    `json:"name"`
-	SerialNumber    string    `json:"serial_number"`
-	Manufacturer    string    `json:"manufacturer"`
-	Description     string    `json:"description"`
-	EquipmentType   string    `json:"equipment_type"`
-	Structure       string    `json:"structure"`
-	Model           string    `json:"model"`
-	Class           string    `json:"class"`
-	ClassCode       string    `json:"class_code"`
-	SafetyCritical  string    `json:"safety_critical"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
+	ComponentID            uuid.UUID  `json:"component_id"`
+	DisplayID              string     `json:"display_id"`
+	AssetID                uuid.UUID  `json:"asset_id"`
+	CategoryID             *uuid.UUID `json:"category_id"`
+	ComponentKind          string     `json:"component_kind"`
+	SingleAssetEquipmentID *uuid.UUID `json:"single_asset_equipment_id"`
+	Name                   string     `json:"name"`
+	SerialNumber           string     `json:"serial_number"`
+	Manufacturer           string     `json:"manufacturer"`
+	Description            string     `json:"description"`
+	EquipmentType          string     `json:"equipment_type"`
+	Structure              string     `json:"structure"`
+	Model                  string     `json:"model"`
+	Class                  string     `json:"class"`
+	ClassCode              string     `json:"class_code"`
+	SafetyCritical         string     `json:"safety_critical"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+	Location               string     `json:"location"`
+	AssignedProject        string     `json:"assigned_project"`
 }
 
 func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams) (CreateComponentRow, error) {
@@ -157,6 +161,141 @@ func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams
 		&i.DisplayID,
 		&i.AssetID,
 		&i.CategoryID,
+		&i.ComponentKind,
+		&i.SingleAssetEquipmentID,
+		&i.Name,
+		&i.SerialNumber,
+		&i.Manufacturer,
+		&i.Description,
+		&i.EquipmentType,
+		&i.Structure,
+		&i.Model,
+		&i.Class,
+		&i.ClassCode,
+		&i.SafetyCritical,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Location,
+		&i.AssignedProject,
+	)
+	return i, err
+}
+
+const createSelfComponent = `-- name: CreateSelfComponent :one
+INSERT INTO components (
+    display_id,
+    asset_id,
+    category_id,
+    component_kind,
+    single_asset_equipment_id,
+    name,
+    serial_number,
+    manufacturer,
+    description,
+    location,
+    assigned_project,
+    equipment_type,
+    structure,
+    model,
+    class,
+    class_code,
+    safety_critical,
+    created_at,
+    updated_at
+)
+VALUES (
+    next_display_id('component_display_id_seq'),
+    $1,
+    NULL,
+    'SELF',
+    $2,
+    $3,
+    '',
+    '',
+    $4,
+    $5,
+    $6,
+    '',
+    '',
+    '',
+    '',
+    '',
+    'NO',
+    NOW(),
+    NOW()
+)
+RETURNING
+    component_id,
+    display_id,
+    asset_id,
+    category_id,
+    component_kind,
+    single_asset_equipment_id,
+    name,
+    serial_number,
+    manufacturer,
+    description,
+    equipment_type,
+    structure,
+    model,
+    class,
+    class_code,
+    safety_critical,
+    created_at,
+    updated_at,
+    location,
+    assigned_project
+`
+
+type CreateSelfComponentParams struct {
+	AssetID                uuid.UUID  `json:"asset_id"`
+	SingleAssetEquipmentID *uuid.UUID `json:"single_asset_equipment_id"`
+	Name                   string     `json:"name"`
+	Description            string     `json:"description"`
+	Location               string     `json:"location"`
+	AssignedProject        string     `json:"assigned_project"`
+}
+
+type CreateSelfComponentRow struct {
+	ComponentID            uuid.UUID  `json:"component_id"`
+	DisplayID              string     `json:"display_id"`
+	AssetID                uuid.UUID  `json:"asset_id"`
+	CategoryID             *uuid.UUID `json:"category_id"`
+	ComponentKind          string     `json:"component_kind"`
+	SingleAssetEquipmentID *uuid.UUID `json:"single_asset_equipment_id"`
+	Name                   string     `json:"name"`
+	SerialNumber           string     `json:"serial_number"`
+	Manufacturer           string     `json:"manufacturer"`
+	Description            string     `json:"description"`
+	EquipmentType          string     `json:"equipment_type"`
+	Structure              string     `json:"structure"`
+	Model                  string     `json:"model"`
+	Class                  string     `json:"class"`
+	ClassCode              string     `json:"class_code"`
+	SafetyCritical         string     `json:"safety_critical"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+	Location               string     `json:"location"`
+	AssignedProject        string     `json:"assigned_project"`
+}
+
+func (q *Queries) CreateSelfComponent(ctx context.Context, arg CreateSelfComponentParams) (CreateSelfComponentRow, error) {
+	row := q.db.QueryRow(ctx, createSelfComponent,
+		arg.AssetID,
+		arg.SingleAssetEquipmentID,
+		arg.Name,
+		arg.Description,
+		arg.Location,
+		arg.AssignedProject,
+	)
+	var i CreateSelfComponentRow
+	err := row.Scan(
+		&i.ComponentID,
+		&i.DisplayID,
+		&i.AssetID,
+		&i.CategoryID,
+		&i.ComponentKind,
+		&i.SingleAssetEquipmentID,
 		&i.Name,
 		&i.SerialNumber,
 		&i.Manufacturer,
@@ -193,6 +332,8 @@ SELECT
     display_id,
     asset_id,
     category_id,
+    component_kind,
+    single_asset_equipment_id,
     name,
     serial_number,
     manufacturer,
@@ -218,24 +359,26 @@ type GetAllComponentsPaginatedParams struct {
 }
 
 type GetAllComponentsPaginatedRow struct {
-	ComponentID     uuid.UUID `json:"component_id"`
-	DisplayID       string    `json:"display_id"`
-	AssetID         uuid.UUID `json:"asset_id"`
-	CategoryID      uuid.UUID `json:"category_id"`
-	Name            string    `json:"name"`
-	SerialNumber    string    `json:"serial_number"`
-	Manufacturer    string    `json:"manufacturer"`
-	Description     string    `json:"description"`
-	EquipmentType   string    `json:"equipment_type"`
-	Structure       string    `json:"structure"`
-	Model           string    `json:"model"`
-	Class           string    `json:"class"`
-	ClassCode       string    `json:"class_code"`
-	SafetyCritical  string    `json:"safety_critical"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
+	ComponentID            uuid.UUID  `json:"component_id"`
+	DisplayID              string     `json:"display_id"`
+	AssetID                uuid.UUID  `json:"asset_id"`
+	CategoryID             *uuid.UUID `json:"category_id"`
+	ComponentKind          string     `json:"component_kind"`
+	SingleAssetEquipmentID *uuid.UUID `json:"single_asset_equipment_id"`
+	Name                   string     `json:"name"`
+	SerialNumber           string     `json:"serial_number"`
+	Manufacturer           string     `json:"manufacturer"`
+	Description            string     `json:"description"`
+	EquipmentType          string     `json:"equipment_type"`
+	Structure              string     `json:"structure"`
+	Model                  string     `json:"model"`
+	Class                  string     `json:"class"`
+	ClassCode              string     `json:"class_code"`
+	SafetyCritical         string     `json:"safety_critical"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+	Location               string     `json:"location"`
+	AssignedProject        string     `json:"assigned_project"`
 }
 
 func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllComponentsPaginatedParams) ([]GetAllComponentsPaginatedRow, error) {
@@ -252,6 +395,8 @@ func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllCompo
 			&i.DisplayID,
 			&i.AssetID,
 			&i.CategoryID,
+			&i.ComponentKind,
+			&i.SingleAssetEquipmentID,
 			&i.Name,
 			&i.SerialNumber,
 			&i.Manufacturer,
@@ -283,6 +428,8 @@ SELECT
     display_id,
     asset_id,
     category_id,
+    component_kind,
+    single_asset_equipment_id,
     name,
     serial_number,
     manufacturer,
@@ -303,24 +450,26 @@ LIMIT 1
 `
 
 type GetComponentByIDRow struct {
-	ComponentID     uuid.UUID `json:"component_id"`
-	DisplayID       string    `json:"display_id"`
-	AssetID         uuid.UUID `json:"asset_id"`
-	CategoryID      uuid.UUID `json:"category_id"`
-	Name            string    `json:"name"`
-	SerialNumber    string    `json:"serial_number"`
-	Manufacturer    string    `json:"manufacturer"`
-	Description     string    `json:"description"`
-	EquipmentType   string    `json:"equipment_type"`
-	Structure       string    `json:"structure"`
-	Model           string    `json:"model"`
-	Class           string    `json:"class"`
-	ClassCode       string    `json:"class_code"`
-	SafetyCritical  string    `json:"safety_critical"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
+	ComponentID            uuid.UUID  `json:"component_id"`
+	DisplayID              string     `json:"display_id"`
+	AssetID                uuid.UUID  `json:"asset_id"`
+	CategoryID             *uuid.UUID `json:"category_id"`
+	ComponentKind          string     `json:"component_kind"`
+	SingleAssetEquipmentID *uuid.UUID `json:"single_asset_equipment_id"`
+	Name                   string     `json:"name"`
+	SerialNumber           string     `json:"serial_number"`
+	Manufacturer           string     `json:"manufacturer"`
+	Description            string     `json:"description"`
+	EquipmentType          string     `json:"equipment_type"`
+	Structure              string     `json:"structure"`
+	Model                  string     `json:"model"`
+	Class                  string     `json:"class"`
+	ClassCode              string     `json:"class_code"`
+	SafetyCritical         string     `json:"safety_critical"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+	Location               string     `json:"location"`
+	AssignedProject        string     `json:"assigned_project"`
 }
 
 func (q *Queries) GetComponentByID(ctx context.Context, componentID uuid.UUID) (GetComponentByIDRow, error) {
@@ -331,6 +480,8 @@ func (q *Queries) GetComponentByID(ctx context.Context, componentID uuid.UUID) (
 		&i.DisplayID,
 		&i.AssetID,
 		&i.CategoryID,
+		&i.ComponentKind,
+		&i.SingleAssetEquipmentID,
 		&i.Name,
 		&i.SerialNumber,
 		&i.Manufacturer,
@@ -355,6 +506,8 @@ SELECT
     display_id,
     asset_id,
     category_id,
+    component_kind,
+    single_asset_equipment_id,
     name,
     serial_number,
     manufacturer,
@@ -382,24 +535,26 @@ type GetComponentsByAssetIDPaginatedParams struct {
 }
 
 type GetComponentsByAssetIDPaginatedRow struct {
-	ComponentID     uuid.UUID `json:"component_id"`
-	DisplayID       string    `json:"display_id"`
-	AssetID         uuid.UUID `json:"asset_id"`
-	CategoryID      uuid.UUID `json:"category_id"`
-	Name            string    `json:"name"`
-	SerialNumber    string    `json:"serial_number"`
-	Manufacturer    string    `json:"manufacturer"`
-	Description     string    `json:"description"`
-	EquipmentType   string    `json:"equipment_type"`
-	Structure       string    `json:"structure"`
-	Model           string    `json:"model"`
-	Class           string    `json:"class"`
-	ClassCode       string    `json:"class_code"`
-	SafetyCritical  string    `json:"safety_critical"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
+	ComponentID            uuid.UUID  `json:"component_id"`
+	DisplayID              string     `json:"display_id"`
+	AssetID                uuid.UUID  `json:"asset_id"`
+	CategoryID             *uuid.UUID `json:"category_id"`
+	ComponentKind          string     `json:"component_kind"`
+	SingleAssetEquipmentID *uuid.UUID `json:"single_asset_equipment_id"`
+	Name                   string     `json:"name"`
+	SerialNumber           string     `json:"serial_number"`
+	Manufacturer           string     `json:"manufacturer"`
+	Description            string     `json:"description"`
+	EquipmentType          string     `json:"equipment_type"`
+	Structure              string     `json:"structure"`
+	Model                  string     `json:"model"`
+	Class                  string     `json:"class"`
+	ClassCode              string     `json:"class_code"`
+	SafetyCritical         string     `json:"safety_critical"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+	Location               string     `json:"location"`
+	AssignedProject        string     `json:"assigned_project"`
 }
 
 func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetComponentsByAssetIDPaginatedParams) ([]GetComponentsByAssetIDPaginatedRow, error) {
@@ -416,6 +571,8 @@ func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetCo
 			&i.DisplayID,
 			&i.AssetID,
 			&i.CategoryID,
+			&i.ComponentKind,
+			&i.SingleAssetEquipmentID,
 			&i.Name,
 			&i.SerialNumber,
 			&i.Manufacturer,
@@ -461,20 +618,20 @@ WHERE component_id = $14
 `
 
 type UpdateComponentParams struct {
-	CategoryID      uuid.UUID `json:"category_id"`
-	Name            string    `json:"name"`
-	SerialNumber    string    `json:"serial_number"`
-	Manufacturer    string    `json:"manufacturer"`
-	Description     string    `json:"description"`
-	Location        string    `json:"location"`
-	AssignedProject string    `json:"assigned_project"`
-	EquipmentType   string    `json:"equipment_type"`
-	Structure       string    `json:"structure"`
-	Model           string    `json:"model"`
-	Class           string    `json:"class"`
-	ClassCode       string    `json:"class_code"`
-	SafetyCritical  string    `json:"safety_critical"`
-	ComponentID     uuid.UUID `json:"component_id"`
+	CategoryID      *uuid.UUID `json:"category_id"`
+	Name            string     `json:"name"`
+	SerialNumber    string     `json:"serial_number"`
+	Manufacturer    string     `json:"manufacturer"`
+	Description     string     `json:"description"`
+	Location        string     `json:"location"`
+	AssignedProject string     `json:"assigned_project"`
+	EquipmentType   string     `json:"equipment_type"`
+	Structure       string     `json:"structure"`
+	Model           string     `json:"model"`
+	Class           string     `json:"class"`
+	ClassCode       string     `json:"class_code"`
+	SafetyCritical  string     `json:"safety_critical"`
+	ComponentID     uuid.UUID  `json:"component_id"`
 }
 
 func (q *Queries) UpdateComponent(ctx context.Context, arg UpdateComponentParams) (int64, error) {

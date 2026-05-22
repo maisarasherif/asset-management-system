@@ -148,9 +148,13 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		_, err = queries.GetAssetByID(ctx, assetID)
+		asset, err := queries.GetAssetByID(ctx, assetID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+			return
+		}
+		if asset.AssetKind == "SINGLE_EQUIPMENT" {
+			c.JSON(http.StatusConflict, gin.H{"error": "single-asset equipment cannot have manual components"})
 			return
 		}
 		_, err = queries.GetCategoryByID(ctx, categoryID)
@@ -161,7 +165,7 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		component, err := queries.CreateComponent(ctx, db.CreateComponentParams{
 			AssetID:         assetID,
-			CategoryID:      categoryID,
+			CategoryID:      &categoryID,
 			Name:            input.Name,
 			SerialNumber:    input.SerialNumber,
 			Manufacturer:    input.Manufacturer,
@@ -205,6 +209,15 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 
 		queries := db.New(pool)
+		existing, err := queries.GetComponentByID(ctx, componentID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+		if existing.ComponentKind == "SELF" {
+			c.JSON(http.StatusConflict, gin.H{"error": "equipment bridge components cannot be edited directly"})
+			return
+		}
 
 		categoryID, err := utils.ParseUUID(input.CategoryID, "category_id")
 		if err != nil {
@@ -219,7 +232,7 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
-			CategoryID:      categoryID,
+			CategoryID:      &categoryID,
 			Name:            input.Name,
 			SerialNumber:    input.SerialNumber,
 			Manufacturer:    input.Manufacturer,
@@ -262,6 +275,10 @@ func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		existing, err := queries.GetComponentByID(ctx, componentID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+		if existing.ComponentKind == "SELF" {
+			c.JSON(http.StatusConflict, gin.H{"error": "equipment bridge components cannot be deleted directly"})
 			return
 		}
 
@@ -314,9 +331,17 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
 			return
 		}
+		if existing.ComponentKind == "SELF" {
+			c.JSON(http.StatusConflict, gin.H{"error": "equipment bridge components cannot be edited directly"})
+			return
+		}
 
 		name := existing.Name
-		categoryID := existing.CategoryID
+		if existing.CategoryID == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "component category is not editable for this component"})
+			return
+		}
+		categoryID := *existing.CategoryID
 		serialNumber := existing.SerialNumber
 		manufacturer := existing.Manufacturer
 		description := existing.Description
@@ -381,7 +406,7 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
-			CategoryID:      categoryID,
+			CategoryID:      &categoryID,
 			Name:            name,
 			SerialNumber:    serialNumber,
 			Manufacturer:    manufacturer,

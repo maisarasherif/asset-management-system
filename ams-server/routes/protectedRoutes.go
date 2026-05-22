@@ -20,6 +20,8 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	admin.PUT("/user/:user_id/password", controller.AdminUpdateUserPassword(pool))
 	admin.DELETE("/user/:user_id", controller.DeleteUser(pool))
 	admin.GET("/user-management-audit-logs", controller.GetUserManagementAuditLogs(pool))
+	admin.GET("/scheduler/certificate-notifications", controller.GetCertificateNotificationTasks(pool))
+	admin.GET("/scheduler/notification-failures", controller.GetCertificateNotificationFailures(pool))
 	admin.GET("/projects", controller.GetProjects(pool))
 	admin.POST("/project", controller.AddProject(pool))
 	admin.PUT("/project/:project_id", controller.UpdateProject(pool))
@@ -48,6 +50,7 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	admin.PATCH("/certificate/:certificate_id", controller.PatchCertificate(pool))
 	admin.DELETE("/certificate/:certificate_id", controller.DeleteCertificate(pool))
 	admin.POST("/certificate/:certificate_id/file", controller.UploadCertificateFile(pool))
+	admin.DELETE("/certificates/:certificate_id/notifications", controller.ForceRenotifyCertificate(pool))
 
 	// Main Category Routes
 	admin.POST("/main-category", controller.AddMainCategory(pool))
@@ -66,6 +69,12 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	admin.PUT("/test-type/:test_id", controller.UpdateTestType(pool))
 	admin.PATCH("/test-type/:test_id", controller.PatchTestType(pool))
 	admin.DELETE("/test-type/:test_id", controller.DeleteTestType(pool))
+
+	// Equipment Type Routes
+	admin.POST("/equipment-type", controller.AddEquipmentType(pool))
+	admin.PUT("/equipment-type/:equipment_type_id", controller.UpdateEquipmentType(pool))
+	admin.PATCH("/equipment-type/:equipment_type_id", controller.PatchEquipmentType(pool))
+	admin.DELETE("/equipment-type/:equipment_type_id", controller.DeleteEquipmentType(pool))
 
 	// Competency Routes
 	admin.GET("/competency-categories", controller.GetCompetencyCategories(pool))
@@ -108,6 +117,7 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	// Asset Routes
 	protected.GET("/assets", controller.GetAssets(pool))
 	protected.GET("/asset/:asset_id", controller.GetAsset(pool))
+	protected.GET("/asset/:asset_id/single-equipment", controller.GetSingleAssetEquipment(pool))
 	protected.GET("/asset/:asset_id/routine-maintenance", controller.GetAssetRoutineMaintenance(pool))
 	protected.GET("/asset/:asset_id/component-certificate-sheet", controller.GetAssetComponentCertificateSheetPDF(pool))
 
@@ -138,6 +148,10 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 
 	// Test Type Routes
 	protected.GET("/test-types", controller.GetTestTypes(pool))
+
+	// Equipment Type Routes
+	protected.GET("/equipment-types", controller.GetEquipmentTypes(pool))
+	protected.GET("/equipment-type/:equipment_type_id", controller.GetEquipmentType(pool))
 
 	// Competency Routes
 	protected.GET("/competency-categories/active", controller.GetActiveCompetencyCategories(pool))

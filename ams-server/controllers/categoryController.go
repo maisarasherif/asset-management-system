@@ -260,7 +260,7 @@ func DeleteCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		count, err := queries.CountComponentsByCategoryID(ctx, categoryID)
+		count, err := queries.CountComponentsByCategoryID(ctx, &categoryID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check components"})
 			return

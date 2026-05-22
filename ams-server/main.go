@@ -9,7 +9,7 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	middleware "github.com/maisarasherif/asset-management-system/ams-server/middleware"
 	routes "github.com/maisarasherif/asset-management-system/ams-server/routes"
-	//"github.com/maisarasherif/asset-management-system/ams-server/utils"
+	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
 func main() {
@@ -18,7 +18,7 @@ func main() {
 	pool := databases.Connect()
 	defer pool.Close()
 
-	//utils.StartExpiryScheduler(pool)
+	utils.StartExpiryScheduler(pool)
 
 	router := gin.New()
 	router.Use(

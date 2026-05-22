@@ -1003,3 +1003,47 @@ func GetAssetComponentCertificateSheetPDF(pool *pgxpool.Pool) gin.HandlerFunc {
 		c.Data(http.StatusOK, "application/pdf", pdfBytes)
 	}
 }
+
+func ForceRenotifyCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		certificateID, ok := utils.ParseUUIDParam(c, "certificate_id")
+		if !ok {
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+		if _, err := queries.GetCertificateByID(ctx, certificateID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificate"})
+			return
+		}
+
+		keyPrefix := fmt.Sprintf("cert-expiry:%s:%%", certificateID.String())
+		deleted, err := queries.DeleteScheduledTasksByKeyPrefix(ctx, db.DeleteScheduledTasksByKeyPrefixParams{
+			CertificateID:  certificateID,
+			IdempotencyKey: keyPrefix,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear notification history"})
+			return
+		}
+
+		userID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Info().
+			Str("certificate_id", certificateID.String()).
+			Int64("cleared_tasks", deleted).
+			Str("triggered_by", userID).
+			Msg("notification history cleared for certificate")
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":       "notification history cleared; certificate will be re-notified on next scheduler run",
+			"cleared_tasks": deleted,
+		})
+	}
+}

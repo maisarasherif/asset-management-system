@@ -22,8 +22,8 @@ import {
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { AssetDashboardData } from "../../types/ams";
-import { formatDate, humanizeEnum } from "../../utils/format";
-import { certificateStatusType } from "../../utils/status";
+import { formatDate, formatDateTime, humanizeEnum } from "../../utils/format";
+import { assetStatusType, certificateStatusType } from "../../utils/status";
 import { CertificateDonut } from "./CertificateDonut";
 
 type DashboardCertificate = AssetDashboardData["certificates"][number];
@@ -174,6 +174,19 @@ export function DashboardPage() {
     },
   ];
 
+  const componentCount =
+    dashboard.asset.asset_kind === "SINGLE_EQUIPMENT"
+      ? 1
+      : dashboard.components.filter((component) => component.component_kind !== "SELF").length;
+  const maintenanceConfigured = dashboard.asset.maintenance_interval_hours > 0;
+  const maintenanceRequired =
+    Boolean(dashboard.asset.maintenance_required_at) ||
+    (maintenanceConfigured &&
+      dashboard.asset.working_hours >= dashboard.asset.next_maintenance_due_hours);
+  const maintenanceRemaining = maintenanceConfigured
+    ? dashboard.asset.next_maintenance_due_hours - dashboard.asset.working_hours
+    : 0;
+
   return (
     <ContentLayout
       header={
@@ -219,7 +232,7 @@ export function DashboardPage() {
             <SpaceBetween direction="vertical" size="xs">
               <div className="summary-row">
                 <Box variant="awsui-key-label">Status</Box>
-                <StatusIndicator type="info">
+                <StatusIndicator type={assetStatusType(dashboard.asset.status)}>
                   {humanizeEnum(dashboard.asset.status)}
                 </StatusIndicator>
               </div>
@@ -228,12 +241,68 @@ export function DashboardPage() {
                 <Box>{dashboard.asset.assigned_project || "Not set"}</Box>
               </div>
               <div className="summary-row">
-                <Box variant="awsui-key-label">Datasheet</Box>
-                <Box>{dashboard.asset.datasheet ? "Available" : "Not set"}</Box>
+                <Box variant="awsui-key-label">Location</Box>
+                <Box>{dashboard.asset.location || "Not set"}</Box>
               </div>
               <div className="summary-row">
-                <Box variant="awsui-key-label">Pending certificates</Box>
-                <Box>{dashboard.statusCounts.pending}</Box>
+                <Box variant="awsui-key-label">Datasheet</Box>
+                <Button
+                  disabled={!dashboard.asset.datasheet}
+                  href={dashboard.asset.datasheet || undefined}
+                  target="_blank"
+                >
+                  Open datasheet
+                </Button>
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Components</Box>
+                <Box>{componentCount}</Box>
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Routine maintenance</Box>
+                {maintenanceRequired ? (
+                  <StatusIndicator type="warning">Required</StatusIndicator>
+                ) : maintenanceConfigured ? (
+                  <StatusIndicator type="success">On schedule</StatusIndicator>
+                ) : (
+                  <StatusIndicator type="info">Not configured</StatusIndicator>
+                )}
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Working hours</Box>
+                <Box>{dashboard.asset.working_hours.toLocaleString()} h</Box>
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Interval</Box>
+                <Box>
+                  {maintenanceConfigured
+                    ? `${dashboard.asset.maintenance_interval_hours.toLocaleString()} h`
+                    : "Not configured"}
+                </Box>
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Next due</Box>
+                <Box>
+                  {maintenanceConfigured
+                    ? `${dashboard.asset.next_maintenance_due_hours.toLocaleString()} h`
+                    : "Not configured"}
+                </Box>
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Remaining</Box>
+                <Box>
+                  {maintenanceConfigured
+                    ? `${Math.max(maintenanceRemaining, 0).toLocaleString()} h`
+                    : "Not configured"}
+                </Box>
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Last maintenance</Box>
+                <Box>
+                  {dashboard.asset.last_maintenance_completed_at
+                    ? `${formatDateTime(dashboard.asset.last_maintenance_completed_at)} at ${dashboard.asset.last_maintenance_completed_hours.toLocaleString()} h`
+                    : "No completion recorded"}
+                </Box>
               </div>
             </SpaceBetween>
           </Container>

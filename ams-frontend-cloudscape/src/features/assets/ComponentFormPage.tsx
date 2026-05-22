@@ -69,7 +69,7 @@ export function ComponentFormPage() {
   const baseForm: ComponentInput = componentQuery.data
     ? {
       asset_id: componentQuery.data.asset_id,
-      category_id: componentQuery.data.category_id,
+      category_id: componentQuery.data.category_id || "",
       name: componentQuery.data.name,
       serial_number: componentQuery.data.serial_number || "",
       manufacturer: componentQuery.data.manufacturer || "",
