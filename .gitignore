@@ -1,7 +1,7 @@
 *.txt
 .env
 *.pdf
-!tests/api/postman/fixtures/sample-certificate.pdf
+!tests/regression/fixtures/sample-certificate.pdf
 /skills
 /themes
 /postman/*
