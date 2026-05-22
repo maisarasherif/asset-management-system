@@ -171,13 +171,13 @@
         "listen": "test",
         "script": {
           "type": "text/javascript",
-          "exec": [
-            "pm.test('project access is granted', function () {",
-            "  pm.response.to.have.status(201);",
-            "  const body = pm.response.json();",
-            "  pm.expect(body.access_id).to.match(/^[0-9a-f-]{36}$/i);",
-            "  pm.expect(body.status).to.eql('ACTIVE');",
-            "  pm.collectionVariables.set('access_id', body.access_id);",
+	          "exec": [
+	            "pm.test('project access is granted', function () {",
+	            "  pm.response.to.have.status(200);",
+	            "  const body = pm.response.json();",
+	            "  pm.expect(body.access_id).to.match(/^[0-9a-f-]{36}$/i);",
+	            "  pm.expect(body.status).to.eql('ACTIVE');",
+	            "  pm.collectionVariables.set('access_id', body.access_id);",
             "});"
           ]
         }
@@ -189,12 +189,16 @@
       "event": [{
         "listen": "test",
         "script": { "type": "text/javascript", "exec": [
-          "pm.test('project access list includes records', function () {",
-          "  pm.response.to.have.status(200);",
-          "  pm.expect(pm.response.json()).to.be.an('array');",
-          "});"
-        ] }
-      }]
+	          "pm.test('project access list includes records', function () {",
+	          "  pm.response.to.have.status(200);",
+	          "  const rows = pm.response.json();",
+	          "  pm.expect(rows).to.be.an('array');",
+	          "  const match = rows.find((row) => row.user_id === pm.collectionVariables.get('client_user_id') && row.project_id === pm.collectionVariables.get('project_id'));",
+	          "  pm.expect(match, 'created client/project access row').to.exist;",
+	          "  pm.collectionVariables.set('access_id', match.access_id);",
+	          "});"
+	        ] }
+	      }]
     },
     {
       "name": "08 Suspend User Project Access",
