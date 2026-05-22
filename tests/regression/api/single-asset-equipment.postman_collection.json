@@ -161,7 +161,7 @@
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"{{assetName}}\",\n  \"asset_kind\": \"SINGLE_EQUIPMENT\",\n  \"location\": \"Newman Yard\",\n  \"assigned_project\": \"Newman Project\",\n  \"description\": \"Created by Newman to verify single-asset equipment.\",\n  \"single_equipment\": {\n    \"equipment_type_id\": \"{{equipment_type_id}}\",\n    \"test_type_ids\": [\"{{visual_test_id}}\", \"{{load_test_id}}\", \"{{visual_test_id}}\"]\n  }\n}"
+	          "raw": "{\n  \"name\": \"{{assetName}}\",\n  \"status\": \"ACTIVE\",\n  \"asset_kind\": \"SINGLE_EQUIPMENT\",\n  \"location\": \"Newman Yard\",\n  \"assigned_project\": \"Newman Project\",\n  \"description\": \"Created by Newman to verify single-asset equipment.\",\n  \"single_equipment\": {\n    \"equipment_type_id\": \"{{equipment_type_id}}\",\n    \"test_type_ids\": [\"{{visual_test_id}}\", \"{{load_test_id}}\", \"{{visual_test_id}}\"]\n  }\n}"
         },
         "url": "{{baseUrl}}/asset"
       },

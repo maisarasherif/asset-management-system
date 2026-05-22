@@ -119,6 +119,7 @@ test.describe("scheduler management flow", () => {
     const token = await loginApi(setupRequest);
     let assetId: string | null = null;
     let mainCategoryId: string | null = null;
+    let categoryId: string | null = null;
     let testTypeId: string | null = null;
 
     try {
@@ -140,6 +141,7 @@ test.describe("scheduler management flow", () => {
         description: "Created by Playwright for scheduler management.",
         sort_order: sortOrderBase + 1,
       });
+      categoryId = category.category_id;
 
       const testType = await postJson<CreatedTestType>(setupRequest, token, "/test-type", {
         test_name: testName,
@@ -213,6 +215,9 @@ test.describe("scheduler management flow", () => {
     } finally {
       if (assetId) {
         await deleteIfPresent(setupRequest, token, `/asset/${assetId}`);
+      }
+      if (categoryId) {
+        await deleteIfPresent(setupRequest, token, `/category/${categoryId}`);
       }
       if (mainCategoryId) {
         await deleteIfPresent(setupRequest, token, `/main-category/${mainCategoryId}`);

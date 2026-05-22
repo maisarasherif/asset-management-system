@@ -318,10 +318,26 @@ async function expectHealthyPage(page: Page, path: string) {
   await expect(page.getByRole("heading", { name: "Page error" })).toHaveCount(0);
 }
 
+async function expectVisibleText(page: Page, text: string | RegExp) {
+  const matches = page.getByText(text);
+  await expect(matches.first()).toBeAttached();
+  await expect
+    .poll(async () => {
+      const count = await matches.count();
+      for (let index = 0; index < count; index += 1) {
+        if (await matches.nth(index).isVisible()) {
+          return true;
+        }
+      }
+      return false;
+    })
+    .toBe(true);
+}
+
 async function expectRoute(page: Page, path: string, visibleTexts: Array<string | RegExp>) {
   await expectHealthyPage(page, path);
   for (const visibleText of visibleTexts) {
-    await expect(page.getByText(visibleText).first()).toBeVisible();
+    await expectVisibleText(page, visibleText);
   }
 }
 

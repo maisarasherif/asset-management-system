@@ -17,7 +17,7 @@ RUN_GO_REGRESSION="${RUN_GO_REGRESSION:-${RUN_REGRESSION:-0}}"
 RUN_NEWMAN="${RUN_NEWMAN:-1}"
 NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json}"
 RUN_PLAYWRIGHT="${RUN_PLAYWRIGHT:-1}"
-E2E_SPECS="${E2E_SPECS:-../tests/regression/e2e/api-auth-smoke.spec.ts ../tests/regression/e2e/auth-cookie-session.spec.ts ../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/client-asset-certificates.spec.ts ../tests/regression/e2e/user-management-permissions.spec.ts ../tests/regression/e2e/single-asset-equipment.spec.ts ../tests/regression/e2e/scheduler-management.spec.ts}"
+E2E_SPECS="${E2E_SPECS:-../tests/regression/e2e/api-auth-smoke.spec.ts ../tests/regression/e2e/auth-cookie-session.spec.ts ../tests/regression/e2e/template-catalog.spec.ts ../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/client-asset-certificates.spec.ts ../tests/regression/e2e/user-management-permissions.spec.ts ../tests/regression/e2e/single-asset-equipment.spec.ts ../tests/regression/e2e/scheduler-management.spec.ts}"
 
 API_PID=""
 FRONTEND_PID=""
@@ -190,13 +190,14 @@ start_api() {
   (
     cd "$SERVER_DIR"
     go build -buildvcs=false -o "$API_BINARY" .
-    export APP_ENV=test
-    export DATABASE_URL="$TEST_DATABASE_URL"
-    export PORT="$API_PORT"
-    export ALLOWED_ORIGIN="$FRONTEND_BASE_URL"
-    export SEED_ADMIN_EMAIL="$ADMIN_EMAIL"
-    export SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD"
-    export ALERT_RECIPIENT_EMAIL=""
+	    export APP_ENV=test
+	    export DATABASE_URL="$TEST_DATABASE_URL"
+	    export PORT="$API_PORT"
+	    export ALLOWED_ORIGIN="$FRONTEND_BASE_URL"
+	    export SEED_ADMIN_EMAIL="$ADMIN_EMAIL"
+	    export SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD"
+	    export LOGIN_RATE_LIMIT="${LOGIN_RATE_LIMIT:-200}"
+	    export ALERT_RECIPIENT_EMAIL=""
     export CLICKUP_API_TOKEN=""
     export CLICKUP_LIST_ID=""
     exec "$API_BINARY" >"$RUN_DIR/api.out.log" 2>"$RUN_DIR/api.err.log"
@@ -336,7 +337,12 @@ fi
 
 if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
   echo "Building frontend for isolated API"
-  (cd "$FRONTEND_DIR" && VITE_API_BASE_URL="$API_ORIGIN" npm run build)
+  (
+    cd "$FRONTEND_DIR"
+    npx tsc -p tsconfig.app.json --noEmit --incremental false
+    npx tsc vite.config.ts --noEmit --skipLibCheck --module ESNext --moduleResolution Bundler --allowSyntheticDefaultImports --strict --ignoreConfig
+    VITE_API_BASE_URL="$API_ORIGIN" npx vite build
+  )
 
   echo "Starting isolated frontend on $FRONTEND_BASE_URL"
   (

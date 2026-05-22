@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +12,12 @@ import (
 )
 
 func SetupUnprotectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
-	loginRateLimit := middleware.RateLimitMiddleware(10, time.Minute)
+	loginLimit := 10
+	if rawLimit := os.Getenv("LOGIN_RATE_LIMIT"); rawLimit != "" {
+		if parsedLimit, err := strconv.Atoi(rawLimit); err == nil {
+			loginLimit = parsedLimit
+		}
+	}
+	loginRateLimit := middleware.RateLimitMiddleware(loginLimit, time.Minute)
 	router.POST("/v1/login", loginRateLimit, controller.LoginUser(pool))
 }
