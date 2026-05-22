@@ -1336,11 +1336,12 @@
 	            "body": {
 	              "mode": "formdata",
 	              "formdata": [
-	                {
-	                  "key": "file",
-	                  "type": "file",
-	                  "src": "tests/regression/fixtures/sample-certificate.pdf"
-	                },
+		                {
+		                  "key": "file",
+		                  "type": "file",
+		                  "contentType": "application/pdf",
+		                  "src": "tests/regression/fixtures/sample-certificate.pdf"
+		                },
 	                {
 	                  "key": "competent_person_id",
 	                  "value": "{{competent_person_id}}",
