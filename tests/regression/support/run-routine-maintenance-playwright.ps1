@@ -1,25 +1,25 @@
 param(
     [string]$DatabaseName = "",
     [int]$ApiPort = 8082,
-    [int]$FrontendPort = 4176,
+    [int]$FrontendPort = 4175,
     [switch]$KeepDatabase
 )
 
 $ErrorActionPreference = "Stop"
 
-$frontendDir = Resolve-Path (Join-Path $PSScriptRoot "../..")
-$repoRoot = Resolve-Path (Join-Path $frontendDir "..")
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "../../..")
+$frontendDir = Join-Path $repoRoot "ams-frontend-cloudscape"
 $serverDir = Join-Path $repoRoot "ams-server"
 $serverEnvPath = Join-Path $serverDir ".env"
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
 $goCacheDir = Join-Path $repoRoot ".gocache-playwright"
-$serverOutLog = Join-Path $goCacheDir "client-portal-playwright-api.out.log"
-$serverErrLog = Join-Path $goCacheDir "client-portal-playwright-api.err.log"
-$frontendOutLog = Join-Path $goCacheDir "client-portal-playwright-frontend.out.log"
-$frontendErrLog = Join-Path $goCacheDir "client-portal-playwright-frontend.err.log"
+$serverOutLog = Join-Path $goCacheDir "playwright-api.out.log"
+$serverErrLog = Join-Path $goCacheDir "playwright-api.err.log"
+$frontendOutLog = Join-Path $goCacheDir "playwright-frontend.out.log"
+$frontendErrLog = Join-Path $goCacheDir "playwright-frontend.err.log"
 
 if ([string]::IsNullOrWhiteSpace($DatabaseName)) {
-    $DatabaseName = "ams_playwright_client_portal_$timestamp"
+    $DatabaseName = "ams_playwright_routine_$timestamp"
 }
 
 if ($DatabaseName -notmatch '^ams_playwright_[A-Za-z0-9_]+$') {
@@ -149,7 +149,7 @@ function Start-FrontendJob {
 
         Set-Location $JobWorkingDirectory
         $env:PORT = "$JobPort"
-        & node tests/e2e/static-server.cjs > $JobStdoutPath 2> $JobStderrPath
+        & node ../tests/regression/support/static-server.cjs > $JobStdoutPath 2> $JobStderrPath
     }
 }
 
@@ -263,16 +263,16 @@ try {
         -StderrPath $frontendErrLog
     Wait-ForHttp -Url $frontendBaseUrl -Job $frontendJob -Name "frontend" -ErrorLog $frontendErrLog
 
-    Write-Host "Running Playwright client asset certificates E2E"
+    Write-Host "Running Playwright routine maintenance E2E"
     Push-Location $frontendDir
     try {
         $env:PLAYWRIGHT_BASE_URL = $frontendBaseUrl
         $env:PLAYWRIGHT_API_BASE_URL = $apiBaseUrl
         $env:PLAYWRIGHT_ADMIN_EMAIL = $adminEmail
         $env:PLAYWRIGHT_ADMIN_PASSWORD = $adminPassword
-        $env:PLAYWRIGHT_RUN_CLIENT_PORTAL_TRIGGER = "1"
+        $env:PLAYWRIGHT_RUN_ROUTINE_MAINTENANCE_TRIGGER = "1"
 
-        & npx playwright test tests/e2e/client-asset-certificates.spec.ts
+        & npx playwright test ../tests/regression/e2e/routine-maintenance.spec.ts
         if ($LASTEXITCODE -ne 0) {
             throw "Playwright failed with exit code $LASTEXITCODE"
         }
@@ -281,11 +281,11 @@ try {
         Remove-Item Env:\PLAYWRIGHT_API_BASE_URL -ErrorAction SilentlyContinue
         Remove-Item Env:\PLAYWRIGHT_ADMIN_EMAIL -ErrorAction SilentlyContinue
         Remove-Item Env:\PLAYWRIGHT_ADMIN_PASSWORD -ErrorAction SilentlyContinue
-        Remove-Item Env:\PLAYWRIGHT_RUN_CLIENT_PORTAL_TRIGGER -ErrorAction SilentlyContinue
+        Remove-Item Env:\PLAYWRIGHT_RUN_ROUTINE_MAINTENANCE_TRIGGER -ErrorAction SilentlyContinue
         Pop-Location
     }
 
-    Write-Host "Playwright client asset certificates E2E passed against isolated DB: $DatabaseName"
+    Write-Host "Playwright routine maintenance E2E passed against isolated DB: $DatabaseName"
 } finally {
     if ($frontendJob -and $frontendJob.State -eq "Running") {
         Write-Host "Stopping isolated frontend"

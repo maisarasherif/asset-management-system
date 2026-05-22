@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"mime/multipart"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	controllers "github.com/maisarasherif/asset-management-system/ams-server/controllers"
@@ -135,6 +137,109 @@ func TestCreateAssetWithoutTemplate(t *testing.T) {
 	assertField(t, asset, "name", "Standalone Asset")
 	assertField(t, asset, "status", "ACTIVE")
 	assertField(t, asset, "location", "Warehouse A")
+}
+
+func TestSingleAssetEquipmentCreationRegression(t *testing.T) {
+	h := setupIntegrationTest(t)
+
+	equipmentTypeID := createEquipmentType(t, h, "Hydraulic Power Unit", 1)
+	testOneID := createTestType(t, h, "Single Asset Visual Inspection", 12)
+	testTwoID := createTestType(t, h, "Single Asset Load Test", 6)
+
+	asset := createAsset(t, h, map[string]any{
+		"name":                       "Single Equipment Asset",
+		"photo":                      "",
+		"datasheet":                  "",
+		"description":                "Single asset equipment regression",
+		"status":                     "ACTIVE",
+		"asset_kind":                 "SINGLE_EQUIPMENT",
+		"location":                   "Yard SE",
+		"assigned_project":           "Project Single Equipment",
+		"maintenance_interval_hours": 0,
+		"template_id":                nil,
+		"single_equipment": map[string]any{
+			"equipment_type_id": equipmentTypeID,
+			"test_type_ids":     []string{testOneID, testTwoID, testOneID},
+		},
+	})
+	assertField(t, asset, "asset_kind", "SINGLE_EQUIPMENT")
+	assetID := stringField(t, asset, "asset_id")
+
+	equipment := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/asset/"+assetID+"/single-equipment", nil, http.StatusOK))
+	assertField(t, equipment, "asset_id", assetID)
+	assertField(t, equipment, "equipment_type_id", equipmentTypeID)
+	assertField(t, equipment, "equipment_type_name", "Hydraulic Power Unit")
+	selfComponentID := stringField(t, equipment, "self_component_id")
+	assertUUID(t, selfComponentID)
+
+	componentsResponse := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, fmt.Sprintf("/v1/components/asset/%s?page=1&limit=20", assetID), nil, http.StatusOK))
+	components := dataArray(t, componentsResponse)
+	if len(components) != 1 {
+		t.Fatalf("expected exactly one self component, got %d", len(components))
+	}
+	assertField(t, components[0], "component_id", selfComponentID)
+	assertField(t, components[0], "component_kind", "SELF")
+	assertField(t, components[0], "category_id", nil)
+	assertField(t, components[0], "single_asset_equipment_id", stringField(t, equipment, "single_asset_equipment_id"))
+
+	certificatesResponse := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, fmt.Sprintf("/v1/certificates/component/%s?page=1&limit=20", selfComponentID), nil, http.StatusOK))
+	certificates := dataArray(t, certificatesResponse)
+	if len(certificates) != 2 {
+		t.Fatalf("expected two unique pending certificates, got %d", len(certificates))
+	}
+	seenTests := map[string]bool{}
+	for _, certificate := range certificates {
+		assertField(t, certificate, "component_id", selfComponentID)
+		assertField(t, certificate, "status", "PENDING")
+		seenTests[stringField(t, certificate, "test_id")] = true
+	}
+	if !seenTests[testOneID] || !seenTests[testTwoID] {
+		t.Fatalf("expected pending certificates for %s and %s, got %#v", testOneID, testTwoID, seenTests)
+	}
+
+	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/component", componentPayload(assetID, uuid.NewString(), "Forbidden Component"), http.StatusConflict))
+	assertField(t, body, "error", "single-asset equipment cannot have manual components")
+
+	mainCategoryID := createMainCategory(t, h, "Single Equipment Guard Main")
+	categoryID := createCategory(t, h, mainCategoryID, "Single Equipment Guard Category")
+	body = decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/component", componentPayload(assetID, categoryID, "Forbidden Component"), http.StatusConflict))
+	assertField(t, body, "error", "single-asset equipment cannot have manual components")
+
+	body = decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, "/v1/component/"+selfComponentID, nil, http.StatusConflict))
+	assertField(t, body, "error", "equipment bridge components cannot be deleted directly")
+
+	body = decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, "/v1/equipment-type/"+equipmentTypeID, nil, http.StatusConflict))
+	assertField(t, body, "error", "equipment type is assigned to single-asset equipment")
+
+	performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, "/v1/asset/"+assetID, nil, http.StatusOK)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, "/v1/equipment-type/"+equipmentTypeID, nil, http.StatusOK)
+}
+
+func TestSingleAssetEquipmentCreationRejectsTemplate(t *testing.T) {
+	h := setupIntegrationTest(t)
+
+	equipmentTypeID := createEquipmentType(t, h, "Rejected Template Equipment", 1)
+	testID := createTestType(t, h, "Rejected Template Test", 12)
+	mainCategoryID := createMainCategory(t, h, "Rejected Template Main")
+	categoryID := createCategory(t, h, mainCategoryID, "Rejected Template Category")
+	templateID := createConfiguredTemplate(t, h, categoryID, "Rejected Template", "Rejected Component", []string{testID})
+
+	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/asset", map[string]any{
+		"name":             "Invalid Single Equipment",
+		"photo":            "",
+		"datasheet":        "",
+		"description":      "Invalid because it has a template",
+		"status":           "ACTIVE",
+		"asset_kind":       "SINGLE_EQUIPMENT",
+		"location":         "Yard",
+		"assigned_project": "Project",
+		"template_id":      templateID,
+		"single_equipment": map[string]any{
+			"equipment_type_id": equipmentTypeID,
+			"test_type_ids":     []string{testID},
+		},
+	}, http.StatusBadRequest))
+	assertField(t, body, "error", "single-asset equipment cannot be created from a template")
 }
 
 func TestCreateAssetWithInvalidStatus(t *testing.T) {
@@ -565,6 +670,106 @@ func TestCertificateStatusComputation(t *testing.T) {
 			assertField(t, certificate, "status", tc.expected)
 		})
 	}
+}
+
+func TestCertificateNotificationSchedulerAuditAndReset(t *testing.T) {
+	h := setupIntegrationTest(t)
+	componentID, testID := createComponentFixture(t, h, "Scheduler Notification Component")
+	certificate := createCertificate(t, h, certificatePayload(componentID, testID, 6))
+	certificateID := stringField(t, certificate, "certificate_id")
+	certificateUUID, err := utils.ParseUUID(certificateID, "certificate_id")
+	if err != nil {
+		t.Fatalf("failed to parse certificate id: %v", err)
+	}
+	expiryDate := datePrefix(t, stringField(t, certificate, "expiry_date"))
+	idempotencyKey := fmt.Sprintf("cert-expiry:%s:%s:7d:EMAIL", certificateID, expiryDate)
+	queries := db.New(h.pool)
+
+	slot, err := queries.ClaimNotificationSlot(context.Background(), db.ClaimNotificationSlotParams{
+		CertificateID:  certificateUUID,
+		Type:           "EMAIL",
+		Tier:           "7d",
+		IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		t.Fatalf("failed to claim notification slot: %v", err)
+	}
+	if err := queries.FinalizeNotificationSlot(context.Background(), db.FinalizeNotificationSlotParams{
+		ExternalTaskID: "email-message-id",
+		TaskID:         slot.TaskID,
+	}); err != nil {
+		t.Fatalf("failed to finalize notification slot: %v", err)
+	}
+
+	_, err = queries.ClaimNotificationSlot(context.Background(), db.ClaimNotificationSlotParams{
+		CertificateID:  certificateUUID,
+		Type:           "EMAIL",
+		Tier:           "7d",
+		IdempotencyKey: idempotencyKey,
+	})
+	if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("expected duplicate notification claim to return pgx.ErrNoRows, got %v", err)
+	}
+
+	audit := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/certificate-notifications?page=1&limit=20", nil, http.StatusOK))
+	tasks := dataArray(t, audit)
+	task := findByStringField(t, tasks, "idempotency_key", idempotencyKey)
+	assertField(t, task, "certificate_id", certificateID)
+	assertField(t, task, "certificate_name", stringField(t, certificate, "certificate_name"))
+	assertField(t, task, "type", "EMAIL")
+	assertField(t, task, "tier", "7d")
+	assertField(t, task, "status", "SENT")
+	assertField(t, task, "external_task_id", "email-message-id")
+
+	reset := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, "/v1/certificates/"+certificateID+"/notifications", nil, http.StatusOK))
+	assertField(t, reset, "certificate_id", certificateID)
+	assertField(t, reset, "cleared_tasks", 1)
+
+	afterReset := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/certificate-notifications?page=1&limit=20", nil, http.StatusOK))
+	if len(dataArray(t, afterReset)) != 0 {
+		t.Fatalf("expected reset to remove certificate notification audit rows, got %v", afterReset)
+	}
+
+	if _, err := queries.ClaimNotificationSlot(context.Background(), db.ClaimNotificationSlotParams{
+		CertificateID:  certificateUUID,
+		Type:           "EMAIL",
+		Tier:           "7d",
+		IdempotencyKey: idempotencyKey,
+	}); err != nil {
+		t.Fatalf("expected reset to allow the same notification slot to be claimed again: %v", err)
+	}
+}
+
+func TestCertificateNotificationFailureAudit(t *testing.T) {
+	h := setupIntegrationTest(t)
+	componentID, testID := createComponentFixture(t, h, "Scheduler Failure Component")
+	certificate := createCertificate(t, h, certificatePayload(componentID, testID, -2))
+	certificateID := stringField(t, certificate, "certificate_id")
+	certificateUUID, err := utils.ParseUUID(certificateID, "certificate_id")
+	if err != nil {
+		t.Fatalf("failed to parse certificate id: %v", err)
+	}
+	expiryDate := datePrefix(t, stringField(t, certificate, "expiry_date"))
+	idempotencyKey := fmt.Sprintf("cert-expiry:%s:%s:expired:CLICKUP", certificateID, expiryDate)
+
+	if err := db.New(h.pool).RecordNotificationFailure(context.Background(), db.RecordNotificationFailureParams{
+		CertificateID:  certificateUUID,
+		IdempotencyKey: idempotencyKey,
+		Channel:        "CLICKUP",
+		Tier:           "expired",
+		ErrorMessage:   "ClickUp rejected the request",
+	}); err != nil {
+		t.Fatalf("failed to seed notification failure: %v", err)
+	}
+
+	audit := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/notification-failures?page=1&limit=20", nil, http.StatusOK))
+	failures := dataArray(t, audit)
+	failure := findByStringField(t, failures, "idempotency_key", idempotencyKey)
+	assertField(t, failure, "certificate_id", certificateID)
+	assertField(t, failure, "certificate_name", stringField(t, certificate, "certificate_name"))
+	assertField(t, failure, "channel", "CLICKUP")
+	assertField(t, failure, "tier", "expired")
+	assertField(t, failure, "error_message", "ClickUp rejected the request")
 }
 
 func TestUploadCertificateFile(t *testing.T) {
@@ -1153,21 +1358,24 @@ func resetIntegrationDatabase(t *testing.T, pool *pgxpool.Pool) {
 	const truncateSQL = `
 TRUNCATE TABLE
   asset_maintenance_events,
+  notification_failures,
   scheduled_tasks,
   certificate_upload_audit,
   certificates,
   components,
+  single_asset_equipment,
   assets,
   template_component_tests,
   template_components,
   asset_templates,
-	  categories,
-	  main_categories,
-	  test_types,
-	  competent_persons,
-	  competency_categories,
-	  user_management_audit_logs,
-	  users
+  equipment_types,
+  categories,
+  main_categories,
+  test_types,
+  competent_persons,
+  competency_categories,
+  user_management_audit_logs,
+  users
 RESTART IDENTITY CASCADE;
 `
 
@@ -1285,6 +1493,19 @@ func createTestType(t *testing.T, h *integrationHarness, name string, validity i
 	}, http.StatusCreated))
 	stringField(t, body, "display_id")
 	id := stringField(t, body, "test_id")
+	assertUUID(t, id)
+	return id
+}
+
+func createEquipmentType(t *testing.T, h *integrationHarness, name string, sortOrder int) string {
+	t.Helper()
+	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/equipment-type", map[string]any{
+		"equipment_type_name": name,
+		"description":         name + " description",
+		"sort_order":          sortOrder,
+	}, http.StatusCreated))
+	stringField(t, body, "display_id")
+	id := stringField(t, body, "equipment_type_id")
 	assertUUID(t, id)
 	return id
 }
@@ -1583,6 +1804,18 @@ func dataArray(t *testing.T, body map[string]any) []map[string]any {
 	return items
 }
 
+func findByStringField(t *testing.T, items []map[string]any, key, expected string) map[string]any {
+	t.Helper()
+
+	for _, item := range items {
+		if value, ok := item[key].(string); ok && value == expected {
+			return item
+		}
+	}
+	t.Fatalf("expected to find item with %s=%q in %v", key, expected, items)
+	return nil
+}
+
 func unwrapEmbeddedObject(body map[string]any, key string) map[string]any {
 	if raw, exists := body[key]; exists {
 		if embedded, ok := raw.(map[string]any); ok {
@@ -1610,6 +1843,15 @@ func stringField(t *testing.T, body map[string]any, key string) string {
 		t.Fatalf("expected %q to be a string in %v", key, body)
 	}
 	return value
+}
+
+func datePrefix(t *testing.T, value string) string {
+	t.Helper()
+
+	if len(value) < len("2006-01-02") {
+		t.Fatalf("expected %q to contain an ISO date prefix", value)
+	}
+	return value[:len("2006-01-02")]
 }
 
 func intField(t *testing.T, body map[string]any, key string) int {

@@ -17,7 +17,7 @@ AMS_RUN_INTEGRATION=1 go test ./...
 Use the isolated test runner instead:
 
 ```bash
-bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 The runner creates a temporary database named `ams_e2e_*`, runs migrations, runs Newman API regression, recreates a fresh isolated database for browser E2E, and drops it at the end.
@@ -56,37 +56,41 @@ AMS uses these complementary test layers:
 1. Newman/Postman API regression tests call the isolated running API over HTTP and exercise broad API workflows.
 2. Playwright live API smoke tests call the isolated running API over HTTP and verify auth/cookie behavior.
 3. Browser E2E tests run real user workflows in Playwright.
-4. Optional Go integration tests call Gin routes in-process only if `RUN_GO_REGRESSION=1`.
+4. Optional Go integration tests call Gin routes in-process only if `RUN_GO_REGRESSION=1`; this lane includes scheduler notification idempotency, audit, and force re-notify reset coverage.
 
 Newman/Postman is the normal API regression lane for this project. Go integration tests are not required for the VPS workflow unless they are intentionally configured and enabled later.
 
 The primary API regression collections are in:
 
 ```text
-tests/api/postman/
+tests/regression/api/
 ```
 
 The isolated runner defaults to:
 
 ```text
-tests/api/postman/system-api-smoke.postman_collection.json
-tests/api/postman/routine-maintenance.postman_collection.json
-tests/api/postman/client-asset-certificates.postman_collection.json
+tests/regression/api/system-api-smoke.postman_collection.json
+tests/regression/api/admin-surface-regression.postman_collection.json
+tests/regression/api/routine-maintenance.postman_collection.json
+tests/regression/api/client-asset-certificates.postman_collection.json
+tests/regression/api/single-asset-equipment.postman_collection.json
 ```
 
-Other collections in `postman/` may be older targeted/manual collections. Do not add them to the default VPS suite until they have been checked against the current API contract and current required fields such as `sort_order`.
+Only collections under `tests/regression/api/` are part of the automated VPS suite. Do not add legacy/manual collections until they have been checked against the current API contract and current required fields such as `sort_order`.
+
+The default browser E2E suite covers auth, whole-app route health by role, routine maintenance, client certificate visibility, user permissions, single-asset equipment certificate slots, and scheduler management. The whole-app spec seeds current app data and opens every major Cloudscape route. The scheduler spec verifies that an admin/super admin can open `/scheduler`, see the Force re-notify controls plus notification/failure audit tables, select a certificate, and clear notification history through the real UI.
 
 To run a specific Newman set:
 
 ```bash
-NEWMAN_COLLECTIONS="tests/api/postman/system-api-smoke.postman_collection.json" \
-bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+NEWMAN_COLLECTIONS="tests/regression/api/system-api-smoke.postman_collection.json" \
+bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 The live API smoke spec is:
 
 ```text
-ams-frontend-cloudscape/tests/e2e/api-auth-smoke.spec.ts
+tests/regression/e2e/api-auth-smoke.spec.ts
 ```
 
 It verifies:
@@ -178,7 +182,7 @@ Run the script as the matching Linux user for peer auth:
 
 ```bash
 cd /home/pms/ams-testing/asset-management-system
-bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 The Postgres role needs `CREATEDB` so the runner can create/drop `ams_e2e_*` databases:
@@ -222,14 +226,14 @@ The runner reads `DATABASE_URL` only as a template and replaces the DB name with
 From repo root:
 
 ```bash
-bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 If default ports are busy, choose fresh ports:
 
 ```bash
 API_PORT=18085 FRONTEND_PORT=14178 \
-bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 The runner checks port availability before starting isolated servers.
@@ -261,29 +265,29 @@ Useful when you only want API regression without browser E2E:
 ```bash
 RUN_PLAYWRIGHT=0 \
 RUN_NEWMAN=1 \
-bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 Run one Postman collection:
 
 ```bash
-NEWMAN_COLLECTIONS="tests/api/postman/system-api-smoke.postman_collection.json" \
+NEWMAN_COLLECTIONS="tests/regression/api/system-api-smoke.postman_collection.json" \
 RUN_PLAYWRIGHT=0 \
-bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 Skip Newman and run only browser/API Playwright specs:
 
 ```bash
 RUN_NEWMAN=0 \
-bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 Run optional Go integration tests before Newman only if they are configured and you intentionally want that extra lane:
 
 ```bash
 RUN_GO_REGRESSION=1 \
-bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 ## Running Only Auth Cookie E2E
@@ -292,9 +296,9 @@ Useful after auth/session changes:
 
 ```bash
 API_PORT=18085 FRONTEND_PORT=14178 \
-E2E_SPECS="tests/e2e/api-auth-smoke.spec.ts tests/e2e/auth-cookie-session.spec.ts" \
+E2E_SPECS="../tests/regression/e2e/api-auth-smoke.spec.ts ../tests/regression/e2e/auth-cookie-session.spec.ts" \
 RUN_GO_REGRESSION=0 \
-bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 This verifies:
@@ -311,7 +315,7 @@ This verifies:
 For debugging:
 
 ```bash
-KEEP_DB=1 bash ams-frontend-cloudscape/tests/e2e/run-vps-isolated-tests.sh
+KEEP_DB=1 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 Drop it manually after inspection:

@@ -337,28 +337,30 @@ export function AssetFormPage() {
                   }
                   label="Asset creation mode"
                 >
-                  <Select
-                    disabled={isEditing}
-                    options={ASSET_KIND_OPTIONS}
-                    selectedOption={selectedAssetKindOption}
-                    onChange={({ detail }) =>
-                      setForm((current) => {
-                        const nextKind = detail.selectedOption.value as AssetInput["asset_kind"];
-                        return {
-                          ...current,
-                          asset_kind: nextKind,
-                          template_id: nextKind === "SINGLE_EQUIPMENT" ? null : current.template_id,
-                          single_equipment:
-                            nextKind === "SINGLE_EQUIPMENT"
-                              ? current.single_equipment || {
-                                  equipment_type_id: "",
-                                  test_type_ids: [],
-                                }
-                              : undefined,
-                        };
-                      })
-                    }
-                  />
+                  <div data-testid="asset-kind-select">
+                    <Select
+                      disabled={isEditing}
+                      options={ASSET_KIND_OPTIONS}
+                      selectedOption={selectedAssetKindOption}
+                      onChange={({ detail }) =>
+                        setForm((current) => {
+                          const nextKind = detail.selectedOption.value as AssetInput["asset_kind"];
+                          return {
+                            ...current,
+                            asset_kind: nextKind,
+                            template_id: nextKind === "SINGLE_EQUIPMENT" ? null : current.template_id,
+                            single_equipment:
+                              nextKind === "SINGLE_EQUIPMENT"
+                                ? current.single_equipment || {
+                                    equipment_type_id: "",
+                                    test_type_ids: [],
+                                  }
+                                : undefined,
+                          };
+                        })
+                      }
+                    />
+                  </div>
                 </FormField>
                 <FormField label="Assigned project">
                   <Select
@@ -412,46 +414,50 @@ export function AssetFormPage() {
                     description="Equipment types are a separate catalog for single-asset equipment."
                     label="Equipment type"
                   >
-                    <Select
-                      loadingText="Loading equipment types"
-                      options={equipmentTypeOptions}
-                      placeholder="Select equipment type"
-                      selectedOption={selectedEquipmentTypeOption}
-                      statusType={equipmentTypesQuery.isLoading ? "loading" : "finished"}
-                      onChange={({ detail }) =>
-                        setForm((current) => ({
-                          ...current,
-                          single_equipment: {
-                            equipment_type_id: detail.selectedOption.value || "",
-                            test_type_ids: current.single_equipment?.test_type_ids || [],
-                          },
-                        }))
-                      }
-                    />
+                    <div data-testid="single-equipment-type-select">
+                      <Select
+                        loadingText="Loading equipment types"
+                        options={equipmentTypeOptions}
+                        placeholder="Select equipment type"
+                        selectedOption={selectedEquipmentTypeOption}
+                        statusType={equipmentTypesQuery.isLoading ? "loading" : "finished"}
+                        onChange={({ detail }) =>
+                          setForm((current) => ({
+                            ...current,
+                            single_equipment: {
+                              equipment_type_id: detail.selectedOption.value || "",
+                              test_type_ids: current.single_equipment?.test_type_ids || [],
+                            },
+                          }))
+                        }
+                      />
+                    </div>
                   </FormField>
                   <FormField
                     description="Each selected test type creates a pending certificate slot."
                     label="Certificate test types"
                   >
-                    <Multiselect
-                      loadingText="Loading test types"
-                      options={testTypeOptions}
-                      placeholder="Select certificate test types"
-                      selectedOptions={selectedTestOptions}
-                      statusType={testTypesQuery.isLoading ? "loading" : "finished"}
-                      onChange={({ detail }) =>
-                        setForm((current) => ({
-                          ...current,
-                          single_equipment: {
-                            equipment_type_id:
-                              current.single_equipment?.equipment_type_id || "",
-                            test_type_ids: detail.selectedOptions
-                              .map((option) => option.value || "")
-                              .filter(Boolean),
-                          },
-                        }))
-                      }
-                    />
+                    <div data-testid="single-equipment-test-types">
+                      <Multiselect
+                        loadingText="Loading test types"
+                        options={testTypeOptions}
+                        placeholder="Select certificate test types"
+                        selectedOptions={selectedTestOptions}
+                        statusType={testTypesQuery.isLoading ? "loading" : "finished"}
+                        onChange={({ detail }) =>
+                          setForm((current) => ({
+                            ...current,
+                            single_equipment: {
+                              equipment_type_id:
+                                current.single_equipment?.equipment_type_id || "",
+                              test_type_ids: detail.selectedOptions
+                                .map((option) => option.value || "")
+                                .filter(Boolean),
+                            },
+                          }))
+                        }
+                      />
+                    </div>
                   </FormField>
                 </ColumnLayout>
               ) : (

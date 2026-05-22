@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FRONTEND_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-REPO_ROOT="$(cd "$FRONTEND_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+FRONTEND_DIR="$REPO_ROOT/ams-frontend-cloudscape"
 SERVER_DIR="$REPO_ROOT/ams-server"
 SERVER_ENV="$SERVER_DIR/.env"
 RUN_DIR="$REPO_ROOT/.vps-test-run"
@@ -15,9 +15,9 @@ FRONTEND_PORT="${FRONTEND_PORT:-14175}"
 KEEP_DB="${KEEP_DB:-0}"
 RUN_GO_REGRESSION="${RUN_GO_REGRESSION:-${RUN_REGRESSION:-0}}"
 RUN_NEWMAN="${RUN_NEWMAN:-1}"
-NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/api/postman/system-api-smoke.postman_collection.json tests/api/postman/routine-maintenance.postman_collection.json tests/api/postman/client-asset-certificates.postman_collection.json}"
+NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json}"
 RUN_PLAYWRIGHT="${RUN_PLAYWRIGHT:-1}"
-E2E_SPECS="${E2E_SPECS:-tests/e2e/api-auth-smoke.spec.ts tests/e2e/auth-cookie-session.spec.ts tests/e2e/routine-maintenance.spec.ts tests/e2e/client-asset-certificates.spec.ts tests/e2e/user-management-permissions.spec.ts}"
+E2E_SPECS="${E2E_SPECS:-../tests/regression/e2e/api-auth-smoke.spec.ts ../tests/regression/e2e/auth-cookie-session.spec.ts ../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/client-asset-certificates.spec.ts ../tests/regression/e2e/user-management-permissions.spec.ts ../tests/regression/e2e/single-asset-equipment.spec.ts ../tests/regression/e2e/scheduler-management.spec.ts}"
 
 API_PID=""
 FRONTEND_PID=""
@@ -341,7 +341,7 @@ if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
   echo "Starting isolated frontend on $FRONTEND_BASE_URL"
   (
     cd "$FRONTEND_DIR"
-    PORT="$FRONTEND_PORT" node tests/e2e/static-server.cjs >"$RUN_DIR/frontend.out.log" 2>"$RUN_DIR/frontend.err.log"
+    PORT="$FRONTEND_PORT" node ../tests/regression/support/static-server.cjs >"$RUN_DIR/frontend.out.log" 2>"$RUN_DIR/frontend.err.log"
   ) &
   FRONTEND_PID="$!"
   wait_for_http "$FRONTEND_BASE_URL" "frontend" "$RUN_DIR/frontend.err.log"
