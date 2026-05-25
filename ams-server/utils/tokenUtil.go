@@ -15,6 +15,7 @@ import (
 )
 
 const AccessTokenCookieName = "ams_access_token"
+const accessTokenTTL = 6 * time.Hour
 
 type SignedDetails struct {
 	Email     string
@@ -29,12 +30,8 @@ func getSecretKey() []byte {
 	return []byte(os.Getenv("SECRET_KEY"))
 }
 
-func getSecretRefreshKey() []byte {
-	return []byte(os.Getenv("SECRET_REFRESH_KEY"))
-}
-
 func AccessTokenTTL() time.Duration {
-	return time.Hour
+	return accessTokenTTL
 }
 
 func isSecureCookie() bool {
@@ -65,7 +62,7 @@ func ClearAccessTokenCookie(c *gin.Context) {
 	})
 }
 
-func GenerateAllTokens(email, firstName, lastName, role, userId string) (string, string, error) {
+func GenerateAccessToken(email, firstName, lastName, role, userId string) (string, error) {
 	now := time.Now()
 	claims := &SignedDetails{
 		Email:     email,
@@ -83,32 +80,13 @@ func GenerateAllTokens(email, firstName, lastName, role, userId string) (string,
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, err := token.SignedString(getSecretKey())
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
-	refreshClaims := &SignedDetails{
-		Email:     email,
-		FirstName: firstName,
-		LastName:  lastName,
-		Role:      role,
-		UserId:    userId,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "AMS",
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * 7 * time.Hour)),
-		},
-	}
-
-	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
-	signedRefreshToken, err := refreshToken.SignedString(getSecretRefreshKey())
-	if err != nil {
-		return "", "", err
-	}
-
-	return signedToken, signedRefreshToken, nil
+	return signedToken, nil
 }
 
-func UpdateAllTokens(pool *pgxpool.Pool, userId, token, refreshToken string) error {
+func UpdateAccessToken(pool *pgxpool.Pool, userId, token string) error {
 	queries := db.New(pool)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -119,10 +97,9 @@ func UpdateAllTokens(pool *pgxpool.Pool, userId, token, refreshToken string) err
 		return err
 	}
 
-	err = queries.UpdateUserTokens(ctx, db.UpdateUserTokensParams{
-		Token:        token,
-		RefreshToken: refreshToken,
-		UserID:       parsedUserID,
+	err = queries.UpdateUserToken(ctx, db.UpdateUserTokenParams{
+		Token:  token,
+		UserID: parsedUserID,
 	})
 	if err != nil {
 		return err

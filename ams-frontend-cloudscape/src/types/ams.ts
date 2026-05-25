@@ -27,7 +27,6 @@ export interface LoginResponse {
 	role: Role;
 	status: UserStatus;
 	token?: string;
-	refresh_token?: string;
 	can_manage_user_passwords?: boolean;
 }
 

@@ -135,9 +135,9 @@ Implements business logic following cms-go patterns:
 ### 5. Utility Layer
 
 **Token Utility (tokenUtil.go)**
-- `GenerateAllTokens`: Creates access token (24h) and refresh token (7 days)
+- `GenerateAccessToken`: Creates access token (6h)
 - `ValidateToken`: Verifies token signature and expiration
-- `UpdateAllTokens`: Updates tokens in database
+- `UpdateAccessToken`: Updates the stored access token in the database
 - `GetAccessToken`: Extracts token from request header
 - `GetUserIdFromContext`: Retrieves userId from Gin context
 - `GetRoleFromContext`: Retrieves role from Gin context
@@ -236,10 +236,8 @@ Scheduled Job → Query expiring certificates
 
 ### Authentication Mechanism
 - JWT-based stateless authentication
-- Access tokens (short-lived: 24 hours)
-- Refresh tokens (long-lived: 7 days)
+- Access tokens (short-lived: 6 hours)
 - HS256 signing algorithm
-- Separate secrets for access and refresh tokens
 
 ### Authorization Mechanism
 - Role-based access control (RBAC)
@@ -284,7 +282,6 @@ Scheduled Job → Query expiring certificates
 - Implement pagination for large datasets
 - Add search and filtering capabilities
 - Add audit logging for ADMIN actions
-- Implement refresh token rotation
 - Add rate limiting middleware
 
 ## Environment Configuration
@@ -294,7 +291,6 @@ Scheduled Job → Query expiring certificates
 MONGODB_URI          - MongoDB connection string
 DATABASE_NAME        - Database name
 SECRET_KEY           - JWT access token secret
-SECRET_REFRESH_KEY   - JWT refresh token secret
 SMTP_HOST            - SMTP server address
 SMTP_PORT            - SMTP server port
 SMTP_USER            - SMTP username

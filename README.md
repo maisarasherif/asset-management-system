@@ -4,7 +4,7 @@ Asset Management System with certification tracking and expiry alerts built with
 
 ## Features
 
-- User authentication with JWT tokens (access & refresh tokens)
+- User authentication with JWT access tokens
 - Role-based access control (ADMIN/USER)
 - Asset management with categories
 - Component tracking for each asset
@@ -62,7 +62,6 @@ DATABASE_NAME=asset_management_db
 
 # JWT Secrets
 SECRET_KEY=your-secret-key-here
-SECRET_REFRESH_KEY=your-refresh-secret-key-here
 
 # SMTP Configuration for Email Alerts
 SMTP_HOST=smtp.gmail.com
@@ -153,9 +152,9 @@ Certificate records linked to components with issue/expiry dates.
 ## Authentication Flow
 
 1. User registers via `/register` endpoint
-2. User logs in via `/login` endpoint to receive JWT tokens
-3. Access token (24h validity) used for API requests
-4. Refresh token (7 days validity) can be used to get new access token
+2. User logs in via `/login` endpoint to receive a JWT access token
+3. Access token (6h validity) used for API requests
+4. After the access token expires, the user must log in again
 5. All protected endpoints require valid Bearer token in Authorization header
 
 ## Certificate Expiry System

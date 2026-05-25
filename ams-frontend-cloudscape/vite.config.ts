@@ -26,5 +26,12 @@ export default defineConfig({
   },
   server: {
     port: 4174,
+    strictPort: true,
+    proxy: {
+      "/v1": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+    },
   },
 });

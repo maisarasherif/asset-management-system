@@ -114,7 +114,6 @@ type LoginResponse struct {
 	Role                   string `json:"role"`
 	Status                 string `json:"status"`
 	Token                  string `json:"token,omitempty"`
-	RefreshToken           string `json:"refresh_token,omitempty"`
 	CanManageUserPasswords bool   `json:"can_manage_user_passwords"`
 }
 

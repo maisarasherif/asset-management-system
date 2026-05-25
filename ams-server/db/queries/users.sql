@@ -35,7 +35,6 @@ RETURNING
     role,
     status,
     token,
-    refresh_token,
     created_at,
     updated_at;
 
@@ -50,7 +49,6 @@ SELECT
     role,
     status,
     token,
-    refresh_token,
     created_at,
     updated_at
 FROM users
@@ -96,8 +94,8 @@ WHERE user_id = sqlc.arg(user_id);
 -- name: DeleteUser :execrows
 DELETE FROM users WHERE user_id = sqlc.arg(user_id);
 
--- name: UpdateUserTokens :exec
-UPDATE users SET token = $1, refresh_token = $2, updated_at = NOW()
+-- name: UpdateUserToken :exec
+UPDATE users SET token = $1, updated_at = NOW()
 WHERE user_id = sqlc.arg(user_id);
 
 -- name: CreateUserManagementAuditLog :one

@@ -243,18 +243,17 @@ type TestType struct {
 }
 
 type User struct {
-	FirstName    string    `json:"first_name"`
-	LastName     string    `json:"last_name"`
-	Email        string    `json:"email"`
-	Password     string    `json:"password"`
-	Role         string    `json:"role"`
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	UserID       uuid.UUID `json:"user_id"`
-	DisplayID    string    `json:"display_id"`
-	Status       string    `json:"status"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
+	Password  string    `json:"password"`
+	Role      string    `json:"role"`
+	Token     string    `json:"token"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	UserID    uuid.UUID `json:"user_id"`
+	DisplayID string    `json:"display_id"`
+	Status    string    `json:"status"`
 }
 
 type UserManagementAuditLog struct {

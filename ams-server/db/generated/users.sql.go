@@ -74,7 +74,6 @@ RETURNING
     role,
     status,
     token,
-    refresh_token,
     created_at,
     updated_at
 `
@@ -89,18 +88,17 @@ type CreateUserParams struct {
 }
 
 type CreateUserRow struct {
-	UserID       uuid.UUID `json:"user_id"`
-	DisplayID    string    `json:"display_id"`
-	FirstName    string    `json:"first_name"`
-	LastName     string    `json:"last_name"`
-	Email        string    `json:"email"`
-	Password     string    `json:"password"`
-	Role         string    `json:"role"`
-	Status       string    `json:"status"`
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	UserID    uuid.UUID `json:"user_id"`
+	DisplayID string    `json:"display_id"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
+	Password  string    `json:"password"`
+	Role      string    `json:"role"`
+	Status    string    `json:"status"`
+	Token     string    `json:"token"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
@@ -123,7 +121,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.Role,
 		&i.Status,
 		&i.Token,
-		&i.RefreshToken,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -284,7 +281,6 @@ SELECT
     role,
     status,
     token,
-    refresh_token,
     created_at,
     updated_at
 FROM users
@@ -293,18 +289,17 @@ LIMIT 1
 `
 
 type GetUserByEmailRow struct {
-	UserID       uuid.UUID `json:"user_id"`
-	DisplayID    string    `json:"display_id"`
-	FirstName    string    `json:"first_name"`
-	LastName     string    `json:"last_name"`
-	Email        string    `json:"email"`
-	Password     string    `json:"password"`
-	Role         string    `json:"role"`
-	Status       string    `json:"status"`
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	UserID    uuid.UUID `json:"user_id"`
+	DisplayID string    `json:"display_id"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
+	Password  string    `json:"password"`
+	Role      string    `json:"role"`
+	Status    string    `json:"status"`
+	Token     string    `json:"token"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -320,7 +315,6 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Role,
 		&i.Status,
 		&i.Token,
-		&i.RefreshToken,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -517,18 +511,17 @@ func (q *Queries) UpdateUserRoleByEmail(ctx context.Context, arg UpdateUserRoleB
 	return result.RowsAffected(), nil
 }
 
-const updateUserTokens = `-- name: UpdateUserTokens :exec
-UPDATE users SET token = $1, refresh_token = $2, updated_at = NOW()
-WHERE user_id = $3
+const updateUserToken = `-- name: UpdateUserToken :exec
+UPDATE users SET token = $1, updated_at = NOW()
+WHERE user_id = $2
 `
 
-type UpdateUserTokensParams struct {
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token"`
-	UserID       uuid.UUID `json:"user_id"`
+type UpdateUserTokenParams struct {
+	Token  string    `json:"token"`
+	UserID uuid.UUID `json:"user_id"`
 }
 
-func (q *Queries) UpdateUserTokens(ctx context.Context, arg UpdateUserTokensParams) error {
-	_, err := q.db.Exec(ctx, updateUserTokens, arg.Token, arg.RefreshToken, arg.UserID)
+func (q *Queries) UpdateUserToken(ctx context.Context, arg UpdateUserTokenParams) error {
+	_, err := q.db.Exec(ctx, updateUserToken, arg.Token, arg.UserID)
 	return err
 }

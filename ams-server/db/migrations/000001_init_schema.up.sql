@@ -7,7 +7,6 @@ CREATE TABLE users (
     password      TEXT NOT NULL,
     role          TEXT NOT NULL CHECK (role IN ('ADMIN', 'USER')),
     token         TEXT NOT NULL DEFAULT '',
-    refresh_token TEXT NOT NULL DEFAULT '',
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

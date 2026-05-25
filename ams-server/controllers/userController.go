@@ -529,10 +529,9 @@ func AdminUpdateUserPassword(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		if err = queries.UpdateUserTokens(ctx, db.UpdateUserTokensParams{
-			Token:        "",
-			RefreshToken: "",
-			UserID:       userID,
+		if err = queries.UpdateUserToken(ctx, db.UpdateUserTokenParams{
+			Token:  "",
+			UserID: userID,
 		}); err != nil {
 			logger.Log.Error().Err(err).Str("target_user_id", userID.String()).Msg("failed to clear tokens after password reset")
 		}
@@ -759,7 +758,7 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		token, refreshToken, err := utils.GenerateAllTokens(
+		token, err := utils.GenerateAccessToken(
 			foundUser.Email,
 			foundUser.FirstName,
 			foundUser.LastName,
@@ -771,8 +770,8 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		if err = utils.UpdateAllTokens(pool, foundUser.UserID.String(), token, refreshToken); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update tokens"})
+		if err = utils.UpdateAccessToken(pool, foundUser.UserID.String(), token); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token"})
 			return
 		}
 		utils.SetAccessTokenCookie(c, token)
@@ -835,7 +834,7 @@ func LogoutUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		if err = utils.UpdateAllTokens(pool, userID, "", ""); err != nil {
+		if err = utils.UpdateAccessToken(pool, userID, ""); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to logout user"})
 			return
 		}

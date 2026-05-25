@@ -986,9 +986,6 @@ func TestLoginSuccess(t *testing.T) {
 	if strings.TrimSpace(stringField(t, body, "token")) == "" {
 		t.Fatal("expected token in login response")
 	}
-	if _, ok := body["refresh_token"]; ok {
-		t.Fatal("expected login response not to expose refresh token")
-	}
 }
 
 func TestLoginSetsAccessTokenCookieAndSessionReadsIt(t *testing.T) {
@@ -1316,9 +1313,6 @@ func setupIntegrationTest(t *testing.T) *integrationHarness {
 	if os.Getenv("SECRET_KEY") == "" {
 		_ = os.Setenv("SECRET_KEY", "integration-secret-key")
 	}
-	if os.Getenv("SECRET_REFRESH_KEY") == "" {
-		_ = os.Setenv("SECRET_REFRESH_KEY", "integration-refresh-secret-key")
-	}
 	_ = os.Setenv("SEED_ADMIN_EMAIL", "integration-admin@example.com")
 
 	dsn := os.Getenv("DATABASE_URL")
@@ -1405,7 +1399,7 @@ func createIntegrationUserToken(t *testing.T, pool *pgxpool.Pool, firstName, las
 	t.Helper()
 
 	user := createIntegrationUser(t, pool, firstName, lastName, email, password, role)
-	token, _, err := utils.GenerateAllTokens(user.Email, user.FirstName, user.LastName, user.Role, user.UserID.String())
+	token, err := utils.GenerateAccessToken(user.Email, user.FirstName, user.LastName, user.Role, user.UserID.String())
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
