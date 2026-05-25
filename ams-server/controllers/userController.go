@@ -758,7 +758,7 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		token, err := utils.GenerateAccessToken(
+		token, expiresAt, err := utils.GenerateAccessToken(
 			foundUser.Email,
 			foundUser.FirstName,
 			foundUser.LastName,
@@ -774,7 +774,7 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token"})
 			return
 		}
-		utils.SetAccessTokenCookie(c, token)
+		utils.SetAccessTokenCookie(c, token, expiresAt)
 
 		logger.Log.Info().
 			Str("user_id", foundUser.UserID.String()).
@@ -791,6 +791,7 @@ func LoginUser(pool *pgxpool.Pool) gin.HandlerFunc {
 			Role:                   foundUser.Role,
 			Status:                 foundUser.Status,
 			Token:                  token,
+			ExpiresAt:              expiresAt,
 			CanManageUserPasswords: isSuperAdminRole(foundUser.Role),
 		})
 
@@ -813,6 +814,16 @@ func GetSession() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "could not identify requesting user role"})
 			return
 		}
+		expiresAt, ok := c.Get("expiresAt")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "could not identify session expiry"})
+			return
+		}
+		expiresAtTime, ok := expiresAt.(time.Time)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session expiry"})
+			return
+		}
 
 		c.JSON(http.StatusOK, dto.LoginResponse{
 			UserID:                 userID,
@@ -821,6 +832,7 @@ func GetSession() gin.HandlerFunc {
 			Email:                  stringFromContext(email),
 			Role:                   role,
 			Status:                 "ACTIVE",
+			ExpiresAt:              expiresAtTime,
 			CanManageUserPasswords: isSuperAdminRole(role),
 		})
 	}

@@ -10,9 +10,12 @@ import (
 func TestGenerateAccessTokenUsesSixHourTTL(t *testing.T) {
 	t.Setenv("SECRET_KEY", "test-access-secret")
 
-	token, err := GenerateAccessToken("user@example.com", "Test", "User", "USER", "user-id")
+	token, expiresAt, err := GenerateAccessToken("user@example.com", "Test", "User", "USER", "user-id")
 	if err != nil {
 		t.Fatalf("GenerateAccessToken returned error: %v", err)
+	}
+	if expiresAt.IsZero() {
+		t.Fatal("expected generated token expiry")
 	}
 
 	claims := &SignedDetails{}
@@ -31,5 +34,8 @@ func TestGenerateAccessTokenUsesSixHourTTL(t *testing.T) {
 
 	if ttl := claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time); ttl != 6*time.Hour {
 		t.Fatalf("expected access token TTL to be 6h, got %s", ttl)
+	}
+	if !claims.ExpiresAt.Time.Equal(expiresAt.Truncate(time.Second)) {
+		t.Fatalf("expected returned expiry to match token expiry, got %s and %s", expiresAt, claims.ExpiresAt.Time)
 	}
 }

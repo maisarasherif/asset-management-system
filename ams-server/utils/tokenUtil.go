@@ -39,11 +39,13 @@ func isSecureCookie() bool {
 	return appEnv != "dev" && appEnv != "development" && appEnv != "local" && appEnv != "test"
 }
 
-func SetAccessTokenCookie(c *gin.Context, token string) {
+func SetAccessTokenCookie(c *gin.Context, token string, expiresAt time.Time) {
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     AccessTokenCookieName,
 		Value:    token,
 		Path:     "/",
+		Expires:  expiresAt,
+		MaxAge:   int(time.Until(expiresAt).Seconds()),
 		HttpOnly: true,
 		Secure:   isSecureCookie(),
 		SameSite: http.SameSiteLaxMode,
@@ -62,8 +64,9 @@ func ClearAccessTokenCookie(c *gin.Context) {
 	})
 }
 
-func GenerateAccessToken(email, firstName, lastName, role, userId string) (string, error) {
+func GenerateAccessToken(email, firstName, lastName, role, userId string) (string, time.Time, error) {
 	now := time.Now()
+	expiresAt := now.Add(AccessTokenTTL())
 	claims := &SignedDetails{
 		Email:     email,
 		FirstName: firstName,
@@ -73,17 +76,17 @@ func GenerateAccessToken(email, firstName, lastName, role, userId string) (strin
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "AMS",
 			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(AccessTokenTTL())),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, err := token.SignedString(getSecretKey())
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 
-	return signedToken, nil
+	return signedToken, expiresAt, nil
 }
 
 func UpdateAccessToken(pool *pgxpool.Pool, userId, token string) error {
@@ -123,6 +126,10 @@ func ValidateToken(tokenString string) (*SignedDetails, error) {
 
 	if !token.Valid {
 		return nil, errors.New("invalid token")
+	}
+
+	if claims.ExpiresAt == nil {
+		return nil, errors.New("token expiry is required")
 	}
 
 	if claims.ExpiresAt.Time.Before(time.Now()) {

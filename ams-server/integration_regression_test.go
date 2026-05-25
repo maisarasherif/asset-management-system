@@ -986,6 +986,9 @@ func TestLoginSuccess(t *testing.T) {
 	if strings.TrimSpace(stringField(t, body, "token")) == "" {
 		t.Fatal("expected token in login response")
 	}
+	if strings.TrimSpace(stringField(t, body, "expires_at")) == "" {
+		t.Fatal("expected expires_at in login response")
+	}
 }
 
 func TestLoginSetsAccessTokenCookieAndSessionReadsIt(t *testing.T) {
@@ -1023,8 +1026,11 @@ func TestLoginSetsAccessTokenCookieAndSessionReadsIt(t *testing.T) {
 	if accessCookie.Value == "" {
 		t.Fatal("expected access token cookie value")
 	}
-	if accessCookie.MaxAge != 0 {
-		t.Fatal("expected access token cookie to be session scoped")
+	if accessCookie.MaxAge <= 0 {
+		t.Fatal("expected access token cookie to have an expiry")
+	}
+	if accessCookie.Expires.IsZero() {
+		t.Fatal("expected access token cookie expiry")
 	}
 
 	sessionReq := httptest.NewRequest(http.MethodGet, "/v1/session", nil)
@@ -1037,6 +1043,9 @@ func TestLoginSetsAccessTokenCookieAndSessionReadsIt(t *testing.T) {
 
 	body := decodeObject(t, sessionRecorder.Body.Bytes())
 	assertField(t, body, "email", "login-cookie@example.com")
+	if strings.TrimSpace(stringField(t, body, "expires_at")) == "" {
+		t.Fatal("expected session response to expose expiry")
+	}
 	if _, ok := body["token"]; ok {
 		t.Fatal("expected session response not to expose token")
 	}
@@ -1399,7 +1408,7 @@ func createIntegrationUserToken(t *testing.T, pool *pgxpool.Pool, firstName, las
 	t.Helper()
 
 	user := createIntegrationUser(t, pool, firstName, lastName, email, password, role)
-	token, err := utils.GenerateAccessToken(user.Email, user.FirstName, user.LastName, user.Role, user.UserID.String())
+	token, _, err := utils.GenerateAccessToken(user.Email, user.FirstName, user.LastName, user.Role, user.UserID.String())
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}

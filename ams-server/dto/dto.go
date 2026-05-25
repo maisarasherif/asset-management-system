@@ -107,14 +107,15 @@ type UserResponse struct {
 }
 
 type LoginResponse struct {
-	UserID                 string `json:"user_id"`
-	FirstName              string `json:"first_name"`
-	LastName               string `json:"last_name"`
-	Email                  string `json:"email"`
-	Role                   string `json:"role"`
-	Status                 string `json:"status"`
-	Token                  string `json:"token,omitempty"`
-	CanManageUserPasswords bool   `json:"can_manage_user_passwords"`
+	UserID                 string    `json:"user_id"`
+	FirstName              string    `json:"first_name"`
+	LastName               string    `json:"last_name"`
+	Email                  string    `json:"email"`
+	Role                   string    `json:"role"`
+	Status                 string    `json:"status"`
+	Token                  string    `json:"token,omitempty"`
+	ExpiresAt              time.Time `json:"expires_at"`
+	CanManageUserPasswords bool      `json:"can_manage_user_passwords"`
 }
 
 type UserManagementAuditLogResponse struct {
