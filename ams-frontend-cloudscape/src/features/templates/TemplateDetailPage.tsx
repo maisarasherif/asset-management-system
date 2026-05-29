@@ -20,6 +20,7 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
+import { TableCellText } from "../../components/shared/TableCells";
 import {
   deleteTemplate,
   getTemplate,
@@ -156,27 +157,49 @@ export function TemplateDetailPage() {
     {
       id: "component",
       header: "Component",
-      cell: (item) => `${item.display_id} - ${item.name}`,
+      width: "30%",
+      minWidth: 240,
+      cell: (item) => (
+        <TableCellText title={`${item.display_id} - ${item.name}`}>
+          {item.display_id} - {item.name}
+        </TableCellText>
+      ),
     },
     {
       id: "category",
       header: "Category",
-      cell: (item) => categoryMap.get(item.category_id) || item.category_id,
+      width: "22%",
+      minWidth: 180,
+      cell: (item) => (
+        <TableCellText title={categoryMap.get(item.category_id) || item.category_id}>
+          {categoryMap.get(item.category_id) || item.category_id}
+        </TableCellText>
+      ),
     },
     {
       id: "tests",
       header: "Assigned tests",
+      width: 130,
+      minWidth: 120,
       cell: (item) => item.tests.length,
     },
     {
       id: "safety",
       header: "Safety critical",
+      width: 150,
+      minWidth: 140,
       cell: (item) => humanizeEnum(item.safety_critical),
     },
     {
       id: "project",
       header: "Assigned project",
-      cell: (item) => item.assigned_project || "Not set",
+      width: "22%",
+      minWidth: 180,
+      cell: (item) => (
+        <TableCellText title={item.assigned_project || "Not set"}>
+          {item.assigned_project || "Not set"}
+        </TableCellText>
+      ),
     },
   ];
 

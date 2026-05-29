@@ -23,6 +23,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
+import { TableCellText } from "../../components/shared/TableCells";
 import {
   addTemplateComponentTest,
   createTemplateComponent,
@@ -252,8 +253,12 @@ function useTemplateComponentColumns({
         minWidth: 220,
         cell: (item) => (
           <SpaceBetween direction="vertical" size="xxs">
-            <Box fontWeight="bold">{item.name}</Box>
-            <Box color="text-body-secondary">{item.display_id}</Box>
+            <TableCellText title={item.name}>
+              <Box fontWeight="bold">{item.name}</Box>
+            </TableCellText>
+            <TableCellText title={item.display_id}>
+              <Box color="text-body-secondary">{item.display_id}</Box>
+            </TableCellText>
           </SpaceBetween>
         ),
       },
@@ -262,7 +267,11 @@ function useTemplateComponentColumns({
         header: "Category",
         width: "22%",
         minWidth: 170,
-        cell: (item) => categoryMap.get(item.category_id) || item.category_id,
+        cell: (item) => (
+          <TableCellText title={categoryMap.get(item.category_id) || item.category_id}>
+            {categoryMap.get(item.category_id) || item.category_id}
+          </TableCellText>
+        ),
       },
       {
         id: "tests",

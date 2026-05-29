@@ -3,7 +3,6 @@ import {
   Button,
   ContentLayout,
   Header,
-  SpaceBetween,
   Table,
   type TableProps,
 } from "@cloudscape-design/components";
@@ -11,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
+import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
 import { listTemplates } from "../../lib/api/ams";
 import type { AssetTemplate } from "../../types/ams";
 import { formatDate } from "../../utils/format";
@@ -54,32 +54,46 @@ export function TemplatesPage() {
     {
       id: "template",
       header: "Template",
+      width: "34%",
+      minWidth: 240,
       cell: (item) => (
-        <RouterLink to={`/templates/${item.template_id}`}>
-          {item.display_id} - {item.template_name}
-        </RouterLink>
+        <TableCellText title={`${item.display_id} - ${item.template_name}`}>
+          <RouterLink to={`/templates/${item.template_id}`}>
+            {item.display_id} - {item.template_name}
+          </RouterLink>
+        </TableCellText>
       ),
     },
     {
       id: "description",
       header: "Description",
-      cell: (item) => item.description || "No description",
+      width: "34%",
+      minWidth: 260,
+      cell: (item) => (
+        <TableCellText title={item.description || "No description"}>
+          {item.description || "No description"}
+        </TableCellText>
+      ),
     },
     {
       id: "updated",
       header: "Updated",
+      width: 150,
+      minWidth: 140,
       cell: (item) => formatDate(item.updated_at),
     },
     {
       id: "actions",
       header: "Actions",
+      width: 220,
+      minWidth: 220,
       cell: (item) => (
-        <SpaceBetween direction="horizontal" size="xs">
+        <TableCellActions>
           <Button onClick={() => navigate(`/templates/${item.template_id}`)}>Open</Button>
           <Button onClick={() => navigate(`/templates/${item.template_id}/configure`)}>
             Configure
           </Button>
-        </SpaceBetween>
+        </TableCellActions>
       ),
     },
   ];

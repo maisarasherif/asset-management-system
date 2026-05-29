@@ -19,6 +19,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
+import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
 import {
   createCompetencyCategory,
   createCompetentPerson,
@@ -633,17 +634,36 @@ function useAdministrationColumns({
       {
         id: "name",
         header: "Name",
-        cell: (item) => `${item.first_name} ${item.last_name}`.trim(),
+        width: "18%",
+        minWidth: 180,
+        cell: (item) => {
+          const fullName = `${item.first_name} ${item.last_name}`.trim();
+          return <TableCellText title={fullName}>{fullName}</TableCellText>;
+        },
       },
-      { id: "email", header: "Email", cell: (item) => item.email },
-      { id: "role", header: "Role", cell: (item) => humanizeEnum(item.role) },
-      { id: "status", header: "Status", cell: (item) => userStatusBadge(item.status) },
-      { id: "created", header: "Created", cell: (item) => formatDateTime(item.created_at) },
+      {
+        id: "email",
+        header: "Email",
+        width: "22%",
+        minWidth: 220,
+        cell: (item) => <TableCellText title={item.email}>{item.email}</TableCellText>,
+      },
+      { id: "role", header: "Role", width: 130, minWidth: 120, cell: (item) => humanizeEnum(item.role) },
+      { id: "status", header: "Status", width: 120, minWidth: 110, cell: (item) => userStatusBadge(item.status) },
+      {
+        id: "created",
+        header: "Created",
+        width: 190,
+        minWidth: 180,
+        cell: (item) => formatDateTime(item.created_at),
+      },
       {
         id: "actions",
         header: "Actions",
+        width: 320,
+        minWidth: 320,
         cell: (item) => (
-          <SpaceBetween direction="horizontal" size="xs">
+          <TableCellActions>
             <Button disabled={!canManageUserAccount(item)} onClick={() => onEditUser(item)}>
               Edit
             </Button>
@@ -653,7 +673,7 @@ function useAdministrationColumns({
             <Button disabled={!canManageUserAccount(item)} onClick={() => onDeleteUser(item)}>
               Delete
             </Button>
-          </SpaceBetween>
+          </TableCellActions>
         ),
       },
     ],
@@ -662,18 +682,46 @@ function useAdministrationColumns({
 
   const personColumns = useMemo<TableProps<CompetentPerson>["columnDefinitions"]>(
     () => [
-      { id: "name", header: "Competent Person", cell: (item) => item.full_name },
-      { id: "type", header: "Type", cell: (item) => item.person_type },
+      {
+        id: "name",
+        header: "Competent Person",
+        width: "24%",
+        minWidth: 220,
+        cell: (item) => <TableCellText title={item.full_name}>{item.full_name}</TableCellText>,
+      },
+      {
+        id: "type",
+        header: "Type",
+        width: 150,
+        minWidth: 130,
+        cell: (item) => <TableCellText title={item.person_type}>{item.person_type}</TableCellText>,
+      },
       {
         id: "category",
         header: "Competency category",
-        cell: (item) => item.competency_category_name,
+        width: "24%",
+        minWidth: 220,
+        cell: (item) => (
+          <TableCellText title={item.competency_category_name}>
+            {item.competency_category_name}
+          </TableCellText>
+        ),
       },
-      { id: "organization", header: "Organization", cell: (item) => item.organization || "-" },
-      { id: "status", header: "Status", cell: (item) => statusBadge(item.active) },
+      {
+        id: "organization",
+        header: "Organization",
+        width: "20%",
+        minWidth: 180,
+        cell: (item) => (
+          <TableCellText title={item.organization || "-"}>{item.organization || "-"}</TableCellText>
+        ),
+      },
+      { id: "status", header: "Status", width: 120, minWidth: 110, cell: (item) => statusBadge(item.active) },
       {
         id: "actions",
         header: "Actions",
+        width: 100,
+        minWidth: 90,
         cell: (item) => <Button onClick={() => onEditPerson(item)}>Edit</Button>,
       },
     ],
@@ -682,12 +730,28 @@ function useAdministrationColumns({
 
   const categoryColumns = useMemo<TableProps<CompetencyCategory>["columnDefinitions"]>(
     () => [
-      { id: "name", header: "Category", cell: (item) => item.category_name },
-      { id: "description", header: "Description", cell: (item) => item.description },
-      { id: "status", header: "Status", cell: (item) => statusBadge(item.active) },
+      {
+        id: "name",
+        header: "Category",
+        width: "28%",
+        minWidth: 220,
+        cell: (item) => (
+          <TableCellText title={item.category_name}>{item.category_name}</TableCellText>
+        ),
+      },
+      {
+        id: "description",
+        header: "Description",
+        width: "42%",
+        minWidth: 280,
+        cell: (item) => <TableCellText title={item.description}>{item.description}</TableCellText>,
+      },
+      { id: "status", header: "Status", width: 120, minWidth: 110, cell: (item) => statusBadge(item.active) },
       {
         id: "actions",
         header: "Actions",
+        width: 100,
+        minWidth: 90,
         cell: (item) => <Button onClick={() => onEditCategory(item)}>Edit</Button>,
       },
     ],
@@ -696,13 +760,27 @@ function useAdministrationColumns({
 
   const auditColumns = useMemo<TableProps<UserManagementAuditLog>["columnDefinitions"]>(
     () => [
-      { id: "created", header: "Time", cell: (item) => formatDateTime(item.created_at) },
-      { id: "action", header: "Action", cell: (item) => humanizeEnum(item.action) },
-      { id: "actor", header: "Actor", cell: (item) => item.actor_email || "-" },
-      { id: "target", header: "Target", cell: (item) => item.target_email || "-" },
+      { id: "created", header: "Time", width: 190, minWidth: 180, cell: (item) => formatDateTime(item.created_at) },
+      { id: "action", header: "Action", width: 170, minWidth: 150, cell: (item) => humanizeEnum(item.action) },
+      {
+        id: "actor",
+        header: "Actor",
+        width: "22%",
+        minWidth: 220,
+        cell: (item) => <TableCellText title={item.actor_email || "-"}>{item.actor_email || "-"}</TableCellText>,
+      },
+      {
+        id: "target",
+        header: "Target",
+        width: "22%",
+        minWidth: 220,
+        cell: (item) => <TableCellText title={item.target_email || "-"}>{item.target_email || "-"}</TableCellText>,
+      },
       {
         id: "role",
         header: "Role change",
+        width: 190,
+        minWidth: 180,
         cell: (item) =>
           item.target_role_before || item.target_role_after
             ? `${item.target_role_before || "-"} -> ${item.target_role_after || "-"}`

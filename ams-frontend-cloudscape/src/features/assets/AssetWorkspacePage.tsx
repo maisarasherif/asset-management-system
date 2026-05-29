@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
+import { TableCellText } from "../../components/shared/TableCells";
 import {
 	  getAsset,
 	  getSingleAssetEquipment,
@@ -280,22 +281,30 @@ export function AssetWorkspacePage() {
     {
       id: "certificate",
       header: "Certificate",
+      width: "42%",
+      minWidth: 260,
       cell: (item) => (
-        <RouterLink
-          to={`/assets/${assetId}/components/${selectedComponent?.component_id}/certificates/${item.certificate_id}`}
-        >
-          {item.certificate_name}
-        </RouterLink>
+        <TableCellText title={item.certificate_name}>
+          <RouterLink
+            to={`/assets/${assetId}/components/${selectedComponent?.component_id}/certificates/${item.certificate_id}`}
+          >
+            {item.certificate_name}
+          </RouterLink>
+        </TableCellText>
       ),
     },
     {
       id: "expiry",
       header: "Expiry",
+      width: 140,
+      minWidth: 130,
       cell: (item) => formatDate(item.expiry_date),
     },
     {
       id: "status",
       header: "Status",
+      width: 150,
+      minWidth: 140,
       cell: (item) => (
         <StatusIndicator type={certificateStatusType(item.status)}>
           {humanizeEnum(item.status)}
@@ -305,6 +314,8 @@ export function AssetWorkspacePage() {
     {
       id: "file",
       header: "View file",
+      width: 130,
+      minWidth: 120,
       cell: (item) => (
         <Button
           disabled={!item.certificate_file}

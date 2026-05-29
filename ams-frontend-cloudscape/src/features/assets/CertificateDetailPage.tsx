@@ -30,6 +30,7 @@ import {
   uploadCertificateFile,
 } from "../../lib/api/ams";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
+import { TableCellText } from "../../components/shared/TableCells";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type {
@@ -236,26 +237,48 @@ export function CertificateDetailPage() {
     {
       id: "file",
       header: "File",
-      cell: (item) => item.file_name,
+      width: "28%",
+      minWidth: 240,
+      cell: (item) => <TableCellText title={item.file_name}>{item.file_name}</TableCellText>,
     },
     {
       id: "uploadedBy",
       header: "Uploaded by",
-      cell: (item) => item.uploaded_by_name || "Unknown",
+      width: "18%",
+      minWidth: 170,
+      cell: (item) => (
+        <TableCellText title={item.uploaded_by_name || "Unknown"}>
+          {item.uploaded_by_name || "Unknown"}
+        </TableCellText>
+      ),
     },
     {
       id: "competentPerson",
       header: "Competent Person",
-      cell: (item) => item.competent_person_name || "Not recorded",
+      width: "18%",
+      minWidth: 180,
+      cell: (item) => (
+        <TableCellText title={item.competent_person_name || "Not recorded"}>
+          {item.competent_person_name || "Not recorded"}
+        </TableCellText>
+      ),
     },
     {
       id: "competencyCategory",
       header: "Competency category",
-      cell: (item) => item.competency_category_name || "Not recorded",
+      width: "20%",
+      minWidth: 200,
+      cell: (item) => (
+        <TableCellText title={item.competency_category_name || "Not recorded"}>
+          {item.competency_category_name || "Not recorded"}
+        </TableCellText>
+      ),
     },
     {
       id: "uploadedAt",
       header: "Uploaded at",
+      width: 190,
+      minWidth: 180,
       cell: (item) => formatDateTime(item.uploaded_at),
     },
     {

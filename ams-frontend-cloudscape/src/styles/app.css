@@ -13,6 +13,56 @@ body {
   padding-bottom: 32px;
 }
 
+[class*="awsui_button_"]:not(#\9) {
+  min-inline-size: max-content;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+[class*="awsui_button_"] [class*="awsui_content_"]:not(#\9) {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.app-table-cell-text {
+  display: block;
+  width: 1px;
+  min-width: 100%;
+  max-width: 100%;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.45;
+}
+
+.app-table-cell-text a {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.app-table-cell-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.app-table-cell-actions button {
+  white-space: nowrap;
+}
+
+.app-table-cell-actions [class*="awsui_button_"]:not(#\9),
+.catalog-table__actions [class*="awsui_button_"]:not(#\9),
+.upload-history-view-action [class*="awsui_button_"]:not(#\9) {
+  flex: 0 0 auto;
+}
+
 .auth-check-page {
   min-height: 100vh;
   display: grid;
@@ -1050,10 +1100,14 @@ body {
 
 .catalog-table__truncate {
   display: block;
+  width: 1px;
+  min-width: 100%;
   max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.45;
 }
 
 .catalog-table__actions {

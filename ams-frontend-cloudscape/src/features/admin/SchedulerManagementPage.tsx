@@ -16,6 +16,7 @@ import {
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { TableCellText } from "../../components/shared/TableCells";
 import {
   forceRenotifyCertificate,
   listAllCertificateNotificationFailures,
@@ -55,9 +56,11 @@ function certificateDescription(certificate: Pick<CertificateWithContext, "asset
 
 function copyableKey(key: string) {
   return (
-    <Box fontSize="body-s" color="text-body-secondary">
-      <code>{key}</code>
-    </Box>
+    <TableCellText title={key}>
+      <Box fontSize="body-s" color="text-body-secondary">
+        <code>{key}</code>
+      </Box>
+    </TableCellText>
   );
 }
 
@@ -119,16 +122,24 @@ export function SchedulerManagementPage() {
     {
       id: "sent_at",
       header: "Recorded",
+      width: 190,
+      minWidth: 180,
       cell: (item) => formatDateTime(item.sent_at),
       sortingField: "sent_at",
     },
     {
       id: "certificate",
       header: "Certificate",
+      width: "28%",
+      minWidth: 260,
       cell: (item) => (
         <SpaceBetween size="xxs">
-          <Box>{item.certificate_display_id} - {item.certificate_name}</Box>
-          <Box color="text-body-secondary">{item.asset_display_id} - {item.asset_name}</Box>
+          <TableCellText title={`${item.certificate_display_id} - ${item.certificate_name}`}>
+            <Box>{item.certificate_display_id} - {item.certificate_name}</Box>
+          </TableCellText>
+          <TableCellText title={`${item.asset_display_id} - ${item.asset_name}`}>
+            <Box color="text-body-secondary">{item.asset_display_id} - {item.asset_name}</Box>
+          </TableCellText>
         </SpaceBetween>
       ),
       sortingField: "certificate_name",
@@ -136,29 +147,41 @@ export function SchedulerManagementPage() {
     {
       id: "channel",
       header: "Channel",
+      width: 120,
+      minWidth: 110,
       cell: (item) => humanizeEnum(item.type),
       sortingField: "type",
     },
     {
       id: "tier",
       header: "Tier",
+      width: 140,
+      minWidth: 130,
       cell: (item) => tierBadge(item.tier),
       sortingField: "tier",
     },
     {
       id: "status",
       header: "Status",
+      width: 140,
+      minWidth: 130,
       cell: (item) => statusBadge(item.status),
       sortingField: "status",
     },
     {
       id: "external",
       header: "External task",
-      cell: (item) => item.external_task_id || "-",
+      width: "16%",
+      minWidth: 160,
+      cell: (item) => (
+        <TableCellText title={item.external_task_id || "-"}>{item.external_task_id || "-"}</TableCellText>
+      ),
     },
     {
       id: "key",
       header: "Idempotency key",
+      width: "18%",
+      minWidth: 180,
       cell: (item) => copyableKey(item.idempotency_key),
     },
   ];
@@ -167,16 +190,24 @@ export function SchedulerManagementPage() {
     {
       id: "failed_at",
       header: "Failed",
+      width: 190,
+      minWidth: 180,
       cell: (item) => formatDateTime(item.failed_at),
       sortingField: "failed_at",
     },
     {
       id: "certificate",
       header: "Certificate",
+      width: "28%",
+      minWidth: 260,
       cell: (item) => (
         <SpaceBetween size="xxs">
-          <Box>{item.certificate_display_id} - {item.certificate_name}</Box>
-          <Box color="text-body-secondary">{item.asset_display_id} - {item.asset_name}</Box>
+          <TableCellText title={`${item.certificate_display_id} - ${item.certificate_name}`}>
+            <Box>{item.certificate_display_id} - {item.certificate_name}</Box>
+          </TableCellText>
+          <TableCellText title={`${item.asset_display_id} - ${item.asset_name}`}>
+            <Box color="text-body-secondary">{item.asset_display_id} - {item.asset_name}</Box>
+          </TableCellText>
         </SpaceBetween>
       ),
       sortingField: "certificate_name",
@@ -184,23 +215,31 @@ export function SchedulerManagementPage() {
     {
       id: "channel",
       header: "Channel",
+      width: 120,
+      minWidth: 110,
       cell: (item) => humanizeEnum(item.channel),
       sortingField: "channel",
     },
     {
       id: "tier",
       header: "Tier",
+      width: 140,
+      minWidth: 130,
       cell: (item) => tierBadge(item.tier),
       sortingField: "tier",
     },
     {
       id: "error",
       header: "Error",
-      cell: (item) => item.error_message,
+      width: "24%",
+      minWidth: 240,
+      cell: (item) => <TableCellText title={item.error_message}>{item.error_message}</TableCellText>,
     },
     {
       id: "key",
       header: "Idempotency key",
+      width: "18%",
+      minWidth: 180,
       cell: (item) => copyableKey(item.idempotency_key),
     },
   ];

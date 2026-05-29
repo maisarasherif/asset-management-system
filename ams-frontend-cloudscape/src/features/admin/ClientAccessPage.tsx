@@ -19,6 +19,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
+import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
 import {
   createProject,
   deleteUserProjectAccess,
@@ -373,13 +374,37 @@ export function ClientAccessPage() {
   }
 
   const projectColumns: TableProps<Project>["columnDefinitions"] = [
-    { id: "name", header: "Project", cell: (item) => item.project_name },
-    { id: "description", header: "Description", cell: (item) => item.description || "-" },
-    { id: "status", header: "Status", cell: (item) => statusBadge(item.status) },
-    { id: "updated", header: "Updated", cell: (item) => formatDateTime(item.updated_at) },
+    {
+      id: "name",
+      header: "Project",
+      width: "28%",
+      minWidth: 220,
+      cell: (item) => (
+        <TableCellText title={item.project_name}>{item.project_name}</TableCellText>
+      ),
+    },
+    {
+      id: "description",
+      header: "Description",
+      width: "32%",
+      minWidth: 260,
+      cell: (item) => (
+        <TableCellText title={item.description || "-"}>{item.description || "-"}</TableCellText>
+      ),
+    },
+    { id: "status", header: "Status", width: 130, minWidth: 120, cell: (item) => statusBadge(item.status) },
+    {
+      id: "updated",
+      header: "Updated",
+      width: 190,
+      minWidth: 180,
+      cell: (item) => formatDateTime(item.updated_at),
+    },
     {
       id: "actions",
       header: "Actions",
+      width: 100,
+      minWidth: 90,
       cell: (item) => (
         <Button
           onClick={() => {
@@ -400,17 +425,37 @@ export function ClientAccessPage() {
   ];
 
   const accessColumns: TableProps<UserProjectAccess>["columnDefinitions"] = [
-    { id: "client", header: "Client", cell: (item) => item.user_name },
-    { id: "email", header: "Email", cell: (item) => item.user_email },
-    { id: "userStatus", header: "User status", cell: (item) => statusBadge(item.user_status) },
-    { id: "project", header: "Project", cell: (item) => item.project_name },
-    { id: "projectStatus", header: "Project status", cell: (item) => statusBadge(item.project_status) },
-    { id: "accessStatus", header: "Access", cell: (item) => statusBadge(item.status) },
+    {
+      id: "client",
+      header: "Client",
+      width: "18%",
+      minWidth: 170,
+      cell: (item) => <TableCellText title={item.user_name}>{item.user_name}</TableCellText>,
+    },
+    {
+      id: "email",
+      header: "Email",
+      width: "22%",
+      minWidth: 220,
+      cell: (item) => <TableCellText title={item.user_email}>{item.user_email}</TableCellText>,
+    },
+    { id: "userStatus", header: "User status", width: 130, minWidth: 120, cell: (item) => statusBadge(item.user_status) },
+    {
+      id: "project",
+      header: "Project",
+      width: "20%",
+      minWidth: 190,
+      cell: (item) => <TableCellText title={item.project_name}>{item.project_name}</TableCellText>,
+    },
+    { id: "projectStatus", header: "Project status", width: 140, minWidth: 130, cell: (item) => statusBadge(item.project_status) },
+    { id: "accessStatus", header: "Access", width: 110, minWidth: 100, cell: (item) => statusBadge(item.status) },
     {
       id: "actions",
       header: "Actions",
+      width: 220,
+      minWidth: 220,
       cell: (item) => (
-        <SpaceBetween direction="horizontal" size="xs">
+        <TableCellActions>
           <Button
             loading={updateAccessMutation.isPending}
             onClick={() =>
@@ -428,7 +473,7 @@ export function ClientAccessPage() {
           >
             Remove
           </Button>
-        </SpaceBetween>
+        </TableCellActions>
       ),
     },
   ];
