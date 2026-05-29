@@ -17,7 +17,7 @@ import {
   type SelectProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createAsset,
@@ -34,6 +34,39 @@ import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { AssetInput, AssetStatus } from "../../types/ams";
 import { humanizeEnum } from "../../utils/format";
+
+type AssetFormViewProps = {
+  assetId: string | undefined;
+  errorMessage: string;
+  equipmentTypesLoading: boolean;
+  equipmentTypeOptions: SelectProps.Option[];
+  form: AssetInput;
+  isEditing: boolean;
+  isSingleEquipment: boolean;
+  navigate: ReturnType<typeof useNavigate>;
+  onFormChange: Dispatch<SetStateAction<Partial<AssetInput>>>;
+  onSubmit: () => void;
+  pageTitle: string;
+  projectOptions: SelectProps.Option[];
+  projectsLoading: boolean;
+  savePending: boolean;
+  selectedAssignedProjectOption: SelectProps.Option | null;
+  selectedAssetKindOption: SelectProps.Option | null;
+  selectedEquipmentTypeOption: SelectProps.Option | null;
+  selectedStatusOption: SelectProps.Option | null;
+  selectedTemplateId: string | null;
+  selectedTemplateOption: SelectProps.Option | null;
+  selectedTestOptions: MultiselectProps.Option[];
+  templateLocked: boolean;
+  templateOptions: SelectProps.Option[];
+  templatePreviewError: boolean;
+  templatePreviewLoading: boolean;
+  templateSummary: Awaited<ReturnType<typeof getTemplatePreview>> | undefined;
+  templatesError: boolean;
+  templatesLoading: boolean;
+  testTypeOptions: MultiselectProps.Option[];
+  testTypesLoading: boolean;
+};
 
 const DEFAULT_FORM: AssetInput = {
   name: "",
@@ -136,12 +169,11 @@ export function AssetFormPage() {
       return createAsset(payload);
     },
     onSuccess: async (createdAsset) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["assets"] }),
-        queryClient.invalidateQueries({ queryKey: ["templates"] }),
-      ]);
-
       if (createdAsset) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["assets"] }),
+          queryClient.invalidateQueries({ queryKey: ["templates"] }),
+        ]);
         setSelectedAssetId(createdAsset.asset_id);
         success(
           "Asset created",
@@ -156,6 +188,8 @@ export function AssetFormPage() {
       if (assetId) {
         setSelectedAssetId(assetId);
         await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["assets"] }),
+          queryClient.invalidateQueries({ queryKey: ["templates"] }),
           queryClient.invalidateQueries({ queryKey: ["asset", assetId] }),
           queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
         ]);
@@ -228,7 +262,7 @@ export function AssetFormPage() {
   );
 
   if (isEditing && assetQuery.isLoading) {
-    return <PageLoading>Loading asset details...</PageLoading>;
+    return <PageLoading>{"Loading asset details\u2026"}</PageLoading>;
   }
 
   if (isEditing && assetQuery.isError) {
@@ -280,337 +314,463 @@ export function AssetFormPage() {
   };
 
   return (
-    <ContentLayout
-      header={
-        <Header
-          actions={
-            <SpaceBetween direction="horizontal" size="xs">
-              {assetId ? (
-                <Button onClick={() => navigate(`/assets/${assetId}`)}>Cancel</Button>
-              ) : (
-                <Button onClick={() => navigate("/assets")}>Cancel</Button>
-              )}
-              <Button loading={saveMutation.isPending} variant="primary" onClick={handleSubmit}>
-                {isEditing ? "Save asset" : "Create asset"}
-              </Button>
-            </SpaceBetween>
-          }
-          description="Asset records anchor the dashboard, component pane, and nested certificate workflows."
-          variant="h1"
-        >
-          {pageTitle}
-        </Header>
-      }
-    >
+    <AssetFormView
+      assetId={assetId}
+      errorMessage={errorMessage}
+      equipmentTypesLoading={equipmentTypesQuery.isLoading}
+      equipmentTypeOptions={equipmentTypeOptions}
+      form={form}
+      isEditing={isEditing}
+      isSingleEquipment={isSingleEquipment}
+      navigate={navigate}
+      onFormChange={setForm}
+      onSubmit={handleSubmit}
+      pageTitle={pageTitle}
+      projectOptions={projectOptions}
+      projectsLoading={projectsQuery.isLoading}
+      savePending={saveMutation.isPending}
+      selectedAssignedProjectOption={selectedAssignedProjectOption}
+      selectedAssetKindOption={selectedAssetKindOption}
+      selectedEquipmentTypeOption={selectedEquipmentTypeOption}
+      selectedStatusOption={selectedStatusOption}
+      selectedTemplateId={selectedTemplateId}
+      selectedTemplateOption={selectedTemplateOption}
+      selectedTestOptions={selectedTestOptions}
+      templateLocked={templateLocked}
+      templateOptions={templateOptions}
+      templatePreviewError={templatePreviewQuery.isError}
+      templatePreviewLoading={templatePreviewQuery.isLoading}
+      templateSummary={templateSummary}
+      templatesError={templatesQuery.isError}
+      templatesLoading={templatesQuery.isLoading}
+      testTypeOptions={testTypeOptions}
+      testTypesLoading={testTypesQuery.isLoading}
+    />
+  );
+}
+
+function AssetFormView(props: AssetFormViewProps) {
+  return (
+    <ContentLayout header={<AssetFormHeader {...props} />}>
       <ColumnLayout columns={2} variant="text-grid">
-        <Container header={<Header variant="h2">Asset information</Header>}>
-          <Form>
-            <SpaceBetween direction="vertical" size="l">
-              {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
-              <FormField label="Asset name" stretch>
-                <Input
-                  value={form.name}
-                  onChange={({ detail }) =>
-                    setForm((current) => ({ ...current, name: detail.value }))
-                  }
-                />
-              </FormField>
-
-              <ColumnLayout columns={2}>
-                <FormField label="Status">
-                  <Select
-                    options={STATUS_OPTIONS}
-                    selectedOption={selectedStatusOption}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({
-                        ...current,
-                        status: (detail.selectedOption.value as AssetStatus) ?? current.status,
-                      }))
-                    }
-                  />
-                </FormField>
-                <FormField
-                  description={
-                    isEditing
-                      ? "Asset creation mode cannot be changed after the asset is created."
-                      : "Choose whether this asset has many components or is itself the certified equipment."
-                  }
-                  label="Asset creation mode"
-                >
-                  <div data-testid="asset-kind-select">
-                    <Select
-                      disabled={isEditing}
-                      options={ASSET_KIND_OPTIONS}
-                      selectedOption={selectedAssetKindOption}
-                      onChange={({ detail }) =>
-                        setForm((current) => {
-                          const nextKind = detail.selectedOption.value as AssetInput["asset_kind"];
-                          return {
-                            ...current,
-                            asset_kind: nextKind,
-                            template_id: nextKind === "SINGLE_EQUIPMENT" ? null : current.template_id,
-                            single_equipment:
-                              nextKind === "SINGLE_EQUIPMENT"
-                                ? current.single_equipment || {
-                                    equipment_type_id: "",
-                                    test_type_ids: [],
-                                  }
-                                : undefined,
-                          };
-                        })
-                      }
-                    />
-                  </div>
-                </FormField>
-                <FormField label="Assigned project">
-                  <Select
-                    loadingText="Loading projects"
-                    options={projectOptions}
-                    placeholder="Select project"
-                    selectedOption={selectedAssignedProjectOption}
-                    statusType={projectsQuery.isLoading ? "loading" : "finished"}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({
-                        ...current,
-                        assigned_project: detail.selectedOption.value || "",
-                      }))
-                    }
-                  />
-                </FormField>
-              </ColumnLayout>
-
-              <ColumnLayout columns={2}>
-                <FormField label="Location">
-                  <Input
-                    value={form.location}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, location: detail.value }))
-                    }
-                  />
-                </FormField>
-                <FormField label="Maintenance interval (hours)">
-                  <Input
-                    inputMode="numeric"
-                    type="number"
-                    value={String(form.maintenance_interval_hours)}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({
-                        ...current,
-                        maintenance_interval_hours: Number(detail.value) || 0,
-                      }))
-                    }
-                  />
-                </FormField>
-              </ColumnLayout>
-
-              {isSingleEquipment && isEditing ? (
-                <Alert type="info">
-                  Equipment type and certificate slots are managed from the asset workspace after
-                  creation.
-                </Alert>
-              ) : isSingleEquipment ? (
-                <ColumnLayout columns={2}>
-                  <FormField
-                    description="Equipment types are a separate catalog for single-asset equipment."
-                    label="Equipment type"
-                  >
-                    <div data-testid="single-equipment-type-select">
-                      <Select
-                        loadingText="Loading equipment types"
-                        options={equipmentTypeOptions}
-                        placeholder="Select equipment type"
-                        selectedOption={selectedEquipmentTypeOption}
-                        statusType={equipmentTypesQuery.isLoading ? "loading" : "finished"}
-                        onChange={({ detail }) =>
-                          setForm((current) => ({
-                            ...current,
-                            single_equipment: {
-                              equipment_type_id: detail.selectedOption.value || "",
-                              test_type_ids: current.single_equipment?.test_type_ids || [],
-                            },
-                          }))
-                        }
-                      />
-                    </div>
-                  </FormField>
-                  <FormField
-                    description="Each selected test type creates a pending certificate slot."
-                    label="Certificate test types"
-                  >
-                    <div data-testid="single-equipment-test-types">
-                      <Multiselect
-                        loadingText="Loading test types"
-                        options={testTypeOptions}
-                        placeholder="Select certificate test types"
-                        selectedOptions={selectedTestOptions}
-                        statusType={testTypesQuery.isLoading ? "loading" : "finished"}
-                        onChange={({ detail }) =>
-                          setForm((current) => ({
-                            ...current,
-                            single_equipment: {
-                              equipment_type_id:
-                                current.single_equipment?.equipment_type_id || "",
-                              test_type_ids: detail.selectedOptions
-                                .map((option) => option.value || "")
-                                .filter(Boolean),
-                            },
-                          }))
-                        }
-                      />
-                    </div>
-                  </FormField>
-                </ColumnLayout>
-              ) : (
-                <ColumnLayout columns={2}>
-                  <FormField
-                    description={
-                      templateLocked
-                        ? "Templates can only be assigned during asset creation."
-                        : "Optional. A template can prebuild the asset's components and tests."
-                    }
-                    label="Template"
-                  >
-                    <Select
-                      disabled={templateLocked || templatesQuery.isLoading}
-                      loadingText="Loading templates"
-                      options={templateOptions}
-                      placeholder="Select a template"
-                      selectedOption={selectedTemplateOption}
-                      statusType={templatesQuery.isLoading ? "loading" : "finished"}
-                      onChange={({ detail }) =>
-                        setForm((current) => ({
-                          ...current,
-                          template_id: detail.selectedOption.value ?? null,
-                        }))
-                      }
-                    />
-                  </FormField>
-                </ColumnLayout>
-              )}
-
-              <FormField label="Description">
-                <Textarea
-                  rows={6}
-                  value={form.description}
-                  onChange={({ detail }) =>
-                    setForm((current) => ({ ...current, description: detail.value }))
-                  }
-                />
-              </FormField>
-
-              <ColumnLayout columns={2}>
-                <FormField label="Photo URL">
-                  <Input
-                    type="url"
-                    value={form.photo}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, photo: detail.value }))
-                    }
-                  />
-                </FormField>
-                <FormField label="Datasheet URL">
-                  <Input
-                    type="url"
-                    value={form.datasheet}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, datasheet: detail.value }))
-                    }
-                  />
-                </FormField>
-              </ColumnLayout>
-            </SpaceBetween>
-          </Form>
-        </Container>
-
+        <AssetInformation {...props} />
         <SpaceBetween direction="vertical" size="l">
-          <Container header={<Header variant="h2">Workspace impact</Header>}>
-            <SpaceBetween direction="vertical" size="s">
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Dashboard scope</Box>
-                <Box>Each asset drives its own donut and certificate summary.</Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Component navigation</Box>
-                <Box>
-                  {isSingleEquipment
-                    ? "The asset workspace opens directly to equipment certificates."
-                    : "Components appear in the asset workspace left pane."}
-                </Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Certificates</Box>
-                <Box>
-                  {isSingleEquipment
-                    ? "Certificate slots are created from the selected test types."
-                    : "Certificates remain nested inside the selected component."}
-                </Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Status preview</Box>
-                <Box>{humanizeEnum(form.status)}</Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Routine maintenance</Box>
-                <Box>
-                  {form.maintenance_interval_hours > 0
-                    ? `Every ${form.maintenance_interval_hours.toLocaleString()} hours`
-                    : "Not configured"}
-                </Box>
-              </div>
-            </SpaceBetween>
-          </Container>
-
-          <Container header={<Header variant="h2">{isSingleEquipment ? "Equipment preview" : "Template preview"}</Header>}>
-            {isSingleEquipment ? (
-              <SpaceBetween direction="vertical" size="s">
-                <div className="summary-row">
-                  <Box variant="awsui-key-label">Equipment type</Box>
-                  <Box>{selectedEquipmentTypeOption?.label || (isEditing ? "Configured" : "Not selected")}</Box>
-                </div>
-                <div className="summary-row">
-                  <Box variant="awsui-key-label">Certificate slots</Box>
-                  <Box>{isEditing ? "Managed in workspace" : selectedTestOptions.length}</Box>
-                </div>
-                <Box color="text-body-secondary">
-                  {isEditing
-                    ? "Single-asset equipment keeps certificates at the asset level."
-                    : "Creating this asset will create one internal equipment bridge and pending certificates."}
-                </Box>
-              </SpaceBetween>
-            ) : templatesQuery.isError ? (
-              <Alert type="error">Templates could not be loaded.</Alert>
-            ) : selectedTemplateId ? (
-              templatePreviewQuery.isLoading ? (
-                <Box color="text-body-secondary">Loading template composition...</Box>
-              ) : templatePreviewQuery.isError ? (
-                <Alert type="warning">
-                  The template summary could not be loaded. You can still save the asset.
-                </Alert>
-              ) : templateSummary ? (
-                <SpaceBetween direction="vertical" size="s">
-                  <div className="summary-row">
-                    <Box variant="awsui-key-label">Components to create</Box>
-                    <Box>{templateSummary.totalComponents}</Box>
-                  </div>
-                  <div className="summary-row">
-                    <Box variant="awsui-key-label">Tests to create</Box>
-                    <Box>{templateSummary.totalTests}</Box>
-                  </div>
-                  <Box color="text-body-secondary">
-                    Creating the asset with this template will spin up its component structure immediately.
-                  </Box>
-                </SpaceBetween>
-              ) : (
-                <Box color="text-body-secondary">No template summary is available.</Box>
-              )
-            ) : (
-              <Box color="text-body-secondary">
-                Select a template if you want the backend to prebuild the asset's component structure.
-              </Box>
-            )}
-          </Container>
+          <WorkspaceImpact form={props.form} isSingleEquipment={props.isSingleEquipment} />
+          <TemplateOrEquipmentPreview {...props} />
         </SpaceBetween>
       </ColumnLayout>
     </ContentLayout>
+  );
+}
+
+function AssetFormHeader({
+  assetId,
+  isEditing,
+  navigate,
+  onSubmit,
+  pageTitle,
+  savePending,
+}: AssetFormViewProps) {
+  return (
+    <Header
+      actions={
+        <SpaceBetween direction="horizontal" size="xs">
+          {assetId ? (
+            <Button onClick={() => navigate(`/assets/${assetId}`)}>Cancel</Button>
+          ) : (
+            <Button onClick={() => navigate("/assets")}>Cancel</Button>
+          )}
+          <Button loading={savePending} variant="primary" onClick={onSubmit}>
+            {isEditing ? "Save asset" : "Create asset"}
+          </Button>
+        </SpaceBetween>
+      }
+      description="Asset records anchor the dashboard, component pane, and nested certificate workflows."
+      variant="h1"
+    >
+      {pageTitle}
+    </Header>
+  );
+}
+
+function AssetInformation(props: AssetFormViewProps) {
+  const {
+    errorMessage,
+    form,
+    isEditing,
+    onFormChange,
+    projectOptions,
+    projectsLoading,
+    selectedAssignedProjectOption,
+    selectedAssetKindOption,
+    selectedStatusOption,
+  } = props;
+
+  return (
+    <Container header={<Header variant="h2">Asset information</Header>}>
+      <Form>
+        <SpaceBetween direction="vertical" size="l">
+          {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
+          <FormField label="Asset name" stretch>
+            <Input
+              value={form.name}
+              onChange={({ detail }) => onFormChange((current) => ({ ...current, name: detail.value }))}
+            />
+          </FormField>
+
+          <ColumnLayout columns={2}>
+            <FormField label="Status">
+              <Select
+                options={STATUS_OPTIONS}
+                selectedOption={selectedStatusOption}
+                onChange={({ detail }) =>
+                  onFormChange((current) => ({
+                    ...current,
+                    status: (detail.selectedOption.value as AssetStatus) ?? current.status,
+                  }))
+                }
+              />
+            </FormField>
+            <FormField
+              description={
+                isEditing
+                  ? "Asset creation mode cannot be changed after the asset is created."
+                  : "Choose whether this asset has many components or is itself the certified equipment."
+              }
+              label="Asset creation mode"
+            >
+              <div data-testid="asset-kind-select">
+                <Select
+                  disabled={isEditing}
+                  options={ASSET_KIND_OPTIONS}
+                  selectedOption={selectedAssetKindOption}
+                  onChange={({ detail }) =>
+                    onFormChange((current) => {
+                      const nextKind = detail.selectedOption.value as AssetInput["asset_kind"];
+                      return {
+                        ...current,
+                        asset_kind: nextKind,
+                        template_id: nextKind === "SINGLE_EQUIPMENT" ? null : current.template_id,
+                        single_equipment:
+                          nextKind === "SINGLE_EQUIPMENT"
+                            ? current.single_equipment || {
+                                equipment_type_id: "",
+                                test_type_ids: [],
+                              }
+                            : undefined,
+                      };
+                    })
+                  }
+                />
+              </div>
+            </FormField>
+            <FormField label="Assigned project">
+              <Select
+                loadingText="Loading projects"
+                options={projectOptions}
+                placeholder="Select project"
+                selectedOption={selectedAssignedProjectOption}
+                statusType={projectsLoading ? "loading" : "finished"}
+                onChange={({ detail }) =>
+                  onFormChange((current) => ({
+                    ...current,
+                    assigned_project: detail.selectedOption.value || "",
+                  }))
+                }
+              />
+            </FormField>
+          </ColumnLayout>
+
+          <ColumnLayout columns={2}>
+            <FormField label="Location">
+              <Input
+                value={form.location}
+                onChange={({ detail }) => onFormChange((current) => ({ ...current, location: detail.value }))}
+              />
+            </FormField>
+            <FormField label="Maintenance interval (hours)">
+              <Input
+                inputMode="numeric"
+                type="number"
+                value={String(form.maintenance_interval_hours)}
+                onChange={({ detail }) =>
+                  onFormChange((current) => ({
+                    ...current,
+                    maintenance_interval_hours: Number(detail.value) || 0,
+                  }))
+                }
+              />
+            </FormField>
+          </ColumnLayout>
+
+          <AssetModeFields {...props} />
+
+          <FormField label="Description">
+            <Textarea
+              rows={6}
+              value={form.description}
+              onChange={({ detail }) => onFormChange((current) => ({ ...current, description: detail.value }))}
+            />
+          </FormField>
+
+          <ColumnLayout columns={2}>
+            <FormField label="Photo URL">
+              <Input
+                type="url"
+                value={form.photo}
+                onChange={({ detail }) => onFormChange((current) => ({ ...current, photo: detail.value }))}
+              />
+            </FormField>
+            <FormField label="Datasheet URL">
+              <Input
+                type="url"
+                value={form.datasheet}
+                onChange={({ detail }) => onFormChange((current) => ({ ...current, datasheet: detail.value }))}
+              />
+            </FormField>
+          </ColumnLayout>
+        </SpaceBetween>
+      </Form>
+    </Container>
+  );
+}
+
+function AssetModeFields({
+  equipmentTypesLoading,
+  equipmentTypeOptions,
+  isEditing,
+  isSingleEquipment,
+  onFormChange,
+  selectedEquipmentTypeOption,
+  selectedTemplateOption,
+  selectedTestOptions,
+  templateLocked,
+  templateOptions,
+  templatesLoading,
+  testTypeOptions,
+  testTypesLoading,
+}: AssetFormViewProps) {
+  if (isSingleEquipment && isEditing) {
+    return (
+      <Alert type="info">
+        Equipment type and certificate slots are managed from the asset workspace after creation.
+      </Alert>
+    );
+  }
+
+  if (isSingleEquipment) {
+    return (
+      <ColumnLayout columns={2}>
+        <FormField
+          description="Equipment types are a separate catalog for single-asset equipment."
+          label="Equipment type"
+        >
+          <div data-testid="single-equipment-type-select">
+            <Select
+              loadingText="Loading equipment types"
+              options={equipmentTypeOptions}
+              placeholder="Select equipment type"
+              selectedOption={selectedEquipmentTypeOption}
+              statusType={equipmentTypesLoading ? "loading" : "finished"}
+              onChange={({ detail }) =>
+                onFormChange((current) => ({
+                  ...current,
+                  single_equipment: {
+                    equipment_type_id: detail.selectedOption.value || "",
+                    test_type_ids: current.single_equipment?.test_type_ids || [],
+                  },
+                }))
+              }
+            />
+          </div>
+        </FormField>
+        <FormField
+          description="Each selected test type creates a pending certificate slot."
+          label="Certificate test types"
+        >
+          <div data-testid="single-equipment-test-types">
+            <Multiselect
+              loadingText="Loading test types"
+              options={testTypeOptions}
+              placeholder="Select certificate test types"
+              selectedOptions={selectedTestOptions}
+              statusType={testTypesLoading ? "loading" : "finished"}
+              onChange={({ detail }) =>
+                onFormChange((current) => ({
+                  ...current,
+                  single_equipment: {
+                    equipment_type_id: current.single_equipment?.equipment_type_id || "",
+                    test_type_ids: detail.selectedOptions.flatMap((option) =>
+                      option.value ? [option.value] : []
+                    ),
+                  },
+                }))
+              }
+            />
+          </div>
+        </FormField>
+      </ColumnLayout>
+    );
+  }
+
+  return (
+    <ColumnLayout columns={2}>
+      <FormField
+        description={
+          templateLocked
+            ? "Templates can only be assigned during asset creation."
+            : "Optional. A template can prebuild the asset's components and tests."
+        }
+        label="Template"
+      >
+        <Select
+          disabled={templateLocked || templatesLoading}
+          loadingText="Loading templates"
+          options={templateOptions}
+          placeholder="Select a template"
+          selectedOption={selectedTemplateOption}
+          statusType={templatesLoading ? "loading" : "finished"}
+          onChange={({ detail }) =>
+            onFormChange((current) => ({
+              ...current,
+              template_id: detail.selectedOption.value ?? null,
+            }))
+          }
+        />
+      </FormField>
+    </ColumnLayout>
+  );
+}
+
+function WorkspaceImpact({
+  form,
+  isSingleEquipment,
+}: {
+  form: AssetInput;
+  isSingleEquipment: boolean;
+}) {
+  return (
+    <Container header={<Header variant="h2">Workspace impact</Header>}>
+      <SpaceBetween direction="vertical" size="s">
+        <div className="summary-row">
+          <Box variant="awsui-key-label">Dashboard scope</Box>
+          <Box>Each asset drives its own donut and certificate summary.</Box>
+        </div>
+        <div className="summary-row">
+          <Box variant="awsui-key-label">Component navigation</Box>
+          <Box>
+            {isSingleEquipment
+              ? "The asset workspace opens directly to equipment certificates."
+              : "Components appear in the asset workspace left pane."}
+          </Box>
+        </div>
+        <div className="summary-row">
+          <Box variant="awsui-key-label">Certificates</Box>
+          <Box>
+            {isSingleEquipment
+              ? "Certificate slots are created from the selected test types."
+              : "Certificates remain nested inside the selected component."}
+          </Box>
+        </div>
+        <div className="summary-row">
+          <Box variant="awsui-key-label">Status preview</Box>
+          <Box>{humanizeEnum(form.status)}</Box>
+        </div>
+        <div className="summary-row">
+          <Box variant="awsui-key-label">Routine maintenance</Box>
+          <Box>
+            {form.maintenance_interval_hours > 0
+              ? `Every ${form.maintenance_interval_hours.toLocaleString()} hours`
+              : "Not configured"}
+          </Box>
+        </div>
+      </SpaceBetween>
+    </Container>
+  );
+}
+
+function TemplateOrEquipmentPreview(props: AssetFormViewProps) {
+  return (
+    <Container
+      header={<Header variant="h2">{props.isSingleEquipment ? "Equipment preview" : "Template preview"}</Header>}
+    >
+      {props.isSingleEquipment ? <EquipmentPreview {...props} /> : <TemplatePreview {...props} />}
+    </Container>
+  );
+}
+
+function EquipmentPreview({
+  isEditing,
+  selectedEquipmentTypeOption,
+  selectedTestOptions,
+}: AssetFormViewProps) {
+  return (
+    <SpaceBetween direction="vertical" size="s">
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Equipment type</Box>
+        <Box>{selectedEquipmentTypeOption?.label || (isEditing ? "Configured" : "Not selected")}</Box>
+      </div>
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Certificate slots</Box>
+        <Box>{isEditing ? "Managed in workspace" : selectedTestOptions.length}</Box>
+      </div>
+      <Box color="text-body-secondary">
+        {isEditing
+          ? "Single-asset equipment keeps certificates at the asset level."
+          : "Creating this asset will create one internal equipment bridge and pending certificates."}
+      </Box>
+    </SpaceBetween>
+  );
+}
+
+function TemplatePreview({
+  selectedTemplateId,
+  templatePreviewError,
+  templatePreviewLoading,
+  templateSummary,
+  templatesError,
+}: AssetFormViewProps) {
+  if (templatesError) {
+    return <Alert type="error">Templates could not be loaded.</Alert>;
+  }
+
+  if (!selectedTemplateId) {
+    return (
+      <Box color="text-body-secondary">
+        Select a template if you want the backend to prebuild the asset's component structure.
+      </Box>
+    );
+  }
+
+  if (templatePreviewLoading) {
+    return <Box color="text-body-secondary">{"Loading template composition\u2026"}</Box>;
+  }
+
+  if (templatePreviewError) {
+    return (
+      <Alert type="warning">
+        The template summary could not be loaded. You can still save the asset.
+      </Alert>
+    );
+  }
+
+  if (!templateSummary) {
+    return <Box color="text-body-secondary">No template summary is available.</Box>;
+  }
+
+  return (
+    <SpaceBetween direction="vertical" size="s">
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Components to create</Box>
+        <Box>{templateSummary.totalComponents}</Box>
+      </div>
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Tests to create</Box>
+        <Box>{templateSummary.totalTests}</Box>
+      </div>
+      <Box color="text-body-secondary">
+        Creating the asset with this template will spin up its component structure immediately.
+      </Box>
+    </SpaceBetween>
   );
 }

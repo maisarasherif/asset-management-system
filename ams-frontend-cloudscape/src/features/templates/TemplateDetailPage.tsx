@@ -29,7 +29,7 @@ import {
   updateTemplate,
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { TemplateConfigurationComponent } from "../../types/ams";
+import type { AssetTemplate, TemplateConfigurationComponent } from "../../types/ams";
 import { formatDate, humanizeEnum } from "../../utils/format";
 
 export function TemplateDetailPage() {
@@ -123,7 +123,7 @@ export function TemplateDetailPage() {
   }
 
   if (templateQuery.isLoading || configurationQuery.isLoading) {
-    return <PageLoading>Loading the template workspace...</PageLoading>;
+    return <PageLoading>{"Loading the template workspace\u2026"}</PageLoading>;
   }
 
   if (
@@ -197,6 +197,87 @@ export function TemplateDetailPage() {
     updateMutation.mutate();
   };
 
+  return renderTemplateDetailPage({
+    categoryMap,
+    componentColumns,
+    configuredComponents,
+    deleteModalVisible,
+    deletePending: deleteMutation.isPending,
+    description,
+    editError,
+    editModalVisible,
+    navigate,
+    onDelete: () => deleteMutation.mutate(),
+    onDescriptionChange: setDescription,
+    onEditDismiss: () => setEditModalVisible(false),
+    onDeleteDismiss: () => setDeleteModalVisible(false),
+    onOpenDelete: () => setDeleteModalVisible(true),
+    onOpenEdit: openEditModal,
+    onSubmitEdit: submitEdit,
+    onTemplateNameChange: setTemplateName,
+    readinessLabel,
+    template,
+    templateId,
+    templateName,
+    testTypeMap,
+    totalTests,
+    updatePending: updateMutation.isPending,
+  });
+}
+
+interface TemplateDetailPageViewProps {
+  categoryMap: Map<string, string>;
+  componentColumns: TableProps<TemplateConfigurationComponent>["columnDefinitions"];
+  configuredComponents: TemplateConfigurationComponent[];
+  deleteModalVisible: boolean;
+  deletePending: boolean;
+  description: string;
+  editError: string;
+  editModalVisible: boolean;
+  navigate: ReturnType<typeof useNavigate>;
+  onDelete: () => void;
+  onDeleteDismiss: () => void;
+  onDescriptionChange: (value: string) => void;
+  onEditDismiss: () => void;
+  onOpenDelete: () => void;
+  onOpenEdit: () => void;
+  onSubmitEdit: () => void;
+  onTemplateNameChange: (value: string) => void;
+  readinessLabel: string;
+  template: AssetTemplate;
+  templateId: string;
+  templateName: string;
+  testTypeMap: Map<string, string>;
+  totalTests: number;
+  updatePending: boolean;
+}
+
+function renderTemplateDetailPage({
+  categoryMap,
+  componentColumns,
+  configuredComponents,
+  deleteModalVisible,
+  deletePending,
+  description,
+  editError,
+  editModalVisible,
+  navigate,
+  onDelete,
+  onDeleteDismiss,
+  onDescriptionChange,
+  onEditDismiss,
+  onOpenDelete,
+  onOpenEdit,
+  onSubmitEdit,
+  onTemplateNameChange,
+  readinessLabel,
+  template,
+  templateId,
+  templateName,
+  testTypeMap,
+  totalTests,
+  updatePending,
+}: TemplateDetailPageViewProps) {
   return (
     <>
       <ContentLayout
@@ -205,11 +286,11 @@ export function TemplateDetailPage() {
             actions={
               <SpaceBetween direction="horizontal" size="xs">
                 <Button onClick={() => navigate("/templates")}>Back to templates</Button>
-                <Button onClick={openEditModal}>Edit details</Button>
+                <Button onClick={onOpenEdit}>Edit details</Button>
                 <Button onClick={() => navigate(`/templates/${templateId}/configure`)}>
                   Configure template
                 </Button>
-                <Button onClick={() => setDeleteModalVisible(true)}>Delete template</Button>
+                <Button onClick={onOpenDelete}>Delete template</Button>
               </SpaceBetween>
             }
             description={`${template.display_id} - updated ${formatDate(template.updated_at)}`}
@@ -342,10 +423,7 @@ export function TemplateDetailPage() {
                       </div>
                       <div className="template-pill-list">
                         {component.tests.map((test) => (
-                          <span
-                            key={test.template_component_test_id}
-                            className="template-pill"
-                          >
+                          <span key={test.template_component_test_id} className="template-pill">
                             {testTypeMap.get(test.test_id) || test.test_name}
                           </span>
                         ))}
@@ -366,15 +444,11 @@ export function TemplateDetailPage() {
       <Modal
         visible={editModalVisible}
         header="Edit template details"
-        onDismiss={() => setEditModalVisible(false)}
+        onDismiss={onEditDismiss}
         footer={
           <SpaceBetween direction="horizontal" size="xs">
-            <Button onClick={() => setEditModalVisible(false)}>Cancel</Button>
-            <Button
-              loading={updateMutation.isPending}
-              variant="primary"
-              onClick={submitEdit}
-            >
+            <Button onClick={onEditDismiss}>Cancel</Button>
+            <Button loading={updatePending} variant="primary" onClick={onSubmitEdit}>
               Save changes
             </Button>
           </SpaceBetween>
@@ -383,13 +457,13 @@ export function TemplateDetailPage() {
         <SpaceBetween direction="vertical" size="l">
           {editError ? <Alert type="error">{editError}</Alert> : null}
           <FormField label="Template name">
-            <Input value={templateName} onChange={({ detail }) => setTemplateName(detail.value)} />
+            <Input value={templateName} onChange={({ detail }) => onTemplateNameChange(detail.value)} />
           </FormField>
           <FormField label="Description">
             <Textarea
               rows={6}
               value={description}
-              onChange={({ detail }) => setDescription(detail.value)}
+              onChange={({ detail }) => onDescriptionChange(detail.value)}
             />
           </FormField>
         </SpaceBetween>
@@ -398,15 +472,11 @@ export function TemplateDetailPage() {
       <Modal
         visible={deleteModalVisible}
         header="Delete template"
-        onDismiss={() => setDeleteModalVisible(false)}
+        onDismiss={onDeleteDismiss}
         footer={
           <SpaceBetween direction="horizontal" size="xs">
-            <Button onClick={() => setDeleteModalVisible(false)}>Cancel</Button>
-            <Button
-              loading={deleteMutation.isPending}
-              variant="primary"
-              onClick={() => deleteMutation.mutate()}
-            >
+            <Button onClick={onDeleteDismiss}>Cancel</Button>
+            <Button loading={deletePending} variant="primary" onClick={onDelete}>
               Delete template
             </Button>
           </SpaceBetween>

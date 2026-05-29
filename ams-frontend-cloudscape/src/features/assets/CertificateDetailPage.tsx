@@ -32,7 +32,14 @@ import {
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { CertificateUploadAudit } from "../../types/ams";
+import type {
+  Asset,
+  Certificate,
+  CertificateUploadAudit,
+  ComponentRecord,
+  CompetentPerson,
+  TestType,
+} from "../../types/ams";
 import { certificateStatusType } from "../../utils/status";
 import {
   formatDate,
@@ -186,7 +193,7 @@ export function CertificateDetailPage() {
     certificateQuery.isLoading ||
     testTypesQuery.isLoading
   ) {
-    return <PageLoading>Loading certificate details...</PageLoading>;
+    return <PageLoading>{"Loading certificate details\u2026"}</PageLoading>;
   }
 
   if (
@@ -269,6 +276,127 @@ export function CertificateDetailPage() {
     },
   ];
 
+  return renderCertificateDetailPage({
+    asset: assetQuery.data,
+    assetId,
+    certificate: certificateQuery.data,
+    certificateId,
+    competentPersonOptions,
+    competentPersonsLoading: competentPersonsQuery.isLoading,
+    component: componentQuery.data,
+    componentId,
+    downloadDisabled: !certificateQuery.data.certificate_file,
+    downloadPending: downloadMutation.isPending,
+    isAdmin,
+    locationPath: `${location.pathname}${location.search}`,
+    navigate,
+    onDownload: () => downloadMutation.mutate(),
+    onExpiryDateChange: setRenewalExpiryDate,
+    onFileChange: setSelectedFile,
+    onIssueDateChange: (nextIssueDate) => {
+      setRenewalIssueDate(nextIssueDate);
+      setRenewalExpiryDate(
+        nextIssueDate && selectedTestType
+          ? addMonths(nextIssueDate, selectedTestType.validity_duration)
+          : renewalExpiryDateValue
+      );
+    },
+    onRenew: () => uploadMutation.mutate(),
+    onSelectedCompetentPersonChange: setSelectedCompetentPersonId,
+    onViewUpload: (uploadId) => uploadViewMutation.mutate(uploadId),
+    renewalExpiryDateValue,
+    renewalIssueDateValue,
+    selectedCompetentPerson,
+    selectedCompetentPersonId,
+    selectedCompetentPersonOption,
+    selectedFile,
+    selectedTestType,
+    testTypeName,
+    uploadColumns,
+    uploadPending: uploadMutation.isPending,
+    uploadViewPending: uploadViewMutation.isPending,
+    uploads: uploadsQuery.data || [],
+    uploadsError: uploadsQuery.isError,
+    uploadsLoading: uploadsQuery.isLoading,
+    fileInputKey,
+  });
+}
+
+interface CertificateDetailPageViewProps {
+  asset: Asset;
+  assetId: string;
+  certificate: Certificate;
+  certificateId: string;
+  competentPersonOptions: SelectProps.Option[];
+  competentPersonsLoading: boolean;
+  component: ComponentRecord;
+  componentId: string;
+  downloadDisabled: boolean;
+  downloadPending: boolean;
+  fileInputKey: number;
+  isAdmin: boolean;
+  locationPath: string;
+  navigate: ReturnType<typeof useNavigate>;
+  onDownload: () => void;
+  onExpiryDateChange: (value: string) => void;
+  onFileChange: (file: File | null) => void;
+  onIssueDateChange: (value: string) => void;
+  onRenew: () => void;
+  onSelectedCompetentPersonChange: (value: string) => void;
+  onViewUpload: (uploadId: string) => void;
+  renewalExpiryDateValue: string;
+  renewalIssueDateValue: string;
+  selectedCompetentPerson: CompetentPerson | null;
+  selectedCompetentPersonId: string;
+  selectedCompetentPersonOption: SelectProps.Option | null;
+  selectedFile: File | null;
+  selectedTestType: TestType | null;
+  testTypeName: string;
+  uploadColumns: TableProps<CertificateUploadAudit>["columnDefinitions"];
+  uploadPending: boolean;
+  uploadViewPending: boolean;
+  uploads: CertificateUploadAudit[];
+  uploadsError: boolean;
+  uploadsLoading: boolean;
+}
+
+function renderCertificateDetailPage({
+  asset,
+  assetId,
+  certificate,
+  certificateId,
+  competentPersonOptions,
+  competentPersonsLoading,
+  component,
+  componentId,
+  downloadDisabled,
+  downloadPending,
+  fileInputKey,
+  isAdmin,
+  locationPath,
+  navigate,
+  onDownload,
+  onExpiryDateChange,
+  onFileChange,
+  onIssueDateChange,
+  onRenew,
+  onSelectedCompetentPersonChange,
+  onViewUpload,
+  renewalExpiryDateValue,
+  renewalIssueDateValue,
+  selectedCompetentPerson,
+  selectedCompetentPersonId,
+  selectedCompetentPersonOption,
+  selectedFile,
+  selectedTestType,
+  testTypeName,
+  uploadColumns,
+  uploadPending,
+  uploadViewPending,
+  uploads,
+  uploadsError,
+  uploadsLoading,
+}: CertificateDetailPageViewProps) {
   return (
     <ContentLayout
       header={
@@ -282,7 +410,7 @@ export function CertificateDetailPage() {
                 <Button
                   onClick={() =>
                     navigate(`/assets/${assetId}/components/${componentId}/certificates/${certificateId}/edit`, {
-                      state: { from: `${location.pathname}${location.search}` },
+                      state: { from: locationPath },
                     })
                   }
                 >
@@ -290,19 +418,19 @@ export function CertificateDetailPage() {
                 </Button>
               ) : null}
               <Button
-                disabled={!certificateQuery.data.certificate_file}
-                loading={downloadMutation.isPending}
+                disabled={downloadDisabled}
+                loading={downloadPending}
                 variant="primary"
-                onClick={() => downloadMutation.mutate()}
+                onClick={onDownload}
               >
                 Download file
               </Button>
             </SpaceBetween>
           }
-          description={`${componentQuery.data.display_id} - ${testTypeName}`}
+          description={`${component.display_id} - ${testTypeName}`}
           variant="h1"
         >
-          {certificateQuery.data.certificate_name}
+          {certificate.certificate_name}
         </Header>
       }
     >
@@ -311,21 +439,21 @@ export function CertificateDetailPage() {
           <ColumnLayout columns={4} variant="text-grid">
             <div className="summary-row">
               <Box variant="awsui-key-label">Status</Box>
-              <StatusIndicator type={certificateStatusType(certificateQuery.data.status)}>
-                {humanizeEnum(certificateQuery.data.status)}
+              <StatusIndicator type={certificateStatusType(certificate.status)}>
+                {humanizeEnum(certificate.status)}
               </StatusIndicator>
             </div>
             <div className="summary-row">
               <Box variant="awsui-key-label">Issue date</Box>
-              <Box>{formatDate(certificateQuery.data.issue_date)}</Box>
+              <Box>{formatDate(certificate.issue_date)}</Box>
             </div>
             <div className="summary-row">
               <Box variant="awsui-key-label">Expiry date</Box>
-              <Box>{formatDate(certificateQuery.data.expiry_date)}</Box>
+              <Box>{formatDate(certificate.expiry_date)}</Box>
             </div>
             <div className="summary-row">
               <Box variant="awsui-key-label">Issuing authority</Box>
-              <Box>{certificateQuery.data.issuing_authority || "Not set"}</Box>
+              <Box>{certificate.issuing_authority || "Not set"}</Box>
             </div>
           </ColumnLayout>
         </Container>
@@ -335,30 +463,30 @@ export function CertificateDetailPage() {
             <SpaceBetween direction="vertical" size="s">
               <div className="summary-row">
                 <Box variant="awsui-key-label">Asset</Box>
-                <Box>{assetQuery.data.name}</Box>
+              <Box>{asset.name}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Component</Box>
-                <Box>{componentQuery.data.name}</Box>
+              <Box>{component.name}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">IMCA Ref</Box>
-                <Box>{certificateQuery.data.imca_ref || "Not set"}</Box>
+              <Box>{certificate.imca_ref || "Not set"}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">IMCA D018</Box>
-                <Box>{certificateQuery.data.imca_d018 || "Not set"}</Box>
+              <Box>{certificate.imca_d018 || "Not set"}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Certificate file</Box>
-                <Box>{certificateQuery.data.certificate_file ? "Attached" : "No file uploaded"}</Box>
+              <Box>{certificate.certificate_file ? "Attached" : "No file uploaded"}</Box>
               </div>
             </SpaceBetween>
           </Container>
 
           <Container header={<Header variant="h2">Maintenance notes</Header>}>
             <Box color="text-body-secondary">
-              {certificateQuery.data.maintenance_notes || "No maintenance notes are recorded."}
+            {certificate.maintenance_notes || "No maintenance notes are recorded."}
             </Box>
           </Container>
         </ColumnLayout>
@@ -371,26 +499,20 @@ export function CertificateDetailPage() {
               </Box>
               <input
                 key={fileInputKey}
+                aria-label="Certificate renewal file"
                 className="file-input"
                 type="file"
                 accept=".pdf,image/jpeg,image/png,image/webp"
-                onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
               />
               <ColumnLayout columns={2}>
                 <FormField label="Issue date">
                   <input
+                    aria-label="Certificate renewal issue date"
                     className="app-native-input"
                     value={renewalIssueDateValue}
                     type="date"
-                    onChange={(event) => {
-                      const nextIssueDate = event.target.value;
-                      setRenewalIssueDate(nextIssueDate);
-                      setRenewalExpiryDate(
-                        nextIssueDate && selectedTestType
-                          ? addMonths(nextIssueDate, selectedTestType.validity_duration)
-                          : renewalExpiryDateValue
-                      );
-                    }}
+                    onChange={(event) => onIssueDateChange(event.target.value)}
                   />
                 </FormField>
                 <FormField
@@ -402,10 +524,11 @@ export function CertificateDetailPage() {
                   label="Expiry date"
                 >
                   <input
+                    aria-label="Certificate renewal expiry date"
                     className="app-native-input"
                     value={renewalExpiryDateValue}
                     type="date"
-                    onChange={(event) => setRenewalExpiryDate(event.target.value)}
+                    onChange={(event) => onExpiryDateChange(event.target.value)}
                   />
                 </FormField>
               </ColumnLayout>
@@ -414,12 +537,12 @@ export function CertificateDetailPage() {
                   options={competentPersonOptions}
                   placeholder="Select competent person"
                   selectedOption={selectedCompetentPersonOption}
-                  statusType={competentPersonsQuery.isLoading ? "loading" : "finished"}
+                statusType={competentPersonsLoading ? "loading" : "finished"}
                   loadingText="Loading competent persons"
                   empty="No active competent persons are available."
                   onChange={({ detail }) =>
-                    setSelectedCompetentPersonId(detail.selectedOption.value || "")
-                  }
+                  onSelectedCompetentPersonChange(detail.selectedOption.value || "")
+                }
                 />
               </FormField>
               {selectedCompetentPerson ? (
@@ -436,9 +559,9 @@ export function CertificateDetailPage() {
                     !renewalIssueDateValue ||
                     !renewalExpiryDateValue
                   }
-                  loading={uploadMutation.isPending}
-                  variant="primary"
-                  onClick={() => uploadMutation.mutate()}
+                loading={uploadPending}
+                variant="primary"
+                onClick={onRenew}
                 >
                   Renew/change certificate
                 </Button>
@@ -449,14 +572,30 @@ export function CertificateDetailPage() {
         ) : null}
 
         <Container header={<Header variant="h2">Upload history</Header>}>
-          {uploadsQuery.isError ? (
+          {uploadsError ? (
             <Alert type="warning">Upload history could not be loaded.</Alert>
           ) : (
             <Table
-              columnDefinitions={uploadColumns}
+              columnDefinitions={uploadColumns.map((column) =>
+                column.id === "view"
+                  ? {
+                    ...column,
+                    cell: (item: CertificateUploadAudit) => (
+                      <span className="upload-history-view-action">
+                        <Button
+                          loading={uploadViewPending}
+                          onClick={() => onViewUpload(item.uuid)}
+                        >
+                          View
+                        </Button>
+                      </span>
+                    ),
+                  }
+                  : column
+              )}
               empty={<Box color="text-body-secondary">No uploads recorded for this certificate.</Box>}
-              items={uploadsQuery.data || []}
-              loading={uploadsQuery.isLoading}
+              items={uploads}
+              loading={uploadsLoading}
               loadingText="Loading upload history"
               trackBy="file_key"
               variant="embedded"

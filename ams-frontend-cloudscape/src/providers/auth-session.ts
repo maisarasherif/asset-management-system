@@ -8,6 +8,7 @@ export function sessionFromLoginResponse(response: LoginResponse): AuthSession {
 		email: response.email,
 		role: response.role,
 		status: response.status || "ACTIVE",
+		expiresAt: response.expires_at,
 		canManageUserPasswords: Boolean(response.can_manage_user_passwords),
 	};
 }

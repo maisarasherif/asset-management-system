@@ -16,6 +16,7 @@ export interface AuthSession {
 	email: string;
 	role: Role;
 	status: UserStatus;
+	expiresAt: string;
 	canManageUserPasswords: boolean;
 }
 
@@ -27,6 +28,7 @@ export interface LoginResponse {
 	role: Role;
 	status: UserStatus;
 	token?: string;
+	expires_at: string;
 	can_manage_user_passwords?: boolean;
 }
 

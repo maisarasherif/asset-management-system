@@ -8,7 +8,7 @@ import {
   SpaceBetween,
   TopNavigation,
 } from "@cloudscape-design/components";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { listAllAssets, listAllClientAssets, logoutRequest } from "../../lib/api/ams";
@@ -243,11 +243,13 @@ export function AppShellLayout() {
 
 export function AppChrome() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { clearAll } = useFlashbar();
   const { logout, session } = useAuth();
   const logoutMutation = useMutation({
     mutationFn: logoutRequest,
     onSettled: () => {
+      queryClient.clear();
       clearAll();
       logout();
       navigate("/login", { replace: true });

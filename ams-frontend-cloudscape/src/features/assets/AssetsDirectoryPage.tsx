@@ -65,7 +65,7 @@ export function AssetsDirectoryPage() {
   });
 
   if (assetsQuery.isLoading) {
-    return <PageLoading>Loading the assets directory...</PageLoading>;
+    return <PageLoading>{"Loading the assets directory\u2026"}</PageLoading>;
   }
 
   if (assetsQuery.isError) {
@@ -174,15 +174,15 @@ export function AssetsDirectoryPage() {
                       <div className="asset-directory-card__summary">
                         <div className="asset-directory-card__stat">
                           <Box variant="awsui-key-label">Components</Box>
-                          <Box>{componentCount ?? "..."}</Box>
+                          <Box>{componentCount ?? "\u2026"}</Box>
                         </div>
                         <div className="asset-directory-card__stat">
                           <Box variant="awsui-key-label">Certificates</Box>
-                          <Box>{certificateCount ?? "..."}</Box>
+                          <Box>{certificateCount ?? "\u2026"}</Box>
                         </div>
                         <div className="asset-directory-card__stat">
                           <Box variant="awsui-key-label">Expiring / expired</Box>
-                          <Box>{urgentCount ?? "..."}</Box>
+                          <Box>{urgentCount ?? "\u2026"}</Box>
                         </div>
                         <div className="asset-directory-card__stat">
                           <Box variant="awsui-key-label">Routine hours</Box>

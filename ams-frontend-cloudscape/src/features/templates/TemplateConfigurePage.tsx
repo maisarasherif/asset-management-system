@@ -20,7 +20,7 @@ import {
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import {
@@ -37,6 +37,7 @@ import {
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type {
+  AssetTemplate,
   SafetyCritical,
   TemplateComponentInput,
   TemplateConfigurationComponent,
@@ -48,6 +49,33 @@ type EditorMode = "create" | "edit";
 interface TemplateComponentFormState extends TemplateComponentInput {
   test_ids: string[];
 }
+
+type TemplateConfigureViewProps = {
+  categoryOptions: SelectProps.Option[];
+  componentColumns: TableProps<TemplateConfigurationComponent>["columnDefinitions"];
+  configuredComponents: TemplateConfigurationComponent[];
+  deletingComponent: TemplateConfigurationComponent | null;
+  deletePending: boolean;
+  draft: TemplateComponentFormState;
+  editorMode: EditorMode;
+  editorVisible: boolean;
+  formError: string;
+  navigate: ReturnType<typeof useNavigate>;
+  onDelete: () => void;
+  onDeleteDismiss: () => void;
+  onDraftChange: Dispatch<SetStateAction<TemplateComponentFormState>>;
+  onEditorDismiss: () => void;
+  onOpenCreate: () => void;
+  onSave: () => void;
+  savePending: boolean;
+  selectedCategory: SelectProps.Option | null;
+  selectedSafetyOption: SelectProps.Option | null;
+  selectedTests: MultiselectProps.Option[];
+  template: AssetTemplate;
+  templateId: string;
+  testOptions: MultiselectProps.Option[];
+  totalTests: number;
+};
 
 const SAFETY_OPTIONS: SelectProps.Option[] = [
   { label: "Yes", value: "YES" },
@@ -123,19 +151,13 @@ function validateDraft(draft: TemplateComponentFormState) {
   return "";
 }
 
-export function TemplateConfigurePage() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { templateId } = useParams();
-  const { error, success } = useFlashbar();
+type UseTemplateComponentColumnsOptions = {
+  categoryMap: Map<string, string>;
+  onDeleteComponent: (component: TemplateConfigurationComponent) => void;
+  onEditComponent: (component: TemplateConfigurationComponent) => void;
+};
 
-  const [editorVisible, setEditorVisible] = useState(false);
-  const [editorMode, setEditorMode] = useState<EditorMode>("create");
-  const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<TemplateComponentFormState>(createEmptyDraft);
-  const [formError, setFormError] = useState("");
-  const [deletingComponent, setDeletingComponent] = useState<TemplateConfigurationComponent | null>(null);
-
+function useTemplateConfigureData(templateId: string | undefined) {
   const templateQuery = useQuery({
     queryKey: ["template", templateId],
     queryFn: () => getTemplate(templateId!),
@@ -204,9 +226,24 @@ export function TemplateConfigurePage() {
     [testTypesQuery.data]
   );
 
-  const componentColumns = useMemo<
-    TableProps<TemplateConfigurationComponent>["columnDefinitions"]
-  >(
+  return {
+    categoriesQuery,
+    categoryMap,
+    categoryOptions,
+    configurationQuery,
+    mainCategoriesQuery,
+    templateQuery,
+    testOptions,
+    testTypesQuery,
+  };
+}
+
+function useTemplateComponentColumns({
+  categoryMap,
+  onDeleteComponent,
+  onEditComponent,
+}: UseTemplateComponentColumnsOptions) {
+  return useMemo<TableProps<TemplateConfigurationComponent>["columnDefinitions"]>(
     () => [
       {
         id: "component",
@@ -248,24 +285,41 @@ export function TemplateConfigurePage() {
         minWidth: 220,
         cell: (item) => (
           <div className="catalog-table__actions">
-            <Button
-              onClick={() => {
-                setEditorMode("edit");
-                setEditingComponentId(item.template_component_id);
-                setDraft(toDraft(item));
-                setFormError("");
-                setEditorVisible(true);
-              }}
-            >
-              Edit
-            </Button>
-            <Button onClick={() => setDeletingComponent(item)}>Delete</Button>
+            <Button onClick={() => onEditComponent(item)}>Edit</Button>
+            <Button onClick={() => onDeleteComponent(item)}>Delete</Button>
           </div>
         ),
       },
     ],
-    [categoryMap]
+    [categoryMap, onDeleteComponent, onEditComponent]
   );
+}
+
+type UseTemplateComponentMutationsOptions = {
+  configuration: TemplateConfigurationComponent[];
+  deletingComponent: TemplateConfigurationComponent | null;
+  draft: TemplateComponentFormState;
+  editingComponentId: string | null;
+  editorMode: EditorMode;
+  onDeleteSuccess: () => void;
+  onSaveError: (message: string) => void;
+  onSaveSuccess: () => void;
+  templateId: string | undefined;
+};
+
+function useTemplateComponentMutations({
+  configuration,
+  deletingComponent,
+  draft,
+  editingComponentId,
+  editorMode,
+  onDeleteSuccess,
+  onSaveError,
+  onSaveSuccess,
+  templateId,
+}: UseTemplateComponentMutationsOptions) {
+  const queryClient = useQueryClient();
+  const { error, success } = useFlashbar();
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -284,7 +338,7 @@ export function TemplateConfigurePage() {
         return;
       }
 
-      const currentComponent = (configurationQuery.data || []).find(
+      const currentComponent = configuration.find(
         (component) => component.template_component_id === editingComponentId
       );
 
@@ -298,30 +352,25 @@ export function TemplateConfigurePage() {
         currentComponent.tests.map((test) => [test.test_id, test.template_component_test_id])
       );
       const nextTests = new Set(draft.test_ids);
-
-      const testDeleteRequests = currentComponent.tests
-        .filter((test) => !nextTests.has(test.test_id))
-        .map((test) => deleteTemplateComponentTest(test.template_component_test_id));
-
-      const testCreateRequests = draft.test_ids
-        .filter((testId) => !existingTests.has(testId))
-        .map((testId) => addTemplateComponentTest(editingComponentId, testId));
+      const testDeleteRequests = currentComponent.tests.flatMap((test) =>
+        nextTests.has(test.test_id) ? [] : [deleteTemplateComponentTest(test.template_component_test_id)]
+      );
+      const testCreateRequests = draft.test_ids.flatMap((testId) =>
+        existingTests.has(testId) ? [] : [addTemplateComponentTest(editingComponentId, testId)]
+      );
 
       await Promise.all([...testDeleteRequests, ...testCreateRequests]);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["template-configuration", templateId] });
-      setEditorVisible(false);
-      setEditingComponentId(null);
-      setDraft(createEmptyDraft());
-      setFormError("");
+      onSaveSuccess();
       success(
         editorMode === "create" ? "Template component added" : "Template component updated",
         "The template component list has been refreshed."
       );
     },
     onError: (mutationError: Error) => {
-      setFormError(mutationError.message);
+      onSaveError(mutationError.message);
       error("Template component save failed", mutationError.message);
     },
   });
@@ -330,12 +379,68 @@ export function TemplateConfigurePage() {
     mutationFn: () => deleteTemplateComponent(deletingComponent!.template_component_id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["template-configuration", templateId] });
-      setDeletingComponent(null);
+      onDeleteSuccess();
       success("Template component deleted", "The component was removed from this template.");
     },
     onError: (mutationError: Error) => {
       error("Template component delete failed", mutationError.message);
     },
+  });
+
+  return { deleteMutation, saveMutation };
+}
+
+export function TemplateConfigurePage() {
+  const navigate = useNavigate();
+  const { templateId } = useParams();
+
+  const [editorVisible, setEditorVisible] = useState(false);
+  const [editorMode, setEditorMode] = useState<EditorMode>("create");
+  const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<TemplateComponentFormState>(createEmptyDraft);
+  const [formError, setFormError] = useState("");
+  const [deletingComponent, setDeletingComponent] = useState<TemplateConfigurationComponent | null>(null);
+
+  const {
+    categoriesQuery,
+    categoryMap,
+    categoryOptions,
+    configurationQuery,
+    mainCategoriesQuery,
+    templateQuery,
+    testOptions,
+    testTypesQuery,
+  } = useTemplateConfigureData(templateId);
+
+  const openEditEditor = (component: TemplateConfigurationComponent) => {
+    setEditorMode("edit");
+    setEditingComponentId(component.template_component_id);
+    setDraft(toDraft(component));
+    setFormError("");
+    setEditorVisible(true);
+  };
+
+  const componentColumns = useTemplateComponentColumns({
+    categoryMap,
+    onDeleteComponent: setDeletingComponent,
+    onEditComponent: openEditEditor,
+  });
+
+  const { deleteMutation, saveMutation } = useTemplateComponentMutations({
+    configuration: configurationQuery.data || [],
+    deletingComponent,
+    draft,
+    editingComponentId,
+    editorMode,
+    onDeleteSuccess: () => setDeletingComponent(null),
+    onSaveError: setFormError,
+    onSaveSuccess: () => {
+      setEditorVisible(false);
+      setEditingComponentId(null);
+      setDraft(createEmptyDraft());
+      setFormError("");
+    },
+    templateId,
   });
 
   if (!templateId) {
@@ -349,7 +454,7 @@ export function TemplateConfigurePage() {
     mainCategoriesQuery.isLoading ||
     testTypesQuery.isLoading
   ) {
-    return <PageLoading>Loading the template configuration workspace...</PageLoading>;
+    return <PageLoading>{"Loading the template configuration workspace\u2026"}</PageLoading>;
   }
 
   if (
@@ -401,347 +506,549 @@ export function TemplateConfigurePage() {
   const selectedSafetyOption =
     SAFETY_OPTIONS.find((option) => option.value === draft.safety_critical) ?? null;
   const selectedTests = testOptions.filter((option) => draft.test_ids.includes(option.value || ""));
+  const openCreateEditor = () => {
+    setEditorMode("create");
+    setEditingComponentId(null);
+    setDraft(createEmptyDraft());
+    setFormError("");
+    setEditorVisible(true);
+  };
+  const dismissEditor = () => {
+    setEditorVisible(false);
+    setFormError("");
+  };
 
   return (
-    <>
-      <ContentLayout
-        header={
-          <Header
-            actions={
-              <SpaceBetween direction="horizontal" size="xs">
-                <Button onClick={() => navigate(`/templates/${templateId}`)}>Back to template</Button>
-                <Button onClick={() => navigate("/catalog")}>Open catalog</Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setEditorMode("create");
-                    setEditingComponentId(null);
-                    setDraft(createEmptyDraft());
-                    setFormError("");
-                    setEditorVisible(true);
-                  }}
-                >
-                  Add component
-                </Button>
-              </SpaceBetween>
-            }
-            description={`${template.display_id} - simple component list and modal editor`}
-            variant="h1"
-          >
-            Configure {template.template_name}
-          </Header>
-        }
-      >
-        <SpaceBetween direction="vertical" size="l">
-          <Alert type="info">
-            Add components from the button above, then edit or delete them one by one from the list.
-            Existing assets are not changed retroactively.
-          </Alert>
+    <TemplateConfigureView
+      categoryOptions={categoryOptions}
+      componentColumns={componentColumns}
+      configuredComponents={configuredComponents}
+      deletingComponent={deletingComponent}
+      deletePending={deleteMutation.isPending}
+      draft={draft}
+      editorMode={editorMode}
+      editorVisible={editorVisible}
+      formError={formError}
+      navigate={navigate}
+      onDelete={() => deleteMutation.mutate()}
+      onDeleteDismiss={() => setDeletingComponent(null)}
+      onDraftChange={setDraft}
+      onEditorDismiss={dismissEditor}
+      onOpenCreate={openCreateEditor}
+      onSave={() => saveMutation.mutate()}
+      savePending={saveMutation.isPending}
+      selectedCategory={selectedCategory}
+      selectedSafetyOption={selectedSafetyOption}
+      selectedTests={selectedTests}
+      template={template}
+      templateId={templateId}
+      testOptions={testOptions}
+      totalTests={totalTests}
+    />
+  );
+}
 
-          <ColumnLayout columns={3} variant="text-grid">
-            <Container header={<Header variant="h2">Template</Header>}>
-              <SpaceBetween direction="vertical" size="xs">
-                <div className="summary-row">
-                  <Box variant="awsui-key-label">Name</Box>
-                  <Box>{template.template_name}</Box>
-                </div>
-                <div className="summary-row">
-                  <Box variant="awsui-key-label">Description</Box>
-                  <Box>{template.description || "No description"}</Box>
-                </div>
-              </SpaceBetween>
-            </Container>
-            <Container header={<Header variant="h2">Blueprint</Header>}>
-              <SpaceBetween direction="vertical" size="xs">
-                <div className="summary-row">
-                  <Box variant="awsui-key-label">Components</Box>
-                  <Box>{configuredComponents.length}</Box>
-                </div>
-                <div className="summary-row">
-                  <Box variant="awsui-key-label">Assigned tests</Box>
-                  <Box>{totalTests}</Box>
-                </div>
-              </SpaceBetween>
-            </Container>
-            <Container header={<Header variant="h2">Status</Header>}>
-              <SpaceBetween direction="vertical" size="xs">
-                <div className="summary-row">
-                  <Box variant="awsui-key-label">Readiness</Box>
-                  <Badge color={configuredComponents.length === 0 ? "red" : "green"}>
-                    {configuredComponents.length === 0 ? "Needs components" : "Ready"}
-                  </Badge>
-                </div>
-                <div className="summary-row">
-                  <Box variant="awsui-key-label">Next step</Box>
-                  <Box>
-                    {configuredComponents.length === 0
-                      ? "Add your first component."
-                      : "Review or edit items from the list."}
-                  </Box>
-                </div>
-              </SpaceBetween>
-            </Container>
-          </ColumnLayout>
+function TemplateConfigureView({
+  categoryOptions,
+  componentColumns,
+  configuredComponents,
+  deletingComponent,
+  deletePending,
+  draft,
+  editorMode,
+  editorVisible,
+  formError,
+  navigate,
+  onDelete,
+  onDeleteDismiss,
+  onDraftChange,
+  onEditorDismiss,
+  onOpenCreate,
+  onSave,
+  savePending,
+  selectedCategory,
+  selectedSafetyOption,
+  selectedTests,
+  template,
+  templateId,
+  testOptions,
+  totalTests,
+}: TemplateConfigureViewProps) {
+  return (
+    <ContentLayout
+      header={
+        <TemplateConfigureHeader
+          onAddComponent={onOpenCreate}
+          onBackToTemplate={() => navigate(`/templates/${templateId}`)}
+          onOpenCatalog={() => navigate("/catalog")}
+          templateName={template.template_name}
+        />
+      }
+    >
+      <SpaceBetween size="l">
+        <Alert type="info">
+          Add components from the button above. Each component becomes part of the reusable template blueprint and
+          can carry one or more required test types.
+        </Alert>
 
-          <Container
-            header={
-              <Header
-                actions={
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setEditorMode("create");
-                      setEditingComponentId(null);
-                      setDraft(createEmptyDraft());
-                      setFormError("");
-                      setEditorVisible(true);
-                    }}
-                  >
-                    Add component
-                  </Button>
-                }
-                counter={`(${configuredComponents.length})`}
-                description="Each component is managed individually from this list."
-                variant="h2"
-              >
-                Template components
-              </Header>
-            }
-          >
-            {configuredComponents.length === 0 ? (
-              <PageEmpty
-                action={
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setEditorMode("create");
-                      setEditingComponentId(null);
-                      setDraft(createEmptyDraft());
-                      setFormError("");
-                      setEditorVisible(true);
-                    }}
-                  >
-                    Add first component
-                  </Button>
-                }
-                description="Start by adding a component in the modal. You can edit or delete each one afterward."
-                title="No components yet"
-              />
-            ) : (
-              <Table
-                columnDefinitions={componentColumns}
-                items={configuredComponents}
-                trackBy="template_component_id"
-                variant="embedded"
-                wrapLines={false}
-              />
-            )}
-          </Container>
-        </SpaceBetween>
-      </ContentLayout>
+        <TemplateSummaryCards
+          componentCount={configuredComponents.length}
+          template={template}
+          totalTests={totalTests}
+        />
 
-      <Modal
+        <TemplateComponentsPanel
+          columnDefinitions={componentColumns}
+          components={configuredComponents}
+          onOpenCreate={onOpenCreate}
+        />
+      </SpaceBetween>
+
+      <TemplateComponentEditorModal
+        categoryOptions={categoryOptions}
+        draft={draft}
+        editorMode={editorMode}
+        formError={formError}
+        onDismiss={onEditorDismiss}
+        onDraftChange={onDraftChange}
+        onSave={onSave}
+        savePending={savePending}
+        selectedCategory={selectedCategory}
+        selectedSafetyOption={selectedSafetyOption}
+        selectedTests={selectedTests}
+        testOptions={testOptions}
         visible={editorVisible}
-        header={editorMode === "create" ? "Add template component" : "Edit template component"}
-        onDismiss={() => {
-          setEditorVisible(false);
-          setFormError("");
-        }}
-        footer={
+      />
+
+      <DeleteTemplateComponentModal
+        component={deletingComponent}
+        deletePending={deletePending}
+        onDelete={onDelete}
+        onDismiss={onDeleteDismiss}
+      />
+    </ContentLayout>
+  );
+}
+
+type TemplateConfigureHeaderProps = {
+  onAddComponent: () => void;
+  onBackToTemplate: () => void;
+  onOpenCatalog: () => void;
+  templateName: string;
+};
+
+function TemplateConfigureHeader({
+  onAddComponent,
+  onBackToTemplate,
+  onOpenCatalog,
+  templateName,
+}: TemplateConfigureHeaderProps) {
+  return (
+    <Header
+      actions={
+        <SpaceBetween direction="horizontal" size="xs">
+          <Button onClick={onBackToTemplate}>Back to template</Button>
+          <Button onClick={onOpenCatalog}>Open catalog</Button>
+          <Button variant="primary" onClick={onAddComponent}>
+            Add component
+          </Button>
+        </SpaceBetween>
+      }
+      description="Build the component and test blueprint used when this template is applied to assets."
+      variant="h1"
+    >
+      Configure {templateName}
+    </Header>
+  );
+}
+
+type TemplateSummaryCardsProps = {
+  componentCount: number;
+  template: AssetTemplate;
+  totalTests: number;
+};
+
+function TemplateSummaryCards({ componentCount, template, totalTests }: TemplateSummaryCardsProps) {
+  return (
+    <ColumnLayout columns={3} variant="text-grid">
+      <Container header={<Header variant="h2">Template</Header>}>
+        <SpaceBetween size="xs">
+          <Box fontWeight="bold">{template.template_name}</Box>
+          <Box color="text-body-secondary">{template.display_id}</Box>
+        </SpaceBetween>
+      </Container>
+      <Container header={<Header variant="h2">Blueprint</Header>}>
+        <SpaceBetween size="xs">
+          <Box fontSize="display-l">{componentCount}</Box>
+          <Box color="text-body-secondary">components</Box>
+        </SpaceBetween>
+      </Container>
+      <Container header={<Header variant="h2">Status</Header>}>
+        <SpaceBetween size="xs">
+          <Badge color={componentCount > 0 ? "green" : "grey"}>
+            {componentCount > 0 ? "Configured" : "Draft"}
+          </Badge>
+          <Box color="text-body-secondary">{totalTests} assigned tests</Box>
+        </SpaceBetween>
+      </Container>
+    </ColumnLayout>
+  );
+}
+
+type TemplateComponentsPanelProps = {
+  columnDefinitions: TableProps<TemplateConfigurationComponent>["columnDefinitions"];
+  components: TemplateConfigurationComponent[];
+  onOpenCreate: () => void;
+};
+
+function TemplateComponentsPanel({
+  columnDefinitions,
+  components,
+  onOpenCreate,
+}: TemplateComponentsPanelProps) {
+  const emptyState = useMemo(
+    () => <TemplateComponentsEmptyState onOpenCreate={onOpenCreate} />,
+    [onOpenCreate]
+  );
+  const tableHeader = useMemo(
+    () => <TemplateComponentsHeader count={components.length} onOpenCreate={onOpenCreate} />,
+    [components.length, onOpenCreate]
+  );
+
+  return (
+    <Table
+      columnDefinitions={columnDefinitions}
+      empty={emptyState}
+      header={tableHeader}
+      items={components}
+      trackBy="template_component_id"
+    />
+  );
+}
+
+type TemplateComponentsActionProps = {
+  onOpenCreate: () => void;
+};
+
+function TemplateComponentsEmptyState({ onOpenCreate }: TemplateComponentsActionProps) {
+  return (
+    <PageEmpty
+      action={
+        <Button variant="primary" onClick={onOpenCreate}>
+          Add component
+        </Button>
+      }
+      description="Add the first component to define what assets created from this template should contain."
+      title="No components configured"
+    />
+  );
+}
+
+type TemplateComponentsHeaderProps = TemplateComponentsActionProps & {
+  count: number;
+};
+
+function TemplateComponentsHeader({ count, onOpenCreate }: TemplateComponentsHeaderProps) {
+  return (
+    <Header
+      actions={
+        <Button variant="primary" onClick={onOpenCreate}>
+          Add component
+        </Button>
+      }
+      counter={`(${count})`}
+    >
+      Template components
+    </Header>
+  );
+}
+
+type TemplateComponentEditorModalProps = {
+  categoryOptions: SelectProps.Option[];
+  draft: TemplateComponentFormState;
+  editorMode: EditorMode;
+  formError: string;
+  onDismiss: () => void;
+  onDraftChange: Dispatch<SetStateAction<TemplateComponentFormState>>;
+  onSave: () => void;
+  savePending: boolean;
+  selectedCategory: SelectProps.Option | null;
+  selectedSafetyOption: SelectProps.Option | null;
+  selectedTests: MultiselectProps.Option[];
+  testOptions: MultiselectProps.Option[];
+  visible: boolean;
+};
+
+function TemplateComponentEditorModal({
+  categoryOptions,
+  draft,
+  editorMode,
+  formError,
+  onDismiss,
+  onDraftChange,
+  onSave,
+  savePending,
+  selectedCategory,
+  selectedSafetyOption,
+  selectedTests,
+  testOptions,
+  visible,
+}: TemplateComponentEditorModalProps) {
+  return (
+    <Modal
+      footer={
+        <Box float="right">
           <SpaceBetween direction="horizontal" size="xs">
-            <Button
-              onClick={() => {
-                setEditorVisible(false);
-                setFormError("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button loading={saveMutation.isPending} variant="primary" onClick={() => saveMutation.mutate()}>
-              Save
+            <Button onClick={onDismiss}>Cancel</Button>
+            <Button loading={savePending} variant="primary" onClick={onSave}>
+              Save component
             </Button>
           </SpaceBetween>
-        }
-      >
-        <SpaceBetween direction="vertical" size="l">
-          {formError ? <Alert type="error">{formError}</Alert> : null}
+        </Box>
+      }
+      header={editorMode === "create" ? "Add template component" : "Edit template component"}
+      onDismiss={onDismiss}
+      visible={visible}
+    >
+      <SpaceBetween size="m">
+        {formError ? <Alert type="error">{formError}</Alert> : null}
 
-          <ColumnLayout columns={2}>
-            <FormField label="Component name">
-              <Input
-                value={draft.name}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({ ...current, name: detail.value }));
-                }}
-              />
-            </FormField>
-            <FormField label="Category">
-              <div data-testid="template-component-category">
-                <Select
-                  options={categoryOptions}
-                  placeholder="Select category"
-                  selectedOption={selectedCategory}
-                  onChange={({ detail }) => {
-                    setDraft((current) => ({
-                      ...current,
-                      category_id: detail.selectedOption.value || "",
-                    }));
-                  }}
-                />
-              </div>
-            </FormField>
-          </ColumnLayout>
+        <TemplateComponentCoreFields
+          categoryOptions={categoryOptions}
+          draft={draft}
+          onDraftChange={onDraftChange}
+          selectedCategory={selectedCategory}
+        />
 
-          <FormField label="Description">
-            <Textarea
-              rows={4}
-              value={draft.description}
-              onChange={({ detail }) => {
-                setDraft((current) => ({ ...current, description: detail.value }));
-              }}
-            />
-          </FormField>
+        <TemplateComponentDetailsFields draft={draft} onDraftChange={onDraftChange} />
 
-          <ColumnLayout columns={3}>
-            <FormField label="Serial number">
-              <Input
-                value={draft.serial_number}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({ ...current, serial_number: detail.value }));
-                }}
-              />
-            </FormField>
-            <FormField label="Manufacturer">
-              <Input
-                value={draft.manufacturer}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({ ...current, manufacturer: detail.value }));
-                }}
-              />
-            </FormField>
-            <FormField label="Safety critical">
-              <Select
-                options={SAFETY_OPTIONS}
-                selectedOption={selectedSafetyOption}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({
-                    ...current,
-                    safety_critical: (detail.selectedOption.value as SafetyCritical) || "NO",
-                  }));
-                }}
-              />
-            </FormField>
-          </ColumnLayout>
+        <TemplateComponentClassificationFields
+          draft={draft}
+          onDraftChange={onDraftChange}
+          selectedSafetyOption={selectedSafetyOption}
+          selectedTests={selectedTests}
+          testOptions={testOptions}
+        />
+      </SpaceBetween>
+    </Modal>
+  );
+}
 
-          <ColumnLayout columns={3}>
-            <FormField label="Assigned project">
-              <Input
-                value={draft.assigned_project}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({ ...current, assigned_project: detail.value }));
-                }}
-              />
-            </FormField>
-            <FormField label="Location">
-              <Input
-                value={draft.location}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({ ...current, location: detail.value }));
-                }}
-              />
-            </FormField>
-            <FormField label="Equipment type">
-              <Input
-                value={draft.equipment_type}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({ ...current, equipment_type: detail.value }));
-                }}
-              />
-            </FormField>
-          </ColumnLayout>
+type TemplateComponentFieldProps = {
+  draft: TemplateComponentFormState;
+  onDraftChange: Dispatch<SetStateAction<TemplateComponentFormState>>;
+};
 
-          <ColumnLayout columns={3}>
-            <FormField label="Structure">
-              <Input
-                value={draft.structure}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({ ...current, structure: detail.value }));
-                }}
-              />
-            </FormField>
-            <FormField label="Model">
-              <Input
-                value={draft.model}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({ ...current, model: detail.value }));
-                }}
-              />
-            </FormField>
-            <FormField label="Class">
-              <Input
-                value={draft.class}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({ ...current, class: detail.value }));
-                }}
-              />
-            </FormField>
-          </ColumnLayout>
+type TemplateComponentCoreFieldsProps = TemplateComponentFieldProps & {
+  categoryOptions: SelectProps.Option[];
+  selectedCategory: SelectProps.Option | null;
+};
 
-          <ColumnLayout columns={2}>
-            <FormField label="Class code">
-              <Input
-                value={draft.class_code}
-                onChange={({ detail }) => {
-                  setDraft((current) => ({ ...current, class_code: detail.value }));
-                }}
-              />
-            </FormField>
-            <FormField
-              description="These are the default certificate tests for this template component."
-              label="Assigned test types"
-            >
-              <div data-testid="template-component-tests">
-                <Multiselect
-                  options={testOptions}
-                  placeholder="Select test types"
-                  selectedOptions={selectedTests}
-                  onChange={({ detail }) => {
-                    setDraft((current) => ({
-                      ...current,
-                      test_ids: detail.selectedOptions
-                        .map((option) => option.value || "")
-                        .filter(Boolean),
-                    }));
-                  }}
-                />
-              </div>
-            </FormField>
-          </ColumnLayout>
-        </SpaceBetween>
-      </Modal>
+function TemplateComponentCoreFields({
+  categoryOptions,
+  draft,
+  onDraftChange,
+  selectedCategory,
+}: TemplateComponentCoreFieldsProps) {
+  return (
+    <SpaceBetween size="m">
+      <FormField label="Component name">
+        <Input
+          value={draft.name}
+          onChange={({ detail }) =>
+            onDraftChange((currentDraft) => ({ ...currentDraft, name: detail.value }))
+          }
+        />
+      </FormField>
+      <FormField label="Category">
+        <div data-testid="template-component-category">
+          <Select
+            options={categoryOptions}
+            placeholder="Choose a category"
+            selectedOption={selectedCategory}
+            onChange={({ detail }) =>
+              onDraftChange((currentDraft) => ({
+                ...currentDraft,
+                category_id: detail.selectedOption.value || "",
+              }))
+            }
+          />
+        </div>
+      </FormField>
+      <FormField label="Description">
+        <Textarea
+          value={draft.description}
+          onChange={({ detail }) =>
+            onDraftChange((currentDraft) => ({ ...currentDraft, description: detail.value }))
+          }
+        />
+      </FormField>
+    </SpaceBetween>
+  );
+}
 
-      <Modal
-        visible={Boolean(deletingComponent)}
-        header="Delete template component"
-        onDismiss={() => setDeletingComponent(null)}
-        footer={
+function TemplateComponentDetailsFields({ draft, onDraftChange }: TemplateComponentFieldProps) {
+  return (
+    <ColumnLayout columns={2}>
+      <FormField label="Serial number">
+        <Input
+          value={draft.serial_number}
+          onChange={({ detail }) =>
+            onDraftChange((currentDraft) => ({ ...currentDraft, serial_number: detail.value }))
+          }
+        />
+      </FormField>
+      <FormField label="Manufacturer">
+        <Input
+          value={draft.manufacturer}
+          onChange={({ detail }) =>
+            onDraftChange((currentDraft) => ({ ...currentDraft, manufacturer: detail.value }))
+          }
+        />
+      </FormField>
+      <FormField label="Assigned project">
+        <Input
+          value={draft.assigned_project}
+          onChange={({ detail }) =>
+            onDraftChange((currentDraft) => ({ ...currentDraft, assigned_project: detail.value }))
+          }
+        />
+      </FormField>
+      <FormField label="Location">
+        <Input
+          value={draft.location}
+          onChange={({ detail }) =>
+            onDraftChange((currentDraft) => ({ ...currentDraft, location: detail.value }))
+          }
+        />
+      </FormField>
+    </ColumnLayout>
+  );
+}
+
+type TemplateComponentClassificationFieldsProps = TemplateComponentFieldProps & {
+  selectedSafetyOption: SelectProps.Option | null;
+  selectedTests: MultiselectProps.Option[];
+  testOptions: MultiselectProps.Option[];
+};
+
+function TemplateComponentClassificationFields({
+  draft,
+  onDraftChange,
+  selectedSafetyOption,
+  selectedTests,
+  testOptions,
+}: TemplateComponentClassificationFieldsProps) {
+  return (
+    <SpaceBetween size="m">
+      <ColumnLayout columns={2}>
+        <FormField label="Equipment type">
+          <Input
+            value={draft.equipment_type}
+            onChange={({ detail }) =>
+              onDraftChange((currentDraft) => ({ ...currentDraft, equipment_type: detail.value }))
+            }
+          />
+        </FormField>
+        <FormField label="Structure">
+          <Input
+            value={draft.structure}
+            onChange={({ detail }) =>
+              onDraftChange((currentDraft) => ({ ...currentDraft, structure: detail.value }))
+            }
+          />
+        </FormField>
+        <FormField label="Model">
+          <Input
+            value={draft.model}
+            onChange={({ detail }) =>
+              onDraftChange((currentDraft) => ({ ...currentDraft, model: detail.value }))
+            }
+          />
+        </FormField>
+        <FormField label="Class">
+          <Input
+            value={draft.class}
+            onChange={({ detail }) =>
+              onDraftChange((currentDraft) => ({ ...currentDraft, class: detail.value }))
+            }
+          />
+        </FormField>
+        <FormField label="Class code">
+          <Input
+            value={draft.class_code}
+            onChange={({ detail }) =>
+              onDraftChange((currentDraft) => ({ ...currentDraft, class_code: detail.value }))
+            }
+          />
+        </FormField>
+        <FormField label="Safety critical">
+          <Select
+            options={SAFETY_OPTIONS}
+            selectedOption={selectedSafetyOption}
+            onChange={({ detail }) =>
+              onDraftChange((currentDraft) => ({
+                ...currentDraft,
+                safety_critical: (detail.selectedOption.value || "NO") as SafetyCritical,
+              }))
+            }
+          />
+        </FormField>
+      </ColumnLayout>
+      <FormField label="Assigned test types">
+        <div data-testid="template-component-tests">
+          <Multiselect
+            options={testOptions}
+            placeholder="Choose required tests"
+            selectedOptions={selectedTests}
+            onChange={({ detail }) =>
+              onDraftChange((currentDraft) => ({
+                ...currentDraft,
+                test_ids: detail.selectedOptions.flatMap((option) => (option.value ? [option.value] : [])),
+              }))
+            }
+          />
+        </div>
+      </FormField>
+    </SpaceBetween>
+  );
+}
+
+type DeleteTemplateComponentModalProps = {
+  component: TemplateConfigurationComponent | null;
+  deletePending: boolean;
+  onDelete: () => void;
+  onDismiss: () => void;
+};
+
+function DeleteTemplateComponentModal({
+  component,
+  deletePending,
+  onDelete,
+  onDismiss,
+}: DeleteTemplateComponentModalProps) {
+  return (
+    <Modal
+      footer={
+        <Box float="right">
           <SpaceBetween direction="horizontal" size="xs">
-            <Button onClick={() => setDeletingComponent(null)}>Cancel</Button>
-            <Button loading={deleteMutation.isPending} variant="primary" onClick={() => deleteMutation.mutate()}>
+            <Button onClick={onDismiss}>Cancel</Button>
+            <Button loading={deletePending} variant="primary" onClick={onDelete}>
               Delete
             </Button>
           </SpaceBetween>
-        }
-      >
-        <SpaceBetween direction="vertical" size="m">
-          <Alert type="warning">
-            This removes the component blueprint and its default tests from the template.
-          </Alert>
-          <Box>
-            {deletingComponent ? `Delete ${deletingComponent.name} from this template?` : ""}
-          </Box>
-        </SpaceBetween>
-      </Modal>
-    </>
+        </Box>
+      }
+      header="Delete template component"
+      onDismiss={onDismiss}
+      visible={Boolean(component)}
+    >
+      <SpaceBetween size="m">
+        <Alert type="warning">This removes the component and its test assignments from this template.</Alert>
+        <Box>
+          Delete <Box variant="strong">{component?.name}</Box> from this template?
+        </Box>
+      </SpaceBetween>
+    </Modal>
   );
 }

@@ -82,7 +82,7 @@ export function DashboardPage() {
   });
 
   if (assetsQuery.isLoading || (activeAssetId && dashboardQuery.isLoading)) {
-    return <PageLoading>Loading the selected asset dashboard...</PageLoading>;
+    return <PageLoading>{"Loading the selected asset dashboard\u2026"}</PageLoading>;
   }
 
   if (assetsQuery.isError) {

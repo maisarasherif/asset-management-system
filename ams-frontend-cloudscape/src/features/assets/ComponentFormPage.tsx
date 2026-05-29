@@ -27,7 +27,7 @@ import {
 } from "../../lib/api/ams";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { ComponentInput, SafetyCritical } from "../../types/ams";
+import type { Asset, ComponentInput, SafetyCritical } from "../../types/ams";
 import { humanizeEnum } from "../../utils/format";
 
 const SAFETY_OPTIONS: SelectProps.Option[] = [
@@ -134,12 +134,11 @@ export function ComponentFormPage() {
     onSuccess: async (createdComponent) => {
       if (!assetId) return;
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["components", assetId] }),
-        queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
-      ]);
-
       if (createdComponent) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["components", assetId] }),
+          queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
+        ]);
         success("Component created", `${createdComponent.name} is ready for certificates.`);
         navigate(`/assets/${assetId}?component=${createdComponent.component_id}`, {
           replace: true,
@@ -148,7 +147,11 @@ export function ComponentFormPage() {
       }
 
       if (componentId) {
-        await queryClient.invalidateQueries({ queryKey: ["component", componentId] });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["components", assetId] }),
+          queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
+          queryClient.invalidateQueries({ queryKey: ["component", componentId] }),
+        ]);
         success("Component updated", "The component details have been saved.");
         navigate(`/assets/${assetId}?component=${componentId}`, { replace: true });
       }
@@ -169,7 +172,7 @@ export function ComponentFormPage() {
     mainCategoriesQuery.isLoading ||
     (isEditing && componentQuery.isLoading)
   ) {
-    return <PageLoading>Loading component form data...</PageLoading>;
+    return <PageLoading>{"Loading component form data\u2026"}</PageLoading>;
   }
 
   if (assetQuery.isError || categoriesQuery.isError || mainCategoriesQuery.isError) {
@@ -223,14 +226,62 @@ export function ComponentFormPage() {
     });
   };
 
+  const updateForm = (patch: Partial<ComponentInput>) => {
+    setForm((current) => ({ ...current, ...patch }));
+  };
+
+  return renderComponentFormPage({
+    asset: assetQuery.data,
+    assetId,
+    categoryOptions,
+    errorMessage,
+    form,
+    isEditing,
+    onCancel: () => navigate(`/assets/${assetId}`),
+    onFormChange: updateForm,
+    onSubmit: handleSubmit,
+    savePending: saveMutation.isPending,
+    selectedCategoryOption,
+    selectedSafetyOption,
+  });
+}
+
+interface ComponentFormPageViewProps {
+  asset: Asset | undefined;
+  assetId: string;
+  categoryOptions: SelectProps.Option[];
+  errorMessage: string;
+  form: ComponentInput;
+  isEditing: boolean;
+  onCancel: () => void;
+  onFormChange: (patch: Partial<ComponentInput>) => void;
+  onSubmit: () => void;
+  savePending: boolean;
+  selectedCategoryOption: SelectProps.Option | null;
+  selectedSafetyOption: SelectProps.Option | null;
+}
+
+function renderComponentFormPage({
+  asset,
+  categoryOptions,
+  errorMessage,
+  form,
+  isEditing,
+  onCancel,
+  onFormChange,
+  onSubmit,
+  savePending,
+  selectedCategoryOption,
+  selectedSafetyOption,
+}: ComponentFormPageViewProps) {
   return (
     <ContentLayout
       header={
         <Header
           actions={
             <SpaceBetween direction="horizontal" size="xs">
-              <Button onClick={() => navigate(`/assets/${assetId}`)}>Cancel</Button>
-              <Button loading={saveMutation.isPending} variant="primary" onClick={handleSubmit}>
+              <Button onClick={onCancel}>Cancel</Button>
+              <Button loading={savePending} variant="primary" onClick={onSubmit}>
                 {isEditing ? "Save component" : "Create component"}
               </Button>
             </SpaceBetween>
@@ -250,9 +301,7 @@ export function ComponentFormPage() {
               <FormField label="Component name">
                 <Input
                   value={form.name}
-                  onChange={({ detail }) =>
-                    setForm((current) => ({ ...current, name: detail.value }))
-                  }
+                  onChange={({ detail }) => onFormChange({ name: detail.value })}
                 />
               </FormField>
 
@@ -263,10 +312,9 @@ export function ComponentFormPage() {
                     placeholder="Select a category"
                     selectedOption={selectedCategoryOption}
                     onChange={({ detail }) =>
-                      setForm((current) => ({
-                        ...current,
+                      onFormChange({
                         category_id: detail.selectedOption.value ?? "",
-                      }))
+                      })
                     }
                   />
                 </FormField>
@@ -275,11 +323,10 @@ export function ComponentFormPage() {
                     options={SAFETY_OPTIONS}
                     selectedOption={selectedSafetyOption}
                     onChange={({ detail }) =>
-                      setForm((current) => ({
-                        ...current,
+                      onFormChange({
                         safety_critical:
-                          (detail.selectedOption.value as SafetyCritical) ?? current.safety_critical,
-                      }))
+                          (detail.selectedOption.value as SafetyCritical) ?? form.safety_critical,
+                      })
                     }
                   />
                 </FormField>
@@ -289,17 +336,13 @@ export function ComponentFormPage() {
                 <FormField label="Serial number">
                   <Input
                     value={form.serial_number}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, serial_number: detail.value }))
-                    }
+                    onChange={({ detail }) => onFormChange({ serial_number: detail.value })}
                   />
                 </FormField>
                 <FormField label="Manufacturer">
                   <Input
                     value={form.manufacturer}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, manufacturer: detail.value }))
-                    }
+                    onChange={({ detail }) => onFormChange({ manufacturer: detail.value })}
                   />
                 </FormField>
               </ColumnLayout>
@@ -308,25 +351,19 @@ export function ComponentFormPage() {
                 <FormField label="Equipment type">
                   <Input
                     value={form.equipment_type}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, equipment_type: detail.value }))
-                    }
+                    onChange={({ detail }) => onFormChange({ equipment_type: detail.value })}
                   />
                 </FormField>
                 <FormField label="Structure">
                   <Input
                     value={form.structure}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, structure: detail.value }))
-                    }
+                    onChange={({ detail }) => onFormChange({ structure: detail.value })}
                   />
                 </FormField>
                 <FormField label="Model">
                   <Input
                     value={form.model}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, model: detail.value }))
-                    }
+                    onChange={({ detail }) => onFormChange({ model: detail.value })}
                   />
                 </FormField>
               </ColumnLayout>
@@ -335,25 +372,19 @@ export function ComponentFormPage() {
                 <FormField label="Class">
                   <Input
                     value={form.class}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, class: detail.value }))
-                    }
+                    onChange={({ detail }) => onFormChange({ class: detail.value })}
                   />
                 </FormField>
                 <FormField label="Class code">
                   <Input
                     value={form.class_code}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, class_code: detail.value }))
-                    }
+                    onChange={({ detail }) => onFormChange({ class_code: detail.value })}
                   />
                 </FormField>
                 <FormField label="Location">
                   <Input
                     value={form.location}
-                    onChange={({ detail }) =>
-                      setForm((current) => ({ ...current, location: detail.value }))
-                    }
+                    onChange={({ detail }) => onFormChange({ location: detail.value })}
                   />
                 </FormField>
               </ColumnLayout>
@@ -361,12 +392,7 @@ export function ComponentFormPage() {
               <FormField label="Assigned project">
                 <Input
                   value={form.assigned_project}
-                  onChange={({ detail }) =>
-                    setForm((current) => ({
-                      ...current,
-                      assigned_project: detail.value,
-                    }))
-                  }
+                  onChange={({ detail }) => onFormChange({ assigned_project: detail.value })}
                 />
               </FormField>
 
@@ -374,9 +400,7 @@ export function ComponentFormPage() {
                 <Textarea
                   rows={6}
                   value={form.description}
-                  onChange={({ detail }) =>
-                    setForm((current) => ({ ...current, description: detail.value }))
-                  }
+                  onChange={({ detail }) => onFormChange({ description: detail.value })}
                 />
               </FormField>
             </SpaceBetween>
@@ -388,15 +412,15 @@ export function ComponentFormPage() {
             <SpaceBetween direction="vertical" size="s">
               <div className="summary-row">
                 <Box variant="awsui-key-label">Asset</Box>
-                <Box>{assetQuery.data?.name}</Box>
+                <Box>{asset?.name}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Display ID</Box>
-                <Box>{assetQuery.data?.display_id}</Box>
+                <Box>{asset?.display_id}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Location</Box>
-                <Box>{assetQuery.data?.location || "Not set"}</Box>
+                <Box>{asset?.location || "Not set"}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Certificate workflow</Box>

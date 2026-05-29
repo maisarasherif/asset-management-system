@@ -14,6 +14,7 @@ import type { AuthSession } from "../types/ams";
 
 const ASSET_STORAGE_KEY = "ams-cloudscape-selected-asset";
 const LOGOUT_BROADCAST_KEY = "ams-cloudscape-logout";
+const SESSION_EXPIRY_GRACE_MS = 5000;
 
 function readStoredAsset(): string | null {
 	return sessionStorage.getItem(ASSET_STORAGE_KEY);
@@ -51,6 +52,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
 		localStorage.setItem(LOGOUT_BROADCAST_KEY, String(Date.now()));
 	}, [clearSession]);
 
+	const redirectToLogin = useCallback(() => {
+		if (window.location.pathname !== "/login") {
+			window.location.replace("/login");
+		}
+	}, []);
+
+	const expireSession = useCallback(() => {
+		clearSession();
+		localStorage.setItem(LOGOUT_BROADCAST_KEY, String(Date.now()));
+		redirectToLogin();
+	}, [clearSession, redirectToLogin]);
+
   const setSelectedAssetId = useCallback((assetId: string | null) => {
     setSelectedAssetIdState(assetId);
     if (assetId) {
@@ -64,12 +77,50 @@ export function AuthProvider({ children }: PropsWithChildren) {
 		configureApiClient({
 			onUnauthorized: () => {
 				logout();
-				if (window.location.pathname !== "/login") {
-					window.location.replace("/login");
-				}
+				redirectToLogin();
 			},
 		});
-	}, [logout]);
+	}, [logout, redirectToLogin]);
+
+	useEffect(() => {
+		if (!session) {
+			return;
+		}
+
+		const expiresAtMs = Date.parse(session.expiresAt);
+		if (!Number.isFinite(expiresAtMs)) {
+			const timer = window.setTimeout(expireSession, 0);
+			return () => window.clearTimeout(timer);
+		}
+
+		const shouldExpireAtMs = expiresAtMs - SESSION_EXPIRY_GRACE_MS;
+		const expireIfNeeded = () => {
+			if (Date.now() >= shouldExpireAtMs) {
+				expireSession();
+			}
+		};
+
+		const timer = window.setTimeout(
+			expireSession,
+			Math.max(shouldExpireAtMs - Date.now(), 0)
+		);
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === "visible") {
+				expireIfNeeded();
+			}
+		};
+
+		window.addEventListener("focus", expireIfNeeded);
+		window.addEventListener("pageshow", expireIfNeeded);
+		document.addEventListener("visibilitychange", handleVisibilityChange);
+
+		return () => {
+			window.clearTimeout(timer);
+			window.removeEventListener("focus", expireIfNeeded);
+			window.removeEventListener("pageshow", expireIfNeeded);
+			document.removeEventListener("visibilitychange", handleVisibilityChange);
+		};
+	}, [expireSession, session]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -101,15 +152,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
 		const handleStorage = (event: StorageEvent) => {
 			if (event.key === LOGOUT_BROADCAST_KEY) {
 				clearSession();
-				if (window.location.pathname !== "/login") {
-					window.location.replace("/login");
-				}
+				redirectToLogin();
 			}
 		};
 
 		window.addEventListener("storage", handleStorage);
 		return () => window.removeEventListener("storage", handleStorage);
-	}, [clearSession]);
+	}, [clearSession, redirectToLogin]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

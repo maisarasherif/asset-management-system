@@ -69,7 +69,7 @@ export function ClientAssetViewPage() {
   }
 
   if (assetQuery.isLoading) {
-    return <PageLoading>Loading asset certificate data...</PageLoading>;
+    return <PageLoading>{"Loading asset certificate data\u2026"}</PageLoading>;
   }
 
   if (assetQuery.isError || !assetQuery.data) {

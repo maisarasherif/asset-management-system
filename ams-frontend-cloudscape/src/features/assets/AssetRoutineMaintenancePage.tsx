@@ -15,7 +15,7 @@ import {
   Textarea,
   type TableProps,
 } from "@cloudscape-design/components";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
@@ -27,12 +27,13 @@ import {
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { AssetMaintenanceEvent } from "../../types/ams";
+import type { Asset, AssetMaintenanceEvent } from "../../types/ams";
 import { formatDate, humanizeEnum } from "../../utils/format";
 import { assetStatusType } from "../../utils/status";
 
 export function AssetRoutineMaintenancePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { assetId } = useParams();
   const { isAdmin, setSelectedAssetId } = useAuth();
   const { error, success } = useFlashbar();
@@ -61,7 +62,13 @@ export function AssetRoutineMaintenancePage() {
         note: hoursNote,
       }),
     onSuccess: async (response) => {
-      await Promise.all([assetQuery.refetch(), maintenanceQuery.refetch()]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["asset", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["assets"] }),
+        queryClient.invalidateQueries({ queryKey: ["asset-dashboard", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["routine-maintenance", assetId] }),
+      ]);
       setHoursModalVisible(false);
       setHoursNote("");
       success(
@@ -82,7 +89,13 @@ export function AssetRoutineMaintenancePage() {
         completion_notes: completionNotes,
       }),
     onSuccess: async () => {
-      await Promise.all([assetQuery.refetch(), maintenanceQuery.refetch()]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["asset", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["assets"] }),
+        queryClient.invalidateQueries({ queryKey: ["asset-dashboard", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["routine-maintenance", assetId] }),
+      ]);
       setCompleteModalVisible(false);
       setCompletionNotes("");
       success("Routine maintenance completed", "The next maintenance target has been scheduled.");
@@ -101,7 +114,7 @@ export function AssetRoutineMaintenancePage() {
   }
 
   if (assetQuery.isLoading || maintenanceQuery.isLoading) {
-    return <PageLoading>Loading routine maintenance...</PageLoading>;
+    return <PageLoading>{"Loading routine maintenance\u2026"}</PageLoading>;
   }
 
   if (assetQuery.isError || maintenanceQuery.isError || !assetQuery.data) {
@@ -158,6 +171,97 @@ export function AssetRoutineMaintenancePage() {
     },
   ];
 
+  return renderAssetRoutineMaintenancePage({
+    asset,
+    assetId,
+    completeModalVisible,
+    completePending: completeMaintenanceMutation.isPending,
+    completionNotes,
+    hoursDraft,
+    hoursModalVisible,
+    hoursNote,
+    isAdmin,
+    maintenanceColumns,
+    maintenanceConfigured,
+    maintenanceEvents,
+    maintenanceLoading: maintenanceQuery.isLoading,
+    maintenanceRemaining,
+    navigate,
+    onCloseCompleteModal: () => setCompleteModalVisible(false),
+    onCloseHoursModal: () => setHoursModalVisible(false),
+    onCompleteMaintenance: () => completeMaintenanceMutation.mutate(),
+    onCompletionNotesChange: setCompletionNotes,
+    onHoursChange: setHoursDraft,
+    onHoursNoteChange: setHoursNote,
+    onOpenCompleteModal: () => setCompleteModalVisible(true),
+    onOpenHoursModal: () => {
+      setHoursDraft(String(asset.working_hours));
+      setHoursNote("");
+      setHoursModalVisible(true);
+    },
+    onUpdateHours: () => updateHoursMutation.mutate(),
+    openMaintenanceEvent,
+    updateHoursPending: updateHoursMutation.isPending,
+  });
+}
+
+interface AssetRoutineMaintenanceViewProps {
+  asset: Asset;
+  assetId: string;
+  completeModalVisible: boolean;
+  completePending: boolean;
+  completionNotes: string;
+  hoursDraft: string;
+  hoursModalVisible: boolean;
+  hoursNote: string;
+  isAdmin: boolean;
+  maintenanceColumns: TableProps<AssetMaintenanceEvent>["columnDefinitions"];
+  maintenanceConfigured: boolean;
+  maintenanceEvents: AssetMaintenanceEvent[];
+  maintenanceLoading: boolean;
+  maintenanceRemaining: number;
+  navigate: ReturnType<typeof useNavigate>;
+  onCloseCompleteModal: () => void;
+  onCloseHoursModal: () => void;
+  onCompleteMaintenance: () => void;
+  onCompletionNotesChange: (value: string) => void;
+  onHoursChange: (value: string) => void;
+  onHoursNoteChange: (value: string) => void;
+  onOpenCompleteModal: () => void;
+  onOpenHoursModal: () => void;
+  onUpdateHours: () => void;
+  openMaintenanceEvent: AssetMaintenanceEvent | null;
+  updateHoursPending: boolean;
+}
+
+function renderAssetRoutineMaintenancePage({
+  asset,
+  assetId,
+  completeModalVisible,
+  completePending,
+  completionNotes,
+  hoursDraft,
+  hoursModalVisible,
+  hoursNote,
+  isAdmin,
+  maintenanceColumns,
+  maintenanceConfigured,
+  maintenanceEvents,
+  maintenanceLoading,
+  maintenanceRemaining,
+  navigate,
+  onCloseCompleteModal,
+  onCloseHoursModal,
+  onCompleteMaintenance,
+  onCompletionNotesChange,
+  onHoursChange,
+  onHoursNoteChange,
+  onOpenCompleteModal,
+  onOpenHoursModal,
+  onUpdateHours,
+  openMaintenanceEvent,
+  updateHoursPending,
+}: AssetRoutineMaintenanceViewProps) {
   return (
     <>
       <ContentLayout
@@ -171,19 +275,9 @@ export function AssetRoutineMaintenancePage() {
                     Edit maintenance interval
                   </Button>
                 ) : null}
-                {isAdmin ? (
-                  <Button
-                    onClick={() => {
-                      setHoursDraft(String(asset.working_hours));
-                      setHoursNote("");
-                      setHoursModalVisible(true);
-                    }}
-                  >
-                    Update hours
-                  </Button>
-                ) : null}
+                {isAdmin ? <Button onClick={onOpenHoursModal}>Update hours</Button> : null}
                 {isAdmin && openMaintenanceEvent ? (
-                  <Button variant="primary" onClick={() => setCompleteModalVisible(true)}>
+                  <Button variant="primary" onClick={onOpenCompleteModal}>
                     Complete maintenance
                   </Button>
                 ) : null}
@@ -263,9 +357,7 @@ export function AssetRoutineMaintenancePage() {
             <Alert
               action={
                 isAdmin ? (
-                  <Button onClick={() => setCompleteModalVisible(true)}>
-                    Complete maintenance
-                  </Button>
+                  <Button onClick={onOpenCompleteModal}>Complete maintenance</Button>
                 ) : undefined
               }
               type="warning"
@@ -301,7 +393,7 @@ export function AssetRoutineMaintenancePage() {
                 </Box>
               }
               items={maintenanceEvents}
-              loading={maintenanceQuery.isLoading}
+              loading={maintenanceLoading}
               loadingText="Loading routine maintenance"
               trackBy="maintenance_event_id"
               variant="embedded"
@@ -313,16 +405,12 @@ export function AssetRoutineMaintenancePage() {
       <Modal
         visible={hoursModalVisible}
         header="Update working hours"
-        onDismiss={() => setHoursModalVisible(false)}
+        onDismiss={onCloseHoursModal}
         footer={
           <Box float="right">
             <SpaceBetween direction="horizontal" size="xs">
-              <Button onClick={() => setHoursModalVisible(false)}>Cancel</Button>
-              <Button
-                loading={updateHoursMutation.isPending}
-                variant="primary"
-                onClick={() => updateHoursMutation.mutate()}
-              >
+              <Button onClick={onCloseHoursModal}>Cancel</Button>
+              <Button loading={updateHoursPending} variant="primary" onClick={onUpdateHours}>
                 Save hours
               </Button>
             </SpaceBetween>
@@ -335,14 +423,14 @@ export function AssetRoutineMaintenancePage() {
               inputMode="numeric"
               type="number"
               value={hoursDraft}
-              onChange={({ detail }) => setHoursDraft(detail.value)}
+              onChange={({ detail }) => onHoursChange(detail.value)}
             />
           </FormField>
           <FormField label="Note">
             <Textarea
               rows={4}
               value={hoursNote}
-              onChange={({ detail }) => setHoursNote(detail.value)}
+              onChange={({ detail }) => onHoursNoteChange(detail.value)}
             />
           </FormField>
         </SpaceBetween>
@@ -351,16 +439,12 @@ export function AssetRoutineMaintenancePage() {
       <Modal
         visible={completeModalVisible}
         header="Complete routine maintenance"
-        onDismiss={() => setCompleteModalVisible(false)}
+        onDismiss={onCloseCompleteModal}
         footer={
           <Box float="right">
             <SpaceBetween direction="horizontal" size="xs">
-              <Button onClick={() => setCompleteModalVisible(false)}>Cancel</Button>
-              <Button
-                loading={completeMaintenanceMutation.isPending}
-                variant="primary"
-                onClick={() => completeMaintenanceMutation.mutate()}
-              >
+              <Button onClick={onCloseCompleteModal}>Cancel</Button>
+              <Button loading={completePending} variant="primary" onClick={onCompleteMaintenance}>
                 Complete
               </Button>
             </SpaceBetween>
@@ -371,7 +455,7 @@ export function AssetRoutineMaintenancePage() {
           <Textarea
             rows={5}
             value={completionNotes}
-            onChange={({ detail }) => setCompletionNotes(detail.value)}
+            onChange={({ detail }) => onCompletionNotesChange(detail.value)}
           />
         </FormField>
       </Modal>

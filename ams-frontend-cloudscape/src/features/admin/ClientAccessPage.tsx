@@ -17,7 +17,7 @@ import {
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import {
   createProject,
@@ -88,8 +88,6 @@ function ProjectEditorModal({
   onSubmit: (editor: NonNullable<ProjectEditor>) => void;
 }) {
   const [draft, setDraft] = useState<NonNullable<ProjectEditor> | null>(editor);
-
-  useEffect(() => setDraft(editor), [editor]);
 
   const selectedStatus =
     PROJECT_STATUS_OPTIONS.find((option) => option.value === draft?.status) ??
@@ -168,8 +166,6 @@ function AccessEditorModal({
   onSubmit: (editor: NonNullable<AccessEditor>) => void;
 }) {
   const [draft, setDraft] = useState<NonNullable<AccessEditor> | null>(editor);
-
-  useEffect(() => setDraft(editor), [editor]);
 
   const selectedClient = clientOptions.find((option) => option.value === draft?.user_id) ?? null;
   const selectedProject =
@@ -360,7 +356,7 @@ export function ClientAccessPage() {
     !accessQuery.data;
 
   if (loading) {
-    return <PageLoading>Loading client access controls...</PageLoading>;
+    return <PageLoading>{"Loading client access controls\u2026"}</PageLoading>;
   }
 
   if (failed) {
@@ -455,6 +451,87 @@ export function ClientAccessPage() {
     saveAccessMutation.mutate(editor);
   };
 
+  return renderClientAccessPage({
+    accessColumns,
+    accessEditor,
+    accessItems: accessQuery.data,
+    accessLoading: saveAccessMutation.isPending,
+    clientOptions,
+    modalError,
+    onAccessDismiss: () => {
+      setModalError("");
+      setAccessEditor(null);
+    },
+    onCreateAccess: () => {
+      setModalError("");
+      setAccessEditor({
+        user_id: clientOptions[0]?.value || "",
+        project_id: projectOptions[0]?.value || "",
+        status: "ACTIVE",
+      });
+    },
+    onCreateProject: () => {
+      setModalError("");
+      setProjectEditor({
+        mode: "create",
+        project_name: "",
+        description: "",
+        status: "ACTIVE",
+      });
+    },
+    onProjectDismiss: () => {
+      setModalError("");
+      setProjectEditor(null);
+    },
+    onSaveAccess: saveAccess,
+    onSaveProject: saveProject,
+    projectColumns,
+    projectEditor,
+    projectItems: projectsQuery.data,
+    projectLoading: saveProjectMutation.isPending,
+    projectOptions,
+  });
+}
+
+interface ClientAccessPageViewProps {
+  accessColumns: TableProps<UserProjectAccess>["columnDefinitions"];
+  accessEditor: AccessEditor;
+  accessItems: UserProjectAccess[];
+  accessLoading: boolean;
+  clientOptions: SelectProps.Option[];
+  modalError: string;
+  onAccessDismiss: () => void;
+  onCreateAccess: () => void;
+  onCreateProject: () => void;
+  onProjectDismiss: () => void;
+  onSaveAccess: (editor: NonNullable<AccessEditor>) => void;
+  onSaveProject: (editor: NonNullable<ProjectEditor>) => void;
+  projectColumns: TableProps<Project>["columnDefinitions"];
+  projectEditor: ProjectEditor;
+  projectItems: Project[];
+  projectLoading: boolean;
+  projectOptions: SelectProps.Option[];
+}
+
+function renderClientAccessPage({
+  accessColumns,
+  accessEditor,
+  accessItems,
+  accessLoading,
+  clientOptions,
+  modalError,
+  onAccessDismiss,
+  onCreateAccess,
+  onCreateProject,
+  onProjectDismiss,
+  onSaveAccess,
+  onSaveProject,
+  projectColumns,
+  projectEditor,
+  projectItems,
+  projectLoading,
+  projectOptions,
+}: ClientAccessPageViewProps) {
   return (
     <>
       <ContentLayout
@@ -472,22 +549,11 @@ export function ClientAccessPage() {
             header={
               <Header
                 actions={
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setModalError("");
-                      setProjectEditor({
-                        mode: "create",
-                        project_name: "",
-                        description: "",
-                        status: "ACTIVE",
-                      });
-                    }}
-                  >
+                  <Button variant="primary" onClick={onCreateProject}>
                     Create project
                   </Button>
                 }
-                counter={`(${projectsQuery.data.length})`}
+                counter={`(${projectItems.length})`}
                 variant="h2"
               >
                 Projects
@@ -497,7 +563,7 @@ export function ClientAccessPage() {
             <Table
               columnDefinitions={projectColumns}
               empty={<Box color="text-body-secondary">No projects are available.</Box>}
-              items={projectsQuery.data}
+              items={projectItems}
               trackBy="project_id"
               variant="embedded"
             />
@@ -510,19 +576,12 @@ export function ClientAccessPage() {
                   <Button
                     variant="primary"
                     disabled={clientOptions.length === 0 || projectOptions.length === 0}
-                    onClick={() => {
-                      setModalError("");
-                      setAccessEditor({
-                        user_id: clientOptions[0]?.value || "",
-                        project_id: projectOptions[0]?.value || "",
-                        status: "ACTIVE",
-                      });
-                    }}
+                    onClick={onCreateAccess}
                   >
                     Assign access
                   </Button>
                 }
-                counter={`(${accessQuery.data.length})`}
+                counter={`(${accessItems.length})`}
                 variant="h2"
               >
                 Client project access
@@ -535,7 +594,7 @@ export function ClientAccessPage() {
             <Table
               columnDefinitions={accessColumns}
               empty={<Box color="text-body-secondary">No client project access is assigned.</Box>}
-              items={accessQuery.data}
+              items={accessItems}
               trackBy="access_id"
               variant="embedded"
             />
@@ -544,29 +603,25 @@ export function ClientAccessPage() {
       </ContentLayout>
 
       <ProjectEditorModal
+        key={projectEditor ? `project-${projectEditor.mode}-${projectEditor.id ?? "new"}` : "project-closed"}
         editor={projectEditor}
         visible={Boolean(projectEditor)}
-        loading={saveProjectMutation.isPending}
+        loading={projectLoading}
         errorMessage={modalError}
-        onDismiss={() => {
-          setModalError("");
-          setProjectEditor(null);
-        }}
-        onSubmit={saveProject}
+        onDismiss={onProjectDismiss}
+        onSubmit={onSaveProject}
       />
 
       <AccessEditorModal
+        key={accessEditor ? `access-${accessEditor.user_id}-${accessEditor.project_id}` : "access-closed"}
         editor={accessEditor}
         visible={Boolean(accessEditor)}
-        loading={saveAccessMutation.isPending}
+        loading={accessLoading}
         errorMessage={modalError}
         clientOptions={clientOptions}
         projectOptions={projectOptions}
-        onDismiss={() => {
-          setModalError("");
-          setAccessEditor(null);
-        }}
-        onSubmit={saveAccess}
+        onDismiss={onAccessDismiss}
+        onSubmit={onSaveAccess}
       />
     </>
   );

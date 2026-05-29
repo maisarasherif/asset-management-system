@@ -12,7 +12,7 @@ import {
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
@@ -28,9 +28,50 @@ import {
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { Certificate, ComponentRecord } from "../../types/ams";
+import type { Asset, AssetMaintenanceEvent, Certificate, ComponentRecord, SingleAssetEquipment } from "../../types/ams";
 import { formatDate, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
+
+type ComponentGroupSection = {
+  key: string;
+  mainCategoryName: string;
+  groups: Array<{
+    key: string;
+    categoryName: string;
+    items: ComponentRecord[];
+  }>;
+};
+
+type AssetWorkspaceViewProps = {
+  asset: Asset;
+  assetId: string;
+  categoryMap: Map<string, string>;
+  certificateColumns: TableProps<Certificate>["columnDefinitions"];
+  certificateCount: number;
+  certificateItems: Certificate[];
+  certificatesError: boolean;
+  certificatesLoading: boolean;
+  collapsedGroups: Record<string, boolean>;
+  componentCount: number;
+  equipment: SingleAssetEquipment | undefined;
+  groupedComponents: ComponentGroupSection[];
+  isAdmin: boolean;
+  isSingleEquipment: boolean;
+  maintenanceConfigured: boolean;
+  maintenanceRemaining: number;
+  navigate: ReturnType<typeof useNavigate>;
+  onComponentSelect: (componentId: string) => void;
+  openMaintenanceEvent: AssetMaintenanceEvent | null;
+  selectedComponent: ComponentRecord | null;
+  setCollapsedGroups: Dispatch<SetStateAction<Record<string, boolean>>>;
+};
+
+const SINGLE_EQUIPMENT_CERTIFICATE_EMPTY = (
+  <Box color="text-body-secondary">No certificates exist for this asset yet.</Box>
+);
+const COMPONENT_CERTIFICATE_EMPTY = (
+  <Box color="text-body-secondary">No certificates exist for this component yet.</Box>
+);
 
 export function AssetWorkspacePage() {
   const navigate = useNavigate();
@@ -150,15 +191,7 @@ export function AssetWorkspacePage() {
   );
 
   const groupedComponents = useMemo(() => {
-    const sections: Array<{
-      key: string;
-      mainCategoryName: string;
-      groups: Array<{
-        key: string;
-        categoryName: string;
-        items: ComponentRecord[];
-      }>;
-    }> = [];
+    const sections: ComponentGroupSection[] = [];
 
     for (const component of componentsQuery.data || []) {
 	      if (component.component_kind === "SELF") {
@@ -217,7 +250,7 @@ export function AssetWorkspacePage() {
     mainCategoriesQuery.isLoading ||
     (isSingleEquipment && equipmentQuery.isLoading)
   ) {
-    return <PageLoading>Loading the asset workspace...</PageLoading>;
+    return <PageLoading>{"Loading the asset workspace\u2026"}</PageLoading>;
   }
 
   if (
@@ -302,343 +335,455 @@ export function AssetWorkspacePage() {
   const maintenanceRemaining = maintenanceConfigured
     ? assetQuery.data.next_maintenance_due_hours - assetQuery.data.working_hours
     : 0;
+  const handleComponentSelect = (componentId: string) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("component", componentId);
+    setSearchParams(nextParams);
+  };
 
   return (
-    <ContentLayout
-      header={
-        <Header
-          actions={
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button onClick={() => navigate("/dashboard")}>Open dashboard</Button>
-              <Button onClick={() => navigate(`/assets/${assetId}/routine-maintenance`)}>
-                Open maintenance
-              </Button>
-              <Button
-                disabled={!assetQuery.data.datasheet}
-                href={assetQuery.data.datasheet || undefined}
-                target="_blank"
-              >
-                Open datasheet
-              </Button>
-              {isAdmin ? (
-                <Button onClick={() => navigate(`/assets/${assetId}/edit`)}>Edit asset</Button>
-              ) : null}
-              {isAdmin && !isSingleEquipment ? (
-                <Button variant="primary" onClick={() => navigate(`/assets/${assetId}/components/new`)}>
-                  Add component
-                </Button>
-              ) : null}
-            </SpaceBetween>
-          }
-          description={`${assetQuery.data.display_id} - ${assetQuery.data.location || "No location set"}`}
-          variant="h1"
-        >
-          {assetQuery.data.name}
-        </Header>
-      }
-    >
-      <div className={`asset-workspace-grid${isSingleEquipment ? " asset-workspace-grid--single" : ""}`}>
-        {!isSingleEquipment ? (
-        <div className="asset-workspace-grid__nav">
-          <Container
-            header={
-              <Header
-                counter={`(${componentCount})`}
-                description="Choose a component to update the certificate pane."
-                variant="h2"
-              >
-                Components
-              </Header>
-            }
-          >
-            {componentCount === 0 ? (
-              <PageEmpty
-                action={isAdmin ? (
-                  <Button variant="primary" onClick={() => navigate(`/assets/${assetId}/components/new`)}>
-                    Create first component
-                  </Button>
-                ) : undefined}
-                description="Components are managed inside the asset workspace. Add the first component to begin certificate tracking."
-                title="No components in this asset"
-              />
-            ) : (
-              <div className="component-list-scroll">
-                <div className="component-list">
-                  {groupedComponents.map((section) => (
-                    <div key={section.key} className="component-main-group">
-                      <Box className="component-main-group__label" variant="awsui-key-label">
-                        {section.mainCategoryName}
-                      </Box>
-                      {section.groups.map((group) => (
-                        <div key={group.key} className="component-list-group">
-                          <button
-                            aria-expanded={!collapsedGroups[group.key]}
-                            type="button"
-                            className="component-list-group__toggle"
-                            onClick={() =>
-                              setCollapsedGroups((current) => ({
-                                ...current,
-                                [group.key]: !(current[group.key] ?? false),
-                              }))
-                            }
-                          >
-                            <div className="component-list-group__header">
-                              <Box fontWeight="bold">{group.categoryName}</Box>
-                              <Box color="text-body-secondary" fontSize="heading-s">
-                                {collapsedGroups[group.key] ? "\u25be" : "\u25b4"}
-                              </Box>
-                            </div>
-                          </button>
-                          {!collapsedGroups[group.key] && (
-                            <div className="component-list-group__items">
-                              {group.items.map((component) => {
-                                const isSelected =
-                                  component.component_id === selectedComponent?.component_id;
-                                return (
-                                  <button
-                                    key={component.component_id}
-                                    className={`component-list-item${isSelected ? " is-active" : ""}`}
-                                    type="button"
-                                    onClick={() => {
-                                      const nextParams = new URLSearchParams(searchParams);
-                                      nextParams.set("component", component.component_id);
-                                      setSearchParams(nextParams);
-                                    }}
-                                  >
-                                    <SpaceBetween direction="vertical" size="xs">
-                                      <div className="component-list-item__header">
-                                        <Box fontWeight="bold">{component.name}</Box>
-                                        <Box color="text-body-secondary">{component.display_id}</Box>
-                                      </div>
-                                      <div className="component-list-item__meta">
-                                        <span>{component.serial_number || "No serial"}</span>
-                                        <span>{humanizeEnum(component.safety_critical)}</span>
-                                      </div>
-                                    </SpaceBetween>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Container>
-        </div>
-        ) : null}
+    <AssetWorkspaceView
+      asset={assetQuery.data}
+      assetId={assetId}
+      categoryMap={categoryMap}
+      certificateColumns={certificateColumns}
+      certificateCount={certificateCount}
+      certificateItems={certificateItems}
+      certificatesError={certificatesQuery.isError}
+      certificatesLoading={certificatesQuery.isLoading}
+      collapsedGroups={collapsedGroups}
+      componentCount={componentCount}
+      equipment={equipmentQuery.data}
+      groupedComponents={groupedComponents}
+      isAdmin={isAdmin}
+      isSingleEquipment={isSingleEquipment}
+      maintenanceConfigured={maintenanceConfigured}
+      maintenanceRemaining={maintenanceRemaining}
+      navigate={navigate}
+      onComponentSelect={handleComponentSelect}
+      openMaintenanceEvent={openMaintenanceEvent}
+      selectedComponent={selectedComponent}
+      setCollapsedGroups={setCollapsedGroups}
+    />
+  );
+}
 
-        <div className="asset-workspace-grid__summary">
-          <Container>
-            <div className="asset-context-strip">
-              <div className="asset-context-strip__item">
-                <Box variant="awsui-key-label">Status</Box>
-                <StatusIndicator type={assetStatusType(assetQuery.data.status)}>
-                  {humanizeEnum(assetQuery.data.status)}
-                </StatusIndicator>
-              </div>
-              <div className="asset-context-strip__item">
-                <Box variant="awsui-key-label">Location</Box>
-                <Box>{assetQuery.data.location || "Not set"}</Box>
-              </div>
-              <div className="asset-context-strip__item">
-                <Box variant="awsui-key-label">Assigned project</Box>
-                <Box>{assetQuery.data.assigned_project || "Not set"}</Box>
-              </div>
-	              <div className="asset-context-strip__item">
-	                <Box variant="awsui-key-label">
-	                  {isSingleEquipment ? "Equipment type" : "Components"}
-	                </Box>
-	                <Box>
-	                  {isSingleEquipment
-	                    ? equipmentQuery.data?.equipment_type_name || "Not set"
-	                    : componentCount}
-	                </Box>
-	              </div>
-              <div className="asset-context-strip__item">
-                <Box variant="awsui-key-label">Routine maintenance</Box>
-                {openMaintenanceEvent ? (
-                  <StatusIndicator type="warning">Required</StatusIndicator>
-                ) : maintenanceConfigured ? (
-                  <Box>
-                    {Math.max(maintenanceRemaining, 0).toLocaleString()} h remaining
-                  </Box>
-                ) : (
-                  <Box>Not configured</Box>
-                )}
-              </div>
-            </div>
-          </Container>
-        </div>
-
-        <div className="asset-workspace-grid__detail">
-          <SpaceBetween direction="vertical" size="l">
-            <Container
-              header={
-                <Header
-                  actions={
-	                    selectedComponent && isAdmin ? (
-	                      <SpaceBetween direction="horizontal" size="xs">
-	                        {!isSingleEquipment ? (
-	                          <Button
-	                            onClick={() =>
-	                              navigate(
-	                                `/assets/${assetId}/components/${selectedComponent.component_id}/edit`
-	                              )
-	                            }
-	                          >
-	                            Edit component
-	                          </Button>
-	                        ) : null}
-	                        <Button
-                          variant="primary"
-                          onClick={() =>
-                            navigate(
-                              `/assets/${assetId}/components/${selectedComponent.component_id}/certificates/new`
-                            )
-                          }
-                        >
-                          Add certificate
-                        </Button>
-                      </SpaceBetween>
-                    ) : undefined
-                  }
-	                  description={
-	                    selectedComponent
-	                      ? isSingleEquipment
-	                        ? equipmentQuery.data?.equipment_type_name || "Equipment detail"
-	                        : (selectedComponent.category_id &&
-	                            categoryMap.get(selectedComponent.category_id)) ||
-	                          "Component detail"
-	                      : isSingleEquipment
-	                        ? "Equipment context could not be loaded."
-	                        : "Select a component from the left pane."
-	                  }
-                  variant="h2"
-                >
-	                  {selectedComponent
-	                    ? isSingleEquipment
-	                      ? "Equipment details"
-	                      : selectedComponent.name
-	                    : "Component details"}
-                </Header>
-              }
-            >
-	              {selectedComponent ? (
-	                isSingleEquipment ? (
-	                  <ColumnLayout columns={3} variant="text-grid">
-	                    <div className="summary-row">
-	                      <Box variant="awsui-key-label">Equipment type</Box>
-	                      <Box>{equipmentQuery.data?.equipment_type_name || "Not set"}</Box>
-	                    </div>
-	                    <div className="summary-row">
-	                      <Box variant="awsui-key-label">Equipment reference</Box>
-	                      <Box>{equipmentQuery.data?.display_id || "Not set"}</Box>
-	                    </div>
-	                    <div className="summary-row">
-	                      <Box variant="awsui-key-label">Certificate bridge</Box>
-	                      <Box>{selectedComponent.display_id}</Box>
-	                    </div>
-	                    <div className="summary-row">
-	                      <Box variant="awsui-key-label">Location</Box>
-	                      <Box>{selectedComponent.location || assetQuery.data.location || "Not set"}</Box>
-	                    </div>
-	                    <div className="summary-row">
-	                      <Box variant="awsui-key-label">Project</Box>
-	                      <Box>
-	                        {selectedComponent.assigned_project ||
-	                          assetQuery.data.assigned_project ||
-	                          "Not set"}
-	                      </Box>
-	                    </div>
-	                  </ColumnLayout>
-	                ) : (
-	                  <ColumnLayout columns={3} variant="text-grid">
-	                    <div className="summary-row">
-	                      <Box variant="awsui-key-label">Manufacturer</Box>
-	                      <Box>{selectedComponent.manufacturer || "Not set"}</Box>
-	                    </div>
-	                    <div className="summary-row">
-	                      <Box variant="awsui-key-label">Model</Box>
-	                      <Box>{selectedComponent.model || "Not set"}</Box>
-	                    </div>
-	                    <div className="summary-row">
-	                      <Box variant="awsui-key-label">Safety critical</Box>
-	                      <Box>{humanizeEnum(selectedComponent.safety_critical)}</Box>
-	                    </div>
-	                    <div className="summary-row">
-	                      <Box variant="awsui-key-label">Location</Box>
-	                      <Box>{selectedComponent.location || "Not set"}</Box>
-	                    </div>
-	                    <div className="summary-row">
-	                      <Box variant="awsui-key-label">Project</Box>
-	                      <Box>{selectedComponent.assigned_project || "Not set"}</Box>
-	                    </div>
-	                  </ColumnLayout>
-	                )
-	              ) : (
-                <Box color="text-body-secondary">
-	                  {isSingleEquipment
-	                    ? "Equipment details are not available yet."
-	                    : "Choose a component to show its certificate records here."}
-                </Box>
-              )}
-            </Container>
-
-            <Container
-              header={
-                <Header
-                  counter={selectedComponent ? `(${certificateCount})` : undefined}
-	                  description={
-	                    selectedComponent
-	                      ? isSingleEquipment
-	                        ? "Certificate records for this asset."
-	                        : "Certificate records for the selected component."
-	                      : isSingleEquipment
-	                        ? "The equipment bridge must load before certificates can be shown."
-	                        : "A component must be selected before certificates can be shown."
-	                  }
-                  variant="h2"
-                >
-	                  {isSingleEquipment ? "Asset certificates" : "Certificates"}
-                </Header>
-              }
-            >
-              {!selectedComponent ? (
-                <Box color="text-body-secondary">
-		                  {isSingleEquipment
-		                    ? "Equipment certificates will appear once the equipment context is loaded."
-		                    : "Select a component from the left pane to review its certificates."}
-                </Box>
-              ) : certificatesQuery.isError ? (
-                <Alert type="error">
-                  Certificate data could not be loaded for this component.
-                </Alert>
-              ) : (
-                <Table
-                  columnDefinitions={certificateColumns}
-                  empty={
-                    <Box color="text-body-secondary">
-	                      {isSingleEquipment
-	                        ? "No certificates exist for this asset yet."
-	                        : "No certificates exist for this component yet."}
-                    </Box>
-                  }
-                  items={certificateItems}
-                  loading={certificatesQuery.isLoading}
-                  loadingText="Loading certificates"
-                  trackBy="certificate_id"
-                  variant="embedded"
-                />
-              )}
-            </Container>
-
-          </SpaceBetween>
-        </div>
+function AssetWorkspaceView(props: AssetWorkspaceViewProps) {
+  return (
+    <ContentLayout header={<AssetWorkspaceHeader {...props} />}>
+      <div className={`asset-workspace-grid${props.isSingleEquipment ? " asset-workspace-grid--single" : ""}`}>
+        {!props.isSingleEquipment ? <ComponentNavigation {...props} /> : null}
+        <AssetContextStrip {...props} />
+        <WorkspaceDetail {...props} />
       </div>
     </ContentLayout>
+  );
+}
+
+function AssetWorkspaceHeader({
+  asset,
+  assetId,
+  isAdmin,
+  isSingleEquipment,
+  navigate,
+}: AssetWorkspaceViewProps) {
+  return (
+    <Header
+      actions={
+        <SpaceBetween direction="horizontal" size="xs">
+          <Button onClick={() => navigate("/dashboard")}>Open dashboard</Button>
+          <Button onClick={() => navigate(`/assets/${assetId}/routine-maintenance`)}>
+            Open maintenance
+          </Button>
+          <Button disabled={!asset.datasheet} href={asset.datasheet || undefined} target="_blank">
+            Open datasheet
+          </Button>
+          {isAdmin ? <Button onClick={() => navigate(`/assets/${assetId}/edit`)}>Edit asset</Button> : null}
+          {isAdmin && !isSingleEquipment ? (
+            <Button variant="primary" onClick={() => navigate(`/assets/${assetId}/components/new`)}>
+              Add component
+            </Button>
+          ) : null}
+        </SpaceBetween>
+      }
+      description={`${asset.display_id} - ${asset.location || "No location set"}`}
+      variant="h1"
+    >
+      {asset.name}
+    </Header>
+  );
+}
+
+function ComponentNavigation(props: AssetWorkspaceViewProps) {
+  const { assetId, componentCount, groupedComponents, isAdmin, navigate } = props;
+
+  return (
+    <div className="asset-workspace-grid__nav">
+      <Container
+        header={
+          <Header
+            counter={`(${componentCount})`}
+            description="Choose a component to update the certificate pane."
+            variant="h2"
+          >
+            Components
+          </Header>
+        }
+      >
+        {componentCount === 0 ? (
+          <PageEmpty
+            action={
+              isAdmin ? (
+                <Button variant="primary" onClick={() => navigate(`/assets/${assetId}/components/new`)}>
+                  Create first component
+                </Button>
+              ) : undefined
+            }
+            description="Components are managed inside the asset workspace. Add the first component to begin certificate tracking."
+            title="No components in this asset"
+          />
+        ) : (
+          <div className="component-list-scroll">
+            <div className="component-list">
+              {groupedComponents.map((section) => (
+                <ComponentMainGroup key={section.key} section={section} {...props} />
+              ))}
+            </div>
+          </div>
+        )}
+      </Container>
+    </div>
+  );
+}
+
+function ComponentMainGroup({
+  collapsedGroups,
+  onComponentSelect,
+  section,
+  selectedComponent,
+  setCollapsedGroups,
+}: AssetWorkspaceViewProps & { section: ComponentGroupSection }) {
+  return (
+    <div className="component-main-group">
+      <Box className="component-main-group__label" variant="awsui-key-label">
+        {section.mainCategoryName}
+      </Box>
+      {section.groups.map((group) => (
+        <div key={group.key} className="component-list-group">
+          <button
+            aria-expanded={!collapsedGroups[group.key]}
+            type="button"
+            className="component-list-group__toggle"
+            onClick={() =>
+              setCollapsedGroups((current) => ({
+                ...current,
+                [group.key]: !(current[group.key] ?? false),
+              }))
+            }
+          >
+            <div className="component-list-group__header">
+              <Box fontWeight="bold">{group.categoryName}</Box>
+              <Box color="text-body-secondary" fontSize="heading-s">
+                {collapsedGroups[group.key] ? "\u25be" : "\u25b4"}
+              </Box>
+            </div>
+          </button>
+          {!collapsedGroups[group.key] && (
+            <div className="component-list-group__items">
+              {group.items.map((component) => (
+                <ComponentListItem
+                  key={component.component_id}
+                  component={component}
+                  isSelected={component.component_id === selectedComponent?.component_id}
+                  onComponentSelect={onComponentSelect}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ComponentListItem({
+  component,
+  isSelected,
+  onComponentSelect,
+}: {
+  component: ComponentRecord;
+  isSelected: boolean;
+  onComponentSelect: (componentId: string) => void;
+}) {
+  return (
+    <button
+      className={`component-list-item${isSelected ? " is-active" : ""}`}
+      type="button"
+      onClick={() => onComponentSelect(component.component_id)}
+    >
+      <SpaceBetween direction="vertical" size="xs">
+        <div className="component-list-item__header">
+          <Box fontWeight="bold">{component.name}</Box>
+          <Box color="text-body-secondary">{component.display_id}</Box>
+        </div>
+        <div className="component-list-item__meta">
+          <span>{component.serial_number || "No serial"}</span>
+          <span>{humanizeEnum(component.safety_critical)}</span>
+        </div>
+      </SpaceBetween>
+    </button>
+  );
+}
+
+function AssetContextStrip({
+  asset,
+  componentCount,
+  equipment,
+  isSingleEquipment,
+  maintenanceConfigured,
+  maintenanceRemaining,
+  openMaintenanceEvent,
+}: AssetWorkspaceViewProps) {
+  return (
+    <div className="asset-workspace-grid__summary">
+      <Container>
+        <div className="asset-context-strip">
+          <div className="asset-context-strip__item">
+            <Box variant="awsui-key-label">Status</Box>
+            <StatusIndicator type={assetStatusType(asset.status)}>
+              {humanizeEnum(asset.status)}
+            </StatusIndicator>
+          </div>
+          <div className="asset-context-strip__item">
+            <Box variant="awsui-key-label">Location</Box>
+            <Box>{asset.location || "Not set"}</Box>
+          </div>
+          <div className="asset-context-strip__item">
+            <Box variant="awsui-key-label">Assigned project</Box>
+            <Box>{asset.assigned_project || "Not set"}</Box>
+          </div>
+          <div className="asset-context-strip__item">
+            <Box variant="awsui-key-label">{isSingleEquipment ? "Equipment type" : "Components"}</Box>
+            <Box>{isSingleEquipment ? equipment?.equipment_type_name || "Not set" : componentCount}</Box>
+          </div>
+          <div className="asset-context-strip__item">
+            <Box variant="awsui-key-label">Routine maintenance</Box>
+            {openMaintenanceEvent ? (
+              <StatusIndicator type="warning">Required</StatusIndicator>
+            ) : maintenanceConfigured ? (
+              <Box>{Math.max(maintenanceRemaining, 0).toLocaleString()} h remaining</Box>
+            ) : (
+              <Box>Not configured</Box>
+            )}
+          </div>
+        </div>
+      </Container>
+    </div>
+  );
+}
+
+function WorkspaceDetail(props: AssetWorkspaceViewProps) {
+  return (
+    <div className="asset-workspace-grid__detail">
+      <SpaceBetween direction="vertical" size="l">
+        <ComponentDetailPanel {...props} />
+        <CertificatesPanel {...props} />
+      </SpaceBetween>
+    </div>
+  );
+}
+
+function ComponentDetailPanel(props: AssetWorkspaceViewProps) {
+  return (
+    <Container header={<ComponentDetailHeader {...props} />}>
+      {props.selectedComponent ? <ComponentDetailBody {...props} /> : <NoComponentDetail {...props} />}
+    </Container>
+  );
+}
+
+function ComponentDetailHeader({
+  assetId,
+  categoryMap,
+  equipment,
+  isAdmin,
+  isSingleEquipment,
+  navigate,
+  selectedComponent,
+}: AssetWorkspaceViewProps) {
+  return (
+    <Header
+      actions={
+        selectedComponent && isAdmin ? (
+          <SpaceBetween direction="horizontal" size="xs">
+            {!isSingleEquipment ? (
+              <Button
+                onClick={() =>
+                  navigate(`/assets/${assetId}/components/${selectedComponent.component_id}/edit`)
+                }
+              >
+                Edit component
+              </Button>
+            ) : null}
+            <Button
+              variant="primary"
+              onClick={() =>
+                navigate(`/assets/${assetId}/components/${selectedComponent.component_id}/certificates/new`)
+              }
+            >
+              Add certificate
+            </Button>
+          </SpaceBetween>
+        ) : undefined
+      }
+      description={
+        selectedComponent
+          ? isSingleEquipment
+            ? equipment?.equipment_type_name || "Equipment detail"
+            : (selectedComponent.category_id && categoryMap.get(selectedComponent.category_id)) ||
+              "Component detail"
+          : isSingleEquipment
+            ? "Equipment context could not be loaded."
+            : "Select a component from the left pane."
+      }
+      variant="h2"
+    >
+      {selectedComponent
+        ? isSingleEquipment
+          ? "Equipment details"
+          : selectedComponent.name
+        : "Component details"}
+    </Header>
+  );
+}
+
+function ComponentDetailBody(props: AssetWorkspaceViewProps) {
+  if (props.isSingleEquipment) {
+    return <SingleEquipmentDetail {...props} />;
+  }
+
+  return <ComponentRecordDetail component={props.selectedComponent!} />;
+}
+
+function SingleEquipmentDetail({
+  asset,
+  equipment,
+  selectedComponent,
+}: AssetWorkspaceViewProps) {
+  return (
+    <ColumnLayout columns={3} variant="text-grid">
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Equipment type</Box>
+        <Box>{equipment?.equipment_type_name || "Not set"}</Box>
+      </div>
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Equipment reference</Box>
+        <Box>{equipment?.display_id || "Not set"}</Box>
+      </div>
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Certificate bridge</Box>
+        <Box>{selectedComponent?.display_id}</Box>
+      </div>
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Location</Box>
+        <Box>{selectedComponent?.location || asset.location || "Not set"}</Box>
+      </div>
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Project</Box>
+        <Box>{selectedComponent?.assigned_project || asset.assigned_project || "Not set"}</Box>
+      </div>
+    </ColumnLayout>
+  );
+}
+
+function ComponentRecordDetail({ component }: { component: ComponentRecord }) {
+  return (
+    <ColumnLayout columns={3} variant="text-grid">
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Manufacturer</Box>
+        <Box>{component.manufacturer || "Not set"}</Box>
+      </div>
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Model</Box>
+        <Box>{component.model || "Not set"}</Box>
+      </div>
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Safety critical</Box>
+        <Box>{humanizeEnum(component.safety_critical)}</Box>
+      </div>
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Location</Box>
+        <Box>{component.location || "Not set"}</Box>
+      </div>
+      <div className="summary-row">
+        <Box variant="awsui-key-label">Project</Box>
+        <Box>{component.assigned_project || "Not set"}</Box>
+      </div>
+    </ColumnLayout>
+  );
+}
+
+function NoComponentDetail({ isSingleEquipment }: AssetWorkspaceViewProps) {
+  return (
+    <Box color="text-body-secondary">
+      {isSingleEquipment
+        ? "Equipment details are not available yet."
+        : "Choose a component to show its certificate records here."}
+    </Box>
+  );
+}
+
+function CertificatesPanel(props: AssetWorkspaceViewProps) {
+  return (
+    <Container header={<CertificatesHeader {...props} />}>
+      {!props.selectedComponent ? (
+        <NoCertificateContext isSingleEquipment={props.isSingleEquipment} />
+      ) : props.certificatesError ? (
+        <Alert type="error">Certificate data could not be loaded for this component.</Alert>
+      ) : (
+        <Table
+          columnDefinitions={props.certificateColumns}
+          empty={props.isSingleEquipment ? SINGLE_EQUIPMENT_CERTIFICATE_EMPTY : COMPONENT_CERTIFICATE_EMPTY}
+          items={props.certificateItems}
+          loading={props.certificatesLoading}
+          loadingText="Loading certificates"
+          trackBy="certificate_id"
+          variant="embedded"
+        />
+      )}
+    </Container>
+  );
+}
+
+function CertificatesHeader({
+  certificateCount,
+  isSingleEquipment,
+  selectedComponent,
+}: AssetWorkspaceViewProps) {
+  return (
+    <Header
+      counter={selectedComponent ? `(${certificateCount})` : undefined}
+      description={
+        selectedComponent
+          ? isSingleEquipment
+            ? "Certificate records for this asset."
+            : "Certificate records for the selected component."
+          : isSingleEquipment
+            ? "The equipment bridge must load before certificates can be shown."
+            : "A component must be selected before certificates can be shown."
+      }
+      variant="h2"
+    >
+      {isSingleEquipment ? "Asset certificates" : "Certificates"}
+    </Header>
+  );
+}
+
+function NoCertificateContext({ isSingleEquipment }: { isSingleEquipment: boolean }) {
+  return (
+    <Box color="text-body-secondary">
+      {isSingleEquipment
+        ? "Equipment certificates will appear once the equipment context is loaded."
+        : "Select a component from the left pane to review its certificates."}
+    </Box>
   );
 }

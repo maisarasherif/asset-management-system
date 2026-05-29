@@ -24,7 +24,7 @@ export function TemplatesPage() {
   });
 
   if (templatesQuery.isLoading) {
-    return <PageLoading>Loading the template workspace...</PageLoading>;
+    return <PageLoading>{"Loading the template workspace\u2026"}</PageLoading>;
   }
 
   if (templatesQuery.isError) {

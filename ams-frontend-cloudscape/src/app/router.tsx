@@ -1,182 +1,32 @@
-/* eslint-disable react-refresh/only-export-components */
-import { Suspense, lazy, type ReactNode } from "react";
-import { createBrowserRouter, Navigate, useLocation } from "react-router-dom";
-import { PageLoading } from "../components/shared/PageStates";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { RouteErrorPage } from "../components/shared/RouteErrorPage";
-import { useAuth } from "../providers/auth-context";
 import { LoginPage } from "../features/auth/LoginPage";
-
-const AppChrome = lazy(() =>
-  import("../components/layout/AppShellLayout").then((module) => ({
-    default: module.AppChrome,
-  }))
-);
-
-const DashboardPage = lazy(() =>
-  import("../features/dashboard/DashboardPage").then((module) => ({
-    default: module.DashboardPage,
-  }))
-);
-const AssetsDirectoryPage = lazy(() =>
-  import("../features/assets/AssetsDirectoryPage").then((module) => ({
-    default: module.AssetsDirectoryPage,
-  }))
-);
-const AssetFormPage = lazy(() =>
-  import("../features/assets/AssetFormPage").then((module) => ({
-    default: module.AssetFormPage,
-  }))
-);
-const AssetWorkspacePage = lazy(() =>
-  import("../features/assets/AssetWorkspacePage").then((module) => ({
-    default: module.AssetWorkspacePage,
-  }))
-);
-const AssetRoutineMaintenancePage = lazy(() =>
-  import("../features/assets/AssetRoutineMaintenancePage").then((module) => ({
-    default: module.AssetRoutineMaintenancePage,
-  }))
-);
-const ComponentFormPage = lazy(() =>
-  import("../features/assets/ComponentFormPage").then((module) => ({
-    default: module.ComponentFormPage,
-  }))
-);
-const CertificateFormPage = lazy(() =>
-  import("../features/assets/CertificateFormPage").then((module) => ({
-    default: module.CertificateFormPage,
-  }))
-);
-const CertificateDetailPage = lazy(() =>
-  import("../features/assets/CertificateDetailPage").then((module) => ({
-    default: module.CertificateDetailPage,
-  }))
-);
-const TemplatesPage = lazy(() =>
-  import("../features/templates/TemplatesPage").then((module) => ({
-    default: module.TemplatesPage,
-  }))
-);
-const TemplateCreatePage = lazy(() =>
-  import("../features/templates/TemplateCreatePage").then((module) => ({
-    default: module.TemplateCreatePage,
-  }))
-);
-const TemplateDetailPage = lazy(() =>
-  import("../features/templates/TemplateDetailPage").then((module) => ({
-    default: module.TemplateDetailPage,
-  }))
-);
-const TemplateConfigurePage = lazy(() =>
-  import("../features/templates/TemplateConfigurePage").then((module) => ({
-    default: module.TemplateConfigurePage,
-  }))
-);
-const CatalogPage = lazy(() =>
-  import("../features/catalog/CatalogPage").then((module) => ({
-    default: module.CatalogPage,
-  }))
-);
-const AccountPage = lazy(() =>
-  import("../features/account/AccountPage").then((module) => ({
-    default: module.AccountPage,
-  }))
-);
-const AdministrationPage = lazy(() =>
-  import("../features/admin/AdministrationPage").then((module) => ({
-    default: module.AdministrationPage,
-  }))
-);
-const ClientAccessPage = lazy(() =>
-  import("../features/admin/ClientAccessPage").then((module) => ({
-    default: module.ClientAccessPage,
-  }))
-);
-const SchedulerManagementPage = lazy(() =>
-  import("../features/admin/SchedulerManagementPage").then((module) => ({
-    default: module.SchedulerManagementPage,
-  }))
-);
-const ClientAssetsPage = lazy(() =>
-  import("../features/client/ClientAssetsPage").then((module) => ({
-    default: module.ClientAssetsPage,
-  }))
-);
-const ClientAssetViewPage = lazy(() =>
-  import("../features/client/ClientAssetViewPage").then((module) => ({
-    default: module.ClientAssetViewPage,
-  }))
-);
-
-function RouteSuspense({ children }: { children: ReactNode }) {
-  return (
-    <Suspense fallback={<PageLoading>Loading the next page...</PageLoading>}>
-      {children}
-    </Suspense>
-  );
-}
-
-function AuthCheckPage() {
-  return (
-    <main className="auth-check-page" aria-busy="true" aria-live="polite">
-      <div className="auth-check-page__content">
-        <div className="auth-check-page__spinner" aria-hidden="true" />
-        <div className="auth-check-page__title">Checking authentication</div>
-      </div>
-    </main>
-  );
-}
-
-function RequireAuth({ children }: { children: ReactNode }) {
-	const { isAuthenticated, isClient, isSessionLoading } = useAuth();
-	const location = useLocation();
-
-	if (isSessionLoading) {
-		return <AuthCheckPage />;
-	}
-
-	if (!isAuthenticated) {
-		return <Navigate replace to="/login" />;
-	}
-
-  if (isClient && !location.pathname.startsWith("/client") && location.pathname !== "/account") {
-    return <Navigate replace to="/client/assets" />;
-  }
-
-  return children;
-}
-
-function RequireAdmin({ children }: { children: ReactNode }) {
-	const { isAdmin, isAuthenticated, isSessionLoading } = useAuth();
-
-	if (isSessionLoading) {
-		return <AuthCheckPage />;
-	}
-
-	if (!isAuthenticated) {
-		return <Navigate replace to="/login" />;
-	}
-
-  if (!isAdmin) {
-    return <Navigate replace to="/dashboard" />;
-  }
-
-  return children;
-}
-
-function GuestOnly({ children }: { children: ReactNode }) {
-	const { isAuthenticated, isSessionLoading } = useAuth();
-
-	if (isSessionLoading) {
-		return <AuthCheckPage />;
-	}
-
-	if (isAuthenticated) {
-		return <Navigate replace to="/dashboard" />;
-  }
-
-  return children;
-}
+import {
+  AccountPage,
+  AdministrationPage,
+  AppChrome,
+  AssetFormPage,
+  AssetRoutineMaintenancePage,
+  AssetWorkspacePage,
+  AssetsDirectoryPage,
+  CatalogPage,
+  CertificateDetailPage,
+  CertificateFormPage,
+  ClientAccessPage,
+  ClientAssetViewPage,
+  ClientAssetsPage,
+  ComponentFormPage,
+  DashboardPage,
+  GuestOnly,
+  RequireAdmin,
+  RequireAuth,
+  RouteSuspense,
+  SchedulerManagementPage,
+  TemplateConfigurePage,
+  TemplateCreatePage,
+  TemplateDetailPage,
+  TemplatesPage,
+} from "./route-components";
 
 export const router = createBrowserRouter([
   {

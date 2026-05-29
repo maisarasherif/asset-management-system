@@ -22,7 +22,7 @@ export function ClientAssetsPage() {
   });
 
   if (assetsQuery.isLoading) {
-    return <PageLoading>Loading client assets...</PageLoading>;
+    return <PageLoading>{"Loading client assets\u2026"}</PageLoading>;
   }
 
   if (assetsQuery.isError) {

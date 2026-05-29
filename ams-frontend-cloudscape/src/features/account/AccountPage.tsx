@@ -12,7 +12,7 @@ import {
   Select,
   SpaceBetween,
 } from "@cloudscape-design/components";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createUser, logoutRequest, updatePassword } from "../../lib/api/ams";
@@ -23,6 +23,7 @@ import type { Role } from "../../types/ams";
 
 export function AccountPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isAdmin, logout, session } = useAuth();
   const { error, success } = useFlashbar();
   const [currentPassword, setCurrentPassword] = useState("");
@@ -60,6 +61,7 @@ export function AccountPage() {
   const logoutMutation = useMutation({
     mutationFn: logoutRequest,
     onSettled: () => {
+      queryClient.clear();
       logout();
       navigate("/login", { replace: true });
       success("Signed out", "Your session has been cleared.");
@@ -68,7 +70,11 @@ export function AccountPage() {
 
   const createUserMutation = useMutation({
     mutationFn: createUser,
-    onSuccess: (createdUser) => {
+    onSuccess: async (createdUser) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["users"] }),
+        queryClient.invalidateQueries({ queryKey: ["user-management-audit-logs"] }),
+      ]);
       setNewUserFirstName("");
       setNewUserLastName("");
       setNewUserEmail("");
