@@ -16,32 +16,122 @@
     ]
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080/v1" },
-    { "key": "adminEmail", "value": "YOUR_ADMIN_EMAIL" },
-    { "key": "adminPassword", "value": "YOUR_ADMIN_PASSWORD" },
-    { "key": "runSuffix", "value": "" },
-    { "key": "token", "value": "" },
-    { "key": "adminToken", "value": "" },
-    { "key": "userToken", "value": "" },
-    { "key": "userEmail", "value": "" },
-    { "key": "userPassword", "value": "" },
-    { "key": "userNewPassword", "value": "" },
-    { "key": "user_id", "value": "" },
-    { "key": "main_category_id", "value": "" },
-    { "key": "category_id", "value": "" },
-    { "key": "test_id", "value": "" },
-    { "key": "manual_template_id", "value": "" },
-    { "key": "manual_template_component_id", "value": "" },
-    { "key": "manual_template_component_test_id", "value": "" },
-    { "key": "configured_template_id", "value": "" },
-    { "key": "configured_template_component_id", "value": "" },
-	    { "key": "asset_id", "value": "" },
-	    { "key": "templated_asset_id", "value": "" },
-	    { "key": "component_id", "value": "" },
-	    { "key": "spun_component_id", "value": "" },
-	    { "key": "competency_category_id", "value": "" },
-	    { "key": "competent_person_id", "value": "" },
-	    { "key": "certificate_id", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/v1"
+    },
+    {
+      "key": "adminEmail",
+      "value": "YOUR_ADMIN_EMAIL"
+    },
+    {
+      "key": "adminPassword",
+      "value": "YOUR_ADMIN_PASSWORD"
+    },
+    {
+      "key": "runSuffix",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "userToken",
+      "value": ""
+    },
+    {
+      "key": "userEmail",
+      "value": ""
+    },
+    {
+      "key": "userPassword",
+      "value": ""
+    },
+    {
+      "key": "userNewPassword",
+      "value": ""
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "main_category_id",
+      "value": ""
+    },
+    {
+      "key": "category_id",
+      "value": ""
+    },
+    {
+      "key": "test_id",
+      "value": ""
+    },
+    {
+      "key": "manual_template_id",
+      "value": ""
+    },
+    {
+      "key": "manual_template_component_id",
+      "value": ""
+    },
+    {
+      "key": "manual_template_component_test_id",
+      "value": ""
+    },
+    {
+      "key": "configured_template_id",
+      "value": ""
+    },
+    {
+      "key": "configured_template_component_id",
+      "value": ""
+    },
+    {
+      "key": "asset_id",
+      "value": ""
+    },
+    {
+      "key": "templated_asset_id",
+      "value": ""
+    },
+    {
+      "key": "component_id",
+      "value": ""
+    },
+    {
+      "key": "spun_component_id",
+      "value": ""
+    },
+    {
+      "key": "competency_category_id",
+      "value": ""
+    },
+    {
+      "key": "competent_person_id",
+      "value": ""
+    },
+    {
+      "key": "certificate_id",
+      "value": ""
+    },
+    {
+      "key": "catalog_scope_id",
+      "value": ""
+    },
+    {
+      "key": "scope_main_category_id",
+      "value": ""
+    },
+    {
+      "key": "scope_category_id",
+      "value": ""
+    }
   ],
   "event": [
     {
@@ -65,10 +155,15 @@
         {
           "name": "Login Admin",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -97,7 +192,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -166,11 +264,14 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-	              "raw": "{\n  \"first_name\": \"Newman\",\n  \"last_name\": \"Updated {{runSuffix}}\",\n  \"email\": \"{{userEmail}}\",\n  \"role\": \"USER\",\n  \"status\": \"ACTIVE\"\n}"
+              "raw": "{\n  \"first_name\": \"Newman\",\n  \"last_name\": \"Updated {{runSuffix}}\",\n  \"email\": \"{{userEmail}}\",\n  \"role\": \"USER\",\n  \"status\": \"ACTIVE\"\n}"
             },
             "url": "{{baseUrl}}/user/{{user_id}}"
           },
@@ -191,7 +292,10 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -214,10 +318,15 @@
         {
           "name": "Login User",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -245,7 +354,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -286,10 +398,15 @@
         {
           "name": "Login User With New Password",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -348,11 +465,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-	              "raw": "{\n  \"main_category_name\": \"Main {{runSuffix}}\",\n  \"description\": \"Main category for smoke test\",\n  \"sort_order\": 100\n}"
+              "raw": "{\n  \"main_category_name\": \"Main {{runSuffix}}\",\n  \"description\": \"Main category for smoke test\",\n  \"sort_order\": 100\n}"
             },
             "url": "{{baseUrl}}/main-category"
           },
@@ -412,11 +532,14 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-	              "raw": "{\n  \"main_category_name\": \"Main Updated {{runSuffix}}\",\n  \"description\": \"Updated main category\",\n  \"sort_order\": 101\n}"
+              "raw": "{\n  \"main_category_name\": \"Main Updated {{runSuffix}}\",\n  \"description\": \"Updated main category\",\n  \"sort_order\": 101\n}"
             },
             "url": "{{baseUrl}}/main-category/{{main_category_id}}"
           },
@@ -437,7 +560,10 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -462,11 +588,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-	              "raw": "{\n  \"main_category_id\": \"{{main_category_id}}\",\n  \"category_name\": \"Category {{runSuffix}}\",\n  \"description\": \"Category for smoke test\",\n  \"sort_order\": 100\n}"
+              "raw": "{\n  \"main_category_id\": \"{{main_category_id}}\",\n  \"category_name\": \"Category {{runSuffix}}\",\n  \"description\": \"Category for smoke test\",\n  \"sort_order\": 100\n}"
             },
             "url": "{{baseUrl}}/category"
           },
@@ -544,11 +673,14 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-	              "raw": "{\n  \"main_category_id\": \"{{main_category_id}}\",\n  \"category_name\": \"Category Updated {{runSuffix}}\",\n  \"description\": \"Updated category\",\n  \"sort_order\": 101\n}"
+              "raw": "{\n  \"main_category_id\": \"{{main_category_id}}\",\n  \"category_name\": \"Category Updated {{runSuffix}}\",\n  \"description\": \"Updated category\",\n  \"sort_order\": 101\n}"
             },
             "url": "{{baseUrl}}/category/{{category_id}}"
           },
@@ -569,7 +701,10 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -590,11 +725,99 @@
           ]
         },
         {
+          "name": "Get Default Catalog Scope",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/catalog-scopes/default"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.scope_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "pm.collectionVariables.set('catalog_scope_id', body.scope_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Attach Main Category To Catalog Scope",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"main_category_name\": \"Main Updated {{runSuffix}}\",\n  \"description\": \"Scoped main category for smoke test\",\n  \"sort_order\": 901\n}"
+            },
+            "url": "{{baseUrl}}/catalog-scope/{{catalog_scope_id}}/main-category"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.scope_main_category_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "pm.expect(body.main_category_id).to.eql(pm.collectionVariables.get('main_category_id'));",
+                  "pm.collectionVariables.set('scope_main_category_id', body.scope_main_category_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Attach Category To Catalog Scope",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"main_category_id\": \"{{main_category_id}}\",\n  \"category_name\": \"Category Updated {{runSuffix}}\",\n  \"description\": \"Scoped category for smoke test\",\n  \"sort_order\": 901\n}"
+            },
+            "url": "{{baseUrl}}/catalog-scope/{{catalog_scope_id}}/category"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.scope_category_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "pm.expect(body.category_id).to.eql(pm.collectionVariables.get('category_id'));",
+                  "pm.collectionVariables.set('scope_category_id', body.scope_category_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create Test Type",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -640,7 +863,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -665,7 +891,10 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -695,7 +924,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -758,7 +990,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -783,11 +1018,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"category_id\": \"{{category_id}}\",\n  \"name\": \"Manual Template Component {{runSuffix}}\",\n  \"description\": \"Manual template component\",\n  \"serial_number\": \"\",\n  \"manufacturer\": \"Newman\",\n  \"location\": \"\",\n  \"assigned_project\": \"\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"TMP-1\",\n  \"class\": \"A\",\n  \"class_code\": \"TMP-A\",\n  \"safety_critical\": \"YES\"\n}"
+              "raw": "{\n  \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n  \"name\": \"Manual Template Component {{runSuffix}}\",\n  \"description\": \"Manual template component\",\n  \"serial_number\": \"\",\n  \"manufacturer\": \"Newman\",\n  \"location\": \"\",\n  \"assigned_project\": \"\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"TMP-1\",\n  \"class\": \"A\",\n  \"class_code\": \"TMP-A\",\n  \"safety_critical\": \"YES\"\n}"
             },
             "url": "{{baseUrl}}/template/{{manual_template_id}}/component"
           },
@@ -824,15 +1062,40 @@
           ]
         },
         {
+          "name": "Get Manual Template Configuration Without Tests",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/template/{{manual_template_id}}/configuration"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body).to.be.an('array').with.length(1);",
+                  "pm.expect(body[0].template_component_id).to.eql(pm.collectionVariables.get('manual_template_component_id'));",
+                  "pm.expect(body[0].tests).to.be.an('array').with.length(0);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Update Template Component",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"category_id\": \"{{category_id}}\",\n  \"name\": \"Manual Template Component Updated {{runSuffix}}\",\n  \"description\": \"Updated template component\",\n  \"serial_number\": \"\",\n  \"manufacturer\": \"Newman\",\n  \"location\": \"\",\n  \"assigned_project\": \"\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"TMP-2\",\n  \"class\": \"A\",\n  \"class_code\": \"TMP-B\",\n  \"safety_critical\": \"NO\"\n}"
+              "raw": "{\n  \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n  \"name\": \"Manual Template Component Updated {{runSuffix}}\",\n  \"description\": \"Updated template component\",\n  \"serial_number\": \"\",\n  \"manufacturer\": \"Newman\",\n  \"location\": \"\",\n  \"assigned_project\": \"\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"TMP-2\",\n  \"class\": \"A\",\n  \"class_code\": \"TMP-B\",\n  \"safety_critical\": \"NO\"\n}"
             },
             "url": "{{baseUrl}}/template-component/{{manual_template_component_id}}"
           },
@@ -853,7 +1116,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -939,7 +1205,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -966,11 +1235,14 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"components\": [\n    {\n      \"category_id\": \"{{category_id}}\",\n      \"name\": \"Config Hook {{runSuffix}}\",\n      \"description\": \"Configured hook\",\n      \"serial_number\": \"\",\n      \"manufacturer\": \"Newman\",\n      \"location\": \"\",\n      \"assigned_project\": \"\",\n      \"equipment_type\": \"Hook\",\n      \"structure\": \"Fixed\",\n      \"model\": \"CFG-1\",\n      \"class\": \"A\",\n      \"class_code\": \"CFG-A\",\n      \"safety_critical\": \"YES\",\n      \"test_ids\": [\"{{test_id}}\"]\n    },\n    {\n      \"category_id\": \"{{category_id}}\",\n      \"name\": \"Config Rope {{runSuffix}}\",\n      \"description\": \"Configured rope\",\n      \"serial_number\": \"\",\n      \"manufacturer\": \"Newman\",\n      \"location\": \"\",\n      \"assigned_project\": \"\",\n      \"equipment_type\": \"Rope\",\n      \"structure\": \"Flexible\",\n      \"model\": \"CFG-2\",\n      \"class\": \"B\",\n      \"class_code\": \"CFG-B\",\n      \"safety_critical\": \"YES\",\n      \"test_ids\": [\"{{test_id}}\"]\n    }\n  ]\n}"
+              "raw": "{\n  \"components\": [\n    {\n      \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n      \"name\": \"Config Hook {{runSuffix}}\",\n      \"description\": \"Configured hook\",\n      \"serial_number\": \"\",\n      \"manufacturer\": \"Newman\",\n      \"location\": \"\",\n      \"assigned_project\": \"\",\n      \"equipment_type\": \"Hook\",\n      \"structure\": \"Fixed\",\n      \"model\": \"CFG-1\",\n      \"class\": \"A\",\n      \"class_code\": \"CFG-A\",\n      \"safety_critical\": \"YES\",\n      \"test_ids\": [\"{{test_id}}\"]\n    },\n    {\n      \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n      \"name\": \"Config Rope {{runSuffix}}\",\n      \"description\": \"Configured rope\",\n      \"serial_number\": \"\",\n      \"manufacturer\": \"Newman\",\n      \"location\": \"\",\n      \"assigned_project\": \"\",\n      \"equipment_type\": \"Rope\",\n      \"structure\": \"Flexible\",\n      \"model\": \"CFG-2\",\n      \"class\": \"B\",\n      \"class_code\": \"CFG-B\",\n      \"safety_critical\": \"YES\",\n      \"test_ids\": [\"{{test_id}}\"]\n    }\n  ]\n}"
             },
             "url": "{{baseUrl}}/template/{{configured_template_id}}/configuration"
           },
@@ -1035,7 +1307,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -1068,7 +1343,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -1100,7 +1378,12 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] }
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
             }
           ]
         },
@@ -1113,7 +1396,12 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] }
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
             }
           ]
         },
@@ -1121,7 +1409,12 @@
           "name": "Update Manual Asset",
           "request": {
             "method": "PUT",
-            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Manual Asset Updated {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Updated manual asset\",\n  \"status\": \"MAINTENANCE\",\n  \"location\": \"Warehouse B\",\n  \"assigned_project\": \"Project Manual 2\"\n}"
@@ -1131,7 +1424,12 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] }
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
             }
           ]
         },
@@ -1139,7 +1437,12 @@
           "name": "Patch Manual Asset",
           "request": {
             "method": "PATCH",
-            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"ACTIVE\"\n}"
@@ -1149,7 +1452,12 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] }
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
             }
           ]
         },
@@ -1157,10 +1465,15 @@
           "name": "Create Component",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"name\": \"Component {{runSuffix}}\",\n  \"serial_number\": \"CMP-{{runSuffix}}\",\n  \"manufacturer\": \"Newman\",\n  \"description\": \"Component for smoke test\",\n  \"location\": \"Deck A\",\n  \"assigned_project\": \"Project Manual\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"CMP-1\",\n  \"class\": \"A\",\n  \"class_code\": \"CMP-A\",\n  \"safety_critical\": \"YES\"\n}"
+              "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n  \"name\": \"Component {{runSuffix}}\",\n  \"serial_number\": \"CMP-{{runSuffix}}\",\n  \"manufacturer\": \"Newman\",\n  \"description\": \"Component for smoke test\",\n  \"location\": \"Deck A\",\n  \"assigned_project\": \"Project Manual\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"CMP-1\",\n  \"class\": \"A\",\n  \"class_code\": \"CMP-A\",\n  \"safety_critical\": \"YES\"\n}"
             },
             "url": "{{baseUrl}}/component"
           },
@@ -1180,47 +1493,124 @@
         },
         {
           "name": "Get Components",
-          "request": { "method": "GET", "url": "{{baseUrl}}/components?page=1&limit=20" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/components?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Component",
-          "request": { "method": "GET", "url": "{{baseUrl}}/component/{{component_id}}" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/component/{{component_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Components By Asset",
-          "request": { "method": "GET", "url": "{{baseUrl}}/components/asset/{{asset_id}}?page=1&limit=20" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/components/asset/{{asset_id}}?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Update Component",
           "request": {
             "method": "PUT",
-            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"name\": \"Component Updated {{runSuffix}}\",\n  \"serial_number\": \"CMP-UPD-{{runSuffix}}\",\n  \"manufacturer\": \"Newman\",\n  \"description\": \"Updated component\",\n  \"location\": \"Deck B\",\n  \"assigned_project\": \"Project Manual 2\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"CMP-2\",\n  \"class\": \"B\",\n  \"class_code\": \"CMP-B\",\n  \"safety_critical\": \"NO\"\n}"
+              "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n  \"name\": \"Component Updated {{runSuffix}}\",\n  \"serial_number\": \"CMP-UPD-{{runSuffix}}\",\n  \"manufacturer\": \"Newman\",\n  \"description\": \"Updated component\",\n  \"location\": \"Deck B\",\n  \"assigned_project\": \"Project Manual 2\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"CMP-2\",\n  \"class\": \"B\",\n  \"class_code\": \"CMP-B\",\n  \"safety_critical\": \"NO\"\n}"
             },
             "url": "{{baseUrl}}/component/{{component_id}}"
           },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Patch Component",
           "request": {
             "method": "PATCH",
-            "header": [ { "key": "Content-Type", "value": "application/json" } ],
-            "body": { "mode": "raw", "raw": "{\n  \"safety_critical\": \"YES\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"safety_critical\": \"YES\"\n}"
+            },
             "url": "{{baseUrl}}/component/{{component_id}}"
           },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Create Certificate",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Certificate {{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"expiry_date\": \"2027-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Bureau Veritas\",\n  \"test_id\": \"{{test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Smoke certificate\"\n}"
@@ -1243,179 +1633,585 @@
         },
         {
           "name": "Get Certificates",
-          "request": { "method": "GET", "url": "{{baseUrl}}/certificates?page=1&limit=20" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificates?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Certificate",
-          "request": { "method": "GET", "url": "{{baseUrl}}/certificate/{{certificate_id}}" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Certificates By Component",
-          "request": { "method": "GET", "url": "{{baseUrl}}/certificates/component/{{component_id}}?page=1&limit=20" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificates/component/{{component_id}}?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Update Certificate",
           "request": {
             "method": "PUT",
-            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Certificate Updated {{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"expiry_date\": \"2026-12-31T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Bureau Veritas\",\n  \"test_id\": \"{{test_id}}\",\n  \"imca_ref\": \"REF-1\",\n  \"imca_d018\": \"D018-1\",\n  \"maintenance_notes\": \"Updated certificate\"\n}"
             },
             "url": "{{baseUrl}}/certificate/{{certificate_id}}"
           },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
-	        {
-	          "name": "Patch Certificate",
-	          "request": {
-	            "method": "PATCH",
-	            "header": [ { "key": "Content-Type", "value": "application/json" } ],
-	            "body": { "mode": "raw", "raw": "{\n  \"expiry_date\": \"2026-04-20T00:00:00Z\"\n}" },
-	            "url": "{{baseUrl}}/certificate/{{certificate_id}}"
-	          },
-	          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
-	        },
-	        {
-	          "name": "Create Competency Category",
-	          "request": {
-	            "method": "POST",
-	            "header": [ { "key": "Content-Type", "value": "application/json" } ],
-	            "body": {
-	              "mode": "raw",
-	              "raw": "{\n  \"category_code\": \"CERT-{{runSuffix}}\",\n  \"category_name\": \"Certificate Upload Competency {{runSuffix}}\",\n  \"description\": \"Competency category for certificate upload smoke test\",\n  \"active\": true\n}"
-	            },
-	            "url": "{{baseUrl}}/competency-category"
-	          },
-	          "event": [
-	            {
-	              "listen": "test",
-	              "script": {
-	                "type": "text/javascript",
-	                "exec": [
-	                  "pm.response.to.have.status(201);",
-	                  "const body = pm.response.json();",
-	                  "pm.collectionVariables.set('competency_category_id', body.competency_category_id);"
-	                ]
-	              }
-	            }
-	          ]
-	        },
-	        {
-	          "name": "Create Competent Person",
-	          "request": {
-	            "method": "POST",
-	            "header": [ { "key": "Content-Type", "value": "application/json" } ],
-	            "body": {
-	              "mode": "raw",
-	              "raw": "{\n  \"full_name\": \"Certificate Reviewer {{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"Newman\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": true\n}"
-	            },
-	            "url": "{{baseUrl}}/competent-person"
-	          },
-	          "event": [
-	            {
-	              "listen": "test",
-	              "script": {
-	                "type": "text/javascript",
-	                "exec": [
-	                  "pm.response.to.have.status(201);",
-	                  "const body = pm.response.json();",
-	                  "pm.collectionVariables.set('competent_person_id', body.competent_person_id);"
-	                ]
-	              }
-	            }
-	          ]
-	        },
-	        {
-	          "name": "Upload Certificate File",
-	          "request": {
-	            "method": "POST",
-	            "body": {
-	              "mode": "formdata",
-	              "formdata": [
-		                {
-		                  "key": "file",
-		                  "type": "file",
-		                  "contentType": "application/pdf",
-		                  "src": "tests/regression/fixtures/sample-certificate.pdf"
-		                },
-	                {
-	                  "key": "competent_person_id",
-	                  "value": "{{competent_person_id}}",
-	                  "type": "text"
-	                }
-	              ]
-	            },
+        {
+          "name": "Patch Certificate",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expiry_date\": \"2026-04-20T00:00:00Z\"\n}"
+            },
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Competency Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category_code\": \"CERT-{{runSuffix}}\",\n  \"category_name\": \"Certificate Upload Competency {{runSuffix}}\",\n  \"description\": \"Competency category for certificate upload smoke test\",\n  \"active\": true\n}"
+            },
+            "url": "{{baseUrl}}/competency-category"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('competency_category_id', body.competency_category_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Competent Person",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Certificate Reviewer {{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"Newman\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": true\n}"
+            },
+            "url": "{{baseUrl}}/competent-person"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('competent_person_id', body.competent_person_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Certificate File",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "application/pdf",
+                  "src": "tests/regression/fixtures/sample-certificate.pdf"
+                },
+                {
+                  "key": "competent_person_id",
+                  "value": "{{competent_person_id}}",
+                  "type": "text"
+                }
+              ]
+            },
             "url": "{{baseUrl}}/certificate/{{certificate_id}}/file"
           },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
-	        {
-	          "name": "Get Certificate File URL",
-	          "request": { "method": "GET", "url": "{{baseUrl}}/certificate/{{certificate_id}}/file" },
-	          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);", "const body = pm.response.json();", "pm.expect(body.url).to.be.a('string').and.not.empty;", "pm.expect(body.url).to.include('/certificate-files/');", "pm.expect(body.url).to.not.include(pm.collectionVariables.get('certificate_id'));", "pm.expect(body.url).to.not.include('certification-tracker');", "pm.expect(body.url).to.not.include('sample-certificate');" ] } } ]
-	        },
+        {
+          "name": "Get Certificate File URL",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}/file"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.url).to.be.a('string').and.not.empty;",
+                  "pm.expect(body.url).to.include('/certificate-files/');",
+                  "pm.expect(body.url).to.not.include(pm.collectionVariables.get('certificate_id'));",
+                  "pm.expect(body.url).to.not.include('certification-tracker');",
+                  "pm.expect(body.url).to.not.include('sample-certificate');"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Get Certificate Upload Audit",
-          "request": { "method": "GET", "url": "{{baseUrl}}/certificate/{{certificate_id}}/uploads?page=1&limit=20" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);", "const body = pm.response.json();", "pm.expect(body.data).to.be.an('array').with.length.greaterThan(0);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}/uploads?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.data).to.be.an('array').with.length.greaterThan(0);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Expiring Certificates",
-          "request": { "method": "GET", "url": "{{baseUrl}}/certificates/expiring?page=1&limit=20" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificates/expiring?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Certificates Dashboard",
-          "request": { "method": "GET", "url": "{{baseUrl}}/certificates/dashboard?page=1&limit=20" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificates/dashboard?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Certificates Report PDF",
-          "request": { "method": "GET", "url": "{{baseUrl}}/certificates/report" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);", "pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificates/report"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Spun-Up Components By Asset",
-          "request": { "method": "GET", "url": "{{baseUrl}}/components/asset/{{templated_asset_id}}?page=1&limit=20" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);", "const body = pm.response.json();", "pm.expect(body.data).to.be.an('array').with.length.greaterThan(0);", "pm.collectionVariables.set('spun_component_id', body.data[0].component_id);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/components/asset/{{templated_asset_id}}?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.data).to.be.an('array').with.length.greaterThan(0);",
+                  "pm.collectionVariables.set('spun_component_id', body.data[0].component_id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Spun-Up Certificates By Component",
-          "request": { "method": "GET", "url": "{{baseUrl}}/certificates/component/{{spun_component_id}}?page=1&limit=20" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificates/component/{{spun_component_id}}?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Delete Certificate",
-          "request": { "method": "DELETE", "url": "{{baseUrl}}/certificate/{{certificate_id}}" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Delete Component",
-          "request": { "method": "DELETE", "url": "{{baseUrl}}/component/{{component_id}}" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/component/{{component_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Delete Manual Asset",
-          "request": { "method": "DELETE", "url": "{{baseUrl}}/asset/{{asset_id}}" },
-          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ]
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/asset/{{asset_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
       "name": "05 Cleanup",
       "item": [
-        { "name": "Delete Templated Asset", "request": { "method": "DELETE", "url": "{{baseUrl}}/asset/{{templated_asset_id}}" }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ] },
-        { "name": "Delete Manual Template", "request": { "method": "DELETE", "url": "{{baseUrl}}/template/{{manual_template_id}}" }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ] },
-        { "name": "Delete Configured Template", "request": { "method": "DELETE", "url": "{{baseUrl}}/template/{{configured_template_id}}" }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ] },
-        { "name": "Delete Category", "request": { "method": "DELETE", "url": "{{baseUrl}}/category/{{category_id}}" }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ] },
-        { "name": "Delete Main Category", "request": { "method": "DELETE", "url": "{{baseUrl}}/main-category/{{main_category_id}}" }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ] },
-        { "name": "Delete Test Type", "request": { "method": "DELETE", "url": "{{baseUrl}}/test-type/{{test_id}}" }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ] },
-        { "name": "Delete User", "request": { "method": "DELETE", "url": "{{baseUrl}}/user/{{user_id}}" }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ] },
-        { "name": "Logout Admin", "request": { "method": "POST", "url": "{{baseUrl}}/logout" }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.response.to.have.status(200);" ] } } ] }
+        {
+          "name": "Delete Templated Asset",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/asset/{{templated_asset_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Manual Template",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/template/{{manual_template_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Configured Template",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/template/{{configured_template_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Catalog Scope Category",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/catalog-scope-category/{{scope_category_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/category/{{category_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Catalog Scope Main Category",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/catalog-scope-main-category/{{scope_main_category_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Main Category",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/main-category/{{main_category_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Test Type",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/test-type/{{test_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/user/{{user_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout Admin",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/logout"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        }
       ]
     }
   ]

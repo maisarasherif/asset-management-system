@@ -16,7 +16,7 @@ import {
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
@@ -25,13 +25,19 @@ import {
   deleteTemplate,
   getTemplate,
   getTemplateConfiguration,
-  listAllCategories,
+  listAllCatalogScopeCategories,
+  listCatalogScopes,
   listTestTypes,
   updateTemplate,
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { AssetTemplate, TemplateConfigurationComponent } from "../../types/ams";
 import { formatDate, humanizeEnum } from "../../utils/format";
+
+type TemplateDetailsDraft = {
+  template_name: string;
+  description: string;
+};
 
 export function TemplateDetailPage() {
   const navigate = useNavigate();
@@ -40,8 +46,6 @@ export function TemplateDetailPage() {
   const { error, success } = useFlashbar();
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [templateName, setTemplateName] = useState("");
-  const [description, setDescription] = useState("");
   const [editError, setEditError] = useState("");
 
   const templateQuery = useQuery({
@@ -56,9 +60,20 @@ export function TemplateDetailPage() {
     enabled: Boolean(templateId),
   });
 
-  const categoriesQuery = useQuery({
-    queryKey: ["categories", "all"],
-    queryFn: listAllCategories,
+  const catalogScopesQuery = useQuery({
+    queryKey: ["catalog-scopes"],
+    queryFn: listCatalogScopes,
+  });
+
+  const scopeCategoriesQuery = useQuery({
+    queryKey: ["catalog-scope-categories", "template-detail", "all-scopes"],
+    queryFn: () =>
+      Promise.all(
+        (catalogScopesQuery.data || []).map((scope) =>
+          listAllCatalogScopeCategories(scope.scope_id)
+        )
+      ),
+    enabled: Boolean(catalogScopesQuery.data?.length),
   });
 
   const testTypesQuery = useQuery({
@@ -67,10 +82,10 @@ export function TemplateDetailPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (draft: TemplateDetailsDraft) =>
       updateTemplate(templateId!, {
-        template_name: templateName.trim(),
-        description: description.trim(),
+        template_name: draft.template_name.trim(),
+        description: draft.description.trim(),
       }),
     onSuccess: async () => {
       await Promise.all([
@@ -101,14 +116,18 @@ export function TemplateDetailPage() {
   });
 
   const categoryMap = useMemo(
-    () =>
-      new Map(
-        (categoriesQuery.data || []).map((category) => [
-          category.category_id,
-          category.category_name,
-        ])
-      ),
-    [categoriesQuery.data]
+    () => {
+      const labels = new Map<string, string>();
+      for (const category of (scopeCategoriesQuery.data || []).flat()) {
+        const label = `${category.main_category_name} > ${category.category_name}`;
+        labels.set(category.scope_category_id, label);
+        if (!labels.has(category.category_id)) {
+          labels.set(category.category_id, label);
+        }
+      }
+      return labels;
+    },
+    [scopeCategoriesQuery.data]
   );
 
   const testTypeMap = useMemo(
@@ -145,9 +164,9 @@ export function TemplateDetailPage() {
   }
 
   const template = templateQuery.data;
-  const configuredComponents = configurationQuery.data;
+  const configuredComponents = configurationQuery.data ?? [];
   const totalTests = configuredComponents.reduce(
-    (count, component) => count + component.tests.length,
+    (count, component) => count + (component.tests ?? []).length,
     0
   );
   const readinessLabel =
@@ -171,8 +190,16 @@ export function TemplateDetailPage() {
       width: "22%",
       minWidth: 180,
       cell: (item) => (
-        <TableCellText title={categoryMap.get(item.category_id) || item.category_id}>
-          {categoryMap.get(item.category_id) || item.category_id}
+        <TableCellText
+          title={
+            (item.scope_category_id && categoryMap.get(item.scope_category_id)) ||
+            categoryMap.get(item.category_id) ||
+            item.category_id
+          }
+        >
+          {(item.scope_category_id && categoryMap.get(item.scope_category_id)) ||
+            categoryMap.get(item.category_id) ||
+            item.category_id}
         </TableCellText>
       ),
     },
@@ -181,7 +208,7 @@ export function TemplateDetailPage() {
       header: "Assigned tests",
       width: 130,
       minWidth: 120,
-      cell: (item) => item.tests.length,
+      cell: (item) => (item.tests ?? []).length,
     },
     {
       id: "safety",
@@ -204,20 +231,18 @@ export function TemplateDetailPage() {
   ];
 
   const openEditModal = () => {
-    setTemplateName(template.template_name);
-    setDescription(template.description || "");
     setEditError("");
     setEditModalVisible(true);
   };
 
-  const submitEdit = () => {
-    if (templateName.trim().length < 2) {
+  const submitEdit = (draft: TemplateDetailsDraft) => {
+    if (draft.template_name.trim().length < 2) {
       setEditError("Template name must be at least 2 characters.");
       return;
     }
 
     setEditError("");
-    updateMutation.mutate();
+    updateMutation.mutate(draft);
   };
 
   return renderTemplateDetailPage({
@@ -226,22 +251,18 @@ export function TemplateDetailPage() {
     configuredComponents,
     deleteModalVisible,
     deletePending: deleteMutation.isPending,
-    description,
     editError,
     editModalVisible,
     navigate,
     onDelete: () => deleteMutation.mutate(),
-    onDescriptionChange: setDescription,
     onEditDismiss: () => setEditModalVisible(false),
     onDeleteDismiss: () => setDeleteModalVisible(false),
     onOpenDelete: () => setDeleteModalVisible(true),
     onOpenEdit: openEditModal,
     onSubmitEdit: submitEdit,
-    onTemplateNameChange: setTemplateName,
     readinessLabel,
     template,
     templateId,
-    templateName,
     testTypeMap,
     totalTests,
     updatePending: updateMutation.isPending,
@@ -254,25 +275,90 @@ interface TemplateDetailPageViewProps {
   configuredComponents: TemplateConfigurationComponent[];
   deleteModalVisible: boolean;
   deletePending: boolean;
-  description: string;
   editError: string;
   editModalVisible: boolean;
   navigate: ReturnType<typeof useNavigate>;
   onDelete: () => void;
   onDeleteDismiss: () => void;
-  onDescriptionChange: (value: string) => void;
   onEditDismiss: () => void;
   onOpenDelete: () => void;
   onOpenEdit: () => void;
-  onSubmitEdit: () => void;
-  onTemplateNameChange: (value: string) => void;
+  onSubmitEdit: (draft: TemplateDetailsDraft) => void;
   readinessLabel: string;
   template: AssetTemplate;
   templateId: string;
-  templateName: string;
   testTypeMap: Map<string, string>;
   totalTests: number;
   updatePending: boolean;
+}
+
+interface TemplateDetailsEditorModalProps {
+  error: string;
+  loading: boolean;
+  onDismiss: () => void;
+  onSubmit: (draft: TemplateDetailsDraft) => void;
+  template: AssetTemplate;
+  visible: boolean;
+}
+
+function TemplateDetailsEditorModal({
+  error,
+  loading,
+  onDismiss,
+  onSubmit,
+  template,
+  visible,
+}: TemplateDetailsEditorModalProps) {
+  const [draft, setDraft] = useState<TemplateDetailsDraft>({
+    template_name: template.template_name,
+    description: template.description || "",
+  });
+
+  useEffect(() => {
+    if (visible) {
+      setDraft({
+        template_name: template.template_name,
+        description: template.description || "",
+      });
+    }
+  }, [template.description, template.template_name, visible]);
+
+  return (
+    <Modal
+      visible={visible}
+      header="Edit template details"
+      onDismiss={onDismiss}
+      footer={
+        <SpaceBetween direction="horizontal" size="xs">
+          <Button onClick={onDismiss}>Cancel</Button>
+          <Button loading={loading} variant="primary" onClick={() => onSubmit(draft)}>
+            Save changes
+          </Button>
+        </SpaceBetween>
+      }
+    >
+      <SpaceBetween direction="vertical" size="l">
+        {error ? <Alert type="error">{error}</Alert> : null}
+        <FormField label="Template name">
+          <Input
+            value={draft.template_name}
+            onChange={({ detail }) =>
+              setDraft((current) => ({ ...current, template_name: detail.value }))
+            }
+          />
+        </FormField>
+        <FormField label="Description">
+          <Textarea
+            rows={6}
+            value={draft.description}
+            onChange={({ detail }) =>
+              setDraft((current) => ({ ...current, description: detail.value }))
+            }
+          />
+        </FormField>
+      </SpaceBetween>
+    </Modal>
+  );
 }
 
 function renderTemplateDetailPage({
@@ -281,22 +367,18 @@ function renderTemplateDetailPage({
   configuredComponents,
   deleteModalVisible,
   deletePending,
-  description,
   editError,
   editModalVisible,
   navigate,
   onDelete,
   onDeleteDismiss,
-  onDescriptionChange,
   onEditDismiss,
   onOpenDelete,
   onOpenEdit,
   onSubmitEdit,
-  onTemplateNameChange,
   readinessLabel,
   template,
   templateId,
-  templateName,
   testTypeMap,
   totalTests,
   updatePending,
@@ -433,7 +515,10 @@ function renderTemplateDetailPage({
                           <Box color="text-body-secondary">{component.display_id}</Box>
                         </div>
                         <Badge color="blue">
-                          {categoryMap.get(component.category_id) || component.category_id}
+                          {(component.scope_category_id &&
+                            categoryMap.get(component.scope_category_id)) ||
+                            categoryMap.get(component.category_id) ||
+                            component.category_id}
                         </Badge>
                       </div>
                       <Box color="text-body-secondary">
@@ -445,7 +530,7 @@ function renderTemplateDetailPage({
                         <span>Safety: {humanizeEnum(component.safety_critical)}</span>
                       </div>
                       <div className="template-pill-list">
-                        {component.tests.map((test) => (
+                        {(component.tests ?? []).map((test) => (
                           <span key={test.template_component_test_id} className="template-pill">
                             {testTypeMap.get(test.test_id) || test.test_name}
                           </span>
@@ -464,33 +549,14 @@ function renderTemplateDetailPage({
         </SpaceBetween>
       </ContentLayout>
 
-      <Modal
-        visible={editModalVisible}
-        header="Edit template details"
+      <TemplateDetailsEditorModal
+        error={editError}
+        loading={updatePending}
         onDismiss={onEditDismiss}
-        footer={
-          <SpaceBetween direction="horizontal" size="xs">
-            <Button onClick={onEditDismiss}>Cancel</Button>
-            <Button loading={updatePending} variant="primary" onClick={onSubmitEdit}>
-              Save changes
-            </Button>
-          </SpaceBetween>
-        }
-      >
-        <SpaceBetween direction="vertical" size="l">
-          {editError ? <Alert type="error">{editError}</Alert> : null}
-          <FormField label="Template name">
-            <Input value={templateName} onChange={({ detail }) => onTemplateNameChange(detail.value)} />
-          </FormField>
-          <FormField label="Description">
-            <Textarea
-              rows={6}
-              value={description}
-              onChange={({ detail }) => onDescriptionChange(detail.value)}
-            />
-          </FormField>
-        </SpaceBetween>
-      </Modal>
+        onSubmit={onSubmitEdit}
+        template={template}
+        visible={editModalVisible}
+      />
 
       <Modal
         visible={deleteModalVisible}

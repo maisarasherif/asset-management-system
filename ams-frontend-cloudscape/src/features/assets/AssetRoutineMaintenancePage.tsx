@@ -31,6 +31,15 @@ import type { Asset, AssetMaintenanceEvent } from "../../types/ams";
 import { formatDate, humanizeEnum } from "../../utils/format";
 import { assetStatusType } from "../../utils/status";
 
+type WorkingHoursDraft = {
+  working_hours: string;
+  note: string;
+};
+
+type CompletionDraft = {
+  completion_notes: string;
+};
+
 export function AssetRoutineMaintenancePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -38,10 +47,7 @@ export function AssetRoutineMaintenancePage() {
   const { isAdmin, setSelectedAssetId } = useAuth();
   const { error, success } = useFlashbar();
   const [hoursModalVisible, setHoursModalVisible] = useState(false);
-  const [hoursDraft, setHoursDraft] = useState("");
-  const [hoursNote, setHoursNote] = useState("");
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
-  const [completionNotes, setCompletionNotes] = useState("");
 
   const assetQuery = useQuery({
     queryKey: ["asset", assetId],
@@ -56,10 +62,10 @@ export function AssetRoutineMaintenancePage() {
   });
 
   const updateHoursMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (draft: WorkingHoursDraft) =>
       updateAssetWorkingHours(assetId!, {
-        working_hours: Number(hoursDraft) || 0,
-        note: hoursNote,
+        working_hours: Number(draft.working_hours) || 0,
+        note: draft.note,
       }),
     onSuccess: async (response) => {
       await Promise.all([
@@ -70,7 +76,6 @@ export function AssetRoutineMaintenancePage() {
         queryClient.invalidateQueries({ queryKey: ["routine-maintenance", assetId] }),
       ]);
       setHoursModalVisible(false);
-      setHoursNote("");
       success(
         response.maintenance_event ? "Routine maintenance required" : "Working hours updated",
         response.maintenance_event
@@ -84,9 +89,9 @@ export function AssetRoutineMaintenancePage() {
   });
 
   const completeMaintenanceMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (draft: CompletionDraft) =>
       completeAssetRoutineMaintenance(assetId!, {
-        completion_notes: completionNotes,
+        completion_notes: draft.completion_notes,
       }),
     onSuccess: async () => {
       await Promise.all([
@@ -97,7 +102,6 @@ export function AssetRoutineMaintenancePage() {
         queryClient.invalidateQueries({ queryKey: ["routine-maintenance", assetId] }),
       ]);
       setCompleteModalVisible(false);
-      setCompletionNotes("");
       success("Routine maintenance completed", "The next maintenance target has been scheduled.");
     },
     onError: (mutationError: Error) => {
@@ -176,10 +180,7 @@ export function AssetRoutineMaintenancePage() {
     assetId,
     completeModalVisible,
     completePending: completeMaintenanceMutation.isPending,
-    completionNotes,
-    hoursDraft,
     hoursModalVisible,
-    hoursNote,
     isAdmin,
     maintenanceColumns,
     maintenanceConfigured,
@@ -189,17 +190,10 @@ export function AssetRoutineMaintenancePage() {
     navigate,
     onCloseCompleteModal: () => setCompleteModalVisible(false),
     onCloseHoursModal: () => setHoursModalVisible(false),
-    onCompleteMaintenance: () => completeMaintenanceMutation.mutate(),
-    onCompletionNotesChange: setCompletionNotes,
-    onHoursChange: setHoursDraft,
-    onHoursNoteChange: setHoursNote,
+    onCompleteMaintenance: (draft) => completeMaintenanceMutation.mutate(draft),
     onOpenCompleteModal: () => setCompleteModalVisible(true),
-    onOpenHoursModal: () => {
-      setHoursDraft(String(asset.working_hours));
-      setHoursNote("");
-      setHoursModalVisible(true);
-    },
-    onUpdateHours: () => updateHoursMutation.mutate(),
+    onOpenHoursModal: () => setHoursModalVisible(true),
+    onUpdateHours: (draft) => updateHoursMutation.mutate(draft),
     openMaintenanceEvent,
     updateHoursPending: updateHoursMutation.isPending,
   });
@@ -210,10 +204,7 @@ interface AssetRoutineMaintenanceViewProps {
   assetId: string;
   completeModalVisible: boolean;
   completePending: boolean;
-  completionNotes: string;
-  hoursDraft: string;
   hoursModalVisible: boolean;
-  hoursNote: string;
   isAdmin: boolean;
   maintenanceColumns: TableProps<AssetMaintenanceEvent>["columnDefinitions"];
   maintenanceConfigured: boolean;
@@ -223,15 +214,121 @@ interface AssetRoutineMaintenanceViewProps {
   navigate: ReturnType<typeof useNavigate>;
   onCloseCompleteModal: () => void;
   onCloseHoursModal: () => void;
-  onCompleteMaintenance: () => void;
-  onCompletionNotesChange: (value: string) => void;
-  onHoursChange: (value: string) => void;
-  onHoursNoteChange: (value: string) => void;
+  onCompleteMaintenance: (draft: CompletionDraft) => void;
   onOpenCompleteModal: () => void;
   onOpenHoursModal: () => void;
-  onUpdateHours: () => void;
+  onUpdateHours: (draft: WorkingHoursDraft) => void;
   openMaintenanceEvent: AssetMaintenanceEvent | null;
   updateHoursPending: boolean;
+}
+
+interface WorkingHoursModalProps {
+  asset: Asset;
+  loading: boolean;
+  onDismiss: () => void;
+  onSubmit: (draft: WorkingHoursDraft) => void;
+  visible: boolean;
+}
+
+function WorkingHoursModal({ asset, loading, onDismiss, onSubmit, visible }: WorkingHoursModalProps) {
+  const [draft, setDraft] = useState<WorkingHoursDraft>({
+    working_hours: String(asset.working_hours),
+    note: "",
+  });
+
+  useEffect(() => {
+    if (visible) {
+      setDraft({
+        working_hours: String(asset.working_hours),
+        note: "",
+      });
+    }
+  }, [asset.working_hours, visible]);
+
+  return (
+    <Modal
+      visible={visible}
+      header="Update working hours"
+      onDismiss={onDismiss}
+      footer={
+        <Box float="right">
+          <SpaceBetween direction="horizontal" size="xs">
+            <Button onClick={onDismiss}>Cancel</Button>
+            <Button loading={loading} variant="primary" onClick={() => onSubmit(draft)}>
+              Save hours
+            </Button>
+          </SpaceBetween>
+        </Box>
+      }
+    >
+      <SpaceBetween direction="vertical" size="m">
+        <FormField label="Working hours">
+          <Input
+            inputMode="numeric"
+            type="number"
+            value={draft.working_hours}
+            onChange={({ detail }) =>
+              setDraft((current) => ({ ...current, working_hours: detail.value }))
+            }
+          />
+        </FormField>
+        <FormField label="Note">
+          <Textarea
+            rows={4}
+            value={draft.note}
+            onChange={({ detail }) =>
+              setDraft((current) => ({ ...current, note: detail.value }))
+            }
+          />
+        </FormField>
+      </SpaceBetween>
+    </Modal>
+  );
+}
+
+interface CompletionModalProps {
+  loading: boolean;
+  onDismiss: () => void;
+  onSubmit: (draft: CompletionDraft) => void;
+  visible: boolean;
+}
+
+function CompletionModal({ loading, onDismiss, onSubmit, visible }: CompletionModalProps) {
+  const [draft, setDraft] = useState<CompletionDraft>({ completion_notes: "" });
+
+  useEffect(() => {
+    if (visible) {
+      setDraft({ completion_notes: "" });
+    }
+  }, [visible]);
+
+  return (
+    <Modal
+      visible={visible}
+      header="Complete routine maintenance"
+      onDismiss={onDismiss}
+      footer={
+        <Box float="right">
+          <SpaceBetween direction="horizontal" size="xs">
+            <Button onClick={onDismiss}>Cancel</Button>
+            <Button loading={loading} variant="primary" onClick={() => onSubmit(draft)}>
+              Complete
+            </Button>
+          </SpaceBetween>
+        </Box>
+      }
+    >
+      <FormField label="Completion notes">
+        <Textarea
+          rows={5}
+          value={draft.completion_notes}
+          onChange={({ detail }) =>
+            setDraft((current) => ({ ...current, completion_notes: detail.value }))
+          }
+        />
+      </FormField>
+    </Modal>
+  );
 }
 
 function renderAssetRoutineMaintenancePage({
@@ -239,10 +336,7 @@ function renderAssetRoutineMaintenancePage({
   assetId,
   completeModalVisible,
   completePending,
-  completionNotes,
-  hoursDraft,
   hoursModalVisible,
-  hoursNote,
   isAdmin,
   maintenanceColumns,
   maintenanceConfigured,
@@ -253,9 +347,6 @@ function renderAssetRoutineMaintenancePage({
   onCloseCompleteModal,
   onCloseHoursModal,
   onCompleteMaintenance,
-  onCompletionNotesChange,
-  onHoursChange,
-  onHoursNoteChange,
   onOpenCompleteModal,
   onOpenHoursModal,
   onUpdateHours,
@@ -402,63 +493,20 @@ function renderAssetRoutineMaintenancePage({
         </SpaceBetween>
       </ContentLayout>
 
-      <Modal
-        visible={hoursModalVisible}
-        header="Update working hours"
+      <WorkingHoursModal
+        asset={asset}
+        loading={updateHoursPending}
         onDismiss={onCloseHoursModal}
-        footer={
-          <Box float="right">
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button onClick={onCloseHoursModal}>Cancel</Button>
-              <Button loading={updateHoursPending} variant="primary" onClick={onUpdateHours}>
-                Save hours
-              </Button>
-            </SpaceBetween>
-          </Box>
-        }
-      >
-        <SpaceBetween direction="vertical" size="m">
-          <FormField label="Working hours">
-            <Input
-              inputMode="numeric"
-              type="number"
-              value={hoursDraft}
-              onChange={({ detail }) => onHoursChange(detail.value)}
-            />
-          </FormField>
-          <FormField label="Note">
-            <Textarea
-              rows={4}
-              value={hoursNote}
-              onChange={({ detail }) => onHoursNoteChange(detail.value)}
-            />
-          </FormField>
-        </SpaceBetween>
-      </Modal>
+        onSubmit={onUpdateHours}
+        visible={hoursModalVisible}
+      />
 
-      <Modal
-        visible={completeModalVisible}
-        header="Complete routine maintenance"
+      <CompletionModal
+        loading={completePending}
         onDismiss={onCloseCompleteModal}
-        footer={
-          <Box float="right">
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button onClick={onCloseCompleteModal}>Cancel</Button>
-              <Button loading={completePending} variant="primary" onClick={onCompleteMaintenance}>
-                Complete
-              </Button>
-            </SpaceBetween>
-          </Box>
-        }
-      >
-        <FormField label="Completion notes">
-          <Textarea
-            rows={5}
-            value={completionNotes}
-            onChange={({ detail }) => onCompletionNotesChange(detail.value)}
-          />
-        </FormField>
-      </Modal>
+        onSubmit={onCompleteMaintenance}
+        visible={completeModalVisible}
+      />
     </>
   );
 }

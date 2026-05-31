@@ -142,7 +142,7 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		categoryID, err := utils.ParseUUID(input.CategoryID, "category_id")
+		categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, input.ScopeCategoryID, input.CategoryID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -157,15 +157,10 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusConflict, gin.H{"error": "single-asset equipment cannot have manual components"})
 			return
 		}
-		_, err = queries.GetCategoryByID(ctx, categoryID)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
-			return
-		}
-
 		component, err := queries.CreateComponent(ctx, db.CreateComponentParams{
 			AssetID:         assetID,
 			CategoryID:      &categoryID,
+			ScopeCategoryID: &scopeCategoryID,
 			Name:            input.Name,
 			SerialNumber:    input.SerialNumber,
 			Manufacturer:    input.Manufacturer,
@@ -219,20 +214,15 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		categoryID, err := utils.ParseUUID(input.CategoryID, "category_id")
+		categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, input.ScopeCategoryID, input.CategoryID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		_, err = queries.GetCategoryByID(ctx, categoryID)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
-			return
-		}
-
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
 			CategoryID:      &categoryID,
+			ScopeCategoryID: &scopeCategoryID,
 			Name:            input.Name,
 			SerialNumber:    input.SerialNumber,
 			Manufacturer:    input.Manufacturer,
@@ -342,6 +332,11 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 		categoryID := *existing.CategoryID
+		if existing.ScopeCategoryID == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "component catalog scope is not editable for this component"})
+			return
+		}
+		scopeCategoryID := *existing.ScopeCategoryID
 		serialNumber := existing.SerialNumber
 		manufacturer := existing.Manufacturer
 		description := existing.Description
@@ -354,13 +349,22 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		classCode := existing.ClassCode
 		safetyCritical := existing.SafetyCritical
 
-		if input.CategoryID != nil {
-			parsedCategoryID, err := utils.ParseUUID(*input.CategoryID, "category_id")
+		if input.ScopeCategoryID != nil || input.CategoryID != nil {
+			scopeCategoryValue := ""
+			if input.ScopeCategoryID != nil {
+				scopeCategoryValue = *input.ScopeCategoryID
+			}
+			categoryValue := categoryID.String()
+			if input.CategoryID != nil {
+				categoryValue = *input.CategoryID
+			}
+			parsedCategoryID, parsedScopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, scopeCategoryValue, categoryValue)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
 			categoryID = parsedCategoryID
+			scopeCategoryID = parsedScopeCategoryID
 		}
 		if input.Name != nil {
 			name = *input.Name
@@ -399,14 +403,9 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			safetyCritical = *input.SafetyCritical
 		}
 
-		_, err = queries.GetCategoryByID(ctx, categoryID)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
-			return
-		}
-
 		rows, err := queries.UpdateComponent(ctx, db.UpdateComponentParams{
 			CategoryID:      &categoryID,
+			ScopeCategoryID: &scopeCategoryID,
 			Name:            name,
 			SerialNumber:    serialNumber,
 			Manufacturer:    manufacturer,

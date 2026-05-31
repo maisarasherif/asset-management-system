@@ -18,6 +18,19 @@ interface CreatedCategory {
   category_id: string;
 }
 
+interface CatalogScope {
+  scope_id: string;
+}
+
+interface CreatedScopeMainCategory {
+  scope_main_category_id: string;
+}
+
+interface CreatedScopeCategory {
+  scope_category_id: string;
+  category_id: string;
+}
+
 interface CreatedTestType {
   test_id: string;
 }
@@ -73,6 +86,15 @@ async function postJson<T>(
   return (await response.json()) as T;
 }
 
+async function getJson<T>(request: APIRequestContext, token: string, path: string) {
+  const response = await request.get(`${API_BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as T;
+}
+
 async function deleteIfPresent(request: APIRequestContext, token: string, path: string) {
   const response = await request.delete(`${API_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -120,6 +142,8 @@ test.describe("scheduler management flow", () => {
     let assetId: string | null = null;
     let mainCategoryId: string | null = null;
     let categoryId: string | null = null;
+    let scopeMainCategoryId: string | null = null;
+    let scopeCategoryId: string | null = null;
     let testTypeId: string | null = null;
 
     try {
@@ -143,6 +167,38 @@ test.describe("scheduler management flow", () => {
       });
       categoryId = category.category_id;
 
+      const defaultScope = await getJson<CatalogScope>(
+        setupRequest,
+        token,
+        "/catalog-scopes/default"
+      );
+
+      const scopeMainCategory = await postJson<CreatedScopeMainCategory>(
+        setupRequest,
+        token,
+        `/catalog-scope/${defaultScope.scope_id}/main-category`,
+        {
+          main_category_name: mainCategoryName,
+          description: "Created by Playwright for scheduler management.",
+          sort_order: sortOrderBase + 2,
+        }
+      );
+      scopeMainCategoryId = scopeMainCategory.scope_main_category_id;
+
+      const scopeCategory = await postJson<CreatedScopeCategory>(
+        setupRequest,
+        token,
+        `/catalog-scope/${defaultScope.scope_id}/category`,
+        {
+          main_category_id: mainCategory.main_category_id,
+          category_name: categoryName,
+          description: "Created by Playwright for scheduler management.",
+          sort_order: sortOrderBase + 3,
+        }
+      );
+      expect(scopeCategory.category_id).toBe(category.category_id);
+      scopeCategoryId = scopeCategory.scope_category_id;
+
       const testType = await postJson<CreatedTestType>(setupRequest, token, "/test-type", {
         test_name: testName,
         validity_duration: 6,
@@ -165,6 +221,7 @@ test.describe("scheduler management flow", () => {
       const component = await postJson<CreatedComponent>(setupRequest, token, "/component", {
         asset_id: asset.asset_id,
         category_id: category.category_id,
+        scope_category_id: scopeCategory.scope_category_id,
         name: componentName,
         serial_number: `PW-SCHED-${suffix}`,
         manufacturer: "Playwright Manufacturer",
@@ -216,8 +273,18 @@ test.describe("scheduler management flow", () => {
       if (assetId) {
         await deleteIfPresent(setupRequest, token, `/asset/${assetId}`);
       }
+      if (scopeCategoryId) {
+        await deleteIfPresent(setupRequest, token, `/catalog-scope-category/${scopeCategoryId}`);
+      }
       if (categoryId) {
         await deleteIfPresent(setupRequest, token, `/category/${categoryId}`);
+      }
+      if (scopeMainCategoryId) {
+        await deleteIfPresent(
+          setupRequest,
+          token,
+          `/catalog-scope-main-category/${scopeMainCategoryId}`
+        );
       }
       if (mainCategoryId) {
         await deleteIfPresent(setupRequest, token, `/main-category/${mainCategoryId}`);

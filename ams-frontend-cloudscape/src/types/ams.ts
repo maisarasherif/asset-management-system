@@ -94,6 +94,7 @@ export interface ComponentRecord {
   display_id: string;
   asset_id: string;
   category_id: string | null;
+  scope_category_id: string | null;
   component_kind: ComponentKind;
   single_asset_equipment_id: string | null;
   name: string;
@@ -220,6 +221,44 @@ export interface MainCategory {
   updated_at: string;
 }
 
+export interface CatalogScope {
+  scope_id: string;
+  display_id: string;
+  scope_name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CatalogScopeMainCategory {
+  scope_main_category_id: string;
+  display_id: string;
+  scope_id: string;
+  main_category_id: string;
+  sort_order: number;
+  main_category_display_id: string;
+  main_category_name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CatalogScopeCategory {
+  scope_category_id: string;
+  display_id: string;
+  scope_id: string;
+  main_category_id: string;
+  main_category_display_id: string;
+  main_category_name: string;
+  category_id: string;
+  category_display_id: string;
+  category_name: string;
+  sort_order: number;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TestType {
   test_id: string;
   display_id: string;
@@ -266,6 +305,7 @@ export interface TemplateComponent {
   display_id: string;
   template_id: string;
   category_id: string;
+  scope_category_id: string;
   position: number;
   name: string;
   description: string;
@@ -383,6 +423,7 @@ export interface AssetMaintenanceUpdateResponse {
 export interface ComponentInput {
   asset_id: string;
   category_id: string;
+  scope_category_id?: string;
   name: string;
   serial_number: string;
   manufacturer: string;
@@ -514,6 +555,7 @@ export interface AssetTemplateInput {
 
 export interface TemplateComponentInput {
   category_id: string;
+  scope_category_id?: string;
   name: string;
   description: string;
   serial_number: string;
@@ -543,6 +585,24 @@ export interface TemplateConfigurationComponent extends TemplateComponent {
 
 export interface MainCategoryInput {
   main_category_name: string;
+  description: string;
+  sort_order: number;
+}
+
+export interface CatalogScopeInput {
+  scope_name: string;
+  description: string;
+}
+
+export interface CatalogScopeMainCategoryInput {
+  main_category_name: string;
+  description: string;
+  sort_order: number;
+}
+
+export interface CatalogScopeCategoryInput {
+  main_category_id: string;
+  category_name: string;
   description: string;
   sort_order: number;
 }

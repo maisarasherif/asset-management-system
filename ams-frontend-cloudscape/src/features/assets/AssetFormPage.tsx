@@ -9,8 +9,6 @@ import {
   FormField,
   Header,
   Input,
-  Multiselect,
-  Select,
   SpaceBetween,
   Textarea,
   type MultiselectProps,
@@ -29,6 +27,7 @@ import {
   listTemplates,
   updateAsset,
 } from "../../lib/api/ams";
+import { Multiselect, Select } from "../../components/shared/OptimizedSelect";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";

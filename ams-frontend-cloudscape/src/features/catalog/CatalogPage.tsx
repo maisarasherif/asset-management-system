@@ -9,7 +9,6 @@ import {
   Header,
   Input,
   Modal,
-  Select,
   SpaceBetween,
   Table,
   Textarea,
@@ -17,28 +16,40 @@ import {
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
+import { Select } from "../../components/shared/OptimizedSelect";
 import {
-  createCategory,
+  createCatalogScope,
+  createCatalogScopeCategory,
+  createCatalogScopeMainCategory,
   createEquipmentType,
-  createMainCategory,
   createTestType,
-  deleteCategory,
+  deleteCatalogScope,
+  deleteCatalogScopeCategory,
+  deleteCatalogScopeMainCategory,
   deleteEquipmentType,
-  deleteMainCategory,
   deleteTestType,
-  listAllCategories,
+  duplicateCatalogScope,
+  listAllCatalogScopeCategories,
+  listAllCatalogScopeMainCategories,
   listAllEquipmentTypes,
-  listAllMainCategories,
+  listCatalogScopes,
   listTestTypes,
-  updateCategory,
+  updateCatalogScope,
+  updateCatalogScopeCategory,
+  updateCatalogScopeMainCategory,
   updateEquipmentType,
-  updateMainCategory,
   updateTestType,
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { Category, EquipmentType, MainCategory, TestType } from "../../types/ams";
+import type {
+  CatalogScope,
+  CatalogScopeCategory,
+  CatalogScopeMainCategory,
+  EquipmentType,
+  TestType,
+} from "../../types/ams";
 import { formatMonthDuration } from "../../utils/format";
 
 type MainCategoryEditor =
@@ -82,9 +93,18 @@ type EquipmentTypeEditor =
     }
   | null;
 
+type CatalogScopeEditor =
+  | {
+      mode: "create" | "edit" | "duplicate";
+      id?: string;
+      scope_name: string;
+      description: string;
+    }
+  | null;
+
 type DeleteTarget =
   | {
-      type: "main-category" | "category" | "test-type" | "equipment-type";
+      type: "catalog-scope" | "main-category" | "category" | "test-type" | "equipment-type";
       id: string;
       label: string;
     }
@@ -100,14 +120,14 @@ function TruncatedCell({ value }: { value: string }) {
   );
 }
 
-function getNextMainCategorySortOrder(mainCategories: MainCategory[]) {
+function getNextMainCategorySortOrder(mainCategories: CatalogScopeMainCategory[]) {
   return mainCategories.reduce(
     (maxSortOrder, mainCategory) => Math.max(maxSortOrder, mainCategory.sort_order),
     0
   ) + 1;
 }
 
-function getNextCategorySortOrder(categories: Category[], mainCategoryId: string) {
+function getNextCategorySortOrder(categories: CatalogScopeCategory[], mainCategoryId: string) {
   return categories
     .filter((category) => category.main_category_id === mainCategoryId)
     .reduce((maxSortOrder, category) => Math.max(maxSortOrder, category.sort_order), 0) + 1;
@@ -120,15 +140,22 @@ function getNextEquipmentTypeSortOrder(equipmentTypes: EquipmentType[]) {
   ) + 1;
 }
 
-function useCatalogData() {
+function useCatalogData(selectedScopeId: string) {
+  const catalogScopesQuery = useQuery({
+    queryKey: ["catalog-scopes"],
+    queryFn: listCatalogScopes,
+  });
+
   const mainCategoriesQuery = useQuery({
-    queryKey: ["main-categories", "all"],
-    queryFn: listAllMainCategories,
+    queryKey: ["catalog-scope-main-categories", selectedScopeId],
+    queryFn: () => listAllCatalogScopeMainCategories(selectedScopeId),
+    enabled: Boolean(selectedScopeId),
   });
 
   const categoriesQuery = useQuery({
-    queryKey: ["categories", "all"],
-    queryFn: listAllCategories,
+    queryKey: ["catalog-scope-categories", selectedScopeId],
+    queryFn: () => listAllCatalogScopeCategories(selectedScopeId),
+    enabled: Boolean(selectedScopeId),
   });
 
   const testTypesQuery = useQuery({
@@ -180,7 +207,7 @@ function useCatalogData() {
       (mainCategoriesQuery.data || []).map((mainCategory) => ({
         label: mainCategory.main_category_name,
         value: mainCategory.main_category_id,
-        description: mainCategory.description || mainCategory.display_id,
+        description: mainCategory.description || mainCategory.main_category_display_id,
       })),
     [mainCategoriesQuery.data]
   );
@@ -188,6 +215,7 @@ function useCatalogData() {
   return {
     categoriesQuery,
     categoryCountByMainCategory,
+    catalogScopesQuery,
     equipmentTypesQuery,
     mainCategoriesQuery,
     mainCategoryMap,
@@ -199,19 +227,23 @@ function useCatalogData() {
 
 type UseCatalogMutationsOptions = {
   onCategorySaved: () => void;
+  onCatalogScopeSaved: (scope?: CatalogScope) => void;
   onDeleteComplete: () => void;
   onEquipmentTypeSaved: () => void;
   onMainCategorySaved: () => void;
   onTestTypeSaved: () => void;
+  selectedScopeId: string;
   setModalError: (message: string) => void;
 };
 
 function useCatalogMutations({
   onCategorySaved,
+  onCatalogScopeSaved,
   onDeleteComplete,
   onEquipmentTypeSaved,
   onMainCategorySaved,
   onTestTypeSaved,
+  selectedScopeId,
   setModalError,
 }: UseCatalogMutationsOptions) {
   const queryClient = useQueryClient();
@@ -226,13 +258,13 @@ function useCatalogMutations({
       };
 
       return editor.mode === "create"
-        ? createMainCategory(payload)
-        : updateMainCategory(editor.id!, payload);
+        ? createCatalogScopeMainCategory(selectedScopeId, payload)
+        : updateCatalogScopeMainCategory(editor.id!, payload);
     },
     onSuccess: async (_, editor) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["main-categories"] }),
-        queryClient.invalidateQueries({ queryKey: ["categories"] }),
+        queryClient.invalidateQueries({ queryKey: ["catalog-scope-main-categories"] }),
+        queryClient.invalidateQueries({ queryKey: ["catalog-scope-categories"] }),
       ]);
       onMainCategorySaved();
       success(
@@ -255,10 +287,12 @@ function useCatalogMutations({
         description: editor.description.trim(),
       };
 
-      return editor.mode === "create" ? createCategory(payload) : updateCategory(editor.id!, payload);
+      return editor.mode === "create"
+        ? createCatalogScopeCategory(selectedScopeId, payload)
+        : updateCatalogScopeCategory(editor.id!, payload);
     },
     onSuccess: async (_, editor) => {
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await queryClient.invalidateQueries({ queryKey: ["catalog-scope-categories"] });
       onCategorySaved();
       success(
         editor.mode === "create" ? "Category created" : "Category updated",
@@ -323,11 +357,14 @@ function useCatalogMutations({
 
   const deleteMutation = useMutation({
     mutationFn: async (target: NonNullable<DeleteTarget>) => {
+      if (target.type === "catalog-scope") {
+        return deleteCatalogScope(target.id);
+      }
       if (target.type === "main-category") {
-        return deleteMainCategory(target.id);
+        return deleteCatalogScopeMainCategory(target.id);
       }
       if (target.type === "category") {
-        return deleteCategory(target.id);
+        return deleteCatalogScopeCategory(target.id);
       }
       if (target.type === "equipment-type") {
         return deleteEquipmentType(target.id);
@@ -336,8 +373,9 @@ function useCatalogMutations({
     },
     onSuccess: async (_, target) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["main-categories"] }),
-        queryClient.invalidateQueries({ queryKey: ["categories"] }),
+        queryClient.invalidateQueries({ queryKey: ["catalog-scopes"] }),
+        queryClient.invalidateQueries({ queryKey: ["catalog-scope-main-categories"] }),
+        queryClient.invalidateQueries({ queryKey: ["catalog-scope-categories"] }),
         queryClient.invalidateQueries({ queryKey: ["test-types"] }),
         queryClient.invalidateQueries({ queryKey: ["equipment-types"] }),
       ]);
@@ -350,8 +388,43 @@ function useCatalogMutations({
     },
   });
 
+  const saveCatalogScopeMutation = useMutation({
+    mutationFn: async (editor: NonNullable<CatalogScopeEditor>) => {
+      const payload = {
+        scope_name: editor.scope_name.trim(),
+        description: editor.description.trim(),
+      };
+
+      if (editor.mode === "edit") {
+        await updateCatalogScope(editor.id!, payload);
+        return undefined;
+      }
+      if (editor.mode === "duplicate") {
+        return duplicateCatalogScope(editor.id!, payload);
+      }
+      return createCatalogScope(payload);
+    },
+    onSuccess: async (scope, editor) => {
+      await queryClient.invalidateQueries({ queryKey: ["catalog-scopes"] });
+      onCatalogScopeSaved(scope);
+      success(
+        editor.mode === "edit"
+          ? "Catalog scope updated"
+          : editor.mode === "duplicate"
+            ? "Catalog scope duplicated"
+            : "Catalog scope created",
+        "The scoped catalog is ready."
+      );
+    },
+    onError: (mutationError: Error) => {
+      setModalError(mutationError.message);
+      error("Catalog scope save failed", mutationError.message);
+    },
+  });
+
   return {
     deleteMutation,
+    saveCatalogScopeMutation,
     saveCategoryMutation,
     saveEquipmentTypeMutation,
     saveMainCategoryMutation,
@@ -363,13 +436,13 @@ type UseCatalogColumnsOptions = {
   categoryCountByMainCategory: Map<string, number>;
   mainCategoryMap: Map<string, string>;
   mainCategorySortOrderMap: Map<string, number>;
-  onDeleteCategory: (category: Category) => void;
+  onDeleteCategory: (category: CatalogScopeCategory) => void;
   onDeleteEquipmentType: (equipmentType: EquipmentType) => void;
-  onDeleteMainCategory: (mainCategory: MainCategory) => void;
+  onDeleteMainCategory: (mainCategory: CatalogScopeMainCategory) => void;
   onDeleteTestType: (testType: TestType) => void;
-  onEditCategory: (category: Category) => void;
+  onEditCategory: (category: CatalogScopeCategory) => void;
   onEditEquipmentType: (equipmentType: EquipmentType) => void;
-  onEditMainCategory: (mainCategory: MainCategory) => void;
+  onEditMainCategory: (mainCategory: CatalogScopeMainCategory) => void;
   onEditTestType: (testType: TestType) => void;
 };
 
@@ -386,7 +459,7 @@ function useCatalogColumns({
   onEditMainCategory,
   onEditTestType,
 }: UseCatalogColumnsOptions) {
-  const mainCategoryColumns = useMemo<TableProps<MainCategory>["columnDefinitions"]>(
+  const mainCategoryColumns = useMemo<TableProps<CatalogScopeMainCategory>["columnDefinitions"]>(
     () => [
       {
         id: "name",
@@ -426,7 +499,7 @@ function useCatalogColumns({
     [categoryCountByMainCategory, onDeleteMainCategory, onEditMainCategory]
   );
 
-  const categoryColumns = useMemo<TableProps<Category>["columnDefinitions"]>(
+  const categoryColumns = useMemo<TableProps<CatalogScopeCategory>["columnDefinitions"]>(
     () => [
       {
         id: "name",
@@ -560,6 +633,8 @@ function useCatalogColumns({
 }
 
 export function CatalogPage() {
+  const [selectedScopeId, setSelectedScopeId] = useState("");
+  const [catalogScopeEditor, setCatalogScopeEditor] = useState<CatalogScopeEditor>(null);
   const [mainCategoryEditor, setMainCategoryEditor] = useState<MainCategoryEditor>(null);
   const [categoryEditor, setCategoryEditor] = useState<CategoryEditor>(null);
   const [testTypeEditor, setTestTypeEditor] = useState<TestTypeEditor>(null);
@@ -567,10 +642,11 @@ export function CatalogPage() {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [modalError, setModalError] = useState("");
 
-  const catalogData = useCatalogData();
+  const catalogData = useCatalogData(selectedScopeId);
   const {
     categoriesQuery,
     categoryCountByMainCategory,
+    catalogScopesQuery,
     equipmentTypesQuery,
     mainCategoriesQuery,
     mainCategoryMap,
@@ -579,9 +655,19 @@ export function CatalogPage() {
     testTypesQuery,
   } = catalogData;
 
+  useEffect(() => {
+    if (!selectedScopeId && catalogScopesQuery.data?.[0]) {
+      setSelectedScopeId(catalogScopesQuery.data[0].scope_id);
+    }
+  }, [catalogScopesQuery.data, selectedScopeId]);
+
   const dismissMainCategoryEditor = () => {
     setModalError("");
     setMainCategoryEditor(null);
+  };
+  const dismissCatalogScopeEditor = () => {
+    setModalError("");
+    setCatalogScopeEditor(null);
   };
   const dismissCategoryEditor = () => {
     setModalError("");
@@ -602,10 +688,22 @@ export function CatalogPage() {
 
   const mutations = useCatalogMutations({
     onCategorySaved: dismissCategoryEditor,
-    onDeleteComplete: dismissDeleteTarget,
+    onCatalogScopeSaved: (scope) => {
+      dismissCatalogScopeEditor();
+      if (scope?.scope_id) {
+        setSelectedScopeId(scope.scope_id);
+      }
+    },
+    onDeleteComplete: () => {
+      if (deleteTarget?.type === "catalog-scope") {
+        setSelectedScopeId("");
+      }
+      dismissDeleteTarget();
+    },
     onEquipmentTypeSaved: dismissEquipmentTypeEditor,
     onMainCategorySaved: dismissMainCategoryEditor,
     onTestTypeSaved: dismissTestTypeEditor,
+    selectedScopeId,
     setModalError,
   });
 
@@ -615,7 +713,7 @@ export function CatalogPage() {
       mainCategoryMap,
       mainCategorySortOrderMap,
       onDeleteCategory: (category) =>
-        setDeleteTarget({ type: "category", id: category.category_id, label: category.category_name }),
+        setDeleteTarget({ type: "category", id: category.scope_category_id, label: category.category_name }),
       onDeleteEquipmentType: (equipmentType) =>
         setDeleteTarget({
           type: "equipment-type",
@@ -625,7 +723,7 @@ export function CatalogPage() {
       onDeleteMainCategory: (mainCategory) =>
         setDeleteTarget({
           type: "main-category",
-          id: mainCategory.main_category_id,
+          id: mainCategory.scope_main_category_id,
           label: mainCategory.main_category_name,
         }),
       onDeleteTestType: (testType) =>
@@ -634,8 +732,8 @@ export function CatalogPage() {
         setModalError("");
         setCategoryEditor({
           mode: "edit",
-          id: category.category_id,
-          main_category_id: category.main_category_id || "",
+          id: category.scope_category_id,
+          main_category_id: category.main_category_id,
           sort_order: String(category.sort_order),
           category_name: category.category_name,
           description: category.description || "",
@@ -655,7 +753,7 @@ export function CatalogPage() {
         setModalError("");
         setMainCategoryEditor({
           mode: "edit",
-          id: mainCategory.main_category_id,
+          id: mainCategory.scope_main_category_id,
           sort_order: String(mainCategory.sort_order),
           main_category_name: mainCategory.main_category_name,
           description: mainCategory.description || "",
@@ -674,15 +772,19 @@ export function CatalogPage() {
     });
 
   const loading =
+    catalogScopesQuery.isLoading ||
+    (Boolean(catalogScopesQuery.data?.length) && !selectedScopeId) ||
     mainCategoriesQuery.isLoading ||
     categoriesQuery.isLoading ||
     testTypesQuery.isLoading ||
     equipmentTypesQuery.isLoading;
   const failed =
+    catalogScopesQuery.isError ||
     mainCategoriesQuery.isError ||
     categoriesQuery.isError ||
     testTypesQuery.isError ||
     equipmentTypesQuery.isError ||
+    !catalogScopesQuery.data ||
     !mainCategoriesQuery.data ||
     !categoriesQuery.data ||
     !testTypesQuery.data ||
@@ -697,6 +799,7 @@ export function CatalogPage() {
       <PageError
         description="The catalog workspace could not be loaded."
         onRetry={() => {
+          void catalogScopesQuery.refetch();
           void mainCategoriesQuery.refetch();
           void categoriesQuery.refetch();
           void testTypesQuery.refetch();
@@ -764,9 +867,24 @@ export function CatalogPage() {
     mutations.saveEquipmentTypeMutation.mutate(editor);
   };
 
+  const saveCatalogScope = (editor: NonNullable<CatalogScopeEditor>) => {
+    if (editor.scope_name.trim().length < 2) {
+      setModalError("Catalog scope name must be at least 2 characters.");
+      return;
+    }
+    setModalError("");
+    mutations.saveCatalogScopeMutation.mutate(editor);
+  };
+
+  const selectedScope =
+    catalogScopesQuery.data.find((scope) => scope.scope_id === selectedScopeId) ||
+    catalogScopesQuery.data[0];
+
   return (
     <CatalogView
       categories={categoriesQuery.data}
+      catalogScopeEditor={catalogScopeEditor}
+      catalogScopes={catalogScopesQuery.data}
       categoryColumns={categoryColumns}
       categoryEditor={categoryEditor}
       deleteTarget={deleteTarget}
@@ -779,6 +897,10 @@ export function CatalogPage() {
       mainCategoryOptions={mainCategoryOptions}
       modalError={modalError}
       mutations={mutations}
+      onCreateCatalogScope={() => {
+        setModalError("");
+        setCatalogScopeEditor({ mode: "create", scope_name: "", description: "" });
+      }}
       onCreateCategory={() => {
         setModalError("");
         setCategoryEditor({
@@ -822,65 +944,105 @@ export function CatalogPage() {
         });
       }}
       onDelete={() => deleteTarget && mutations.deleteMutation.mutate(deleteTarget)}
+      onDeleteCatalogScope={() =>
+        selectedScope &&
+        setDeleteTarget({
+          type: "catalog-scope",
+          id: selectedScope.scope_id,
+          label: selectedScope.scope_name,
+        })
+      }
       onDismissCategoryEditor={dismissCategoryEditor}
+      onDismissCatalogScopeEditor={dismissCatalogScopeEditor}
       onDismissDeleteTarget={dismissDeleteTarget}
       onDismissEquipmentTypeEditor={dismissEquipmentTypeEditor}
       onDismissMainCategoryEditor={dismissMainCategoryEditor}
       onDismissTestTypeEditor={dismissTestTypeEditor}
       onSaveCategory={saveCategory}
+      onSaveCatalogScope={saveCatalogScope}
       onSaveEquipmentType={saveEquipmentType}
       onSaveMainCategory={saveMainCategory}
       onSaveTestType={saveTestType}
-      setCategoryEditor={setCategoryEditor}
-      setEquipmentTypeEditor={setEquipmentTypeEditor}
-      setMainCategoryEditor={setMainCategoryEditor}
-      setTestTypeEditor={setTestTypeEditor}
+      onDuplicateCatalogScope={() => {
+        if (!selectedScope) {
+          return;
+        }
+        setModalError("");
+        setCatalogScopeEditor({
+          mode: "duplicate",
+          id: selectedScope.scope_id,
+          scope_name: `${selectedScope.scope_name} copy`,
+          description: selectedScope.description || "",
+        });
+      }}
+      onRenameCatalogScope={() => {
+        if (!selectedScope) {
+          return;
+        }
+        setModalError("");
+        setCatalogScopeEditor({
+          mode: "edit",
+          id: selectedScope.scope_id,
+          scope_name: selectedScope.scope_name,
+          description: selectedScope.description || "",
+        });
+      }}
+      onSelectCatalogScope={setSelectedScopeId}
       testTypeColumns={testTypeColumns}
       testTypeEditor={testTypeEditor}
       testTypes={testTypesQuery.data}
+      selectedScopeId={selectedScopeId}
     />
   );
 }
 
 type CatalogViewProps = {
-  categories: Category[];
-  categoryColumns: TableProps<Category>["columnDefinitions"];
+  categories: CatalogScopeCategory[];
+  catalogScopeEditor: CatalogScopeEditor;
+  catalogScopes: CatalogScope[];
+  categoryColumns: TableProps<CatalogScopeCategory>["columnDefinitions"];
   categoryEditor: CategoryEditor;
   deleteTarget: DeleteTarget;
   equipmentTypeColumns: TableProps<EquipmentType>["columnDefinitions"];
   equipmentTypeEditor: EquipmentTypeEditor;
   equipmentTypes: EquipmentType[];
-  mainCategories: MainCategory[];
-  mainCategoryColumns: TableProps<MainCategory>["columnDefinitions"];
+  mainCategories: CatalogScopeMainCategory[];
+  mainCategoryColumns: TableProps<CatalogScopeMainCategory>["columnDefinitions"];
   mainCategoryEditor: MainCategoryEditor;
   mainCategoryOptions: SelectProps.Option[];
   modalError: string;
   mutations: CatalogMutations;
+  onCreateCatalogScope: () => void;
   onCreateCategory: () => void;
   onCreateEquipmentType: () => void;
   onCreateMainCategory: () => void;
   onCreateTestType: () => void;
   onDelete: () => void;
+  onDeleteCatalogScope: () => void;
   onDismissCategoryEditor: () => void;
+  onDismissCatalogScopeEditor: () => void;
   onDismissDeleteTarget: () => void;
   onDismissEquipmentTypeEditor: () => void;
   onDismissMainCategoryEditor: () => void;
   onDismissTestTypeEditor: () => void;
   onSaveCategory: (editor: NonNullable<CategoryEditor>) => void;
+  onSaveCatalogScope: (editor: NonNullable<CatalogScopeEditor>) => void;
   onSaveEquipmentType: (editor: NonNullable<EquipmentTypeEditor>) => void;
   onSaveMainCategory: (editor: NonNullable<MainCategoryEditor>) => void;
   onSaveTestType: (editor: NonNullable<TestTypeEditor>) => void;
-  setCategoryEditor: Dispatch<SetStateAction<CategoryEditor>>;
-  setEquipmentTypeEditor: Dispatch<SetStateAction<EquipmentTypeEditor>>;
-  setMainCategoryEditor: Dispatch<SetStateAction<MainCategoryEditor>>;
-  setTestTypeEditor: Dispatch<SetStateAction<TestTypeEditor>>;
+  onDuplicateCatalogScope: () => void;
+  onRenameCatalogScope: () => void;
+  onSelectCatalogScope: (scopeId: string) => void;
   testTypeColumns: TableProps<TestType>["columnDefinitions"];
   testTypeEditor: TestTypeEditor;
   testTypes: TestType[];
+  selectedScopeId: string;
 };
 
 function CatalogView({
   categories,
+  catalogScopeEditor,
+  catalogScopes,
   categoryColumns,
   categoryEditor,
   deleteTarget,
@@ -893,27 +1055,31 @@ function CatalogView({
   mainCategoryOptions,
   modalError,
   mutations,
+  onCreateCatalogScope,
   onCreateCategory,
   onCreateEquipmentType,
   onCreateMainCategory,
   onCreateTestType,
   onDelete,
+  onDeleteCatalogScope,
   onDismissCategoryEditor,
+  onDismissCatalogScopeEditor,
   onDismissDeleteTarget,
   onDismissEquipmentTypeEditor,
   onDismissMainCategoryEditor,
   onDismissTestTypeEditor,
   onSaveCategory,
+  onSaveCatalogScope,
   onSaveEquipmentType,
   onSaveMainCategory,
   onSaveTestType,
-  setCategoryEditor,
-  setEquipmentTypeEditor,
-  setMainCategoryEditor,
-  setTestTypeEditor,
+  onDuplicateCatalogScope,
+  onRenameCatalogScope,
+  onSelectCatalogScope,
   testTypeColumns,
   testTypeEditor,
   testTypes,
+  selectedScopeId,
 }: CatalogViewProps) {
   const pageHeader = useMemo(
     () => (
@@ -932,6 +1098,16 @@ function CatalogView({
     <>
       <ContentLayout header={pageHeader}>
         <SpaceBetween direction="vertical" size="l">
+          <CatalogScopeSelector
+            catalogScopes={catalogScopes}
+            onCreate={onCreateCatalogScope}
+            onDelete={onDeleteCatalogScope}
+            onDuplicate={onDuplicateCatalogScope}
+            onRename={onRenameCatalogScope}
+            onSelect={onSelectCatalogScope}
+            selectedScopeId={selectedScopeId}
+          />
+
           <CatalogSummary
             categories={categories}
             equipmentTypes={equipmentTypes}
@@ -947,7 +1123,7 @@ function CatalogView({
             items={mainCategories}
             onAction={onCreateMainCategory}
             title="Main categories"
-            trackBy="main_category_id"
+            trackBy="scope_main_category_id"
           />
 
           <CategoriesTableSection
@@ -985,10 +1161,18 @@ function CatalogView({
         editor={mainCategoryEditor}
         errorMessage={modalError}
         loading={mutations.saveMainCategoryMutation.isPending}
-        onChange={setMainCategoryEditor}
         onDismiss={onDismissMainCategoryEditor}
         onSubmit={onSaveMainCategory}
         visible={Boolean(mainCategoryEditor)}
+      />
+
+      <CatalogScopeEditorModal
+        editor={catalogScopeEditor}
+        errorMessage={modalError}
+        loading={mutations.saveCatalogScopeMutation.isPending}
+        onDismiss={onDismissCatalogScopeEditor}
+        onSubmit={onSaveCatalogScope}
+        visible={Boolean(catalogScopeEditor)}
       />
 
       <CategoryEditorModal
@@ -997,7 +1181,6 @@ function CatalogView({
         errorMessage={modalError}
         loading={mutations.saveCategoryMutation.isPending}
         mainCategoryOptions={mainCategoryOptions}
-        onChange={setCategoryEditor}
         onDismiss={onDismissCategoryEditor}
         onSubmit={onSaveCategory}
         visible={Boolean(categoryEditor)}
@@ -1007,7 +1190,6 @@ function CatalogView({
         editor={testTypeEditor}
         errorMessage={modalError}
         loading={mutations.saveTestTypeMutation.isPending}
-        onChange={setTestTypeEditor}
         onDismiss={onDismissTestTypeEditor}
         onSubmit={onSaveTestType}
         visible={Boolean(testTypeEditor)}
@@ -1017,7 +1199,6 @@ function CatalogView({
         editor={equipmentTypeEditor}
         errorMessage={modalError}
         loading={mutations.saveEquipmentTypeMutation.isPending}
-        onChange={setEquipmentTypeEditor}
         onDismiss={onDismissEquipmentTypeEditor}
         onSubmit={onSaveEquipmentType}
         visible={Boolean(equipmentTypeEditor)}
@@ -1034,10 +1215,76 @@ function CatalogView({
   );
 }
 
+type CatalogScopeSelectorProps = {
+  catalogScopes: CatalogScope[];
+  onCreate: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  onRename: () => void;
+  onSelect: (scopeId: string) => void;
+  selectedScopeId: string;
+};
+
+function CatalogScopeSelector({
+  catalogScopes,
+  onCreate,
+  onDelete,
+  onDuplicate,
+  onRename,
+  onSelect,
+  selectedScopeId,
+}: CatalogScopeSelectorProps) {
+  const options = useMemo<SelectProps.Option[]>(
+    () =>
+      catalogScopes.map((scope) => ({
+        label: scope.scope_name,
+        value: scope.scope_id,
+        description: scope.description || scope.display_id,
+      })),
+    [catalogScopes]
+  );
+  const selectedOption = options.find((option) => option.value === selectedScopeId) ?? null;
+  const actions = useMemo(
+    () => (
+      <SpaceBetween direction="horizontal" size="xs">
+        <Button onClick={onRename}>Rename</Button>
+        <Button onClick={onDuplicate}>Duplicate</Button>
+        <Button onClick={onDelete}>Delete</Button>
+        <Button variant="primary" onClick={onCreate}>
+          Create scope
+        </Button>
+      </SpaceBetween>
+    ),
+    [onCreate, onDelete, onDuplicate, onRename]
+  );
+
+  return (
+    <Container
+      header={
+        <Header
+          actions={actions}
+          description="Choose the catalog scope whose main categories and categories you want to manage."
+          variant="h2"
+        >
+          Catalog scope
+        </Header>
+      }
+    >
+      <FormField label="Selected scope">
+        <Select
+          options={options}
+          selectedOption={selectedOption}
+          onChange={({ detail }) => onSelect(detail.selectedOption.value || "")}
+        />
+      </FormField>
+    </Container>
+  );
+}
+
 type CatalogSummaryProps = {
-  categories: Category[];
+  categories: CatalogScopeCategory[];
   equipmentTypes: EquipmentType[];
-  mainCategories: MainCategory[];
+  mainCategories: CatalogScopeMainCategory[];
   testTypes: TestType[];
 };
 
@@ -1173,8 +1420,8 @@ function CatalogTableHeader({
 }
 
 type CategoriesTableSectionProps = {
-  categories: Category[];
-  columnDefinitions: TableProps<Category>["columnDefinitions"];
+  categories: CatalogScopeCategory[];
+  columnDefinitions: TableProps<CatalogScopeCategory>["columnDefinitions"];
   hasMainCategories: boolean;
   onCreateCategory: () => void;
 };
@@ -1195,7 +1442,7 @@ function CategoriesTableSection({
       items={categories}
       onAction={onCreateCategory}
       title="Categories"
-      trackBy="category_id"
+      trackBy="scope_category_id"
     />
   );
 }
@@ -1204,37 +1451,117 @@ type MainCategoryEditorModalProps = {
   editor: MainCategoryEditor;
   errorMessage: string;
   loading: boolean;
-  onChange: Dispatch<SetStateAction<MainCategoryEditor>>;
   onDismiss: () => void;
   onSubmit: (editor: NonNullable<MainCategoryEditor>) => void;
   visible: boolean;
 };
 
-function MainCategoryEditorModal({
+type CatalogScopeEditorModalProps = {
+  editor: CatalogScopeEditor;
+  errorMessage: string;
+  loading: boolean;
+  onDismiss: () => void;
+  onSubmit: (editor: NonNullable<CatalogScopeEditor>) => void;
+  visible: boolean;
+};
+
+function CatalogScopeEditorModal({
   editor,
   errorMessage,
   loading,
-  onChange,
   onDismiss,
   onSubmit,
   visible,
-}: MainCategoryEditorModalProps) {
+}: CatalogScopeEditorModalProps) {
+  const [draft, setDraft] = useState<CatalogScopeEditor>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
+
   const footer = useMemo(
     () => (
       <SpaceBetween direction="horizontal" size="xs">
         <Button onClick={onDismiss}>Cancel</Button>
-        <Button loading={loading} variant="primary" onClick={() => editor && onSubmit(editor)}>
-          {editor?.mode === "edit" ? "Save changes" : "Create main category"}
+        <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
+          {draft?.mode === "edit"
+            ? "Save changes"
+            : draft?.mode === "duplicate"
+              ? "Duplicate scope"
+              : "Create scope"}
         </Button>
       </SpaceBetween>
     ),
-    [editor, loading, onDismiss, onSubmit]
+    [draft, loading, onDismiss, onSubmit]
   );
 
   return (
     <Modal
       visible={visible}
-      header={editor?.mode === "edit" ? "Edit main category" : "Create main category"}
+      header={
+        draft?.mode === "edit"
+          ? "Rename catalog scope"
+          : draft?.mode === "duplicate"
+            ? "Duplicate catalog scope"
+            : "Create catalog scope"
+      }
+      onDismiss={onDismiss}
+      footer={footer}
+    >
+      <SpaceBetween direction="vertical" size="l">
+        {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
+        <FormField label="Catalog scope name">
+          <Input
+            value={draft?.scope_name || ""}
+            onChange={({ detail }) =>
+              setDraft((current) => current && { ...current, scope_name: detail.value })
+            }
+          />
+        </FormField>
+        <FormField label="Description">
+          <Textarea
+            rows={5}
+            value={draft?.description || ""}
+            onChange={({ detail }) =>
+              setDraft((current) => current && { ...current, description: detail.value })
+            }
+          />
+        </FormField>
+      </SpaceBetween>
+    </Modal>
+  );
+}
+
+function MainCategoryEditorModal({
+  editor,
+  errorMessage,
+  loading,
+  onDismiss,
+  onSubmit,
+  visible,
+}: MainCategoryEditorModalProps) {
+  const [draft, setDraft] = useState<MainCategoryEditor>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
+
+  const footer = useMemo(
+    () => (
+      <SpaceBetween direction="horizontal" size="xs">
+        <Button onClick={onDismiss}>Cancel</Button>
+        <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
+          {draft?.mode === "edit" ? "Save changes" : "Create main category"}
+        </Button>
+      </SpaceBetween>
+    ),
+    [draft, loading, onDismiss, onSubmit]
+  );
+
+  return (
+    <Modal
+      visible={visible}
+      header={draft?.mode === "edit" ? "Edit main category" : "Create main category"}
       onDismiss={onDismiss}
       footer={footer}
     >
@@ -1242,27 +1569,27 @@ function MainCategoryEditorModal({
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="Main category name">
           <Input
-            value={editor?.main_category_name || ""}
+            value={draft?.main_category_name || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, main_category_name: detail.value })
+              setDraft((current) => current && { ...current, main_category_name: detail.value })
             }
           />
         </FormField>
         <FormField label="Main category order">
           <Input
             inputMode="numeric"
-            value={editor?.sort_order || ""}
+            value={draft?.sort_order || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, sort_order: detail.value })
+              setDraft((current) => current && { ...current, sort_order: detail.value })
             }
           />
         </FormField>
         <FormField label="Description">
           <Textarea
             rows={6}
-            value={editor?.description || ""}
+            value={draft?.description || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, description: detail.value })
+              setDraft((current) => current && { ...current, description: detail.value })
             }
           />
         </FormField>
@@ -1272,12 +1599,11 @@ function MainCategoryEditorModal({
 }
 
 type CategoryEditorModalProps = {
-  categories: Category[];
+  categories: CatalogScopeCategory[];
   editor: CategoryEditor;
   errorMessage: string;
   loading: boolean;
   mainCategoryOptions: SelectProps.Option[];
-  onChange: Dispatch<SetStateAction<CategoryEditor>>;
   onDismiss: () => void;
   onSubmit: (editor: NonNullable<CategoryEditor>) => void;
   visible: boolean;
@@ -1289,29 +1615,34 @@ function CategoryEditorModal({
   errorMessage,
   loading,
   mainCategoryOptions,
-  onChange,
   onDismiss,
   onSubmit,
   visible,
 }: CategoryEditorModalProps) {
+  const [draft, setDraft] = useState<CategoryEditor>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
+
   const selectedMainCategoryOption =
-    mainCategoryOptions.find((option) => option.value === editor?.main_category_id) ?? null;
+    mainCategoryOptions.find((option) => option.value === draft?.main_category_id) ?? null;
   const footer = useMemo(
     () => (
       <SpaceBetween direction="horizontal" size="xs">
         <Button onClick={onDismiss}>Cancel</Button>
-        <Button loading={loading} variant="primary" onClick={() => editor && onSubmit(editor)}>
-          {editor?.mode === "edit" ? "Save changes" : "Create category"}
+        <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
+          {draft?.mode === "edit" ? "Save changes" : "Create category"}
         </Button>
       </SpaceBetween>
     ),
-    [editor, loading, onDismiss, onSubmit]
+    [draft, loading, onDismiss, onSubmit]
   );
 
   return (
     <Modal
       visible={visible}
-      header={editor?.mode === "edit" ? "Edit category" : "Create category"}
+      header={draft?.mode === "edit" ? "Edit category" : "Create category"}
       onDismiss={onDismiss}
       footer={footer}
     >
@@ -1324,7 +1655,7 @@ function CategoryEditorModal({
               placeholder="Select main category"
               selectedOption={selectedMainCategoryOption}
               onChange={({ detail }) =>
-                onChange((current) =>
+                setDraft((current) =>
                   current
                     ? {
                         ...current,
@@ -1348,26 +1679,26 @@ function CategoryEditorModal({
         <FormField label="Category order">
           <Input
             inputMode="numeric"
-            value={editor?.sort_order || ""}
+            value={draft?.sort_order || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, sort_order: detail.value })
+              setDraft((current) => current && { ...current, sort_order: detail.value })
             }
           />
         </FormField>
         <FormField label="Category name">
           <Input
-            value={editor?.category_name || ""}
+            value={draft?.category_name || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, category_name: detail.value })
+              setDraft((current) => current && { ...current, category_name: detail.value })
             }
           />
         </FormField>
         <FormField label="Description">
           <Textarea
             rows={6}
-            value={editor?.description || ""}
+            value={draft?.description || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, description: detail.value })
+              setDraft((current) => current && { ...current, description: detail.value })
             }
           />
         </FormField>
@@ -1380,7 +1711,6 @@ type TestTypeEditorModalProps = {
   editor: TestTypeEditor;
   errorMessage: string;
   loading: boolean;
-  onChange: Dispatch<SetStateAction<TestTypeEditor>>;
   onDismiss: () => void;
   onSubmit: (editor: NonNullable<TestTypeEditor>) => void;
   visible: boolean;
@@ -1390,27 +1720,32 @@ function TestTypeEditorModal({
   editor,
   errorMessage,
   loading,
-  onChange,
   onDismiss,
   onSubmit,
   visible,
 }: TestTypeEditorModalProps) {
+  const [draft, setDraft] = useState<TestTypeEditor>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
+
   const footer = useMemo(
     () => (
       <SpaceBetween direction="horizontal" size="xs">
         <Button onClick={onDismiss}>Cancel</Button>
-        <Button loading={loading} variant="primary" onClick={() => editor && onSubmit(editor)}>
-          {editor?.mode === "edit" ? "Save changes" : "Create test type"}
+        <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
+          {draft?.mode === "edit" ? "Save changes" : "Create test type"}
         </Button>
       </SpaceBetween>
     ),
-    [editor, loading, onDismiss, onSubmit]
+    [draft, loading, onDismiss, onSubmit]
   );
 
   return (
     <Modal
       visible={visible}
-      header={editor?.mode === "edit" ? "Edit test type" : "Create test type"}
+      header={draft?.mode === "edit" ? "Edit test type" : "Create test type"}
       onDismiss={onDismiss}
       footer={footer}
     >
@@ -1418,27 +1753,27 @@ function TestTypeEditorModal({
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="Test type name">
           <Input
-            value={editor?.test_name || ""}
+            value={draft?.test_name || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, test_name: detail.value })
+              setDraft((current) => current && { ...current, test_name: detail.value })
             }
           />
         </FormField>
         <FormField label="Validity duration (months)">
           <Input
             inputMode="numeric"
-            value={editor?.validity_duration || ""}
+            value={draft?.validity_duration || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, validity_duration: detail.value })
+              setDraft((current) => current && { ...current, validity_duration: detail.value })
             }
           />
         </FormField>
         <FormField label="Description">
           <Textarea
             rows={6}
-            value={editor?.description || ""}
+            value={draft?.description || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, description: detail.value })
+              setDraft((current) => current && { ...current, description: detail.value })
             }
           />
         </FormField>
@@ -1451,7 +1786,6 @@ type EquipmentTypeEditorModalProps = {
   editor: EquipmentTypeEditor;
   errorMessage: string;
   loading: boolean;
-  onChange: Dispatch<SetStateAction<EquipmentTypeEditor>>;
   onDismiss: () => void;
   onSubmit: (editor: NonNullable<EquipmentTypeEditor>) => void;
   visible: boolean;
@@ -1461,27 +1795,32 @@ function EquipmentTypeEditorModal({
   editor,
   errorMessage,
   loading,
-  onChange,
   onDismiss,
   onSubmit,
   visible,
 }: EquipmentTypeEditorModalProps) {
+  const [draft, setDraft] = useState<EquipmentTypeEditor>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
+
   const footer = useMemo(
     () => (
       <SpaceBetween direction="horizontal" size="xs">
         <Button onClick={onDismiss}>Cancel</Button>
-        <Button loading={loading} variant="primary" onClick={() => editor && onSubmit(editor)}>
-          {editor?.mode === "edit" ? "Save changes" : "Create equipment type"}
+        <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
+          {draft?.mode === "edit" ? "Save changes" : "Create equipment type"}
         </Button>
       </SpaceBetween>
     ),
-    [editor, loading, onDismiss, onSubmit]
+    [draft, loading, onDismiss, onSubmit]
   );
 
   return (
     <Modal
       visible={visible}
-      header={editor?.mode === "edit" ? "Edit equipment type" : "Create equipment type"}
+      header={draft?.mode === "edit" ? "Edit equipment type" : "Create equipment type"}
       onDismiss={onDismiss}
       footer={footer}
     >
@@ -1489,27 +1828,27 @@ function EquipmentTypeEditorModal({
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="Equipment type name">
           <Input
-            value={editor?.equipment_type_name || ""}
+            value={draft?.equipment_type_name || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, equipment_type_name: detail.value })
+              setDraft((current) => current && { ...current, equipment_type_name: detail.value })
             }
           />
         </FormField>
         <FormField label="Equipment type order">
           <Input
             inputMode="numeric"
-            value={editor?.sort_order || ""}
+            value={draft?.sort_order || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, sort_order: detail.value })
+              setDraft((current) => current && { ...current, sort_order: detail.value })
             }
           />
         </FormField>
         <FormField label="Description">
           <Textarea
             rows={6}
-            value={editor?.description || ""}
+            value={draft?.description || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, description: detail.value })
+              setDraft((current) => current && { ...current, description: detail.value })
             }
           />
         </FormField>

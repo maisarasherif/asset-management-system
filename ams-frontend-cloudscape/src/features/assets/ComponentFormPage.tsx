@@ -9,31 +9,55 @@ import {
   FormField,
   Header,
   Input,
-  Select,
   SpaceBetween,
   Textarea,
   type SelectProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createComponent,
   getAsset,
   getComponent,
-  listAllCategories,
-  listAllMainCategories,
+  listAllCatalogScopeCategories,
+  listCatalogScopes,
   updateComponent,
 } from "../../lib/api/ams";
+import { Select } from "../../components/shared/OptimizedSelect";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { Asset, ComponentInput, SafetyCritical } from "../../types/ams";
+import type {
+  Asset,
+  CatalogScope,
+  CatalogScopeCategory,
+  ComponentInput,
+  SafetyCritical,
+} from "../../types/ams";
 import { humanizeEnum } from "../../utils/format";
 
 const SAFETY_OPTIONS: SelectProps.Option[] = [
   { label: "Yes", value: "YES" },
   { label: "No", value: "NO" },
 ];
+
+type CategorySelectOption = SelectProps.Option & { categoryId?: string };
+
+function findCategoryScopeId(
+  categoriesByScope: CatalogScopeCategory[][],
+  scopeCategoryId?: string
+) {
+  if (!scopeCategoryId) {
+    return "";
+  }
+  for (const categories of categoriesByScope) {
+    const match = categories.find((category) => category.scope_category_id === scopeCategoryId);
+    if (match) {
+      return match.scope_id;
+    }
+  }
+  return "";
+}
 
 export function ComponentFormPage() {
   const navigate = useNavigate();
@@ -43,6 +67,7 @@ export function ComponentFormPage() {
   const isEditing = Boolean(componentId);
   const [errorMessage, setErrorMessage] = useState("");
   const [formDraft, setForm] = useState<Partial<ComponentInput>>({});
+  const [selectedScopeId, setSelectedScopeId] = useState("");
 
   const assetQuery = useQuery({
     queryKey: ["asset", assetId],
@@ -50,14 +75,26 @@ export function ComponentFormPage() {
     enabled: Boolean(assetId),
   });
 
-  const categoriesQuery = useQuery({
-    queryKey: ["categories", "all"],
-    queryFn: listAllCategories,
+  const catalogScopesQuery = useQuery({
+    queryKey: ["catalog-scopes"],
+    queryFn: listCatalogScopes,
   });
 
-  const mainCategoriesQuery = useQuery({
-    queryKey: ["main-categories", "all"],
-    queryFn: listAllMainCategories,
+  const categoriesQuery = useQuery({
+    queryKey: ["catalog-scope-categories", selectedScopeId, "component-form"],
+    queryFn: () => listAllCatalogScopeCategories(selectedScopeId),
+    enabled: Boolean(selectedScopeId),
+  });
+
+  const allScopeCategoriesQuery = useQuery({
+    queryKey: ["catalog-scope-categories", "component-form", "all-scopes"],
+    queryFn: () =>
+      Promise.all(
+        (catalogScopesQuery.data || []).map((scope) =>
+          listAllCatalogScopeCategories(scope.scope_id)
+        )
+      ),
+    enabled: isEditing && Boolean(catalogScopesQuery.data?.length),
   });
 
   const componentQuery = useQuery({
@@ -70,6 +107,7 @@ export function ComponentFormPage() {
     ? {
       asset_id: componentQuery.data.asset_id,
       category_id: componentQuery.data.category_id || "",
+      scope_category_id: componentQuery.data.scope_category_id || undefined,
       name: componentQuery.data.name,
       serial_number: componentQuery.data.serial_number || "",
       manufacturer: componentQuery.data.manufacturer || "",
@@ -101,25 +139,47 @@ export function ComponentFormPage() {
     };
   const form: ComponentInput = { ...baseForm, ...formDraft };
 
-  const categoryOptions = useMemo<SelectProps.Option[]>(() => {
-    const mainCategoryMap = new Map(
-      (mainCategoriesQuery.data || []).map((mainCategory) => [
-        mainCategory.main_category_id,
-        mainCategory.main_category_name,
-      ])
-    );
+  useEffect(() => {
+    if (!selectedScopeId && catalogScopesQuery.data?.[0]) {
+      setSelectedScopeId(catalogScopesQuery.data[0].scope_id);
+    }
+  }, [catalogScopesQuery.data, selectedScopeId]);
 
+  useEffect(() => {
+    const scopeId = findCategoryScopeId(
+      allScopeCategoriesQuery.data || [],
+      componentQuery.data?.scope_category_id ?? undefined
+    );
+    if (scopeId && scopeId !== selectedScopeId) {
+      setSelectedScopeId(scopeId);
+    }
+  }, [allScopeCategoriesQuery.data, componentQuery.data?.scope_category_id, selectedScopeId]);
+
+  const scopeOptions = useMemo<SelectProps.Option[]>(
+    () =>
+      (catalogScopesQuery.data || []).map((scope: CatalogScope) => ({
+        label: scope.scope_name,
+        value: scope.scope_id,
+        description: scope.description || scope.display_id,
+      })),
+    [catalogScopesQuery.data]
+  );
+  const selectedScopeOption =
+    scopeOptions.find((option) => option.value === selectedScopeId) ?? null;
+
+  const categoryOptions = useMemo<CategorySelectOption[]>(() => {
     return (categoriesQuery.data || []).map((category) => ({
-      label: category.category_name,
-      description: category.main_category_id
-        ? mainCategoryMap.get(category.main_category_id) || category.display_id
-        : category.display_id,
-      value: category.category_id,
+      label: `${category.main_category_name} > ${category.category_name}`,
+      description: category.category_display_id,
+      value: category.scope_category_id,
+      categoryId: category.category_id,
     }));
-  }, [categoriesQuery.data, mainCategoriesQuery.data]);
+  }, [categoriesQuery.data]);
 
   const selectedCategoryOption =
-    categoryOptions.find((option) => option.value === form.category_id) ?? null;
+    categoryOptions.find(
+      (option) => option.value === form.scope_category_id || option.categoryId === form.category_id
+    ) ?? null;
   const selectedSafetyOption =
     SAFETY_OPTIONS.find((option) => option.value === form.safety_critical) ?? null;
 
@@ -168,21 +228,31 @@ export function ComponentFormPage() {
 
   if (
     assetQuery.isLoading ||
+    catalogScopesQuery.isLoading ||
+    (isEditing && allScopeCategoriesQuery.isLoading) ||
+    (Boolean(catalogScopesQuery.data?.length) && !selectedScopeId) ||
     categoriesQuery.isLoading ||
-    mainCategoriesQuery.isLoading ||
     (isEditing && componentQuery.isLoading)
   ) {
     return <PageLoading>{"Loading component form data\u2026"}</PageLoading>;
   }
 
-  if (assetQuery.isError || categoriesQuery.isError || mainCategoriesQuery.isError) {
+  if (
+    assetQuery.isError ||
+    catalogScopesQuery.isError ||
+    categoriesQuery.isError ||
+    (isEditing && allScopeCategoriesQuery.isError)
+  ) {
     return (
       <PageError
         description="The component form could not load its asset or category references."
         onRetry={() => {
           void assetQuery.refetch();
+          void catalogScopesQuery.refetch();
           void categoriesQuery.refetch();
-          void mainCategoriesQuery.refetch();
+          if (isEditing) {
+            void allScopeCategoriesQuery.refetch();
+          }
         }}
       />
     );
@@ -230,6 +300,11 @@ export function ComponentFormPage() {
     setForm((current) => ({ ...current, ...patch }));
   };
 
+  const updateScope = (scopeId: string) => {
+    setSelectedScopeId(scopeId);
+    setForm((current) => ({ ...current, category_id: "", scope_category_id: "" }));
+  };
+
   return renderComponentFormPage({
     asset: assetQuery.data,
     assetId,
@@ -239,26 +314,32 @@ export function ComponentFormPage() {
     isEditing,
     onCancel: () => navigate(`/assets/${assetId}`),
     onFormChange: updateForm,
+    onScopeChange: updateScope,
     onSubmit: handleSubmit,
     savePending: saveMutation.isPending,
     selectedCategoryOption,
     selectedSafetyOption,
+    selectedScopeOption,
+    scopeOptions,
   });
 }
 
 interface ComponentFormPageViewProps {
   asset: Asset | undefined;
   assetId: string;
-  categoryOptions: SelectProps.Option[];
+  categoryOptions: CategorySelectOption[];
   errorMessage: string;
   form: ComponentInput;
   isEditing: boolean;
   onCancel: () => void;
   onFormChange: (patch: Partial<ComponentInput>) => void;
+  onScopeChange: (scopeId: string) => void;
   onSubmit: () => void;
   savePending: boolean;
-  selectedCategoryOption: SelectProps.Option | null;
+  selectedCategoryOption: CategorySelectOption | null;
   selectedSafetyOption: SelectProps.Option | null;
+  selectedScopeOption: SelectProps.Option | null;
+  scopeOptions: SelectProps.Option[];
 }
 
 function renderComponentFormPage({
@@ -269,10 +350,13 @@ function renderComponentFormPage({
   isEditing,
   onCancel,
   onFormChange,
+  onScopeChange,
   onSubmit,
   savePending,
   selectedCategoryOption,
   selectedSafetyOption,
+  selectedScopeOption,
+  scopeOptions,
 }: ComponentFormPageViewProps) {
   return (
     <ContentLayout
@@ -306,16 +390,30 @@ function renderComponentFormPage({
               </FormField>
 
               <ColumnLayout columns={2}>
+                <FormField label="Catalog scope">
+                  <Select
+                    options={scopeOptions}
+                    placeholder="Select a catalog scope"
+                    selectedOption={selectedScopeOption}
+                    onChange={({ detail }) => onScopeChange(detail.selectedOption.value || "")}
+                  />
+                </FormField>
                 <FormField label="Category">
                   <Select
+                    filteringType="auto"
+                    filteringAriaLabel="Filter categories"
+                    filteringPlaceholder="Find category"
                     options={categoryOptions}
                     placeholder="Select a category"
                     selectedOption={selectedCategoryOption}
-                    onChange={({ detail }) =>
-                      onFormChange({
-                        category_id: detail.selectedOption.value ?? "",
-                      })
-                    }
+                    virtualScroll
+                    onChange={({ detail }) => {
+                      const selectedOption = detail.selectedOption as CategorySelectOption;
+                      return onFormChange({
+                        category_id: String(selectedOption.categoryId || ""),
+                        scope_category_id: selectedOption.value ?? "",
+                      });
+                    }}
                   />
                 </FormField>
                 <FormField label="Safety critical">

@@ -8,6 +8,12 @@ import type {
   AssetTemplateInput,
   AdminUpdateUserPasswordInput,
   AssetTemplate,
+  CatalogScope,
+  CatalogScopeInput,
+  CatalogScopeCategory,
+  CatalogScopeCategoryInput,
+  CatalogScopeMainCategory,
+  CatalogScopeMainCategoryInput,
   CategoryInput,
   Category,
   Certificate,
@@ -65,6 +71,10 @@ function normalizeCollection<T>(data: T[] | null | undefined): T[] {
 
   return data.filter((item): item is T => item != null);
 }
+
+type TemplateConfigurationComponentApi = Omit<TemplateConfigurationComponent, "tests"> & {
+  tests?: TemplateConfigurationComponent["tests"] | null;
+};
 
 async function fetchAllPages<T>(
   loader: (page: number) => Promise<PaginatedResponse<T>>
@@ -402,6 +412,110 @@ export function listAllMainCategories() {
   return fetchAllPages((page) => listMainCategories(page));
 }
 
+export function listCatalogScopes() {
+  return apiRequest<CatalogScope[]>("/v1/catalog-scopes");
+}
+
+export function getDefaultCatalogScope() {
+  return apiRequest<CatalogScope>("/v1/catalog-scopes/default");
+}
+
+export function createCatalogScope(payload: CatalogScopeInput) {
+  return apiRequest<CatalogScope>("/v1/catalog-scope", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCatalogScope(scopeId: string, payload: CatalogScopeInput) {
+  return apiRequest<MessageResponse>(`/v1/catalog-scope/${scopeId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function duplicateCatalogScope(scopeId: string, payload: CatalogScopeInput) {
+  return apiRequest<CatalogScope>(`/v1/catalog-scope/${scopeId}/duplicate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteCatalogScope(scopeId: string) {
+  return apiRequest<MessageResponse>(`/v1/catalog-scope/${scopeId}`, {
+    method: "DELETE",
+  });
+}
+
+export function listCatalogScopeMainCategories(scopeId: string, page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<CatalogScopeMainCategory>>(
+    `/v1/catalog-scope/${scopeId}/main-categories?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllCatalogScopeMainCategories(scopeId: string) {
+  return fetchAllPages((page) => listCatalogScopeMainCategories(scopeId, page));
+}
+
+export function createCatalogScopeMainCategory(
+  scopeId: string,
+  payload: CatalogScopeMainCategoryInput
+) {
+  return apiRequest<CatalogScopeMainCategory>(`/v1/catalog-scope/${scopeId}/main-category`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCatalogScopeMainCategory(
+  scopeMainCategoryId: string,
+  payload: CatalogScopeMainCategoryInput
+) {
+  return apiRequest<MessageResponse>(`/v1/catalog-scope-main-category/${scopeMainCategoryId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteCatalogScopeMainCategory(scopeMainCategoryId: string) {
+  return apiRequest<MessageResponse>(`/v1/catalog-scope-main-category/${scopeMainCategoryId}`, {
+    method: "DELETE",
+  });
+}
+
+export function listCatalogScopeCategories(scopeId: string, page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<CatalogScopeCategory>>(
+    `/v1/catalog-scope/${scopeId}/categories?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllCatalogScopeCategories(scopeId: string) {
+  return fetchAllPages((page) => listCatalogScopeCategories(scopeId, page));
+}
+
+export function createCatalogScopeCategory(scopeId: string, payload: CatalogScopeCategoryInput) {
+  return apiRequest<CatalogScopeCategory>(`/v1/catalog-scope/${scopeId}/category`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCatalogScopeCategory(
+  scopeCategoryId: string,
+  payload: CatalogScopeCategoryInput
+) {
+  return apiRequest<MessageResponse>(`/v1/catalog-scope-category/${scopeCategoryId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteCatalogScopeCategory(scopeCategoryId: string) {
+  return apiRequest<MessageResponse>(`/v1/catalog-scope-category/${scopeCategoryId}`, {
+    method: "DELETE",
+  });
+}
+
 export function createMainCategory(payload: MainCategoryInput) {
   return apiRequest<MainCategory>("/v1/main-category", {
     method: "POST",
@@ -563,9 +677,14 @@ export function deleteTemplateComponentTest(templateComponentTestId: string) {
 export async function getTemplateConfiguration(
   templateId: string
 ): Promise<TemplateConfigurationComponent[]> {
-  return normalizeCollection(
-    await apiRequest<TemplateConfigurationComponent[]>(`/v1/template/${templateId}/configuration`)
+  const components = normalizeCollection(
+    await apiRequest<TemplateConfigurationComponentApi[]>(`/v1/template/${templateId}/configuration`)
   );
+
+  return components.map((component) => ({
+    ...component,
+    tests: component.tests ?? [],
+  }));
 }
 
 export async function getTemplatePreview(templateId: string) {
@@ -574,10 +693,10 @@ export async function getTemplatePreview(templateId: string) {
   return {
     components,
     totalComponents: components.length,
-    totalTests: components.reduce((count, component) => count + component.tests.length, 0),
+    totalTests: components.reduce((count, component) => count + (component.tests ?? []).length, 0),
     testsByComponent: components.map((component) => ({
       componentId: component.template_component_id,
-      count: component.tests.length,
+      count: (component.tests ?? []).length,
     })),
   };
 }

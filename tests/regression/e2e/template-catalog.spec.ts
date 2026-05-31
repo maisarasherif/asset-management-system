@@ -108,6 +108,44 @@ async function cleanupByName(
     await deleteIfPresent(request, token, `/test-type/${testType.test_id}`);
   }
 
+  const scopesResponse = await request.get(`${API_BASE_URL}/catalog-scopes`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (scopesResponse.ok()) {
+    const scopes = (await scopesResponse.json()) as Array<{ scope_id: string }>;
+    for (const scope of scopes) {
+      const scopeCategories = await getPaginated<{
+        scope_category_id: string;
+        category_name: string;
+      }>(request, token, `/catalog-scope/${scope.scope_id}/categories?page=1&limit=200`);
+      const scopeCategory = scopeCategories.find(
+        (item) => item.category_name === names.categoryName
+      );
+      if (scopeCategory) {
+        await deleteIfPresent(
+          request,
+          token,
+          `/catalog-scope-category/${scopeCategory.scope_category_id}`
+        );
+      }
+
+      const scopeMainCategories = await getPaginated<{
+        scope_main_category_id: string;
+        main_category_name: string;
+      }>(request, token, `/catalog-scope/${scope.scope_id}/main-categories?page=1&limit=200`);
+      const scopeMainCategory = scopeMainCategories.find(
+        (item) => item.main_category_name === names.mainCategoryName
+      );
+      if (scopeMainCategory) {
+        await deleteIfPresent(
+          request,
+          token,
+          `/catalog-scope-main-category/${scopeMainCategory.scope_main_category_id}`
+        );
+      }
+    }
+  }
+
   const categories = await getPaginated<{ category_id: string; category_name: string }>(
     request,
     token,
@@ -239,7 +277,7 @@ test.describe("template and catalog browser flow", () => {
         page.getByRole("heading", { name: new RegExp(`Configure ${escapeRegExp(names.templateName)}`) })
       ).toBeVisible();
 
-      await page.getByRole("button", { name: "Add first component" }).click();
+      await page.getByRole("button", { name: "Add component" }).click();
 
       const componentDialog = page.getByRole("dialog", { name: "Add template component" });
       await expect(componentDialog).toBeVisible();
@@ -248,9 +286,13 @@ test.describe("template and catalog browser flow", () => {
         .locator("textarea")
         .first()
         .fill("Configured by Playwright to verify component setup.");
-      await selectCloudscapeOption(page, "template-component-category", names.categoryName);
+      await selectCloudscapeOption(
+        page,
+        "template-component-category",
+        `${names.mainCategoryName} > ${names.categoryName}`
+      );
       await selectCloudscapeMultiOption(page, "template-component-tests", names.testName);
-      await componentDialog.getByRole("button", { name: "Save" }).click();
+      await componentDialog.getByRole("button", { name: "Save component" }).click();
 
       await expect(page.getByText(componentName, { exact: true }).first()).toBeVisible();
       const templateId = page.url().match(/\/templates\/([^/]+)\/configure$/)?.[1];
@@ -258,6 +300,7 @@ test.describe("template and catalog browser flow", () => {
       const configuration = await getTemplateConfiguration(cleanupRequest, token, templateId!);
       const savedComponent = configuration.find((component) => component.name === componentName);
       expect(savedComponent).toBeTruthy();
+      expect(Array.isArray(savedComponent!.tests)).toBe(true);
       expect(savedComponent!.tests.map((assignedTest) => assignedTest.test_name)).toContain(
         names.testName
       );

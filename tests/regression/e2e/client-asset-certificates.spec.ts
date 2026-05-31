@@ -32,6 +32,19 @@ interface CreatedCategory {
   category_id: string;
 }
 
+interface CatalogScope {
+  scope_id: string;
+}
+
+interface CreatedScopeMainCategory {
+  scope_main_category_id: string;
+}
+
+interface CreatedScopeCategory {
+  scope_category_id: string;
+  category_id: string;
+}
+
 interface CreatedTestType {
   test_id: string;
 }
@@ -79,6 +92,15 @@ async function postJson<T>(
   const response = await request.post(`${API_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
     data,
+  });
+
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as T;
+}
+
+async function getJson<T>(request: APIRequestContext, token: string, path: string) {
+  const response = await request.get(`${API_BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
 
   expect(response.ok()).toBeTruthy();
@@ -140,6 +162,10 @@ test.describe("client asset certificates browser flow", () => {
     const token = await adminToken(setupRequest);
     let clientUser: CreatedUser | null = null;
     let asset: CreatedAsset | null = null;
+    let mainCategoryId: string | null = null;
+    let categoryId: string | null = null;
+    let scopeMainCategoryId: string | null = null;
+    let scopeCategoryId: string | null = null;
 
     try {
       clientUser = await postJson<CreatedUser>(setupRequest, token, "/user", {
@@ -177,6 +203,7 @@ test.describe("client asset certificates browser flow", () => {
           sort_order: sortOrderBase,
         }
       );
+      mainCategoryId = mainCategory.main_category_id;
 
       const category = await postJson<CreatedCategory>(setupRequest, token, "/category", {
         main_category_id: mainCategory.main_category_id,
@@ -184,6 +211,39 @@ test.describe("client asset certificates browser flow", () => {
         description: "Created by Playwright for the client portal flow.",
         sort_order: sortOrderBase + 1,
       });
+      categoryId = category.category_id;
+
+      const defaultScope = await getJson<CatalogScope>(
+        setupRequest,
+        token,
+        "/catalog-scopes/default"
+      );
+
+      const scopeMainCategory = await postJson<CreatedScopeMainCategory>(
+        setupRequest,
+        token,
+        `/catalog-scope/${defaultScope.scope_id}/main-category`,
+        {
+          main_category_name: mainCategoryName,
+          description: "Created by Playwright for the client portal flow.",
+          sort_order: sortOrderBase + 2,
+        }
+      );
+      scopeMainCategoryId = scopeMainCategory.scope_main_category_id;
+
+      const scopeCategory = await postJson<CreatedScopeCategory>(
+        setupRequest,
+        token,
+        `/catalog-scope/${defaultScope.scope_id}/category`,
+        {
+          main_category_id: mainCategory.main_category_id,
+          category_name: categoryName,
+          description: "Created by Playwright for the client portal flow.",
+          sort_order: sortOrderBase + 3,
+        }
+      );
+      expect(scopeCategory.category_id).toBe(category.category_id);
+      scopeCategoryId = scopeCategory.scope_category_id;
 
       const testType = await postJson<CreatedTestType>(setupRequest, token, "/test-type", {
         test_name: certificateName,
@@ -205,6 +265,7 @@ test.describe("client asset certificates browser flow", () => {
       const component = await postJson<CreatedComponent>(setupRequest, token, "/component", {
         asset_id: asset.asset_id,
         category_id: category.category_id,
+        scope_category_id: scopeCategory.scope_category_id,
         name: componentName,
         serial_number: "PW-CLIENT-001",
         manufacturer: "Playwright Manufacturer",
@@ -298,6 +359,22 @@ test.describe("client asset certificates browser flow", () => {
     } finally {
       if (asset) {
         await deleteIfPresent(setupRequest, token, `/asset/${asset.asset_id}`);
+      }
+      if (scopeCategoryId) {
+        await deleteIfPresent(setupRequest, token, `/catalog-scope-category/${scopeCategoryId}`);
+      }
+      if (categoryId) {
+        await deleteIfPresent(setupRequest, token, `/category/${categoryId}`);
+      }
+      if (scopeMainCategoryId) {
+        await deleteIfPresent(
+          setupRequest,
+          token,
+          `/catalog-scope-main-category/${scopeMainCategoryId}`
+        );
+      }
+      if (mainCategoryId) {
+        await deleteIfPresent(setupRequest, token, `/main-category/${mainCategoryId}`);
       }
       if (clientUser) {
         await deleteIfPresent(setupRequest, token, `/user/${clientUser.user_id}`);

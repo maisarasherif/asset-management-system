@@ -9,12 +9,12 @@ import {
   FormField,
   Header,
   Input,
-  Select,
   SpaceBetween,
 } from "@cloudscape-design/components";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Select } from "../../components/shared/OptimizedSelect";
 import { createUser, logoutRequest, updatePassword } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";

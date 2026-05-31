@@ -59,6 +59,37 @@ type AssetTemplate struct {
 	DisplayID    string    `json:"display_id"`
 }
 
+type CatalogScope struct {
+	ScopeID     uuid.UUID `json:"scope_id"`
+	DisplayID   string    `json:"display_id"`
+	ScopeName   string    `json:"scope_name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type CatalogScopeCategory struct {
+	ScopeCategoryID uuid.UUID `json:"scope_category_id"`
+	DisplayID       string    `json:"display_id"`
+	ScopeID         uuid.UUID `json:"scope_id"`
+	MainCategoryID  uuid.UUID `json:"main_category_id"`
+	CategoryID      uuid.UUID `json:"category_id"`
+	SortOrder       int32     `json:"sort_order"`
+	Description     string    `json:"description"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type CatalogScopeMainCategory struct {
+	ScopeMainCategoryID uuid.UUID `json:"scope_main_category_id"`
+	DisplayID           string    `json:"display_id"`
+	ScopeID             uuid.UUID `json:"scope_id"`
+	MainCategoryID      uuid.UUID `json:"main_category_id"`
+	SortOrder           int32     `json:"sort_order"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
 type Category struct {
 	CategoryName   string     `json:"category_name"`
 	Description    string     `json:"description"`
@@ -142,6 +173,7 @@ type Component struct {
 	TemplateComponentID    *uuid.UUID `json:"template_component_id"`
 	ComponentKind          string     `json:"component_kind"`
 	SingleAssetEquipmentID *uuid.UUID `json:"single_asset_equipment_id"`
+	ScopeCategoryID        *uuid.UUID `json:"scope_category_id"`
 }
 
 type EquipmentType struct {
@@ -223,6 +255,7 @@ type TemplateComponent struct {
 	DisplayID           string    `json:"display_id"`
 	TemplateID          uuid.UUID `json:"template_id"`
 	CategoryID          uuid.UUID `json:"category_id"`
+	ScopeCategoryID     uuid.UUID `json:"scope_category_id"`
 }
 
 type TemplateComponentTest struct {

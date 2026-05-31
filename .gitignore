@@ -4,6 +4,7 @@
 !tests/regression/fixtures/sample-certificate.pdf
 /skills
 /themes
+/fixes
 /postman/*
 /docs/question*
 /docs/cert*

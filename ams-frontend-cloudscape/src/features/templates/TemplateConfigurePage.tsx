@@ -10,8 +10,6 @@ import {
   Header,
   Input,
   Modal,
-  Multiselect,
-  Select,
   SpaceBetween,
   Table,
   Textarea,
@@ -20,25 +18,24 @@ import {
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Multiselect, Select } from "../../components/shared/OptimizedSelect";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { TableCellText } from "../../components/shared/TableCells";
 import {
-  addTemplateComponentTest,
-  createTemplateComponent,
-  deleteTemplateComponent,
-  deleteTemplateComponentTest,
+  configureTemplate,
   getTemplate,
   getTemplateConfiguration,
-  listAllCategories,
-  listAllMainCategories,
+  listAllCatalogScopeCategories,
+  listCatalogScopes,
   listTestTypes,
-  updateTemplateComponent,
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type {
   AssetTemplate,
+  CatalogScope,
+  CatalogScopeCategory,
   SafetyCritical,
   TemplateComponentInput,
   TemplateConfigurationComponent,
@@ -51,8 +48,27 @@ interface TemplateComponentFormState extends TemplateComponentInput {
   test_ids: string[];
 }
 
+type CategorySelectOption = SelectProps.Option & { categoryId?: string };
+
+function findCategoryScopeId(
+  categoriesByScope: CatalogScopeCategory[][],
+  scopeCategoryId?: string
+) {
+  if (!scopeCategoryId) {
+    return "";
+  }
+  for (const categories of categoriesByScope) {
+    const match = categories.find((category) => category.scope_category_id === scopeCategoryId);
+    if (match) {
+      return match.scope_id;
+    }
+  }
+  return "";
+}
+
 type TemplateConfigureViewProps = {
-  categoryOptions: SelectProps.Option[];
+  categoryOptions: CategorySelectOption[];
+  catalogScopeOptions: SelectProps.Option[];
   componentColumns: TableProps<TemplateConfigurationComponent>["columnDefinitions"];
   configuredComponents: TemplateConfigurationComponent[];
   deletingComponent: TemplateConfigurationComponent | null;
@@ -64,14 +80,13 @@ type TemplateConfigureViewProps = {
   navigate: ReturnType<typeof useNavigate>;
   onDelete: () => void;
   onDeleteDismiss: () => void;
-  onDraftChange: Dispatch<SetStateAction<TemplateComponentFormState>>;
   onEditorDismiss: () => void;
   onOpenCreate: () => void;
-  onSave: () => void;
+  onSave: (draft: TemplateComponentFormState) => void;
+  onScopeChange: (scopeId: string) => void;
   savePending: boolean;
-  selectedCategory: SelectProps.Option | null;
+  selectedCatalogScope: SelectProps.Option | null;
   selectedSafetyOption: SelectProps.Option | null;
-  selectedTests: MultiselectProps.Option[];
   template: AssetTemplate;
   templateId: string;
   testOptions: MultiselectProps.Option[];
@@ -86,6 +101,7 @@ const SAFETY_OPTIONS: SelectProps.Option[] = [
 function createEmptyDraft(): TemplateComponentFormState {
   return {
     category_id: "",
+    scope_category_id: "",
     name: "",
     description: "",
     serial_number: "",
@@ -105,6 +121,7 @@ function createEmptyDraft(): TemplateComponentFormState {
 function toDraft(component: TemplateConfigurationComponent): TemplateComponentFormState {
   return {
     category_id: component.category_id,
+    scope_category_id: component.scope_category_id,
     name: component.name,
     description: component.description || "",
     serial_number: component.serial_number || "",
@@ -117,13 +134,14 @@ function toDraft(component: TemplateConfigurationComponent): TemplateComponentFo
     class: component.class || "",
     class_code: component.class_code || "",
     safety_critical: component.safety_critical,
-    test_ids: component.tests.map((test) => test.test_id),
+    test_ids: (component.tests ?? []).map((test) => test.test_id),
   };
 }
 
 function buildPayload(draft: TemplateComponentFormState): TemplateComponentInput {
   return {
     category_id: draft.category_id,
+    scope_category_id: draft.scope_category_id,
     name: draft.name.trim(),
     description: draft.description.trim(),
     serial_number: draft.serial_number.trim(),
@@ -137,6 +155,40 @@ function buildPayload(draft: TemplateComponentFormState): TemplateComponentInput
     class_code: draft.class_code.trim(),
     safety_critical: draft.safety_critical,
   };
+}
+
+function toConfigurationPayload(
+  component: TemplateConfigurationComponent,
+  draft?: TemplateComponentFormState
+) {
+  const source = draft ?? toDraft(component);
+  return {
+    template_component_id: component.template_component_id,
+    ...buildPayload(source),
+    test_ids: source.test_ids,
+  };
+}
+
+function buildNextConfiguration(
+  configuration: TemplateConfigurationComponent[],
+  draft: TemplateComponentFormState,
+  editingComponentId: string | null
+) {
+  if (!editingComponentId) {
+    return [
+      ...configuration.map((component) => toConfigurationPayload(component)),
+      {
+        ...buildPayload(draft),
+        test_ids: draft.test_ids,
+      },
+    ];
+  }
+
+  return configuration.map((component) =>
+    component.template_component_id === editingComponentId
+      ? toConfigurationPayload(component, draft)
+      : toConfigurationPayload(component)
+  );
 }
 
 function validateDraft(draft: TemplateComponentFormState) {
@@ -158,7 +210,7 @@ type UseTemplateComponentColumnsOptions = {
   onEditComponent: (component: TemplateConfigurationComponent) => void;
 };
 
-function useTemplateConfigureData(templateId: string | undefined) {
+function useTemplateConfigureData(templateId: string | undefined, selectedScopeId: string) {
   const templateQuery = useQuery({
     queryKey: ["template", templateId],
     queryFn: () => getTemplate(templateId!),
@@ -171,14 +223,26 @@ function useTemplateConfigureData(templateId: string | undefined) {
     enabled: Boolean(templateId),
   });
 
-  const categoriesQuery = useQuery({
-    queryKey: ["categories", "all"],
-    queryFn: listAllCategories,
+  const catalogScopesQuery = useQuery({
+    queryKey: ["catalog-scopes"],
+    queryFn: listCatalogScopes,
   });
 
-  const mainCategoriesQuery = useQuery({
-    queryKey: ["main-categories", "all"],
-    queryFn: listAllMainCategories,
+  const categoriesQuery = useQuery({
+    queryKey: ["catalog-scope-categories", selectedScopeId, "template-configure"],
+    queryFn: () => listAllCatalogScopeCategories(selectedScopeId),
+    enabled: Boolean(selectedScopeId),
+  });
+
+  const allScopeCategoriesQuery = useQuery({
+    queryKey: ["catalog-scope-categories", "template-configure", "all-scopes"],
+    queryFn: () =>
+      Promise.all(
+        (catalogScopesQuery.data || []).map((scope) =>
+          listAllCatalogScopeCategories(scope.scope_id)
+        )
+      ),
+    enabled: Boolean(catalogScopesQuery.data?.length),
   });
 
   const testTypesQuery = useQuery({
@@ -186,35 +250,30 @@ function useTemplateConfigureData(templateId: string | undefined) {
     queryFn: listTestTypes,
   });
 
-  const mainCategoryMap = useMemo(
-    () =>
-      new Map(
-        (mainCategoriesQuery.data || []).map((mainCategory) => [
-          mainCategory.main_category_id,
-          mainCategory.main_category_name,
-        ])
-      ),
-    [mainCategoriesQuery.data]
-  );
-
   const categoryMap = useMemo(
-    () =>
-      new Map(
-        (categoriesQuery.data || []).map((category) => [category.category_id, category.category_name])
-      ),
-    [categoriesQuery.data]
+    () => {
+      const labels = new Map<string, string>();
+      for (const category of (allScopeCategoriesQuery.data || []).flat()) {
+        const label = `${category.main_category_name} > ${category.category_name}`;
+        labels.set(category.scope_category_id, label);
+        if (!labels.has(category.category_id)) {
+          labels.set(category.category_id, label);
+        }
+      }
+      return labels;
+    },
+    [allScopeCategoriesQuery.data]
   );
 
-  const categoryOptions = useMemo<SelectProps.Option[]>(
+  const categoryOptions = useMemo<CategorySelectOption[]>(
     () =>
       (categoriesQuery.data || []).map((category) => ({
-        label: category.category_name,
-        value: category.category_id,
-        description:
-          (category.main_category_id && mainCategoryMap.get(category.main_category_id)) ||
-          category.display_id,
+        label: `${category.main_category_name} > ${category.category_name}`,
+        value: category.scope_category_id,
+        description: category.category_display_id,
+        categoryId: category.category_id,
       })),
-    [categoriesQuery.data, mainCategoryMap]
+    [categoriesQuery.data]
   );
 
   const testOptions = useMemo<MultiselectProps.Option[]>(
@@ -228,11 +287,12 @@ function useTemplateConfigureData(templateId: string | undefined) {
   );
 
   return {
+    allScopeCategoriesQuery,
+    catalogScopesQuery,
     categoriesQuery,
     categoryMap,
     categoryOptions,
     configurationQuery,
-    mainCategoriesQuery,
     templateQuery,
     testOptions,
     testTypesQuery,
@@ -268,8 +328,16 @@ function useTemplateComponentColumns({
         width: "22%",
         minWidth: 170,
         cell: (item) => (
-          <TableCellText title={categoryMap.get(item.category_id) || item.category_id}>
-            {categoryMap.get(item.category_id) || item.category_id}
+          <TableCellText
+            title={
+              (item.scope_category_id && categoryMap.get(item.scope_category_id)) ||
+              categoryMap.get(item.category_id) ||
+              item.category_id
+            }
+          >
+            {(item.scope_category_id && categoryMap.get(item.scope_category_id)) ||
+              categoryMap.get(item.category_id) ||
+              item.category_id}
           </TableCellText>
         ),
       },
@@ -278,7 +346,7 @@ function useTemplateComponentColumns({
         header: "Tests",
         width: 110,
         minWidth: 90,
-        cell: (item) => item.tests.length,
+        cell: (item) => (item.tests ?? []).length,
       },
       {
         id: "safety",
@@ -307,7 +375,6 @@ function useTemplateComponentColumns({
 type UseTemplateComponentMutationsOptions = {
   configuration: TemplateConfigurationComponent[];
   deletingComponent: TemplateConfigurationComponent | null;
-  draft: TemplateComponentFormState;
   editingComponentId: string | null;
   editorMode: EditorMode;
   onDeleteSuccess: () => void;
@@ -319,7 +386,6 @@ type UseTemplateComponentMutationsOptions = {
 function useTemplateComponentMutations({
   configuration,
   deletingComponent,
-  draft,
   editingComponentId,
   editorMode,
   onDeleteSuccess,
@@ -331,44 +397,19 @@ function useTemplateComponentMutations({
   const { error, success } = useFlashbar();
 
   const saveMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (draft: TemplateComponentFormState) => {
       const nextFormError = validateDraft(draft);
       if (nextFormError) {
         throw new Error(nextFormError);
       }
 
-      const payload = buildPayload(draft);
-
-      if (editorMode === "create") {
-        const component = await createTemplateComponent(templateId!, payload);
-        await Promise.all(
-          draft.test_ids.map((testId) => addTemplateComponentTest(component.template_component_id, testId))
-        );
-        return;
-      }
-
-      const currentComponent = configuration.find(
-        (component) => component.template_component_id === editingComponentId
-      );
-
-      if (!currentComponent || !editingComponentId) {
+      if (editorMode === "edit" && !editingComponentId) {
         throw new Error("The selected component could not be found.");
       }
 
-      await updateTemplateComponent(editingComponentId, payload);
+      const nextConfiguration = buildNextConfiguration(configuration, draft, editingComponentId);
 
-      const existingTests = new Map(
-        currentComponent.tests.map((test) => [test.test_id, test.template_component_test_id])
-      );
-      const nextTests = new Set(draft.test_ids);
-      const testDeleteRequests = currentComponent.tests.flatMap((test) =>
-        nextTests.has(test.test_id) ? [] : [deleteTemplateComponentTest(test.template_component_test_id)]
-      );
-      const testCreateRequests = draft.test_ids.flatMap((testId) =>
-        existingTests.has(testId) ? [] : [addTemplateComponentTest(editingComponentId, testId)]
-      );
-
-      await Promise.all([...testDeleteRequests, ...testCreateRequests]);
+      await configureTemplate(templateId!, { components: nextConfiguration });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["template-configuration", templateId] });
@@ -385,7 +426,15 @@ function useTemplateComponentMutations({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteTemplateComponent(deletingComponent!.template_component_id),
+    mutationFn: () =>
+      configureTemplate(templateId!, {
+        components: configuration
+          .filter(
+            (component) =>
+              component.template_component_id !== deletingComponent!.template_component_id
+          )
+          .map((component) => toConfigurationPayload(component)),
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["template-configuration", templateId] });
       onDeleteSuccess();
@@ -407,24 +456,36 @@ export function TemplateConfigurePage() {
   const [editorMode, setEditorMode] = useState<EditorMode>("create");
   const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
   const [draft, setDraft] = useState<TemplateComponentFormState>(createEmptyDraft);
+  const [selectedScopeId, setSelectedScopeId] = useState("");
   const [formError, setFormError] = useState("");
   const [deletingComponent, setDeletingComponent] = useState<TemplateConfigurationComponent | null>(null);
 
   const {
+    allScopeCategoriesQuery,
+    catalogScopesQuery,
     categoriesQuery,
     categoryMap,
     categoryOptions,
     configurationQuery,
-    mainCategoriesQuery,
     templateQuery,
     testOptions,
     testTypesQuery,
-  } = useTemplateConfigureData(templateId);
+  } = useTemplateConfigureData(templateId, selectedScopeId);
+
+  useEffect(() => {
+    if (!selectedScopeId && catalogScopesQuery.data?.[0]) {
+      setSelectedScopeId(catalogScopesQuery.data[0].scope_id);
+    }
+  }, [catalogScopesQuery.data, selectedScopeId]);
 
   const openEditEditor = (component: TemplateConfigurationComponent) => {
     setEditorMode("edit");
     setEditingComponentId(component.template_component_id);
     setDraft(toDraft(component));
+    const scopeId = findCategoryScopeId(allScopeCategoriesQuery.data || [], component.scope_category_id);
+    if (scopeId) {
+      setSelectedScopeId(scopeId);
+    }
     setFormError("");
     setEditorVisible(true);
   };
@@ -438,7 +499,6 @@ export function TemplateConfigurePage() {
   const { deleteMutation, saveMutation } = useTemplateComponentMutations({
     configuration: configurationQuery.data || [],
     deletingComponent,
-    draft,
     editingComponentId,
     editorMode,
     onDeleteSuccess: () => setDeletingComponent(null),
@@ -452,6 +512,20 @@ export function TemplateConfigurePage() {
     templateId,
   });
 
+  const selectedSafetyOption =
+    SAFETY_OPTIONS.find((option) => option.value === draft.safety_critical) ?? null;
+  const catalogScopeOptions = useMemo<SelectProps.Option[]>(
+    () =>
+      (catalogScopesQuery.data || []).map((scope: CatalogScope) => ({
+        label: scope.scope_name,
+        value: scope.scope_id,
+        description: scope.description || scope.display_id,
+      })),
+    [catalogScopesQuery.data]
+  );
+  const selectedCatalogScope =
+    catalogScopeOptions.find((option) => option.value === selectedScopeId) ?? null;
+
   if (!templateId) {
     return <PageError description="The template route is missing." title="Invalid route" />;
   }
@@ -460,7 +534,9 @@ export function TemplateConfigurePage() {
     templateQuery.isLoading ||
     configurationQuery.isLoading ||
     categoriesQuery.isLoading ||
-    mainCategoriesQuery.isLoading ||
+    catalogScopesQuery.isLoading ||
+    allScopeCategoriesQuery.isLoading ||
+    (Boolean(catalogScopesQuery.data?.length) && !selectedScopeId) ||
     testTypesQuery.isLoading
   ) {
     return <PageLoading>{"Loading the template configuration workspace\u2026"}</PageLoading>;
@@ -470,9 +546,10 @@ export function TemplateConfigurePage() {
     templateQuery.isError ||
     configurationQuery.isError ||
     categoriesQuery.isError ||
-    mainCategoriesQuery.isError ||
+    catalogScopesQuery.isError ||
     testTypesQuery.isError ||
     !templateQuery.data ||
+    !catalogScopesQuery.data ||
     !categoriesQuery.data ||
     !testTypesQuery.data
   ) {
@@ -482,15 +559,16 @@ export function TemplateConfigurePage() {
         onRetry={() => {
           void templateQuery.refetch();
           void configurationQuery.refetch();
+          void catalogScopesQuery.refetch();
           void categoriesQuery.refetch();
-          void mainCategoriesQuery.refetch();
           void testTypesQuery.refetch();
         }}
       />
     );
   }
 
-  if (categoriesQuery.data.length === 0 || testTypesQuery.data.length === 0) {
+  const allScopedCategoryCount = (allScopeCategoriesQuery.data || []).flat().length;
+  if (allScopedCategoryCount === 0 || testTypesQuery.data.length === 0) {
     return (
       <PageEmpty
         action={
@@ -509,12 +587,10 @@ export function TemplateConfigurePage() {
 
   const template = templateQuery.data;
   const configuredComponents = configurationQuery.data || [];
-  const totalTests = configuredComponents.reduce((count, component) => count + component.tests.length, 0);
-  const selectedCategory =
-    categoryOptions.find((option) => option.value === draft.category_id) ?? null;
-  const selectedSafetyOption =
-    SAFETY_OPTIONS.find((option) => option.value === draft.safety_critical) ?? null;
-  const selectedTests = testOptions.filter((option) => draft.test_ids.includes(option.value || ""));
+  const totalTests = configuredComponents.reduce(
+    (count, component) => count + (component.tests ?? []).length,
+    0
+  );
   const openCreateEditor = () => {
     setEditorMode("create");
     setEditingComponentId(null);
@@ -526,10 +602,14 @@ export function TemplateConfigurePage() {
     setEditorVisible(false);
     setFormError("");
   };
+  const updateScope = (scopeId: string) => {
+    setSelectedScopeId(scopeId);
+  };
 
   return (
     <TemplateConfigureView
       categoryOptions={categoryOptions}
+      catalogScopeOptions={catalogScopeOptions}
       componentColumns={componentColumns}
       configuredComponents={configuredComponents}
       deletingComponent={deletingComponent}
@@ -541,14 +621,13 @@ export function TemplateConfigurePage() {
       navigate={navigate}
       onDelete={() => deleteMutation.mutate()}
       onDeleteDismiss={() => setDeletingComponent(null)}
-      onDraftChange={setDraft}
       onEditorDismiss={dismissEditor}
       onOpenCreate={openCreateEditor}
-      onSave={() => saveMutation.mutate()}
+      onSave={(nextDraft) => saveMutation.mutate(nextDraft)}
+      onScopeChange={updateScope}
       savePending={saveMutation.isPending}
-      selectedCategory={selectedCategory}
+      selectedCatalogScope={selectedCatalogScope}
       selectedSafetyOption={selectedSafetyOption}
-      selectedTests={selectedTests}
       template={template}
       templateId={templateId}
       testOptions={testOptions}
@@ -559,6 +638,7 @@ export function TemplateConfigurePage() {
 
 function TemplateConfigureView({
   categoryOptions,
+  catalogScopeOptions,
   componentColumns,
   configuredComponents,
   deletingComponent,
@@ -570,14 +650,13 @@ function TemplateConfigureView({
   navigate,
   onDelete,
   onDeleteDismiss,
-  onDraftChange,
   onEditorDismiss,
   onOpenCreate,
   onSave,
+  onScopeChange,
   savePending,
-  selectedCategory,
+  selectedCatalogScope,
   selectedSafetyOption,
-  selectedTests,
   template,
   templateId,
   testOptions,
@@ -615,16 +694,16 @@ function TemplateConfigureView({
 
       <TemplateComponentEditorModal
         categoryOptions={categoryOptions}
+        catalogScopeOptions={catalogScopeOptions}
         draft={draft}
         editorMode={editorMode}
         formError={formError}
         onDismiss={onEditorDismiss}
-        onDraftChange={onDraftChange}
         onSave={onSave}
+        onScopeChange={onScopeChange}
         savePending={savePending}
-        selectedCategory={selectedCategory}
+        selectedCatalogScope={selectedCatalogScope}
         selectedSafetyOption={selectedSafetyOption}
-        selectedTests={selectedTests}
         testOptions={testOptions}
         visible={editorVisible}
       />
@@ -773,43 +852,62 @@ function TemplateComponentsHeader({ count, onOpenCreate }: TemplateComponentsHea
 }
 
 type TemplateComponentEditorModalProps = {
-  categoryOptions: SelectProps.Option[];
+  categoryOptions: CategorySelectOption[];
+  catalogScopeOptions: SelectProps.Option[];
   draft: TemplateComponentFormState;
   editorMode: EditorMode;
   formError: string;
   onDismiss: () => void;
-  onDraftChange: Dispatch<SetStateAction<TemplateComponentFormState>>;
-  onSave: () => void;
+  onSave: (draft: TemplateComponentFormState) => void;
+  onScopeChange: (scopeId: string) => void;
   savePending: boolean;
-  selectedCategory: SelectProps.Option | null;
+  selectedCatalogScope: SelectProps.Option | null;
   selectedSafetyOption: SelectProps.Option | null;
-  selectedTests: MultiselectProps.Option[];
   testOptions: MultiselectProps.Option[];
   visible: boolean;
 };
 
 function TemplateComponentEditorModal({
   categoryOptions,
+  catalogScopeOptions,
   draft,
   editorMode,
   formError,
   onDismiss,
-  onDraftChange,
   onSave,
+  onScopeChange,
   savePending,
-  selectedCategory,
+  selectedCatalogScope,
   selectedSafetyOption,
-  selectedTests,
   testOptions,
   visible,
 }: TemplateComponentEditorModalProps) {
+  const [localDraft, setLocalDraft] = useState<TemplateComponentFormState>(draft);
+
+  useEffect(() => {
+    setLocalDraft(draft);
+  }, [draft]);
+
+  const localSelectedCategory =
+    categoryOptions.find(
+      (option) =>
+        option.value === localDraft.scope_category_id ||
+        option.categoryId === localDraft.category_id
+    ) ?? null;
+  const localSelectedSafetyOption =
+    SAFETY_OPTIONS.find((option) => option.value === localDraft.safety_critical) ??
+    selectedSafetyOption;
+  const localSelectedTests = testOptions.filter((option) =>
+    localDraft.test_ids.includes(option.value || "")
+  );
+
   return (
     <Modal
       footer={
         <Box float="right">
           <SpaceBetween direction="horizontal" size="xs">
             <Button onClick={onDismiss}>Cancel</Button>
-            <Button loading={savePending} variant="primary" onClick={onSave}>
+            <Button loading={savePending} variant="primary" onClick={() => onSave(localDraft)}>
               Save component
             </Button>
           </SpaceBetween>
@@ -824,18 +922,28 @@ function TemplateComponentEditorModal({
 
         <TemplateComponentCoreFields
           categoryOptions={categoryOptions}
-          draft={draft}
-          onDraftChange={onDraftChange}
-          selectedCategory={selectedCategory}
+          catalogScopeOptions={catalogScopeOptions}
+          draft={localDraft}
+          onDraftChange={setLocalDraft}
+          onScopeChange={(scopeId) => {
+            onScopeChange(scopeId);
+            setLocalDraft((currentDraft) => ({
+              ...currentDraft,
+              category_id: "",
+              scope_category_id: "",
+            }));
+          }}
+          selectedCatalogScope={selectedCatalogScope}
+          selectedCategory={localSelectedCategory}
         />
 
-        <TemplateComponentDetailsFields draft={draft} onDraftChange={onDraftChange} />
+        <TemplateComponentDetailsFields draft={localDraft} onDraftChange={setLocalDraft} />
 
         <TemplateComponentClassificationFields
-          draft={draft}
-          onDraftChange={onDraftChange}
-          selectedSafetyOption={selectedSafetyOption}
-          selectedTests={selectedTests}
+          draft={localDraft}
+          onDraftChange={setLocalDraft}
+          selectedSafetyOption={localSelectedSafetyOption}
+          selectedTests={localSelectedTests}
           testOptions={testOptions}
         />
       </SpaceBetween>
@@ -849,14 +957,20 @@ type TemplateComponentFieldProps = {
 };
 
 type TemplateComponentCoreFieldsProps = TemplateComponentFieldProps & {
-  categoryOptions: SelectProps.Option[];
-  selectedCategory: SelectProps.Option | null;
+  categoryOptions: CategorySelectOption[];
+  catalogScopeOptions: SelectProps.Option[];
+  onScopeChange: (scopeId: string) => void;
+  selectedCatalogScope: SelectProps.Option | null;
+  selectedCategory: CategorySelectOption | null;
 };
 
 function TemplateComponentCoreFields({
   categoryOptions,
+  catalogScopeOptions,
   draft,
   onDraftChange,
+  onScopeChange,
+  selectedCatalogScope,
   selectedCategory,
 }: TemplateComponentCoreFieldsProps) {
   return (
@@ -869,18 +983,32 @@ function TemplateComponentCoreFields({
           }
         />
       </FormField>
+      <FormField label="Catalog scope">
+        <Select
+          options={catalogScopeOptions}
+          placeholder="Choose a catalog scope"
+          selectedOption={selectedCatalogScope}
+          onChange={({ detail }) => onScopeChange(detail.selectedOption.value || "")}
+        />
+      </FormField>
       <FormField label="Category">
         <div data-testid="template-component-category">
           <Select
+            filteringType="auto"
+            filteringAriaLabel="Filter categories"
+            filteringPlaceholder="Find category"
             options={categoryOptions}
             placeholder="Choose a category"
             selectedOption={selectedCategory}
-            onChange={({ detail }) =>
-              onDraftChange((currentDraft) => ({
+            virtualScroll
+            onChange={({ detail }) => {
+              const selectedOption = detail.selectedOption as CategorySelectOption;
+              return onDraftChange((currentDraft) => ({
                 ...currentDraft,
-                category_id: detail.selectedOption.value || "",
-              }))
-            }
+                category_id: String(selectedOption.categoryId || ""),
+                scope_category_id: selectedOption.value || "",
+              }));
+            }}
           />
         </div>
       </FormField>

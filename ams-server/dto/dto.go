@@ -230,6 +230,29 @@ type PatchMainCategoryInput struct {
 	SortOrder        *int32  `json:"sort_order" validate:"omitempty,min=1"`
 }
 
+type CatalogScopeInput struct {
+	ScopeName   string `json:"scope_name" validate:"required,min=2,max=160"`
+	Description string `json:"description"`
+}
+
+type CatalogScopeDuplicateInput struct {
+	ScopeName   string `json:"scope_name" validate:"required,min=2,max=160"`
+	Description string `json:"description"`
+}
+
+type CatalogScopeMainCategoryInput struct {
+	MainCategoryName string `json:"main_category_name" validate:"required,min=2,max=100"`
+	Description      string `json:"description"`
+	SortOrder        int32  `json:"sort_order" validate:"required,min=1"`
+}
+
+type CatalogScopeCategoryInput struct {
+	MainCategoryID string `json:"main_category_id" validate:"required,uuid"`
+	CategoryName   string `json:"category_name" validate:"required,min=2,max=100"`
+	Description    string `json:"description"`
+	SortOrder      int32  `json:"sort_order" validate:"required,min=1"`
+}
+
 // ==================== Asset DTOs ====================
 
 type AssetInput struct {
@@ -276,6 +299,7 @@ type CompleteAssetMaintenanceInput struct {
 type ComponentInput struct {
 	AssetID         string `json:"asset_id" validate:"required,uuid"`
 	CategoryID      string `json:"category_id" validate:"required,uuid"`
+	ScopeCategoryID string `json:"scope_category_id" validate:"omitempty,uuid"`
 	Name            string `json:"name" validate:"required,min=2,max=200"`
 	SerialNumber    string `json:"serial_number"`
 	Manufacturer    string `json:"manufacturer"`
@@ -292,6 +316,7 @@ type ComponentInput struct {
 
 type PatchComponentInput struct {
 	CategoryID      *string `json:"category_id" validate:"omitempty,uuid"`
+	ScopeCategoryID *string `json:"scope_category_id" validate:"omitempty,uuid"`
 	Name            *string `json:"name" validate:"omitempty,min=2,max=200"`
 	SerialNumber    *string `json:"serial_number"`
 	Manufacturer    *string `json:"manufacturer"`
@@ -369,6 +394,7 @@ type AssetTemplateInput struct {
 
 type TemplateComponentInput struct {
 	CategoryID      string `json:"category_id" validate:"required,uuid"`
+	ScopeCategoryID string `json:"scope_category_id" validate:"omitempty,uuid"`
 	Name            string `json:"name" validate:"required,min=2,max=200"`
 	Description     string `json:"description"`
 	SerialNumber    string `json:"serial_number"`
@@ -390,6 +416,7 @@ type TemplateComponentTestInput struct {
 type ConfigureTemplateComponentItem struct {
 	TemplateComponentID string   `json:"template_component_id"`
 	CategoryID          string   `json:"category_id" validate:"required,uuid"`
+	ScopeCategoryID     string   `json:"scope_category_id" validate:"omitempty,uuid"`
 	Name                string   `json:"name" validate:"required,min=2,max=200"`
 	Description         string   `json:"description"`
 	SerialNumber        string   `json:"serial_number"`
@@ -426,6 +453,7 @@ type TemplateConfigurationComponentResponse struct {
 	DisplayID           string                                `json:"display_id"`
 	TemplateID          string                                `json:"template_id"`
 	CategoryID          string                                `json:"category_id"`
+	ScopeCategoryID     string                                `json:"scope_category_id"`
 	Position            int32                                 `json:"position"`
 	Name                string                                `json:"name"`
 	Description         string                                `json:"description"`

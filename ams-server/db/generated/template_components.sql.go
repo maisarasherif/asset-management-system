@@ -25,6 +25,19 @@ func (q *Queries) CountTemplateComponentsByCategoryID(ctx context.Context, categ
 	return count, err
 }
 
+const countTemplateComponentsByScopeCategoryID = `-- name: CountTemplateComponentsByScopeCategoryID :one
+SELECT COUNT(*)
+FROM template_components
+WHERE scope_category_id = $1
+`
+
+func (q *Queries) CountTemplateComponentsByScopeCategoryID(ctx context.Context, scopeCategoryID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countTemplateComponentsByScopeCategoryID, scopeCategoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTemplateComponentsByTemplateID = `-- name: CountTemplateComponentsByTemplateID :one
 SELECT COUNT(*)
 FROM template_components
@@ -41,7 +54,7 @@ func (q *Queries) CountTemplateComponentsByTemplateID(ctx context.Context, templ
 const createTemplateComponent = `-- name: CreateTemplateComponent :one
 INSERT INTO template_components (
     display_id,
-    template_id, category_id, position, name, description,
+    template_id, category_id, scope_category_id, position, name, description,
     serial_number, manufacturer, location, assigned_project, equipment_type,
     structure, model, class, class_code, safety_critical, created_at
 )
@@ -49,8 +62,8 @@ VALUES (
     next_display_id('template_component_display_id_seq'),
     $1,
     $2,
-    COALESCE((SELECT MAX(position) + 1 FROM template_components WHERE template_id = $1), 1),
     $3,
+    COALESCE((SELECT MAX(position) + 1 FROM template_components WHERE template_id = $1), 1),
     $4,
     $5,
     $6,
@@ -62,6 +75,7 @@ VALUES (
     $12,
     $13,
     $14,
+    $15,
     NOW()
 )
 RETURNING
@@ -69,6 +83,7 @@ RETURNING
     display_id,
     template_id,
     category_id,
+    scope_category_id,
     position,
     name,
     description,
@@ -88,6 +103,7 @@ RETURNING
 type CreateTemplateComponentParams struct {
 	TemplateID      uuid.UUID `json:"template_id"`
 	CategoryID      uuid.UUID `json:"category_id"`
+	ScopeCategoryID uuid.UUID `json:"scope_category_id"`
 	Name            string    `json:"name"`
 	Description     string    `json:"description"`
 	SerialNumber    string    `json:"serial_number"`
@@ -107,6 +123,7 @@ type CreateTemplateComponentRow struct {
 	DisplayID           string    `json:"display_id"`
 	TemplateID          uuid.UUID `json:"template_id"`
 	CategoryID          uuid.UUID `json:"category_id"`
+	ScopeCategoryID     uuid.UUID `json:"scope_category_id"`
 	Position            int32     `json:"position"`
 	Name                string    `json:"name"`
 	Description         string    `json:"description"`
@@ -127,6 +144,7 @@ func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplat
 	row := q.db.QueryRow(ctx, createTemplateComponent,
 		arg.TemplateID,
 		arg.CategoryID,
+		arg.ScopeCategoryID,
 		arg.Name,
 		arg.Description,
 		arg.SerialNumber,
@@ -146,6 +164,7 @@ func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplat
 		&i.DisplayID,
 		&i.TemplateID,
 		&i.CategoryID,
+		&i.ScopeCategoryID,
 		&i.Position,
 		&i.Name,
 		&i.Description,
@@ -195,6 +214,7 @@ SELECT
     display_id,
     template_id,
     category_id,
+    scope_category_id,
     position,
     name,
     description,
@@ -219,6 +239,7 @@ type GetTemplateComponentByIDRow struct {
 	DisplayID           string    `json:"display_id"`
 	TemplateID          uuid.UUID `json:"template_id"`
 	CategoryID          uuid.UUID `json:"category_id"`
+	ScopeCategoryID     uuid.UUID `json:"scope_category_id"`
 	Position            int32     `json:"position"`
 	Name                string    `json:"name"`
 	Description         string    `json:"description"`
@@ -243,6 +264,7 @@ func (q *Queries) GetTemplateComponentByID(ctx context.Context, templateComponen
 		&i.DisplayID,
 		&i.TemplateID,
 		&i.CategoryID,
+		&i.ScopeCategoryID,
 		&i.Position,
 		&i.Name,
 		&i.Description,
@@ -267,6 +289,7 @@ SELECT
     tc.display_id,
     tc.template_id,
     tc.category_id,
+    tc.scope_category_id,
     tc.position,
     tc.name,
     tc.description,
@@ -298,6 +321,7 @@ type GetTemplateComponentsByTemplateIDRow struct {
 	DisplayID           string    `json:"display_id"`
 	TemplateID          uuid.UUID `json:"template_id"`
 	CategoryID          uuid.UUID `json:"category_id"`
+	ScopeCategoryID     uuid.UUID `json:"scope_category_id"`
 	Position            int32     `json:"position"`
 	Name                string    `json:"name"`
 	Description         string    `json:"description"`
@@ -328,6 +352,7 @@ func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templat
 			&i.DisplayID,
 			&i.TemplateID,
 			&i.CategoryID,
+			&i.ScopeCategoryID,
 			&i.Position,
 			&i.Name,
 			&i.Description,
@@ -356,23 +381,25 @@ func (q *Queries) GetTemplateComponentsByTemplateID(ctx context.Context, templat
 const updateTemplateComponent = `-- name: UpdateTemplateComponent :execrows
 UPDATE template_components
 SET category_id = $1,
-    name = $2,
-    description = $3,
-    serial_number = $4,
-    manufacturer = $5,
-    location = $6,
-    assigned_project = $7,
-    equipment_type = $8,
-    structure = $9,
-    model = $10,
-    class = $11,
-    class_code = $12,
-    safety_critical = $13
-WHERE template_component_id = $14
+    scope_category_id = $2,
+    name = $3,
+    description = $4,
+    serial_number = $5,
+    manufacturer = $6,
+    location = $7,
+    assigned_project = $8,
+    equipment_type = $9,
+    structure = $10,
+    model = $11,
+    class = $12,
+    class_code = $13,
+    safety_critical = $14
+WHERE template_component_id = $15
 `
 
 type UpdateTemplateComponentParams struct {
 	CategoryID          uuid.UUID `json:"category_id"`
+	ScopeCategoryID     uuid.UUID `json:"scope_category_id"`
 	Name                string    `json:"name"`
 	Description         string    `json:"description"`
 	SerialNumber        string    `json:"serial_number"`
@@ -391,6 +418,7 @@ type UpdateTemplateComponentParams struct {
 func (q *Queries) UpdateTemplateComponent(ctx context.Context, arg UpdateTemplateComponentParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateTemplateComponent,
 		arg.CategoryID,
+		arg.ScopeCategoryID,
 		arg.Name,
 		arg.Description,
 		arg.SerialNumber,

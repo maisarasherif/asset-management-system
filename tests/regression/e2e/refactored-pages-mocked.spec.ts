@@ -29,6 +29,10 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function templateTests(component: { tests?: unknown }): Array<Record<string, any>> {
+  return Array.isArray(component.tests) ? component.tests : [];
+}
+
 function createMockState() {
   const asset = {
     asset_id: "asset-1",
@@ -108,6 +112,44 @@ function createMockState() {
     updated_at: "2026-01-02T00:00:00.000Z",
   };
 
+  const catalogScope = {
+    scope_id: "scope-1",
+    display_id: "SCOPE-001",
+    scope_name: "ADNOC-Approved Full Diving Spread",
+    description: "Default catalog scope",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-02T00:00:00.000Z",
+  };
+
+  const catalogScopeMainCategory = {
+    scope_main_category_id: "scope-main-1",
+    display_id: "SCOPEMAIN-001",
+    scope_id: "scope-1",
+    main_category_id: "main-1",
+    sort_order: 1,
+    main_category_display_id: "MAIN-001",
+    main_category_name: "Diving Systems",
+    description: "Diving system assets",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-02T00:00:00.000Z",
+  };
+
+  const catalogScopeCategory = {
+    scope_category_id: "scope-cat-1",
+    display_id: "SCOPECAT-001",
+    scope_id: "scope-1",
+    main_category_id: "main-1",
+    main_category_display_id: "MAIN-001",
+    main_category_name: "Diving Systems",
+    category_id: "cat-1",
+    category_display_id: "CAT-001",
+    category_name: "Lifting",
+    sort_order: 1,
+    description: "Lifting components",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-02T00:00:00.000Z",
+  };
+
   const mainCategory = {
     main_category_id: "main-1",
     display_id: "MAIN-001",
@@ -175,6 +217,7 @@ function createMockState() {
     display_id: "TC-001",
     template_id: "tpl-1",
     category_id: "cat-1",
+    scope_category_id: "scope-cat-1",
     position: 1,
     name: "Harness Blueprint",
     description: "Template component.",
@@ -202,6 +245,15 @@ function createMockState() {
         description: "Annual inspection",
       },
     ],
+  };
+
+  const templateComponentWithoutTests = {
+    ...templateComponent,
+    template_component_id: "tc-2",
+    display_id: "TC-002",
+    position: 2,
+    name: "Spare Blueprint",
+    tests: null,
   };
 
   const maintenanceEvent = {
@@ -332,6 +384,9 @@ function createMockState() {
   return {
     access: [access],
     asset,
+    catalogScopeCategories: [catalogScopeCategory],
+    catalogScopeMainCategories: [catalogScopeMainCategory],
+    catalogScopes: [catalogScope],
     categories: [category],
     certificate,
     competencyCategories: [competencyCategory],
@@ -346,7 +401,7 @@ function createMockState() {
     singleAsset,
     singleCertificate,
     template,
-    templateConfiguration: [templateComponent],
+    templateConfiguration: [templateComponent, templateComponentWithoutTests],
     testTypes: [testType, secondaryTestType],
     unexpected: [] as string[],
     uploads: [upload],
@@ -695,8 +750,219 @@ async function installMockApi(page: Page) {
       return fulfillJson(route, [state.template]);
     }
 
+    if (path === "/catalog-scopes" && method === "GET") {
+      return fulfillJson(route, state.catalogScopes);
+    }
+
+    if (path === "/catalog-scope/scope-1/main-categories" && method === "GET") {
+      return fulfillJson(route, paginated(state.catalogScopeMainCategories));
+    }
+
+    if (path === "/catalog-scope/scope-1/main-category" && method === "POST") {
+      const payload = request.body as Omit<
+        typeof state.catalogScopeMainCategories[number],
+        | "scope_main_category_id"
+        | "display_id"
+        | "scope_id"
+        | "main_category_id"
+        | "main_category_display_id"
+        | "created_at"
+        | "updated_at"
+      >;
+      const nextMainCategoryId = "main-2";
+      const nextScopeMainCategory = {
+        ...payload,
+        scope_main_category_id: "scope-main-2",
+        display_id: "SCOPEMAIN-002",
+        scope_id: "scope-1",
+        main_category_id: nextMainCategoryId,
+        main_category_display_id: "MAIN-002",
+        created_at: "2026-01-05T00:00:00.000Z",
+        updated_at: "2026-01-05T00:00:00.000Z",
+      };
+      state.catalogScopeMainCategories = [
+        ...state.catalogScopeMainCategories,
+        nextScopeMainCategory,
+      ];
+      state.mainCategories = [
+        ...state.mainCategories,
+        {
+          main_category_id: nextMainCategoryId,
+          display_id: "MAIN-002",
+          sort_order: payload.sort_order,
+          main_category_name: payload.main_category_name,
+          description: payload.description,
+          created_at: "2026-01-05T00:00:00.000Z",
+          updated_at: "2026-01-05T00:00:00.000Z",
+        },
+      ];
+      return fulfillJson(route, nextScopeMainCategory);
+    }
+
+    if (/^\/catalog-scope-main-category\/scope-main-\d+$/.test(path) && method === "PUT") {
+      const scopeMainCategoryId = path.split("/")[2];
+      const payload = request.body as Partial<typeof state.catalogScopeMainCategories[number]>;
+      state.catalogScopeMainCategories = state.catalogScopeMainCategories.map((mainCategory) =>
+        mainCategory.scope_main_category_id === scopeMainCategoryId
+          ? { ...mainCategory, ...payload, updated_at: "2026-01-05T00:00:00.000Z" }
+          : mainCategory
+      );
+      return fulfillJson(route, message("scope main category updated"));
+    }
+
+    if (/^\/catalog-scope-main-category\/scope-main-\d+$/.test(path) && method === "DELETE") {
+      const scopeMainCategoryId = path.split("/")[2];
+      const removed = state.catalogScopeMainCategories.find(
+        (mainCategory) => mainCategory.scope_main_category_id === scopeMainCategoryId
+      );
+      state.catalogScopeMainCategories = state.catalogScopeMainCategories.filter(
+        (mainCategory) => mainCategory.scope_main_category_id !== scopeMainCategoryId
+      );
+      if (removed) {
+        state.catalogScopeCategories = state.catalogScopeCategories.filter(
+          (category) => category.main_category_id !== removed.main_category_id
+        );
+      }
+      return fulfillJson(route, message("scope main category deleted"));
+    }
+
+    if (path === "/catalog-scope/scope-1/categories" && method === "GET") {
+      return fulfillJson(route, paginated(state.catalogScopeCategories));
+    }
+
+    if (path === "/catalog-scope/scope-1/category" && method === "POST") {
+      const payload = request.body as Omit<
+        typeof state.catalogScopeCategories[number],
+        | "scope_category_id"
+        | "display_id"
+        | "scope_id"
+        | "category_id"
+        | "category_display_id"
+        | "main_category_display_id"
+        | "main_category_name"
+        | "created_at"
+        | "updated_at"
+      >;
+      const mainCategory = state.catalogScopeMainCategories.find(
+        (item) => item.main_category_id === payload.main_category_id
+      )!;
+      const nextCategory = {
+        ...payload,
+        scope_category_id: "scope-cat-2",
+        display_id: "SCOPECAT-002",
+        scope_id: "scope-1",
+        main_category_display_id: mainCategory.main_category_display_id,
+        main_category_name: mainCategory.main_category_name,
+        category_id: "cat-2",
+        category_display_id: "CAT-002",
+        created_at: "2026-01-05T00:00:00.000Z",
+        updated_at: "2026-01-05T00:00:00.000Z",
+      };
+      state.catalogScopeCategories = [...state.catalogScopeCategories, nextCategory];
+      state.categories = [
+        ...state.categories,
+        {
+          category_id: "cat-2",
+          display_id: "CAT-002",
+          main_category_id: payload.main_category_id,
+          sort_order: payload.sort_order,
+          category_name: payload.category_name,
+          description: payload.description,
+          created_at: "2026-01-05T00:00:00.000Z",
+          updated_at: "2026-01-05T00:00:00.000Z",
+        },
+      ];
+      return fulfillJson(route, nextCategory);
+    }
+
+    if (/^\/catalog-scope-category\/scope-cat-\d+$/.test(path) && method === "PUT") {
+      const scopeCategoryId = path.split("/")[2];
+      const payload = request.body as Partial<typeof state.catalogScopeCategories[number]>;
+      const mainCategory = state.catalogScopeMainCategories.find(
+        (item) => item.main_category_id === payload.main_category_id
+      );
+      state.catalogScopeCategories = state.catalogScopeCategories.map((category) =>
+        category.scope_category_id === scopeCategoryId
+          ? {
+              ...category,
+              ...payload,
+              main_category_display_id:
+                mainCategory?.main_category_display_id || category.main_category_display_id,
+              main_category_name: mainCategory?.main_category_name || category.main_category_name,
+              updated_at: "2026-01-05T00:00:00.000Z",
+            }
+          : category
+      );
+      return fulfillJson(route, message("scope category updated"));
+    }
+
+    if (/^\/catalog-scope-category\/scope-cat-\d+$/.test(path) && method === "DELETE") {
+      const scopeCategoryId = path.split("/")[2];
+      state.catalogScopeCategories = state.catalogScopeCategories.filter(
+        (category) => category.scope_category_id !== scopeCategoryId
+      );
+      return fulfillJson(route, message("scope category deleted"));
+    }
+
     if (path === "/template/tpl-1/configuration" && method === "GET") {
       return fulfillJson(route, state.templateConfiguration);
+    }
+
+    if (path === "/template/tpl-1/configuration" && method === "PUT") {
+      const payload = request.body as {
+        components: Array<
+          Partial<typeof state.templateConfiguration[number]> & {
+            test_ids?: string[];
+          }
+        >;
+      };
+
+      state.templateConfiguration = payload.components.map((componentPayload, index) => {
+        const existing = state.templateConfiguration.find(
+          (component) =>
+            component.template_component_id === componentPayload.template_component_id
+        );
+        const testIds = componentPayload.test_ids || [];
+        const nextComponentId =
+          componentPayload.template_component_id || `tc-${index + 1}`;
+        const nextTests = testIds.map((testId, testIndex) => {
+          const testType = state.testTypes.find((item) => item.test_id === testId)!;
+          const templateComponentTestId = `tct-${index + 1}-${testIndex + 1}`;
+          return {
+            template_component_test_id: templateComponentTestId,
+            template_component_test_display_id: templateComponentTestId.toUpperCase(),
+            template_component_id: nextComponentId,
+            test_id: testId,
+            position: testIndex + 1,
+            created_at: "2026-01-05T00:00:00.000Z",
+            test_name: testType.test_name,
+            validity_duration: testType.validity_duration,
+            description: testType.description,
+          };
+        });
+        const componentFields = { ...componentPayload };
+        delete componentFields.test_ids;
+
+        return {
+          ...existing,
+          ...componentFields,
+          template_component_id: nextComponentId,
+          display_id: existing?.display_id || `TC-${String(index + 1).padStart(3, "0")}`,
+          template_id: "tpl-1",
+          position: index + 1,
+          created_at: existing?.created_at || "2026-01-05T00:00:00.000Z",
+          tests: nextTests,
+        };
+      });
+
+      return fulfillJson(route, {
+        message: "template configured successfully",
+        components_configured: state.templateConfiguration.length,
+        tests_assigned: state.templateConfiguration.reduce(
+          (count, component) => count + templateTests(component).length,
+          0
+        ),
+      });
     }
 
     if (path === "/template/tpl-1/component" && method === "POST") {
@@ -736,7 +1002,7 @@ async function installMockApi(page: Page) {
       const templateComponentId = path.split("/")[2];
       const payload = request.body as { test_id: string };
       const testType = state.testTypes.find((item) => item.test_id === payload.test_id)!;
-      const nextTestId = `tct-${state.templateConfiguration.reduce((count, component) => count + component.tests.length, 0) + 1}`;
+      const nextTestId = `tct-${state.templateConfiguration.reduce((count, component) => count + templateTests(component).length, 0) + 1}`;
       const nextTest = {
         template_component_test_id: nextTestId,
         template_component_test_display_id: nextTestId.toUpperCase(),
@@ -750,7 +1016,7 @@ async function installMockApi(page: Page) {
       };
       state.templateConfiguration = state.templateConfiguration.map((component) =>
         component.template_component_id === templateComponentId
-          ? { ...component, tests: [...component.tests, nextTest] }
+          ? { ...component, tests: [...templateTests(component), nextTest] }
           : component
       );
       return fulfillJson(route, nextTest);
@@ -760,7 +1026,7 @@ async function installMockApi(page: Page) {
       const templateComponentTestId = path.split("/")[2];
       state.templateConfiguration = state.templateConfiguration.map((component) => ({
         ...component,
-        tests: component.tests.filter((testItem) => testItem.template_component_test_id !== templateComponentTestId),
+        tests: templateTests(component).filter((testItem) => testItem.template_component_test_id !== templateComponentTestId),
       }));
       return fulfillJson(route, message("template component test deleted"));
     }
@@ -1088,6 +1354,7 @@ test.describe("mocked refactored page smoke coverage", () => {
 
     await expect(page.getByRole("heading", { name: "Diving Harness Template" })).toBeVisible();
     await expect(page.getByText("Harness Blueprint", { exact: true })).toBeVisible();
+    await expect(page.getByText("Spare Blueprint", { exact: true })).toBeVisible();
     await expect(page.getByText("Annual Load Test")).toBeVisible();
 
     await page.getByRole("button", { name: "Edit details" }).click();
@@ -1132,9 +1399,10 @@ test.describe("mocked refactored page smoke coverage", () => {
     await componentDialog.getByRole("button", { name: "Save component" }).click();
     await expect(componentDialog.getByText("Choose a category.")).toBeVisible();
     expect(state.recorded.filter((request) => request.method === "POST" && request.path === "/v1/template/tpl-1/component")).toHaveLength(0);
+    expect(state.recorded.filter((request) => request.method === "PUT" && request.path === "/v1/template/tpl-1/configuration")).toHaveLength(0);
 
     await componentDialog.getByLabel("Component name").fill("  Wet Bell Frame  ");
-    await selectCloudscapeOption(page, "template-component-category", "Lifting");
+    await selectCloudscapeOption(page, "template-component-category", "Diving Systems > Lifting");
     await componentDialog.getByLabel("Description").fill("  Blueprint component  ");
     await componentDialog.getByLabel("Serial number").fill("  WB-100  ");
     await componentDialog.getByLabel("Manufacturer").fill("  Porto Marine  ");
@@ -1148,8 +1416,13 @@ test.describe("mocked refactored page smoke coverage", () => {
     await selectCloudscapeMultiOption(page, "template-component-tests", "Annual Load Test");
     await componentDialog.getByRole("button", { name: "Save component" }).click();
 
-    expect(latestRequest(state, "POST", "/v1/template/tpl-1/component").body).toMatchObject({
+    const configureRequest = latestRequest(state, "PUT", "/v1/template/tpl-1/configuration");
+    const createdComponent = (configureRequest.body as {
+      components: Array<Record<string, unknown>>;
+    }).components.find((component) => component.name === "Wet Bell Frame");
+    expect(createdComponent).toMatchObject({
       category_id: "cat-1",
+      scope_category_id: "scope-cat-1",
       name: "Wet Bell Frame",
       description: "Blueprint component",
       serial_number: "WB-100",
@@ -1162,10 +1435,10 @@ test.describe("mocked refactored page smoke coverage", () => {
       class: "B",
       class_code: "B2",
       safety_critical: "NO",
+      test_ids: ["test-1"],
     });
-    expect(latestRequest(state, "POST", "/v1/template-component/tc-2/test").body).toMatchObject({
-      test_id: "test-1",
-    });
+    expect(state.recorded.filter((request) => request.method === "POST" && request.path === "/v1/template/tpl-1/component")).toHaveLength(0);
+    expect(state.recorded.filter((request) => request.method === "POST" && /\/v1\/template-component\/.*\/test/.test(request.path))).toHaveLength(0);
     await expect(componentDialog).toHaveCount(0);
     await expect(page.getByText("Template component added")).toBeVisible();
     await expect(page.getByText("Wet Bell Frame", { exact: true })).toBeVisible();
@@ -1185,13 +1458,17 @@ test.describe("mocked refactored page smoke coverage", () => {
     await selectCloudscapeMultiOption(page, "template-component-tests", "NDT Inspection");
     await editDialog.getByRole("button", { name: "Save component" }).click();
 
-    expect(latestRequest(state, "PUT", "/v1/template-component/tc-1").body).toMatchObject({
+    const updateConfigurationRequest = latestRequest(state, "PUT", "/v1/template/tpl-1/configuration");
+    const updatedComponent = (updateConfigurationRequest.body as {
+      components: Array<Record<string, unknown>>;
+    }).components.find((component) => component.template_component_id === "tc-1");
+    expect(updatedComponent).toMatchObject({
       name: "Updated Blueprint",
       manufacturer: "Updated Maker",
+      test_ids: ["test-1", "test-2"],
     });
-    expect(latestRequest(state, "POST", "/v1/template-component/tc-1/test").body).toMatchObject({
-      test_id: "test-2",
-    });
+    expect(state.recorded.filter((request) => request.method === "PUT" && request.path === "/v1/template-component/tc-1")).toHaveLength(0);
+    expect(state.recorded.filter((request) => request.method === "POST" && request.path === "/v1/template-component/tc-1/test")).toHaveLength(0);
     await expect(editDialog).toHaveCount(0);
     await expect(page.getByText("Template component updated")).toBeVisible();
     await expect(page.getByText("Updated Blueprint", { exact: true })).toBeVisible();
@@ -1204,7 +1481,11 @@ test.describe("mocked refactored page smoke coverage", () => {
 
     await page.getByRole("row", { name: /Updated Blueprint/ }).getByRole("button", { name: "Delete" }).click();
     await page.getByRole("dialog", { name: "Delete template component" }).getByRole("button", { name: "Delete" }).click();
-    latestRequest(state, "DELETE", "/v1/template-component/tc-1");
+    const deleteConfigurationRequest = latestRequest(state, "PUT", "/v1/template/tpl-1/configuration");
+    expect((deleteConfigurationRequest.body as {
+      components: Array<Record<string, unknown>>;
+    }).components.some((component) => component.template_component_id === "tc-1")).toBe(false);
+    expect(state.recorded.filter((request) => request.method === "DELETE" && request.path === "/v1/template-component/tc-1")).toHaveLength(0);
     await expect(page.getByText("Template component deleted")).toBeVisible();
     await expect(page.getByText("Updated Blueprint", { exact: true })).toHaveCount(0);
     await expectNoUnexpectedApi(state);
@@ -1351,7 +1632,7 @@ test.describe("mocked refactored page smoke coverage", () => {
     await expect(page.getByRole("heading", { name: "Poseidon Lift Bag" })).toBeVisible();
     await expect(page).toHaveURL(/\/assets\/asset-1\?component=comp-1$/);
     await expect(page.getByRole("heading", { name: "Components" })).toBeVisible();
-    await expect(page.getByText("Diving Systems")).toBeVisible();
+    await expect(page.getByText("Diving Systems", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Lifting/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Main Harness/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Main Harness" })).toBeVisible();
@@ -1434,21 +1715,21 @@ test.describe("mocked refactored page smoke coverage", () => {
   test("CatalogPage preserves main category and category lifecycle flows", async ({ page }) => {
     const state = await bootMockedAdmin(page, "/catalog");
 
-    await expect(page.getByRole("heading", { name: "Catalog" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Catalog", exact: true })).toBeVisible();
     await expect(page.getByRole("row", { name: /Diving Systems 1 Diving system assets/ })).toBeVisible();
 
     await page.getByRole("button", { name: "Create main category" }).click();
     const mainCategoryDialog = page.getByRole("dialog", { name: "Create main category" });
     await mainCategoryDialog.getByRole("button", { name: "Create main category" }).click();
     await expect(mainCategoryDialog.getByText("Main category name must be at least 2 characters.")).toBeVisible();
-    expect(state.recorded.filter((request) => request.method === "POST" && request.path === "/v1/main-category")).toHaveLength(0);
+    expect(state.recorded.filter((request) => request.method === "POST" && request.path === "/v1/catalog-scope/scope-1/main-category")).toHaveLength(0);
 
     await mainCategoryDialog.getByLabel("Main category name").fill("  Marine Systems  ");
     await mainCategoryDialog.getByLabel("Main category order").fill("2");
     await mainCategoryDialog.getByLabel("Description").fill("  Marine catalog group  ");
     await mainCategoryDialog.getByRole("button", { name: "Create main category" }).click();
 
-    expect(latestRequest(state, "POST", "/v1/main-category").body).toMatchObject({
+    expect(latestRequest(state, "POST", "/v1/catalog-scope/scope-1/main-category").body).toMatchObject({
       sort_order: 2,
       main_category_name: "Marine Systems",
       description: "Marine catalog group",
@@ -1462,7 +1743,7 @@ test.describe("mocked refactored page smoke coverage", () => {
     await editMainDialog.getByLabel("Description").fill("  Updated diving group  ");
     await editMainDialog.getByRole("button", { name: "Save changes" }).click();
 
-    expect(latestRequest(state, "PUT", "/v1/main-category/main-1").body).toMatchObject({
+    expect(latestRequest(state, "PUT", "/v1/catalog-scope-main-category/scope-main-1").body).toMatchObject({
       sort_order: 1,
       main_category_name: "Diving Systems",
       description: "Updated diving group",
@@ -1474,14 +1755,14 @@ test.describe("mocked refactored page smoke coverage", () => {
     const categoryDialog = page.getByRole("dialog", { name: "Create category" });
     await categoryDialog.getByRole("button", { name: "Create category" }).click();
     await expect(categoryDialog.getByText("Category name must be at least 2 characters.")).toBeVisible();
-    expect(state.recorded.filter((request) => request.method === "POST" && request.path === "/v1/category")).toHaveLength(0);
+    expect(state.recorded.filter((request) => request.method === "POST" && request.path === "/v1/catalog-scope/scope-1/category")).toHaveLength(0);
 
     await categoryDialog.getByLabel("Category name").fill("  Rigging  ");
     await categoryDialog.getByLabel("Category order").fill("2");
     await categoryDialog.getByLabel("Description").fill("  Rigging components  ");
     await categoryDialog.getByRole("button", { name: "Create category" }).click();
 
-    expect(latestRequest(state, "POST", "/v1/category").body).toMatchObject({
+    expect(latestRequest(state, "POST", "/v1/catalog-scope/scope-1/category").body).toMatchObject({
       main_category_id: "main-1",
       sort_order: 2,
       category_name: "Rigging",
@@ -1499,7 +1780,7 @@ test.describe("mocked refactored page smoke coverage", () => {
 
     await page.getByRole("row", { name: /Rigging 1 2 Diving Systems Rigging components/ }).getByRole("button", { name: "Delete" }).click();
     await page.getByRole("dialog", { name: "Delete catalog entry" }).getByRole("button", { name: "Delete" }).click();
-    latestRequest(state, "DELETE", "/v1/category/cat-2");
+    latestRequest(state, "DELETE", "/v1/catalog-scope-category/scope-cat-2");
     await expect(page.getByText("Catalog entry deleted", { exact: true })).toBeVisible();
     await expect(page.getByRole("row", { name: /Rigging 1 2 Diving Systems Rigging components/ })).toHaveCount(0);
     await expectNoUnexpectedApi(state);
@@ -1508,7 +1789,7 @@ test.describe("mocked refactored page smoke coverage", () => {
   test("CatalogPage preserves test type and equipment type lifecycle flows", async ({ page }) => {
     const state = await bootMockedAdmin(page, "/catalog");
 
-    await expect(page.getByRole("heading", { name: "Catalog" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Catalog", exact: true })).toBeVisible();
     await expect(page.getByRole("row", { name: /Annual Load Test/ })).toBeVisible();
 
     await page.getByRole("button", { name: "Create test type" }).click();

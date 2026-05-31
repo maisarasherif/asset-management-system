@@ -18,6 +18,27 @@ interface CreatedTestType {
   test_id: string;
 }
 
+interface CreatedMainCategory {
+  main_category_id: string;
+}
+
+interface CreatedCategory {
+  category_id: string;
+}
+
+interface CatalogScope {
+  scope_id: string;
+}
+
+interface CreatedScopeMainCategory {
+  scope_main_category_id: string;
+}
+
+interface CreatedScopeCategory {
+  scope_category_id: string;
+  category_id: string;
+}
+
 interface PaginatedResponse<T> {
   data: T[];
 }
@@ -122,6 +143,10 @@ test.describe("single-asset equipment flow", () => {
     let equipmentType: CreatedEquipmentType | null = null;
     let visualTest: CreatedTestType | null = null;
     let loadTest: CreatedTestType | null = null;
+    let mainCategory: CreatedMainCategory | null = null;
+    let category: CreatedCategory | null = null;
+    let scopeMainCategory: CreatedScopeMainCategory | null = null;
+    let scopeCategory: CreatedScopeCategory | null = null;
 
     try {
       equipmentType = await postJson<CreatedEquipmentType>(
@@ -146,6 +171,49 @@ test.describe("single-asset equipment flow", () => {
         validity_duration: 6,
         description: "Created by Playwright for single-asset equipment.",
       });
+
+      const sortOrderBase = Math.floor(Date.now() / 1000);
+      const mainCategoryName = `PW Single Main ${suffix}`;
+      const categoryName = `PW Single Category ${suffix}`;
+      mainCategory = await postJson<CreatedMainCategory>(setupRequest, token, "/main-category", {
+        main_category_name: mainCategoryName,
+        sort_order: sortOrderBase,
+        description: "Created by Playwright for single-asset equipment.",
+      });
+      category = await postJson<CreatedCategory>(setupRequest, token, "/category", {
+        main_category_id: mainCategory.main_category_id,
+        category_name: categoryName,
+        sort_order: sortOrderBase + 1,
+        description: "Created by Playwright for single-asset equipment.",
+      });
+
+      const defaultScope = await getJson<CatalogScope>(
+        setupRequest,
+        token,
+        "/catalog-scopes/default"
+      );
+      scopeMainCategory = await postJson<CreatedScopeMainCategory>(
+        setupRequest,
+        token,
+        `/catalog-scope/${defaultScope.scope_id}/main-category`,
+        {
+          main_category_name: mainCategoryName,
+          sort_order: sortOrderBase + 2,
+          description: "Created by Playwright for single-asset equipment.",
+        }
+      );
+      scopeCategory = await postJson<CreatedScopeCategory>(
+        setupRequest,
+        token,
+        `/catalog-scope/${defaultScope.scope_id}/category`,
+        {
+          main_category_id: mainCategory.main_category_id,
+          category_name: categoryName,
+          sort_order: sortOrderBase + 3,
+          description: "Created by Playwright for single-asset equipment.",
+        }
+      );
+      expect(scopeCategory.category_id).toBe(category.category_id);
 
       await page.goto("/login");
       await page.getByLabel("Email").fill(ADMIN_EMAIL!);
@@ -215,7 +283,8 @@ test.describe("single-asset equipment flow", () => {
         headers: { Authorization: `Bearer ${token}` },
         data: {
           asset_id: assetId,
-          category_id: "00000000-0000-4000-8000-000000000000",
+          category_id: category.category_id,
+          scope_category_id: scopeCategory.scope_category_id,
           name: "Forbidden component",
           serial_number: "",
           manufacturer: "",
@@ -234,6 +303,26 @@ test.describe("single-asset equipment flow", () => {
     } finally {
       if (assetId) {
         await deleteIfPresent(setupRequest, token, `/asset/${assetId}`);
+      }
+      if (scopeCategory) {
+        await deleteIfPresent(
+          setupRequest,
+          token,
+          `/catalog-scope-category/${scopeCategory.scope_category_id}`
+        );
+      }
+      if (category) {
+        await deleteIfPresent(setupRequest, token, `/category/${category.category_id}`);
+      }
+      if (scopeMainCategory) {
+        await deleteIfPresent(
+          setupRequest,
+          token,
+          `/catalog-scope-main-category/${scopeMainCategory.scope_main_category_id}`
+        );
+      }
+      if (mainCategory) {
+        await deleteIfPresent(setupRequest, token, `/main-category/${mainCategory.main_category_id}`);
       }
       if (equipmentType) {
         await deleteIfPresent(setupRequest, token, `/equipment-type/${equipmentType.equipment_type_id}`);

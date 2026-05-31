@@ -1,7 +1,7 @@
 -- name: CreateTemplateComponent :one
 INSERT INTO template_components (
     display_id,
-    template_id, category_id, position, name, description,
+    template_id, category_id, scope_category_id, position, name, description,
     serial_number, manufacturer, location, assigned_project, equipment_type,
     structure, model, class, class_code, safety_critical, created_at
 )
@@ -9,6 +9,7 @@ VALUES (
     next_display_id('template_component_display_id_seq'),
     sqlc.arg(template_id),
     sqlc.arg(category_id),
+    sqlc.arg(scope_category_id),
     COALESCE((SELECT MAX(position) + 1 FROM template_components WHERE template_id = sqlc.arg(template_id)), 1),
     sqlc.arg(name),
     sqlc.arg(description),
@@ -29,6 +30,7 @@ RETURNING
     display_id,
     template_id,
     category_id,
+    scope_category_id,
     position,
     name,
     description,
@@ -50,6 +52,7 @@ SELECT
     tc.display_id,
     tc.template_id,
     tc.category_id,
+    tc.scope_category_id,
     tc.position,
     tc.name,
     tc.description,
@@ -81,6 +84,7 @@ SELECT
     display_id,
     template_id,
     category_id,
+    scope_category_id,
     position,
     name,
     description,
@@ -102,6 +106,7 @@ LIMIT 1;
 -- name: UpdateTemplateComponent :execrows
 UPDATE template_components
 SET category_id = sqlc.arg(category_id),
+    scope_category_id = sqlc.arg(scope_category_id),
     name = sqlc.arg(name),
     description = sqlc.arg(description),
     serial_number = sqlc.arg(serial_number),
@@ -132,3 +137,8 @@ WHERE template_id = $1;
 SELECT COUNT(*)
 FROM template_components
 WHERE category_id = $1;
+
+-- name: CountTemplateComponentsByScopeCategoryID :one
+SELECT COUNT(*)
+FROM template_components
+WHERE scope_category_id = $1;

@@ -7,7 +7,6 @@ import {
   ContentLayout,
   FormField,
   Header,
-  Select,
   SpaceBetween,
   StatusIndicator,
   Table,
@@ -30,6 +29,7 @@ import {
   uploadCertificateFile,
 } from "../../lib/api/ams";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
+import { Select } from "../../components/shared/OptimizedSelect";
 import { TableCellText } from "../../components/shared/TableCells";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";

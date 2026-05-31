@@ -4,6 +4,7 @@ SELECT
     display_id,
     asset_id,
     category_id,
+    scope_category_id,
     component_kind,
     single_asset_equipment_id,
     name,
@@ -33,6 +34,7 @@ SELECT
     display_id,
     asset_id,
     category_id,
+    scope_category_id,
     component_kind,
     single_asset_equipment_id,
     name,
@@ -65,6 +67,7 @@ SELECT
     display_id,
     asset_id,
     category_id,
+    scope_category_id,
     component_kind,
     single_asset_equipment_id,
     name,
@@ -90,10 +93,15 @@ SELECT COUNT(*)
 FROM components
 WHERE category_id = $1;
 
+-- name: CountComponentsByScopeCategoryID :one
+SELECT COUNT(*)
+FROM components
+WHERE scope_category_id = $1;
+
 -- name: CreateComponent :one
 INSERT INTO components (
     display_id,
-    asset_id, category_id, name, serial_number, manufacturer,
+    asset_id, category_id, scope_category_id, name, serial_number, manufacturer,
     description, location, assigned_project, equipment_type, structure, model,
     class, class_code, safety_critical, created_at, updated_at
 )
@@ -101,6 +109,7 @@ VALUES (
     next_display_id('component_display_id_seq'),
     sqlc.arg(asset_id),
     sqlc.arg(category_id),
+    sqlc.arg(scope_category_id),
     sqlc.arg(name),
     sqlc.arg(serial_number),
     sqlc.arg(manufacturer),
@@ -121,6 +130,7 @@ RETURNING
     display_id,
     asset_id,
     category_id,
+    scope_category_id,
     component_kind,
     single_asset_equipment_id,
     name,
@@ -143,6 +153,7 @@ INSERT INTO components (
     display_id,
     asset_id,
     category_id,
+    scope_category_id,
     component_kind,
     single_asset_equipment_id,
     name,
@@ -163,6 +174,7 @@ INSERT INTO components (
 VALUES (
     next_display_id('component_display_id_seq'),
     sqlc.arg(asset_id),
+    NULL,
     NULL,
     'SELF',
     sqlc.arg(single_asset_equipment_id),
@@ -186,6 +198,7 @@ RETURNING
     display_id,
     asset_id,
     category_id,
+    scope_category_id,
     component_kind,
     single_asset_equipment_id,
     name,
@@ -206,6 +219,7 @@ RETURNING
 -- name: UpdateComponent :execrows
 UPDATE components
 SET category_id = sqlc.arg(category_id),
+    scope_category_id = sqlc.arg(scope_category_id),
     name = sqlc.arg(name),
     serial_number = sqlc.arg(serial_number),
     manufacturer = sqlc.arg(manufacturer),

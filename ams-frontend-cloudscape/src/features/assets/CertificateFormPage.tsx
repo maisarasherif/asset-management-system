@@ -10,7 +10,6 @@ import {
   FormField,
   Header,
   Input,
-  Select,
   SpaceBetween,
   Textarea,
   type SelectProps,
@@ -28,6 +27,7 @@ import {
   patchCertificate,
   uploadCertificateFile,
 } from "../../lib/api/ams";
+import { Select } from "../../components/shared/OptimizedSelect";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type {

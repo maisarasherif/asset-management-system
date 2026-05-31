@@ -3,7 +3,6 @@ import {
   Box,
   Flashbar,
   HelpPanel,
-  Select,
   SideNavigation,
   SpaceBetween,
   TopNavigation,
@@ -11,6 +10,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Select } from "../shared/OptimizedSelect";
 import { listAllAssets, listAllClientAssets, logoutRequest } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";

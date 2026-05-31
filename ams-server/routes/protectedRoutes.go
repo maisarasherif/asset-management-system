@@ -58,6 +58,18 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	admin.PATCH("/main-category/:main_category_id", controller.PatchMainCategory(pool))
 	admin.DELETE("/main-category/:main_category_id", controller.DeleteMainCategory(pool))
 
+	// Catalog Scope Routes
+	admin.POST("/catalog-scope", controller.AddCatalogScope(pool))
+	admin.PUT("/catalog-scope/:scope_id", controller.UpdateCatalogScope(pool))
+	admin.POST("/catalog-scope/:scope_id/duplicate", controller.DuplicateCatalogScope(pool))
+	admin.DELETE("/catalog-scope/:scope_id", controller.DeleteCatalogScope(pool))
+	admin.POST("/catalog-scope/:scope_id/main-category", controller.AddCatalogScopeMainCategory(pool))
+	admin.PUT("/catalog-scope-main-category/:scope_main_category_id", controller.UpdateCatalogScopeMainCategory(pool))
+	admin.DELETE("/catalog-scope-main-category/:scope_main_category_id", controller.DeleteCatalogScopeMainCategory(pool))
+	admin.POST("/catalog-scope/:scope_id/category", controller.AddCatalogScopeCategory(pool))
+	admin.PUT("/catalog-scope-category/:scope_category_id", controller.UpdateCatalogScopeCategory(pool))
+	admin.DELETE("/catalog-scope-category/:scope_category_id", controller.DeleteCatalogScopeCategory(pool))
+
 	// Category Routes
 	admin.POST("/category", controller.AddCategory(pool))
 	admin.PUT("/category/:category_id", controller.UpdateCategory(pool))
@@ -140,6 +152,12 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	// Main Category Routes
 	protected.GET("/main-categories", controller.GetMainCategories(pool))
 	protected.GET("/main-category/:main_category_id", controller.GetMainCategory(pool))
+
+	// Catalog Scope Routes
+	protected.GET("/catalog-scopes", controller.GetCatalogScopes(pool))
+	protected.GET("/catalog-scopes/default", controller.GetDefaultCatalogScope(pool))
+	protected.GET("/catalog-scope/:scope_id/main-categories", controller.GetCatalogScopeMainCategories(pool))
+	protected.GET("/catalog-scope/:scope_id/categories", controller.GetCatalogScopeCategories(pool))
 
 	// Category Routes
 	protected.GET("/categories", controller.GetCategories(pool))

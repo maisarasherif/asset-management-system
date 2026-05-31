@@ -8,7 +8,6 @@ import {
   FormField,
   Header,
   Modal,
-  Select,
   SpaceBetween,
   Table,
   type SelectProps,
@@ -16,6 +15,7 @@ import {
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Select } from "../../components/shared/OptimizedSelect";
 import { TableCellText } from "../../components/shared/TableCells";
 import {
   forceRenotifyCertificate,

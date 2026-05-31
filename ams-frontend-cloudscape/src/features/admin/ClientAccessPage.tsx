@@ -9,7 +9,6 @@ import {
   Header,
   Input,
   Modal,
-  Select,
   SpaceBetween,
   Table,
   Textarea,
@@ -17,7 +16,8 @@ import {
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Select } from "../../components/shared/OptimizedSelect";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
 import {
@@ -89,6 +89,10 @@ function ProjectEditorModal({
   onSubmit: (editor: NonNullable<ProjectEditor>) => void;
 }) {
   const [draft, setDraft] = useState<NonNullable<ProjectEditor> | null>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
 
   const selectedStatus =
     PROJECT_STATUS_OPTIONS.find((option) => option.value === draft?.status) ??
@@ -167,6 +171,10 @@ function AccessEditorModal({
   onSubmit: (editor: NonNullable<AccessEditor>) => void;
 }) {
   const [draft, setDraft] = useState<NonNullable<AccessEditor> | null>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
 
   const selectedClient = clientOptions.find((option) => option.value === draft?.user_id) ?? null;
   const selectedProject =

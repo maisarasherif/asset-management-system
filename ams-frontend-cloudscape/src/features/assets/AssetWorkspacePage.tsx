@@ -18,18 +18,25 @@ import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageS
 import { RouterLink } from "../../components/shared/RouterLink";
 import { TableCellText } from "../../components/shared/TableCells";
 import {
-	  getAsset,
-	  getSingleAssetEquipment,
-	  listAssetRoutineMaintenance,
-  listAllCategories,
-  listAllMainCategories,
+  getAsset,
+  getSingleAssetEquipment,
+  listAllCatalogScopeCategories,
+  listCatalogScopes,
+  listAssetRoutineMaintenance,
   listAllCertificatesByComponent,
   listAllComponentsByAsset,
   getCertificateDownloadUrl,
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { Asset, AssetMaintenanceEvent, Certificate, ComponentRecord, SingleAssetEquipment } from "../../types/ams";
+import type {
+  Asset,
+  AssetMaintenanceEvent,
+  CatalogScopeCategory,
+  Certificate,
+  ComponentRecord,
+  SingleAssetEquipment,
+} from "../../types/ams";
 import { formatDate, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
 
@@ -95,14 +102,20 @@ export function AssetWorkspacePage() {
     enabled: Boolean(assetId),
   });
 
-  const categoriesQuery = useQuery({
-    queryKey: ["categories", "all"],
-    queryFn: listAllCategories,
+  const catalogScopesQuery = useQuery({
+    queryKey: ["catalog-scopes"],
+    queryFn: listCatalogScopes,
   });
 
-  const mainCategoriesQuery = useQuery({
-    queryKey: ["main-categories", "all"],
-    queryFn: listAllMainCategories,
+  const scopeCategoriesQuery = useQuery({
+    queryKey: ["catalog-scope-categories", "asset-workspace", "all-scopes"],
+    queryFn: () =>
+      Promise.all(
+        (catalogScopesQuery.data || []).map((scope) =>
+          listAllCatalogScopeCategories(scope.scope_id)
+        )
+      ),
+    enabled: Boolean(catalogScopesQuery.data?.length),
   });
 
   const maintenanceQuery = useQuery({
@@ -162,51 +175,47 @@ export function AssetWorkspacePage() {
   });
 
   const categoryMap = useMemo(
-    () =>
-      new Map(
-        (categoriesQuery.data || []).map((category) => [
-          category.category_id,
-          category.category_name,
-        ])
-      ),
-    [categoriesQuery.data]
+    () => {
+      const labels = new Map<string, string>();
+      for (const category of (scopeCategoriesQuery.data || []).flat()) {
+        const label = `${category.main_category_name} > ${category.category_name}`;
+        labels.set(category.scope_category_id, label);
+        if (!labels.has(category.category_id)) {
+          labels.set(category.category_id, label);
+        }
+      }
+      return labels;
+    },
+    [scopeCategoriesQuery.data]
   );
 
   const categoryDetailMap = useMemo(
-    () =>
-      new Map(
-        (categoriesQuery.data || []).map((category) => [category.category_id, category])
-      ),
-    [categoriesQuery.data]
-  );
-
-  const mainCategoryMap = useMemo(
-    () =>
-      new Map(
-        (mainCategoriesQuery.data || []).map((mainCategory) => [
-          mainCategory.main_category_id,
-          mainCategory.main_category_name,
-        ])
-      ),
-    [mainCategoriesQuery.data]
+    () => {
+      const categories = new Map<string, CatalogScopeCategory>();
+      for (const category of (scopeCategoriesQuery.data || []).flat()) {
+        categories.set(category.scope_category_id, category);
+        if (!categories.has(category.category_id)) {
+          categories.set(category.category_id, category);
+        }
+      }
+      return categories;
+    },
+    [scopeCategoriesQuery.data]
   );
 
   const groupedComponents = useMemo(() => {
     const sections: ComponentGroupSection[] = [];
 
     for (const component of componentsQuery.data || []) {
-	      if (component.component_kind === "SELF") {
-	        continue;
-	      }
-	      const category = component.category_id
-	        ? categoryDetailMap.get(component.category_id)
-	        : undefined;
+      if (component.component_kind === "SELF") {
+        continue;
+      }
+      const categoryKey = component.scope_category_id || component.category_id;
+      const category = categoryKey ? categoryDetailMap.get(categoryKey) : undefined;
       const categoryName = category?.category_name || "Uncategorized";
-      const mainCategoryName =
-        (category?.main_category_id && mainCategoryMap.get(category.main_category_id)) ||
-        "Other categories";
-      const sectionKey = mainCategoryName;
-      const groupKey = `${mainCategoryName}::${categoryName}`;
+      const mainCategoryName = category?.main_category_name || "Other categories";
+      const sectionKey = category?.main_category_id || mainCategoryName;
+      const groupKey = category?.scope_category_id || `${sectionKey}::${categoryName}`;
       const existingSection = sections[sections.length - 1];
       const section =
         existingSection && existingSection.key === sectionKey
@@ -239,7 +248,7 @@ export function AssetWorkspacePage() {
     }
 
     return sections;
-  }, [categoryDetailMap, componentsQuery.data, mainCategoryMap]);
+  }, [categoryDetailMap, componentsQuery.data]);
 
   if (!assetId) {
     return <PageError description="The asset route is missing." title="Invalid route" />;
@@ -248,7 +257,8 @@ export function AssetWorkspacePage() {
   if (
     assetQuery.isLoading ||
     componentsQuery.isLoading ||
-    mainCategoriesQuery.isLoading ||
+    catalogScopesQuery.isLoading ||
+    scopeCategoriesQuery.isLoading ||
     (isSingleEquipment && equipmentQuery.isLoading)
   ) {
     return <PageLoading>{"Loading the asset workspace\u2026"}</PageLoading>;
@@ -257,7 +267,8 @@ export function AssetWorkspacePage() {
   if (
     assetQuery.isError ||
     componentsQuery.isError ||
-    mainCategoriesQuery.isError ||
+    catalogScopesQuery.isError ||
+    scopeCategoriesQuery.isError ||
     (isSingleEquipment && equipmentQuery.isError) ||
     !assetQuery.data ||
     !componentsQuery.data
@@ -267,11 +278,12 @@ export function AssetWorkspacePage() {
         description="The asset workspace could not be loaded."
         onRetry={() => {
           void assetQuery.refetch();
-              void componentsQuery.refetch();
-              void mainCategoriesQuery.refetch();
-              if (isSingleEquipment) {
-                void equipmentQuery.refetch();
-              }
+          void componentsQuery.refetch();
+          void catalogScopesQuery.refetch();
+          void scopeCategoriesQuery.refetch();
+          if (isSingleEquipment) {
+            void equipmentQuery.refetch();
+          }
         }}
       />
     );
@@ -650,7 +662,9 @@ function ComponentDetailHeader({
         selectedComponent
           ? isSingleEquipment
             ? equipment?.equipment_type_name || "Equipment detail"
-            : (selectedComponent.category_id && categoryMap.get(selectedComponent.category_id)) ||
+            : (selectedComponent.scope_category_id &&
+                categoryMap.get(selectedComponent.scope_category_id)) ||
+              (selectedComponent.category_id && categoryMap.get(selectedComponent.category_id)) ||
               "Component detail"
           : isSingleEquipment
             ? "Equipment context could not be loaded."

@@ -9,7 +9,6 @@ import {
   Header,
   Input,
   Modal,
-  Select,
   SpaceBetween,
   Table,
   Textarea,
@@ -17,7 +16,8 @@ import {
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Select } from "../../components/shared/OptimizedSelect";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
 import {
@@ -135,7 +135,6 @@ function UserEditorModal({
   errorMessage,
   loading,
   canManageSuperAdmins,
-  onChange,
   onDismiss,
   onSubmit,
 }: {
@@ -144,29 +143,34 @@ function UserEditorModal({
   errorMessage: string;
   loading: boolean;
   canManageSuperAdmins: boolean;
-  onChange: Dispatch<SetStateAction<UserEditor>>;
   onDismiss: () => void;
   onSubmit: (editor: NonNullable<UserEditor>) => void;
 }) {
+  const [draft, setDraft] = useState<UserEditor>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
+
   const roleOptions = canManageSuperAdmins
     ? ROLE_OPTIONS
     : ROLE_OPTIONS.filter((option) => option.value !== "ADMIN" && option.value !== "SUPER_ADMIN");
   const selectedRoleOption =
-    roleOptions.find((option) => option.value === editor?.role) ?? roleOptions[0];
+    roleOptions.find((option) => option.value === draft?.role) ?? roleOptions[0];
   const selectedStatusOption =
-    USER_STATUS_OPTIONS.find((option) => option.value === editor?.status) ??
+    USER_STATUS_OPTIONS.find((option) => option.value === draft?.status) ??
     USER_STATUS_OPTIONS[0];
 
   return (
     <Modal
       visible={visible}
-      header={editor?.mode === "edit" ? "Edit user" : "Create user"}
+      header={draft?.mode === "edit" ? "Edit user" : "Create user"}
       onDismiss={onDismiss}
       footer={
         <SpaceBetween direction="horizontal" size="xs">
           <Button onClick={onDismiss}>Cancel</Button>
-          <Button loading={loading} variant="primary" onClick={() => editor && onSubmit(editor)}>
-            {editor?.mode === "edit" ? "Save changes" : "Create user"}
+          <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
+            {draft?.mode === "edit" ? "Save changes" : "Create user"}
           </Button>
         </SpaceBetween>
       }
@@ -175,36 +179,36 @@ function UserEditorModal({
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="First name">
           <Input
-            value={editor?.first_name || ""}
+            value={draft?.first_name || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, first_name: detail.value })
+              setDraft((current) => current && { ...current, first_name: detail.value })
             }
           />
         </FormField>
         <FormField label="Last name">
           <Input
-            value={editor?.last_name || ""}
+            value={draft?.last_name || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, last_name: detail.value })
+              setDraft((current) => current && { ...current, last_name: detail.value })
             }
           />
         </FormField>
         <FormField label="Email">
           <Input
             type="email"
-            value={editor?.email || ""}
+            value={draft?.email || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, email: detail.value })
+              setDraft((current) => current && { ...current, email: detail.value })
             }
           />
         </FormField>
-        {editor?.mode === "create" ? (
+        {draft?.mode === "create" ? (
           <FormField label="Temporary password">
             <Input
               type="password"
-              value={editor.password}
+              value={draft.password}
               onChange={({ detail }) =>
-                onChange((current) => current && { ...current, password: detail.value })
+                setDraft((current) => current && { ...current, password: detail.value })
               }
             />
           </FormField>
@@ -214,7 +218,7 @@ function UserEditorModal({
             options={roleOptions}
             selectedOption={selectedRoleOption}
             onChange={({ detail }) =>
-              onChange(
+              setDraft(
                 (current) =>
                   current && { ...current, role: (detail.selectedOption.value as Role) || "USER" }
               )
@@ -226,7 +230,7 @@ function UserEditorModal({
             options={USER_STATUS_OPTIONS}
             selectedOption={selectedStatusOption}
             onChange={({ detail }) =>
-              onChange(
+              setDraft(
                 (current) =>
                   current && {
                     ...current,
@@ -246,7 +250,6 @@ function CompetencyCategoryEditorModal({
   visible,
   errorMessage,
   loading,
-  onChange,
   onDismiss,
   onSubmit,
 }: {
@@ -254,23 +257,28 @@ function CompetencyCategoryEditorModal({
   visible: boolean;
   errorMessage: string;
   loading: boolean;
-  onChange: Dispatch<SetStateAction<CompetencyCategoryEditor>>;
   onDismiss: () => void;
   onSubmit: (editor: NonNullable<CompetencyCategoryEditor>) => void;
 }) {
+  const [draft, setDraft] = useState<CompetencyCategoryEditor>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
+
   const selectedActiveOption =
-    ACTIVE_OPTIONS.find((option) => option.value === String(editor?.active)) ?? ACTIVE_OPTIONS[0];
+    ACTIVE_OPTIONS.find((option) => option.value === String(draft?.active)) ?? ACTIVE_OPTIONS[0];
 
   return (
     <Modal
       visible={visible}
-      header={editor?.mode === "edit" ? "Edit competency category" : "Create competency category"}
+      header={draft?.mode === "edit" ? "Edit competency category" : "Create competency category"}
       onDismiss={onDismiss}
       footer={
         <SpaceBetween direction="horizontal" size="xs">
           <Button onClick={onDismiss}>Cancel</Button>
-          <Button loading={loading} variant="primary" onClick={() => editor && onSubmit(editor)}>
-            {editor?.mode === "edit" ? "Save changes" : "Create category"}
+          <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
+            {draft?.mode === "edit" ? "Save changes" : "Create category"}
           </Button>
         </SpaceBetween>
       }
@@ -279,26 +287,26 @@ function CompetencyCategoryEditorModal({
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="Code">
           <Input
-            value={editor?.category_code || ""}
+            value={draft?.category_code || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, category_code: detail.value })
+              setDraft((current) => current && { ...current, category_code: detail.value })
             }
           />
         </FormField>
         <FormField label="Name">
           <Input
-            value={editor?.category_name || ""}
+            value={draft?.category_name || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, category_name: detail.value })
+              setDraft((current) => current && { ...current, category_name: detail.value })
             }
           />
         </FormField>
         <FormField label="Description">
           <Textarea
             rows={5}
-            value={editor?.description || ""}
+            value={draft?.description || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, description: detail.value })
+              setDraft((current) => current && { ...current, description: detail.value })
             }
           />
         </FormField>
@@ -307,7 +315,7 @@ function CompetencyCategoryEditorModal({
             options={ACTIVE_OPTIONS}
             selectedOption={selectedActiveOption}
             onChange={({ detail }) =>
-              onChange(
+              setDraft(
                 (current) =>
                   current && { ...current, active: detail.selectedOption.value !== "false" }
               )
@@ -325,7 +333,6 @@ function CompetentPersonEditorModal({
   errorMessage,
   loading,
   categoryOptions,
-  onChange,
   onDismiss,
   onSubmit,
 }: {
@@ -334,28 +341,33 @@ function CompetentPersonEditorModal({
   errorMessage: string;
   loading: boolean;
   categoryOptions: SelectProps.Option[];
-  onChange: Dispatch<SetStateAction<CompetentPersonEditor>>;
   onDismiss: () => void;
   onSubmit: (editor: NonNullable<CompetentPersonEditor>) => void;
 }) {
+  const [draft, setDraft] = useState<CompetentPersonEditor>(editor);
+
+  useEffect(() => {
+    setDraft(editor);
+  }, [editor]);
+
   const selectedTypeOption =
-    PERSON_TYPE_OPTIONS.find((option) => option.value === editor?.person_type) ??
+    PERSON_TYPE_OPTIONS.find((option) => option.value === draft?.person_type) ??
     PERSON_TYPE_OPTIONS[0];
   const selectedCategoryOption =
-    categoryOptions.find((option) => option.value === editor?.competency_category_id) ?? null;
+    categoryOptions.find((option) => option.value === draft?.competency_category_id) ?? null;
   const selectedActiveOption =
-    ACTIVE_OPTIONS.find((option) => option.value === String(editor?.active)) ?? ACTIVE_OPTIONS[0];
+    ACTIVE_OPTIONS.find((option) => option.value === String(draft?.active)) ?? ACTIVE_OPTIONS[0];
 
   return (
     <Modal
       visible={visible}
-      header={editor?.mode === "edit" ? "Edit competent person" : "Create competent person"}
+      header={draft?.mode === "edit" ? "Edit competent person" : "Create competent person"}
       onDismiss={onDismiss}
       footer={
         <SpaceBetween direction="horizontal" size="xs">
           <Button onClick={onDismiss}>Cancel</Button>
-          <Button loading={loading} variant="primary" onClick={() => editor && onSubmit(editor)}>
-            {editor?.mode === "edit" ? "Save changes" : "Create person"}
+          <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
+            {draft?.mode === "edit" ? "Save changes" : "Create person"}
           </Button>
         </SpaceBetween>
       }
@@ -364,9 +376,9 @@ function CompetentPersonEditorModal({
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="Full name">
           <Input
-            value={editor?.full_name || ""}
+            value={draft?.full_name || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, full_name: detail.value })
+              setDraft((current) => current && { ...current, full_name: detail.value })
             }
           />
         </FormField>
@@ -375,7 +387,7 @@ function CompetentPersonEditorModal({
             options={PERSON_TYPE_OPTIONS}
             selectedOption={selectedTypeOption}
             onChange={({ detail }) =>
-              onChange(
+              setDraft(
                 (current) =>
                   current && {
                     ...current,
@@ -388,9 +400,9 @@ function CompetentPersonEditorModal({
         </FormField>
         <FormField label="Organization">
           <Input
-            value={editor?.organization || ""}
+            value={draft?.organization || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, organization: detail.value })
+              setDraft((current) => current && { ...current, organization: detail.value })
             }
           />
         </FormField>
@@ -400,7 +412,7 @@ function CompetentPersonEditorModal({
             placeholder="Select category"
             selectedOption={selectedCategoryOption}
             onChange={({ detail }) =>
-              onChange(
+              setDraft(
                 (current) =>
                   current && {
                     ...current,
@@ -415,7 +427,7 @@ function CompetentPersonEditorModal({
             options={ACTIVE_OPTIONS}
             selectedOption={selectedActiveOption}
             onChange={({ detail }) =>
-              onChange(
+              setDraft(
                 (current) =>
                   current && { ...current, active: detail.selectedOption.value !== "false" }
               )
@@ -1051,10 +1063,6 @@ export function AdministrationPage() {
       saveCategoryLoading={mutations.saveCategoryMutation.isPending}
       savePersonLoading={mutations.savePersonMutation.isPending}
       saveUserLoading={mutations.saveUserMutation.isPending}
-      setCategoryEditor={setCategoryEditor}
-      setPasswordChangeTarget={setPasswordChangeTarget}
-      setPersonEditor={setPersonEditor}
-      setUserEditor={setUserEditor}
       userColumns={userColumns}
       userEditor={userEditor}
       users={usersQuery.data}
@@ -1094,10 +1102,6 @@ type AdministrationViewProps = {
   saveCategoryLoading: boolean;
   savePersonLoading: boolean;
   saveUserLoading: boolean;
-  setCategoryEditor: Dispatch<SetStateAction<CompetencyCategoryEditor>>;
-  setPasswordChangeTarget: Dispatch<SetStateAction<PasswordChangeTarget>>;
-  setPersonEditor: Dispatch<SetStateAction<CompetentPersonEditor>>;
-  setUserEditor: Dispatch<SetStateAction<UserEditor>>;
   userColumns: TableProps<UserAccount>["columnDefinitions"];
   userEditor: UserEditor;
   users: UserAccount[];
@@ -1135,10 +1139,6 @@ function AdministrationView({
   saveCategoryLoading,
   savePersonLoading,
   saveUserLoading,
-  setCategoryEditor,
-  setPasswordChangeTarget,
-  setPersonEditor,
-  setUserEditor,
   userColumns,
   userEditor,
   users,
@@ -1205,7 +1205,6 @@ function AdministrationView({
         editor={userEditor}
         errorMessage={modalError}
         loading={saveUserLoading}
-        onChange={setUserEditor}
         onDismiss={onDismissUserEditor}
         onSubmit={onSaveUser}
         visible={Boolean(userEditor)}
@@ -1216,7 +1215,6 @@ function AdministrationView({
         editor={personEditor}
         errorMessage={modalError}
         loading={savePersonLoading}
-        onChange={setPersonEditor}
         onDismiss={onDismissPersonEditor}
         onSubmit={onSavePerson}
         visible={Boolean(personEditor)}
@@ -1226,7 +1224,6 @@ function AdministrationView({
         editor={categoryEditor}
         errorMessage={modalError}
         loading={saveCategoryLoading}
-        onChange={setCategoryEditor}
         onDismiss={onDismissCategoryEditor}
         onSubmit={onSaveCategory}
         visible={Boolean(categoryEditor)}
@@ -1235,7 +1232,6 @@ function AdministrationView({
       <PasswordChangeModal
         errorMessage={modalError}
         loading={passwordChangeLoading}
-        onChange={setPasswordChangeTarget}
         onDismiss={onDismissPasswordChange}
         onSubmit={onChangePassword}
         target={passwordChangeTarget}
@@ -1335,7 +1331,6 @@ function AdminTableHeader({
 type PasswordChangeModalProps = {
   errorMessage: string;
   loading: boolean;
-  onChange: Dispatch<SetStateAction<PasswordChangeTarget>>;
   onDismiss: () => void;
   onSubmit: (target: NonNullable<PasswordChangeTarget>) => void;
   target: PasswordChangeTarget;
@@ -1344,21 +1339,26 @@ type PasswordChangeModalProps = {
 function PasswordChangeModal({
   errorMessage,
   loading,
-  onChange,
   onDismiss,
   onSubmit,
   target,
 }: PasswordChangeModalProps) {
+  const [draft, setDraft] = useState<PasswordChangeTarget>(target);
+
+  useEffect(() => {
+    setDraft(target);
+  }, [target]);
+
   const footer = useMemo(
     () => (
       <SpaceBetween direction="horizontal" size="xs">
         <Button onClick={onDismiss}>Cancel</Button>
-        <Button loading={loading} variant="primary" onClick={() => target && onSubmit(target)}>
+        <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
           Change password
         </Button>
       </SpaceBetween>
     ),
-    [loading, onDismiss, onSubmit, target]
+    [draft, loading, onDismiss, onSubmit]
   );
 
   return (
@@ -1375,18 +1375,18 @@ function PasswordChangeModal({
         <FormField label="New password">
           <Input
             type="password"
-            value={target?.newPassword || ""}
+            value={draft?.newPassword || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, newPassword: detail.value })
+              setDraft((current) => current && { ...current, newPassword: detail.value })
             }
           />
         </FormField>
         <FormField label="Confirm new password">
           <Input
             type="password"
-            value={target?.confirmPassword || ""}
+            value={draft?.confirmPassword || ""}
             onChange={({ detail }) =>
-              onChange((current) => current && { ...current, confirmPassword: detail.value })
+              setDraft((current) => current && { ...current, confirmPassword: detail.value })
             }
           />
         </FormField>

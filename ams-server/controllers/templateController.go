@@ -230,7 +230,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 		keptComponentIDs := make(map[uuid.UUID]struct{}, len(input.Components))
 		totalTests := 0
 		for _, componentInput := range input.Components {
-			categoryID, err := utils.ParseUUID(componentInput.CategoryID, "category_id")
+			categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, componentInput.ScopeCategoryID, componentInput.CategoryID)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
@@ -259,6 +259,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 				rows, err := queries.UpdateTemplateComponent(ctx, db.UpdateTemplateComponentParams{
 					TemplateComponentID: templateComponentID,
 					CategoryID:          categoryID,
+					ScopeCategoryID:     scopeCategoryID,
 					Name:                componentInput.Name,
 					Description:         componentInput.Description,
 					SerialNumber:        componentInput.SerialNumber,
@@ -289,6 +290,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 				component, err := queries.CreateTemplateComponent(ctx, db.CreateTemplateComponentParams{
 					TemplateID:      templateID,
 					CategoryID:      categoryID,
+					ScopeCategoryID: scopeCategoryID,
 					Name:            componentInput.Name,
 					Description:     componentInput.Description,
 					SerialNumber:    componentInput.SerialNumber,
@@ -476,25 +478,16 @@ func AddTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		categoryID, err := utils.ParseUUID(input.CategoryID, "category_id")
+		categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, input.ScopeCategoryID, input.CategoryID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		_, err = queries.GetCategoryByID(ctx, categoryID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch category"})
 			return
 		}
 
 		component, err := queries.CreateTemplateComponent(ctx, db.CreateTemplateComponentParams{
 			TemplateID:      templateID,
 			CategoryID:      categoryID,
+			ScopeCategoryID: scopeCategoryID,
 			Name:            input.Name,
 			Description:     input.Description,
 			SerialNumber:    input.SerialNumber,
@@ -603,11 +596,17 @@ func GetTemplateConfiguration(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		response := make([]dto.TemplateConfigurationComponentResponse, 0, len(components))
 		for _, component := range components {
+			componentTests := testsByComponent[component.TemplateComponentID]
+			if componentTests == nil {
+				componentTests = []dto.TemplateComponentTestDetailResponse{}
+			}
+
 			response = append(response, dto.TemplateConfigurationComponentResponse{
 				TemplateComponentID: component.TemplateComponentID.String(),
 				DisplayID:           component.DisplayID,
 				TemplateID:          component.TemplateID.String(),
 				CategoryID:          component.CategoryID.String(),
+				ScopeCategoryID:     component.ScopeCategoryID.String(),
 				Position:            component.Position,
 				Name:                component.Name,
 				Description:         component.Description,
@@ -622,12 +621,19 @@ func GetTemplateConfiguration(pool *pgxpool.Pool) gin.HandlerFunc {
 				CreatedAt:           component.CreatedAt,
 				Location:            component.Location,
 				AssignedProject:     component.AssignedProject,
-				Tests:               testsByComponent[component.TemplateComponentID],
+				Tests:               templateComponentTestsOrEmpty(componentTests),
 			})
 		}
 
 		c.JSON(http.StatusOK, dto.NormalizeListData(response))
 	}
+}
+
+func templateComponentTestsOrEmpty(tests []dto.TemplateComponentTestDetailResponse) []dto.TemplateComponentTestDetailResponse {
+	if tests == nil {
+		return []dto.TemplateComponentTestDetailResponse{}
+	}
+	return tests
 }
 
 func UpdateTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
@@ -662,24 +668,15 @@ func UpdateTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		categoryID, err := utils.ParseUUID(input.CategoryID, "category_id")
+		categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, input.ScopeCategoryID, input.CategoryID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		_, err = queries.GetCategoryByID(ctx, categoryID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch category"})
-			return
-		}
-
 		rows, err := queries.UpdateTemplateComponent(ctx, db.UpdateTemplateComponentParams{
 			CategoryID:          categoryID,
+			ScopeCategoryID:     scopeCategoryID,
 			Name:                input.Name,
 			Description:         input.Description,
 			SerialNumber:        input.SerialNumber,

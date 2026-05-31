@@ -16,20 +16,90 @@
     ]
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080/v1" },
-    { "key": "adminEmail", "value": "YOUR_ADMIN_EMAIL" },
-    { "key": "adminPassword", "value": "YOUR_ADMIN_PASSWORD" },
-    { "key": "runSuffix", "value": "" },
-    { "key": "token", "value": "" },
-    { "key": "equipmentTypeName", "value": "" },
-    { "key": "visualTestName", "value": "" },
-    { "key": "loadTestName", "value": "" },
-    { "key": "assetName", "value": "" },
-    { "key": "equipment_type_id", "value": "" },
-    { "key": "visual_test_id", "value": "" },
-    { "key": "load_test_id", "value": "" },
-    { "key": "asset_id", "value": "" },
-    { "key": "self_component_id", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/v1"
+    },
+    {
+      "key": "adminEmail",
+      "value": "YOUR_ADMIN_EMAIL"
+    },
+    {
+      "key": "adminPassword",
+      "value": "YOUR_ADMIN_PASSWORD"
+    },
+    {
+      "key": "runSuffix",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "equipmentTypeName",
+      "value": ""
+    },
+    {
+      "key": "visualTestName",
+      "value": ""
+    },
+    {
+      "key": "loadTestName",
+      "value": ""
+    },
+    {
+      "key": "assetName",
+      "value": ""
+    },
+    {
+      "key": "equipment_type_id",
+      "value": ""
+    },
+    {
+      "key": "visual_test_id",
+      "value": ""
+    },
+    {
+      "key": "load_test_id",
+      "value": ""
+    },
+    {
+      "key": "asset_id",
+      "value": ""
+    },
+    {
+      "key": "self_component_id",
+      "value": ""
+    },
+    {
+      "key": "mainCategoryName",
+      "value": ""
+    },
+    {
+      "key": "categoryName",
+      "value": ""
+    },
+    {
+      "key": "main_category_id",
+      "value": ""
+    },
+    {
+      "key": "category_id",
+      "value": ""
+    },
+    {
+      "key": "catalog_scope_id",
+      "value": ""
+    },
+    {
+      "key": "scope_main_category_id",
+      "value": ""
+    },
+    {
+      "key": "scope_category_id",
+      "value": ""
+    }
   ],
   "event": [
     {
@@ -42,7 +112,9 @@
           "pm.collectionVariables.set('equipmentTypeName', `Newman Equipment Type ${suffix}`);",
           "pm.collectionVariables.set('visualTestName', `Newman Single Visual ${suffix}`);",
           "pm.collectionVariables.set('loadTestName', `Newman Single Load ${suffix}`);",
-          "pm.collectionVariables.set('assetName', `Newman Single Equipment Asset ${suffix}`);"
+          "pm.collectionVariables.set('assetName', `Newman Single Equipment Asset ${suffix}`);",
+          "pm.collectionVariables.set('mainCategoryName', `Newman Single Main ${suffix}`);",
+          "pm.collectionVariables.set('categoryName', `Newman Single Category ${suffix}`);"
         ]
       }
     }
@@ -51,135 +123,329 @@
     {
       "name": "01 Login Admin",
       "request": {
-        "auth": { "type": "noauth" },
+        "auth": {
+          "type": "noauth"
+        },
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
           "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
         },
         "url": "{{baseUrl}}/login"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": [
-            "pm.test('admin login succeeds', function () {",
-            "  pm.response.to.have.status(200);",
-            "  const body = pm.response.json();",
-            "  pm.expect(body.token).to.be.a('string').and.not.empty;",
-            "  pm.collectionVariables.set('token', body.token);",
-            "});"
-          ]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin login succeeds', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.token).to.be.a('string').and.not.empty;",
+              "  pm.collectionVariables.set('token', body.token);",
+              "});"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "02 Create Equipment Type",
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
           "raw": "{\n  \"equipment_type_name\": \"{{equipmentTypeName}}\",\n  \"sort_order\": 10,\n  \"description\": \"Created by Newman for single-asset equipment regression.\"\n}"
         },
         "url": "{{baseUrl}}/equipment-type"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": [
-            "pm.test('equipment type is created', function () {",
-            "  pm.response.to.have.status(201);",
-            "  const body = pm.response.json();",
-            "  pm.expect(body.equipment_type_id).to.match(/^[0-9a-f-]{36}$/i);",
-            "  pm.expect(body.equipment_type_name).to.eql(pm.collectionVariables.get('equipmentTypeName'));",
-            "  pm.collectionVariables.set('equipment_type_id', body.equipment_type_id);",
-            "});"
-          ]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('equipment type is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.equipment_type_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(body.equipment_type_name).to.eql(pm.collectionVariables.get('equipmentTypeName'));",
+              "  pm.collectionVariables.set('equipment_type_id', body.equipment_type_id);",
+              "});"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "03 Create Visual Test Type",
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
           "raw": "{\n  \"test_name\": \"{{visualTestName}}\",\n  \"validity_duration\": 12,\n  \"description\": \"Created by Newman for single-asset equipment regression.\"\n}"
         },
         "url": "{{baseUrl}}/test-type"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": [
-            "pm.test('visual test type is created', function () {",
-            "  pm.response.to.have.status(201);",
-            "  const body = pm.response.json();",
-            "  pm.expect(body.test_id).to.match(/^[0-9a-f-]{36}$/i);",
-            "  pm.collectionVariables.set('visual_test_id', body.test_id);",
-            "});"
-          ]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('visual test type is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.test_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.collectionVariables.set('visual_test_id', body.test_id);",
+              "});"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "04 Create Load Test Type",
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
           "raw": "{\n  \"test_name\": \"{{loadTestName}}\",\n  \"validity_duration\": 6,\n  \"description\": \"Created by Newman for single-asset equipment regression.\"\n}"
         },
         "url": "{{baseUrl}}/test-type"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": [
-            "pm.test('load test type is created', function () {",
-            "  pm.response.to.have.status(201);",
-            "  const body = pm.response.json();",
-            "  pm.expect(body.test_id).to.match(/^[0-9a-f-]{36}$/i);",
-            "  pm.collectionVariables.set('load_test_id', body.test_id);",
-            "});"
-          ]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('load test type is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.test_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.collectionVariables.set('load_test_id', body.test_id);",
+              "});"
+            ]
+          }
         }
-      }]
+      ]
+    },
+    {
+      "name": "05 Create Main Category",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"main_category_name\": \"{{mainCategoryName}}\",\n  \"description\": \"Single-asset guard main category\",\n  \"sort_order\": 10301\n}"
+        },
+        "url": "{{baseUrl}}/main-category"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('main category is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.main_category_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.collectionVariables.set('main_category_id', body.main_category_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Create Category",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"main_category_id\": \"{{main_category_id}}\",\n  \"category_name\": \"{{categoryName}}\",\n  \"description\": \"Single-asset guard category\",\n  \"sort_order\": 10302\n}"
+        },
+        "url": "{{baseUrl}}/category"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('category is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.category_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.collectionVariables.set('category_id', body.category_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Get Default Catalog Scope",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/catalog-scopes/default"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('default catalog scope is available', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.scope_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.collectionVariables.set('catalog_scope_id', body.scope_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Attach Main Category To Catalog Scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"main_category_name\": \"{{mainCategoryName}}\",\n  \"description\": \"Single-asset guard scoped main category\",\n  \"sort_order\": 10303\n}"
+        },
+        "url": "{{baseUrl}}/catalog-scope/{{catalog_scope_id}}/main-category"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('main category is assigned to catalog scope', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.scope_main_category_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(body.main_category_id).to.eql(pm.collectionVariables.get('main_category_id'));",
+              "  pm.collectionVariables.set('scope_main_category_id', body.scope_main_category_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Attach Category To Catalog Scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"main_category_id\": \"{{main_category_id}}\",\n  \"category_name\": \"{{categoryName}}\",\n  \"description\": \"Single-asset guard scoped category\",\n  \"sort_order\": 10304\n}"
+        },
+        "url": "{{baseUrl}}/catalog-scope/{{catalog_scope_id}}/category"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('category is assigned to catalog scope', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.scope_category_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(body.category_id).to.eql(pm.collectionVariables.get('category_id'));",
+              "  pm.collectionVariables.set('scope_category_id', body.scope_category_id);",
+              "});"
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "05 Create Single Equipment Asset",
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
-	          "raw": "{\n  \"name\": \"{{assetName}}\",\n  \"status\": \"ACTIVE\",\n  \"asset_kind\": \"SINGLE_EQUIPMENT\",\n  \"location\": \"Newman Yard\",\n  \"assigned_project\": \"Newman Project\",\n  \"description\": \"Created by Newman to verify single-asset equipment.\",\n  \"single_equipment\": {\n    \"equipment_type_id\": \"{{equipment_type_id}}\",\n    \"test_type_ids\": [\"{{visual_test_id}}\", \"{{load_test_id}}\", \"{{visual_test_id}}\"]\n  }\n}"
+          "raw": "{\n  \"name\": \"{{assetName}}\",\n  \"status\": \"ACTIVE\",\n  \"asset_kind\": \"SINGLE_EQUIPMENT\",\n  \"location\": \"Newman Yard\",\n  \"assigned_project\": \"Newman Project\",\n  \"description\": \"Created by Newman to verify single-asset equipment.\",\n  \"single_equipment\": {\n    \"equipment_type_id\": \"{{equipment_type_id}}\",\n    \"test_type_ids\": [\"{{visual_test_id}}\", \"{{load_test_id}}\", \"{{visual_test_id}}\"]\n  }\n}"
         },
         "url": "{{baseUrl}}/asset"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": [
-            "pm.test('single-equipment asset is created', function () {",
-            "  pm.response.to.have.status(201);",
-            "  const body = pm.response.json();",
-            "  pm.expect(body.asset_id).to.match(/^[0-9a-f-]{36}$/i);",
-            "  pm.expect(body.asset_kind).to.eql('SINGLE_EQUIPMENT');",
-            "  pm.collectionVariables.set('asset_id', body.asset_id);",
-            "});"
-          ]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('single-equipment asset is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.asset_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(body.asset_kind).to.eql('SINGLE_EQUIPMENT');",
+              "  pm.collectionVariables.set('asset_id', body.asset_id);",
+              "});"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "06 Read Single Equipment Context",
@@ -188,21 +454,23 @@
         "header": [],
         "url": "{{baseUrl}}/asset/{{asset_id}}/single-equipment"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": [
-            "pm.test('single-equipment context points to equipment type and self component', function () {",
-            "  pm.response.to.have.status(200);",
-            "  const body = pm.response.json();",
-            "  pm.expect(body.equipment_type_id).to.eql(pm.collectionVariables.get('equipment_type_id'));",
-            "  pm.expect(body.self_component_id).to.match(/^[0-9a-f-]{36}$/i);",
-            "  pm.collectionVariables.set('self_component_id', body.self_component_id);",
-            "});"
-          ]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('single-equipment context points to equipment type and self component', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.equipment_type_id).to.eql(pm.collectionVariables.get('equipment_type_id'));",
+              "  pm.expect(body.self_component_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.collectionVariables.set('self_component_id', body.self_component_id);",
+              "});"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "07 Self Component Is Only Component",
@@ -211,22 +479,24 @@
         "header": [],
         "url": "{{baseUrl}}/components/asset/{{asset_id}}?page=1&limit=20"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": [
-            "pm.test('asset has exactly one category-less self component', function () {",
-            "  pm.response.to.have.status(200);",
-            "  const body = pm.response.json();",
-            "  pm.expect(body.data).to.have.length(1);",
-            "  pm.expect(body.data[0].component_id).to.eql(pm.collectionVariables.get('self_component_id'));",
-            "  pm.expect(body.data[0].component_kind).to.eql('SELF');",
-            "  pm.expect(body.data[0].category_id).to.eql(null);",
-            "});"
-          ]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('asset has exactly one category-less self component', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.data).to.have.length(1);",
+              "  pm.expect(body.data[0].component_id).to.eql(pm.collectionVariables.get('self_component_id'));",
+              "  pm.expect(body.data[0].component_kind).to.eql('SELF');",
+              "  pm.expect(body.data[0].category_id).to.eql(null);",
+              "});"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "08 Certificate Slots Are Created Once",
@@ -235,47 +505,56 @@
         "header": [],
         "url": "{{baseUrl}}/certificates/component/{{self_component_id}}?page=1&limit=20"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": [
-            "pm.test('certificate slots are unique and pending', function () {",
-            "  pm.response.to.have.status(200);",
-            "  const body = pm.response.json();",
-            "  pm.expect(body.data).to.have.length(2);",
-            "  const names = body.data.map((certificate) => certificate.certificate_name).sort();",
-            "  pm.expect(names).to.eql([pm.collectionVariables.get('loadTestName'), pm.collectionVariables.get('visualTestName')].sort());",
-            "  pm.expect(body.data.every((certificate) => certificate.status === 'PENDING')).to.eql(true);",
-            "});"
-          ]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('certificate slots are unique and pending', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.data).to.have.length(2);",
+              "  const names = body.data.map((certificate) => certificate.certificate_name).sort();",
+              "  pm.expect(names).to.eql([pm.collectionVariables.get('loadTestName'), pm.collectionVariables.get('visualTestName')].sort());",
+              "  pm.expect(body.data.every((certificate) => certificate.status === 'PENDING')).to.eql(true);",
+              "});"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "09 Manual Component Is Rejected",
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"00000000-0000-4000-8000-000000000000\",\n  \"name\": \"Forbidden component\",\n  \"serial_number\": \"\",\n  \"manufacturer\": \"\",\n  \"description\": \"\",\n  \"location\": \"\",\n  \"assigned_project\": \"\",\n  \"equipment_type\": \"\",\n  \"structure\": \"\",\n  \"model\": \"\",\n  \"class\": \"\",\n  \"class_code\": \"\",\n  \"safety_critical\": \"NO\"\n}"
+          "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"name\": \"Forbidden component\",\n  \"serial_number\": \"\",\n  \"manufacturer\": \"\",\n  \"description\": \"\",\n  \"location\": \"\",\n  \"assigned_project\": \"\",\n  \"equipment_type\": \"\",\n  \"structure\": \"\",\n  \"model\": \"\",\n  \"class\": \"\",\n  \"class_code\": \"\",\n  \"safety_critical\": \"NO\",\n  \"scope_category_id\": \"{{scope_category_id}}\"\n}"
         },
         "url": "{{baseUrl}}/component"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": [
-            "pm.test('manual component creation is blocked for single-equipment assets', function () {",
-            "  pm.response.to.have.status(409);",
-            "  const body = pm.response.json();",
-            "  pm.expect(body.error).to.include('single-asset equipment cannot have manual components');",
-            "});"
-          ]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('manual component creation is blocked for single-equipment assets', function () {",
+              "  pm.response.to.have.status(409);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.error).to.include('single-asset equipment cannot have manual components');",
+              "});"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "10 Equipment Type Delete Is Blocked While Assigned",
@@ -284,17 +563,19 @@
         "header": [],
         "url": "{{baseUrl}}/equipment-type/{{equipment_type_id}}"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": [
-            "pm.test('assigned equipment type cannot be deleted', function () {",
-            "  pm.response.to.have.status(409);",
-            "});"
-          ]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('assigned equipment type cannot be deleted', function () {",
+              "  pm.response.to.have.status(409);",
+              "});"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "11 Delete Asset",
@@ -303,13 +584,97 @@
         "header": [],
         "url": "{{baseUrl}}/asset/{{asset_id}}"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": ["pm.test('asset cleanup succeeds', function () { pm.response.to.have.status(200); });"]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('asset cleanup succeeds', function () { pm.response.to.have.status(200); });"
+            ]
+          }
         }
-      }]
+      ]
+    },
+    {
+      "name": "Delete Catalog Scope Category",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/catalog-scope-category/{{scope_category_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('scoped category is deleted or already absent', function () {",
+              "  pm.expect([200, 404]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Category",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/category/{{category_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('category is deleted or already absent', function () {",
+              "  pm.expect([200, 404]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Catalog Scope Main Category",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/catalog-scope-main-category/{{scope_main_category_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('scoped main category is deleted or already absent', function () {",
+              "  pm.expect([200, 404]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Main Category",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/main-category/{{main_category_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('main category is deleted or already absent', function () {",
+              "  pm.expect([200, 404]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "12 Delete Equipment Type",
@@ -318,13 +683,17 @@
         "header": [],
         "url": "{{baseUrl}}/equipment-type/{{equipment_type_id}}"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": ["pm.test('equipment type cleanup succeeds', function () { pm.response.to.have.status(200); });"]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('equipment type cleanup succeeds', function () { pm.response.to.have.status(200); });"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "13 Delete Visual Test Type",
@@ -333,13 +702,17 @@
         "header": [],
         "url": "{{baseUrl}}/test-type/{{visual_test_id}}"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": ["pm.test('visual test cleanup succeeds', function () { pm.response.to.have.status(200); });"]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('visual test cleanup succeeds', function () { pm.response.to.have.status(200); });"
+            ]
+          }
         }
-      }]
+      ]
     },
     {
       "name": "14 Delete Load Test Type",
@@ -348,13 +721,17 @@
         "header": [],
         "url": "{{baseUrl}}/test-type/{{load_test_id}}"
       },
-      "event": [{
-        "listen": "test",
-        "script": {
-          "type": "text/javascript",
-          "exec": ["pm.test('load test cleanup succeeds', function () { pm.response.to.have.status(200); });"]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('load test cleanup succeeds', function () { pm.response.to.have.status(200); });"
+            ]
+          }
         }
-      }]
+      ]
     }
   ]
 }
