@@ -666,7 +666,6 @@ function TemplateConfigureView({
     <ContentLayout
       header={
         <TemplateConfigureHeader
-          onAddComponent={onOpenCreate}
           onBackToTemplate={() => navigate(`/templates/${templateId}`)}
           onOpenCatalog={() => navigate("/catalog")}
           templateName={template.template_name}
@@ -675,8 +674,8 @@ function TemplateConfigureView({
     >
       <SpaceBetween size="l">
         <Alert type="info">
-          Add components from the button above. Each component becomes part of the reusable template blueprint and
-          can carry one or more required test types.
+          Each component becomes part of the reusable template blueprint and can carry one or more
+          required test types.
         </Alert>
 
         <TemplateSummaryCards
@@ -719,14 +718,12 @@ function TemplateConfigureView({
 }
 
 type TemplateConfigureHeaderProps = {
-  onAddComponent: () => void;
   onBackToTemplate: () => void;
   onOpenCatalog: () => void;
   templateName: string;
 };
 
 function TemplateConfigureHeader({
-  onAddComponent,
   onBackToTemplate,
   onOpenCatalog,
   templateName,
@@ -737,9 +734,6 @@ function TemplateConfigureHeader({
         <SpaceBetween direction="horizontal" size="xs">
           <Button onClick={onBackToTemplate}>Back to template</Button>
           <Button onClick={onOpenCatalog}>Open catalog</Button>
-          <Button variant="primary" onClick={onAddComponent}>
-            Add component
-          </Button>
         </SpaceBetween>
       }
       description="Build the component and test blueprint used when this template is applied to assets."
@@ -794,10 +788,7 @@ function TemplateComponentsPanel({
   components,
   onOpenCreate,
 }: TemplateComponentsPanelProps) {
-  const emptyState = useMemo(
-    () => <TemplateComponentsEmptyState onOpenCreate={onOpenCreate} />,
-    [onOpenCreate]
-  );
+  const emptyState = useMemo(() => <TemplateComponentsEmptyState />, []);
   const tableHeader = useMemo(
     () => <TemplateComponentsHeader count={components.length} onOpenCreate={onOpenCreate} />,
     [components.length, onOpenCreate]
@@ -818,14 +809,9 @@ type TemplateComponentsActionProps = {
   onOpenCreate: () => void;
 };
 
-function TemplateComponentsEmptyState({ onOpenCreate }: TemplateComponentsActionProps) {
+function TemplateComponentsEmptyState() {
   return (
     <PageEmpty
-      action={
-        <Button variant="primary" onClick={onOpenCreate}>
-          Add component
-        </Button>
-      }
       description="Add the first component to define what assets created from this template should contain."
       title="No components configured"
     />

@@ -277,7 +277,7 @@ test.describe("template and catalog browser flow", () => {
         page.getByRole("heading", { name: new RegExp(`Configure ${escapeRegExp(names.templateName)}`) })
       ).toBeVisible();
 
-      await page.getByRole("button", { name: "Add component" }).click();
+      await page.getByRole("button", { name: "Add component", exact: true }).click();
 
       const componentDialog = page.getByRole("dialog", { name: "Add template component" });
       await expect(componentDialog).toBeVisible();

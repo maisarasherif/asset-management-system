@@ -1392,7 +1392,7 @@ test.describe("mocked refactored page smoke coverage", () => {
     await expect(page.getByRole("heading", { name: "Configure Diving Harness Template" })).toBeVisible();
     await expect(page.getByText("Harness Blueprint", { exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "Add component" }).first().click();
+    await page.getByRole("button", { name: "Add component", exact: true }).click();
     const componentDialog = page.getByRole("dialog", { name: "Add template component" });
     await expect(componentDialog).toBeVisible();
 
