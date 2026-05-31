@@ -223,14 +223,14 @@ test.describe("template and catalog browser flow", () => {
       await page.getByRole("link", { name: "Catalog" }).click();
       await expect(page).toHaveURL(/\/catalog$/);
 
-      await page.getByRole("button", { name: "Create main category" }).click();
+      await page.getByRole("button", { name: "Create main category", exact: true }).click();
       const mainCategoryDialog = page.getByRole("dialog");
       await mainCategoryDialog.getByLabel("Main category name").fill(names.mainCategoryName);
       await mainCategoryDialog
         .getByLabel("Description")
         .fill("Created by Playwright to verify the catalog flow.");
       await mainCategoryDialog
-        .getByRole("button", { name: "Create main category" })
+        .getByRole("button", { name: "Create main category", exact: true })
         .click();
 
       await expect(page.getByText("Main category created")).toBeVisible();

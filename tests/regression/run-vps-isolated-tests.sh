@@ -21,6 +21,8 @@ E2E_SPECS="${E2E_SPECS:-../tests/regression/e2e/api-auth-smoke.spec.ts ../tests/
 
 API_PID=""
 FRONTEND_PID=""
+API_STARTED=0
+FRONTEND_STARTED=0
 
 fail() {
   echo "ERROR: $*" >&2
@@ -183,6 +185,31 @@ stop_api() {
   fi
 }
 
+kill_port_listeners() {
+  local port="$1"
+  local pid_list=""
+
+  if command -v ss >/dev/null 2>&1; then
+    pid_list="$(
+      ss -ltnp "sport = :$port" 2>/dev/null \
+        | sed -nE 's/.*pid=([0-9]+).*/\1/p' \
+        | sort -u \
+        | tr '\n' ' '
+    )"
+  elif command -v lsof >/dev/null 2>&1; then
+    pid_list="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u | tr '\n' ' ')"
+  elif command -v fuser >/dev/null 2>&1; then
+    pid_list="$(fuser "$port"/tcp 2>/dev/null | tr '\n' ' ')"
+  fi
+
+  if [[ -n "$pid_list" ]]; then
+    echo "Releasing listeners on port $port: $pid_list"
+    kill $pid_list >/dev/null 2>&1 || true
+    sleep 1
+    kill -9 $pid_list >/dev/null 2>&1 || true
+  fi
+}
+
 start_api() {
   ensure_port_free "$API_PORT" || fail "API port $API_PORT is already in use. Stop the old process or rerun with API_PORT=<free-port>."
 
@@ -203,6 +230,7 @@ start_api() {
     exec "$API_BINARY" >"$RUN_DIR/api.out.log" 2>"$RUN_DIR/api.err.log"
   ) &
   API_PID="$!"
+  API_STARTED=1
   wait_for_http "$API_BASE_URL/health" "API" "$RUN_DIR/api.err.log"
 }
 
@@ -240,8 +268,15 @@ cleanup() {
   if [[ -n "$FRONTEND_PID" ]]; then
     kill "$FRONTEND_PID" >/dev/null 2>&1
     wait "$FRONTEND_PID" >/dev/null 2>&1
+    FRONTEND_PID=""
   fi
   stop_api
+  if [[ "$FRONTEND_STARTED" == "1" ]]; then
+    kill_port_listeners "$FRONTEND_PORT"
+  fi
+  if [[ "$API_STARTED" == "1" ]]; then
+    kill_port_listeners "$API_PORT"
+  fi
   if [[ "${KEEP_DB}" != "1" && -n "${MAINTENANCE_DATABASE_URL:-}" && -n "${QUOTED_DATABASE_NAME:-}" ]]; then
     echo "Dropping isolated database: $DATABASE_NAME"
     run_sql "$MAINTENANCE_DATABASE_URL" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DATABASE_NAME';" || true
@@ -347,9 +382,10 @@ if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
   echo "Starting isolated frontend on $FRONTEND_BASE_URL"
   (
     cd "$FRONTEND_DIR"
-    PORT="$FRONTEND_PORT" node ../tests/regression/support/static-server.cjs >"$RUN_DIR/frontend.out.log" 2>"$RUN_DIR/frontend.err.log"
+    exec env PORT="$FRONTEND_PORT" node ../tests/regression/support/static-server.cjs >"$RUN_DIR/frontend.out.log" 2>"$RUN_DIR/frontend.err.log"
   ) &
   FRONTEND_PID="$!"
+  FRONTEND_STARTED=1
   wait_for_http "$FRONTEND_BASE_URL" "frontend" "$RUN_DIR/frontend.err.log"
 
   echo "Running Playwright E2E specs against isolated stack"
