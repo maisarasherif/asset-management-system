@@ -16,7 +16,7 @@ import {
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
@@ -314,15 +314,6 @@ function TemplateDetailsEditorModal({
     description: template.description || "",
   });
 
-  useEffect(() => {
-    if (visible) {
-      setDraft({
-        template_name: template.template_name,
-        description: template.description || "",
-      });
-    }
-  }, [template.description, template.template_name, visible]);
-
   return (
     <Modal
       visible={visible}
@@ -550,6 +541,7 @@ function renderTemplateDetailPage({
       </ContentLayout>
 
       <TemplateDetailsEditorModal
+        key={`template-details-${editModalVisible ? "open" : "closed"}-${template.template_id}-${template.updated_at}`}
         error={editError}
         loading={updatePending}
         onDismiss={onEditDismiss}

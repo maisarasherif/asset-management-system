@@ -39,6 +39,7 @@ import type {
   MainCategoryInput,
   ComponentRecord,
   ForceRenotifyResponse,
+  ForgotPasswordInput,
   LoginResponse,
   MainCategory,
   MessageResponse,
@@ -49,7 +50,8 @@ import type {
   TemplateComponentTest,
 	  TestTypeInput,
 	  TestType,
-	  SingleAssetEquipment,
+  SingleAssetEquipment,
+  ResetPasswordInput,
   UpdatePasswordInput,
   UpdateUserInput,
   UserAccount,
@@ -57,6 +59,7 @@ import type {
   UserProjectAccess,
   UserProjectAccessInput,
 } from "../../types/ams";
+import { countCertificateStatuses } from "../../utils/certificateStatusCounts";
 import { apiRequest } from "./client";
 
 interface LoginPayload {
@@ -105,6 +108,28 @@ export function getSession() {
 
 export function logoutRequest() {
 	return apiRequest<MessageResponse>("/v1/logout", { method: "POST" });
+}
+
+export function forgotPassword(payload: ForgotPasswordInput) {
+  return apiRequest<MessageResponse>(
+    "/v1/forgot-password",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    { auth: false }
+  );
+}
+
+export function resetPassword(payload: ResetPasswordInput) {
+  return apiRequest<MessageResponse>(
+    "/v1/reset-password",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    { auth: false }
+  );
 }
 
 export function updatePassword(payload: UpdatePasswordInput) {
@@ -828,31 +853,7 @@ export async function getAssetDashboard(assetId: string): Promise<AssetDashboard
 
   const flatCertificates = certificates.flat();
 
-  const statusCounts = flatCertificates.reduce(
-    (counts, certificate) => {
-      switch (certificate.status) {
-        case "EXPIRED":
-          counts.expired += 1;
-          break;
-        case "EXPIRING_SOON":
-          counts.expiringSoon += 1;
-          break;
-        case "VALID":
-          counts.valid += 1;
-          break;
-        default:
-          counts.pending += 1;
-          break;
-      }
-      return counts;
-    },
-    {
-      expired: 0,
-      expiringSoon: 0,
-      valid: 0,
-      pending: 0,
-    }
-  );
+  const statusCounts = countCertificateStatuses(flatCertificates);
 
   const byExpiryDate = [...flatCertificates].sort((left, right) => {
     if (!left.expiry_date) return 1;

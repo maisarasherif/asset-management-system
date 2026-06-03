@@ -471,6 +471,15 @@ export interface AdminUpdateUserPasswordInput {
   new_password: string;
 }
 
+export interface ForgotPasswordInput {
+  email: string;
+}
+
+export interface ResetPasswordInput {
+  token: string;
+  new_password: string;
+}
+
 export interface CreateUserInput {
   first_name: string;
   last_name: string;

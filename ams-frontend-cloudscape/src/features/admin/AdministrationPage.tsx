@@ -1146,13 +1146,23 @@ function AdministrationView({
   const layoutHeader = useMemo(
     () => (
       <Header
+        actions={
+          canManageSuperAdmins ? (
+            <Button
+              iconName="external"
+              onClick={() => window.open("/v1/admin/jobs", "_blank", "noopener,noreferrer")}
+            >
+              Background jobs
+            </Button>
+          ) : null
+        }
         description="Manage application users, competent persons, and the competency categories required for certificate uploads."
         variant="h1"
       >
         Administration
       </Header>
     ),
-    []
+    [canManageSuperAdmins]
   );
 
   return (

@@ -15,6 +15,7 @@ import type { AuthSession } from "../types/ams";
 const ASSET_STORAGE_KEY = "ams-cloudscape-selected-asset";
 const LOGOUT_BROADCAST_KEY = "ams-cloudscape-logout";
 const SESSION_EXPIRY_GRACE_MS = 5000;
+const GUEST_PATHS = new Set(["/login", "/forgot-password", "/reset-password"]);
 
 function readStoredAsset(): string | null {
 	return sessionStorage.getItem(ASSET_STORAGE_KEY);
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 	}, [clearSession]);
 
 	const redirectToLogin = useCallback(() => {
-		if (window.location.pathname !== "/login") {
+		if (!GUEST_PATHS.has(window.location.pathname)) {
 			window.location.replace("/login");
 		}
 	}, []);

@@ -432,15 +432,20 @@ func (q *Queries) GetUserPasswordByID(ctx context.Context, userID uuid.UUID) (st
 	return password, err
 }
 
-const getUserStatusByID = `-- name: GetUserStatusByID :one
-SELECT status FROM users WHERE user_id = $1 LIMIT 1
+const getUserSessionByID = `-- name: GetUserSessionByID :one
+SELECT status, token FROM users WHERE user_id = $1 LIMIT 1
 `
 
-func (q *Queries) GetUserStatusByID(ctx context.Context, userID uuid.UUID) (string, error) {
-	row := q.db.QueryRow(ctx, getUserStatusByID, userID)
-	var status string
-	err := row.Scan(&status)
-	return status, err
+type GetUserSessionByIDRow struct {
+	Status string `json:"status"`
+	Token  string `json:"token"`
+}
+
+func (q *Queries) GetUserSessionByID(ctx context.Context, userID uuid.UUID) (GetUserSessionByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserSessionByID, userID)
+	var i GetUserSessionByIDRow
+	err := row.Scan(&i.Status, &i.Token)
+	return i, err
 }
 
 const updateUser = `-- name: UpdateUser :execrows

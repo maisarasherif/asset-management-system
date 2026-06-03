@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	controller "github.com/maisarasherif/asset-management-system/ams-server/controllers"
@@ -8,6 +10,10 @@ import (
 )
 
 func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
+	SetupProtectedRoutesWithJobs(router, pool, nil)
+}
+
+func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverUIHandler http.Handler) {
 
 	// ===================Admin-Protected Routes======================================================
 	admin := router.Group("/v1")
@@ -189,4 +195,15 @@ func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
 	client.GET("/assets", controller.GetClientAssets(pool))
 	client.GET("/asset/:asset_id", controller.GetClientAsset(pool))
 	client.GET("/certificate/:certificate_id/file", controller.GetClientCertificateFile(pool))
+
+	if riverUIHandler != nil {
+		jobs := router.Group("/v1/admin/jobs")
+		jobs.Use(
+			middleware.AuthMiddleware(),
+			middleware.ActiveUserMiddleware(pool),
+			middleware.SuperAdminMiddleware(),
+		)
+		jobs.Any("", gin.WrapH(riverUIHandler))
+		jobs.Any("/*path", gin.WrapH(riverUIHandler))
+	}
 }

@@ -14,34 +14,20 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Select } from "../../components/shared/OptimizedSelect";
-import { createUser, logoutRequest, updatePassword } from "../../lib/api/ams";
+import { logoutRequest, updatePassword } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import { humanizeEnum } from "../../utils/format";
-import type { Role } from "../../types/ams";
 
 export function AccountPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { isAdmin, logout, session } = useAuth();
+  const { logout, session } = useAuth();
   const { error, success } = useFlashbar();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [createUserError, setCreateUserError] = useState("");
-  const [newUserFirstName, setNewUserFirstName] = useState("");
-  const [newUserLastName, setNewUserLastName] = useState("");
-  const [newUserEmail, setNewUserEmail] = useState("");
-  const [newUserPassword, setNewUserPassword] = useState("");
-  const [newUserRole, setNewUserRole] = useState<Role>("USER");
-  const canManageSuperAdmins = session?.role === "SUPER_ADMIN";
-  const roleOptions = [
-    { label: "User", value: "USER" },
-    ...(canManageSuperAdmins ? [{ label: "Admin", value: "ADMIN" }] : []),
-    ...(canManageSuperAdmins ? [{ label: "Super Admin", value: "SUPER_ADMIN" }] : []),
-  ];
 
   const passwordMutation = useMutation({
     mutationFn: updatePassword,
@@ -68,30 +54,6 @@ export function AccountPage() {
     },
   });
 
-  const createUserMutation = useMutation({
-    mutationFn: createUser,
-    onSuccess: async (createdUser) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["users"] }),
-        queryClient.invalidateQueries({ queryKey: ["user-management-audit-logs"] }),
-      ]);
-      setNewUserFirstName("");
-      setNewUserLastName("");
-      setNewUserEmail("");
-      setNewUserPassword("");
-      setNewUserRole("USER");
-      setCreateUserError("");
-      success(
-        "User created",
-        `${createdUser.first_name} ${createdUser.last_name} can now sign in with ${createdUser.email}.`
-      );
-    },
-    onError: (mutationError: Error) => {
-      setCreateUserError(mutationError.message);
-      error("User creation failed", mutationError.message);
-    },
-  });
-
   const handlePasswordSubmit = () => {
     if (!currentPassword || !newPassword) {
       setErrorMessage("Enter your current password and a new password.");
@@ -115,28 +77,6 @@ export function AccountPage() {
     });
   };
 
-  const handleCreateUserSubmit = () => {
-    if (!newUserFirstName || !newUserLastName || !newUserEmail || !newUserPassword) {
-      setCreateUserError("Enter a first name, last name, email, password, and role.");
-      return;
-    }
-
-    if (newUserPassword.length < 6) {
-      setCreateUserError("The temporary password must be at least 6 characters.");
-      return;
-    }
-
-    setCreateUserError("");
-    createUserMutation.mutate({
-      first_name: newUserFirstName.trim(),
-      last_name: newUserLastName.trim(),
-      email: newUserEmail.trim(),
-      password: newUserPassword,
-      role: newUserRole,
-      status: "ACTIVE",
-    });
-  };
-
   return (
     <ContentLayout
       header={
@@ -156,7 +96,7 @@ export function AccountPage() {
         </Header>
       }
     >
-      <ColumnLayout columns={isAdmin ? 3 : 2} variant="text-grid">
+      <ColumnLayout columns={2} variant="text-grid">
         <Container header={<Header variant="h2">Profile</Header>}>
           <SpaceBetween direction="vertical" size="s">
             <div className="summary-row">
@@ -213,64 +153,6 @@ export function AccountPage() {
           </Form>
         </Container>
 
-        {isAdmin ? (
-          <Container header={<Header variant="h2">Create user</Header>}>
-            <Form
-              actions={
-                <Button
-                  loading={createUserMutation.isPending}
-                  variant="primary"
-                  onClick={handleCreateUserSubmit}
-                >
-                  Create user
-                </Button>
-              }
-            >
-              <SpaceBetween direction="vertical" size="l">
-                {createUserError ? <Alert type="error">{createUserError}</Alert> : null}
-                <FormField label="First name">
-                  <Input
-                    value={newUserFirstName}
-                    onChange={({ detail }) => setNewUserFirstName(detail.value)}
-                  />
-                </FormField>
-                <FormField label="Last name">
-                  <Input
-                    value={newUserLastName}
-                    onChange={({ detail }) => setNewUserLastName(detail.value)}
-                  />
-                </FormField>
-                <FormField label="Email">
-                  <Input
-                    type="email"
-                    value={newUserEmail}
-                    onChange={({ detail }) => setNewUserEmail(detail.value)}
-                  />
-                </FormField>
-                <FormField
-                  label="Temporary password"
-                  description="The new user can change this after signing in."
-                >
-                  <Input
-                    type="password"
-                    value={newUserPassword}
-                    onChange={({ detail }) => setNewUserPassword(detail.value)}
-                  />
-                </FormField>
-                <FormField label="Role">
-                  <Select
-                    selectedOption={{
-                      label: humanizeEnum(newUserRole),
-                      value: newUserRole,
-                    }}
-                    options={roleOptions}
-                    onChange={({ detail }) => setNewUserRole((detail.selectedOption.value as Role) || "USER")}
-                  />
-                </FormField>
-              </SpaceBetween>
-            </Form>
-          </Container>
-        ) : null}
       </ColumnLayout>
     </ContentLayout>
   );

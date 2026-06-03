@@ -135,6 +135,36 @@ func SendRoutineMaintenanceEmail(recipientEmail, recipientName, assetName, asset
 	return nil
 }
 
+func SendHTMLMail(recipientEmail, subject, body string) error {
+	smtpHost := os.Getenv("SMTP_HOST")
+	smtpPortStr := os.Getenv("SMTP_PORT")
+	smtpUser := os.Getenv("SMTP_USER")
+	smtpPassword := os.Getenv("SMTP_PASSWORD")
+	fromEmail := os.Getenv("FROM_EMAIL")
+
+	if smtpHost == "" || smtpPortStr == "" || smtpUser == "" || smtpPassword == "" || fromEmail == "" {
+		return fmt.Errorf("SMTP configuration is incomplete")
+	}
+
+	smtpPort, err := strconv.Atoi(smtpPortStr)
+	if err != nil {
+		return fmt.Errorf("invalid SMTP port: %v", err)
+	}
+
+	m := gomail.NewMessage()
+	m.SetHeader("From", fromEmail)
+	m.SetHeader("To", recipientEmail)
+	m.SetHeader("Subject", subject)
+	m.SetBody("text/html", body)
+
+	d := gomail.NewDialer(smtpHost, smtpPort, smtpUser, smtpPassword)
+	if err := d.DialAndSend(m); err != nil {
+		return fmt.Errorf("failed to send email: %v", err)
+	}
+
+	return nil
+}
+
 func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiringCertificatesWithContextRow, recipientEmail, recipientName string) {
 	if cert.ExpiryDate == nil {
 		logger.Log.Warn().

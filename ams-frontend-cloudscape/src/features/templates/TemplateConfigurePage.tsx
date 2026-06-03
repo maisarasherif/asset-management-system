@@ -210,7 +210,7 @@ type UseTemplateComponentColumnsOptions = {
   onEditComponent: (component: TemplateConfigurationComponent) => void;
 };
 
-function useTemplateConfigureData(templateId: string | undefined, selectedScopeId: string) {
+function useTemplateConfigureData(templateId: string | undefined, requestedScopeId: string) {
   const templateQuery = useQuery({
     queryKey: ["template", templateId],
     queryFn: () => getTemplate(templateId!),
@@ -227,6 +227,8 @@ function useTemplateConfigureData(templateId: string | undefined, selectedScopeI
     queryKey: ["catalog-scopes"],
     queryFn: listCatalogScopes,
   });
+
+  const selectedScopeId = requestedScopeId || catalogScopesQuery.data?.[0]?.scope_id || "";
 
   const categoriesQuery = useQuery({
     queryKey: ["catalog-scope-categories", selectedScopeId, "template-configure"],
@@ -293,6 +295,7 @@ function useTemplateConfigureData(templateId: string | undefined, selectedScopeI
     categoryMap,
     categoryOptions,
     configurationQuery,
+    selectedScopeId,
     templateQuery,
     testOptions,
     testTypesQuery,
@@ -467,16 +470,11 @@ export function TemplateConfigurePage() {
     categoryMap,
     categoryOptions,
     configurationQuery,
+    selectedScopeId: activeScopeId,
     templateQuery,
     testOptions,
     testTypesQuery,
   } = useTemplateConfigureData(templateId, selectedScopeId);
-
-  useEffect(() => {
-    if (!selectedScopeId && catalogScopesQuery.data?.[0]) {
-      setSelectedScopeId(catalogScopesQuery.data[0].scope_id);
-    }
-  }, [catalogScopesQuery.data, selectedScopeId]);
 
   const openEditEditor = (component: TemplateConfigurationComponent) => {
     setEditorMode("edit");
@@ -524,7 +522,7 @@ export function TemplateConfigurePage() {
     [catalogScopesQuery.data]
   );
   const selectedCatalogScope =
-    catalogScopeOptions.find((option) => option.value === selectedScopeId) ?? null;
+    catalogScopeOptions.find((option) => option.value === activeScopeId) ?? null;
 
   if (!templateId) {
     return <PageError description="The template route is missing." title="Invalid route" />;
@@ -536,7 +534,7 @@ export function TemplateConfigurePage() {
     categoriesQuery.isLoading ||
     catalogScopesQuery.isLoading ||
     allScopeCategoriesQuery.isLoading ||
-    (Boolean(catalogScopesQuery.data?.length) && !selectedScopeId) ||
+    (Boolean(catalogScopesQuery.data?.length) && !activeScopeId) ||
     testTypesQuery.isLoading
   ) {
     return <PageLoading>{"Loading the template configuration workspace\u2026"}</PageLoading>;

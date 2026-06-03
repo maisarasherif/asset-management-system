@@ -43,6 +43,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Set("firstName", claims.FirstName)
 		c.Set("lastName", claims.LastName)
 		c.Set("expiresAt", claims.ExpiresAt.Time)
+		c.Set("accessToken", token)
 
 		c.Next()
 	}
@@ -67,23 +68,48 @@ func ActiveUserMiddleware(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 		defer cancel()
 
-		status, err := db.New(pool).GetUserStatusByID(ctx, parsedUserID)
+		session, err := db.New(pool).GetUserSessionByID(ctx, parsedUserID)
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
 				c.Abort()
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate user status"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate user session"})
 			c.Abort()
 			return
 		}
-		if status != "ACTIVE" {
+		if session.Status != "ACTIVE" {
 			c.JSON(http.StatusForbidden, gin.H{"error": "user account is suspended"})
 			c.Abort()
 			return
 		}
+		presentedToken, _ := c.Get("accessToken")
+		if session.Token == "" || presentedToken != session.Token {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "session expired. Please sign in again."})
+			c.Abort()
+			return
+		}
 
+		c.Next()
+	}
+}
+
+func SuperAdminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, err := utils.GetRoleFromContext(c)
+		if err != nil || role != "SUPER_ADMIN" {
+			userID, _ := utils.GetUserIdFromContext(c)
+			logger.Log.Warn().
+				Str("user_id", userID).
+				Str("route", c.FullPath()).
+				Str("method", c.Request.Method).
+				Str("ip", c.ClientIP()).
+				Msg("unauthorized super admin access attempt")
+			c.JSON(http.StatusForbidden, gin.H{"error": "only SUPER ADMIN allowed"})
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }

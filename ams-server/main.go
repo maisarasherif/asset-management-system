@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	controller "github.com/maisarasherif/asset-management-system/ams-server/controllers"
@@ -19,6 +21,20 @@ func main() {
 	defer pool.Close()
 
 	utils.StartExpiryScheduler(pool)
+
+	riverCtx, cancelRiver := context.WithCancel(context.Background())
+	defer cancelRiver()
+	riverClient, riverUIHandler, err := utils.StartRiver(riverCtx, pool)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to start River")
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := utils.StopRiver(stopCtx, riverClient); err != nil {
+			logger.Log.Error().Err(err).Msg("failed to stop River")
+		}
+	}()
 
 	router := gin.New()
 	router.Use(
@@ -39,8 +55,8 @@ func main() {
 
 	controller.SeedAdminUser(pool)
 
-	routes.SetupUnprotectedRoutes(router, pool)
-	routes.SetupProtectedRoutes(router, pool)
+	routes.SetupUnprotectedRoutesWithRiver(router, pool, riverClient)
+	routes.SetupProtectedRoutesWithJobs(router, pool, riverUIHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {

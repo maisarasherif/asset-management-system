@@ -13,6 +13,57 @@ body {
   padding-bottom: 32px;
 }
 
+#top-navigation {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  border-bottom: 1px solid #c8dce3;
+  background: #eef6f8;
+}
+
+#top-navigation [class*="awsui_top-navigation_"]:not(#\9),
+#top-navigation [class*="awsui_padding-box_"]:not(#\9) {
+  background: #eef6f8;
+}
+
+#top-navigation [class*="awsui_top-navigation_"]:not(#\9) {
+  border-block-end: 0;
+}
+
+#top-navigation [class*="awsui_padding-box_"]:not(#\9) {
+  block-size: 78px;
+  min-height: 78px;
+  padding-inline-start: 18px;
+}
+
+#top-navigation [class*="awsui_identity_"]:not(#\9) {
+  inline-size: 314px;
+}
+
+#top-navigation [class*="awsui_identity-link_"]:not(#\9) {
+  inline-size: 100%;
+}
+
+#top-navigation [class*="awsui_logo_"]:not(#\9) {
+  inline-size: 236px;
+  block-size: 52px;
+  max-block-size: none;
+  margin-inline-end: 0;
+  object-fit: contain;
+  object-position: left center;
+}
+
+[class*="awsui_navigation_"]:has(.brand-sidebar):not(#\9) {
+  border-right: 1px solid #c8dce3;
+  background: #eef6f8;
+}
+
+[class*="awsui_navigation_"]:has(.brand-sidebar) > div:not(#\9) {
+  box-sizing: border-box;
+  padding: 0;
+  background: #eef6f8;
+}
+
 [class*="awsui_button_"]:not(#\9) {
   min-inline-size: max-content;
   white-space: nowrap;
@@ -93,8 +144,258 @@ body {
   color: #475569;
 }
 
-.navigation-panel {
-  padding: 40px 4px 8px;
+.auth-flow-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 18px;
+  background:
+    linear-gradient(180deg, rgba(9, 114, 211, 0.08), transparent 260px),
+    #f4f8fc;
+  box-sizing: border-box;
+}
+
+.auth-flow-page > [class*="awsui_container_"]:not(#\9) {
+  width: min(100%, 480px);
+}
+
+.brand-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 18px 18px 14px;
+  background:
+    linear-gradient(180deg, rgba(36, 127, 163, 0.1), transparent 260px),
+    #eef6f8;
+  color: #294650;
+  font-family: Aptos, "Segoe UI", "Amazon Ember", sans-serif;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.brand-sidebar__asset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 16px;
+  border-bottom: 1px solid #cddfe5;
+}
+
+.brand-sidebar__asset-label {
+  color: #64818d;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.brand-sidebar__asset [class*="awsui_button-trigger_"]:not(#\9) {
+  border-color: #9fbfca;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 53, 66, 0.04);
+  color: #112b34;
+  font-weight: 600;
+}
+
+.brand-sidebar__asset [class*="awsui_button-trigger_"]:hover:not(#\9) {
+  border-color: #247fa3;
+  background: #f9fcfd;
+}
+
+.brand-sidebar__asset [class*="awsui_button-trigger_"]:focus:not(#\9) {
+  border-color: #247fa3;
+  box-shadow: 0 0 0 3px rgba(36, 127, 163, 0.18);
+}
+
+.brand-sidebar__asset [class*="awsui_trigger_"]:not(#\9),
+.brand-sidebar__asset [class*="awsui_arrow_"]:not(#\9),
+.brand-sidebar__asset [class*="awsui_icon_"]:not(#\9) {
+  color: #247fa3;
+}
+
+.brand-sidebar__nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  padding: 16px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.brand-sidebar__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.brand-sidebar__group-label {
+  padding: 0 10px;
+  color: #64818d;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.brand-sidebar__group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brand-sidebar__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 39px;
+  padding: 8px 10px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #294650;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.brand-sidebar__nav-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+  color: #0f3542;
+}
+
+.brand-sidebar__nav-item:focus-visible {
+  outline: 2px solid #247fa3;
+  outline-offset: 2px;
+}
+
+.brand-sidebar__nav-item.is-active {
+  border-left-color: #247fa3;
+  background: #dceff5;
+  color: #0f3542;
+}
+
+.brand-sidebar__nav-item svg {
+  flex: 0 0 auto;
+  color: #5d8898;
+}
+
+.brand-sidebar__nav-item.is-active svg {
+  color: #247fa3;
+}
+
+.brand-sidebar__profile {
+  position: relative;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #cddfe5;
+}
+
+.brand-sidebar__profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #c5dce4;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #112b34;
+  box-shadow: 0 1px 2px rgba(15, 53, 66, 0.04);
+  cursor: pointer;
+  text-align: left;
+}
+
+.brand-sidebar__profile-trigger:hover {
+  border-color: #9fbfca;
+  background: #f9fcfd;
+}
+
+.brand-sidebar__profile-trigger:focus-visible {
+  outline: 2px solid #247fa3;
+  outline-offset: 2px;
+}
+
+.brand-sidebar__avatar {
+  display: inline-grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: #d7edf4;
+  color: #0f3542;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.brand-sidebar__profile-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.brand-sidebar__profile-name {
+  overflow: hidden;
+  color: #112b34;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-sidebar__profile-role {
+  color: #64818d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.brand-sidebar__profile-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: 20;
+  padding: 6px;
+  border: 1px solid #c5dce4;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(15, 53, 66, 0.16);
+}
+
+.brand-sidebar__profile-menu-item {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #122332;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.brand-sidebar__profile-menu-item:hover {
+  background: #eef6f8;
+}
+
+.brand-sidebar__profile-menu-item:disabled {
+  cursor: progress;
+  opacity: 0.62;
 }
 
 .login-page {

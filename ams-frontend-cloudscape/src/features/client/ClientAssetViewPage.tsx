@@ -2,7 +2,6 @@ import {
   Alert,
   Box,
   Button,
-  ColumnLayout,
   Container,
   ContentLayout,
   Header,
@@ -12,11 +11,13 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { CertificateDonut } from "../../components/shared/CertificateDonut";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import {
   getClientAsset,
   getClientCertificateDownloadUrl,
 } from "../../lib/api/ams";
+import { countCertificateStatuses } from "../../utils/certificateStatusCounts";
 import { formatDate, formatMonthDuration, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
 import { useFlashbar } from "../../providers/flashbar-context";
@@ -46,6 +47,11 @@ export function ClientAssetViewPage() {
         (certificate) => certificate.component_id === selectedComponent?.component_id
       ),
     [assetQuery.data?.certificates, selectedComponent?.component_id]
+  );
+
+  const statusCounts = useMemo(
+    () => countCertificateStatuses(assetQuery.data?.certificates || []),
+    [assetQuery.data?.certificates]
   );
 
   const handleComponentSelect = useCallback((componentId: string) => {
@@ -81,7 +87,11 @@ export function ClientAssetViewPage() {
     );
   }
 
-  const { asset, components } = assetQuery.data;
+  const { asset, components, certificates } = assetQuery.data;
+  const componentCount =
+    asset.asset_kind === "SINGLE_EQUIPMENT"
+      ? 1
+      : components.filter((component) => component.component_kind !== "SELF").length;
 
   return (
     <ContentLayout
@@ -98,28 +108,41 @@ export function ClientAssetViewPage() {
       }
     >
       <SpaceBetween direction="vertical" size="l">
-        <Container>
-          <ColumnLayout columns={4} variant="text-grid">
-            <div className="summary-row">
-              <Box variant="awsui-key-label">Status</Box>
-              <StatusIndicator type={assetStatusType(asset.status)}>
-                {humanizeEnum(asset.status)}
-              </StatusIndicator>
-            </div>
-            <div className="summary-row">
-              <Box variant="awsui-key-label">Location</Box>
-              <Box>{asset.location || "Not set"}</Box>
-            </div>
-            <div className="summary-row">
-              <Box variant="awsui-key-label">Assigned project</Box>
-              <Box>{asset.assigned_project || "Not set"}</Box>
-            </div>
-            <div className="summary-row">
-              <Box variant="awsui-key-label">Components</Box>
-              <Box>{components.length}</Box>
-            </div>
-          </ColumnLayout>
-        </Container>
+        <div className="dashboard-top-grid">
+          <Container header={<Header variant="h2">Certificate status</Header>}>
+            <CertificateDonut
+              expired={statusCounts.expired}
+              expiringSoon={statusCounts.expiringSoon}
+              valid={statusCounts.valid}
+            />
+          </Container>
+          <Container header={<Header variant="h2">Asset details</Header>}>
+            <SpaceBetween direction="vertical" size="xs">
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Status</Box>
+                <StatusIndicator type={assetStatusType(asset.status)}>
+                  {humanizeEnum(asset.status)}
+                </StatusIndicator>
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Location</Box>
+                <Box>{asset.location || "Not set"}</Box>
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Assigned project</Box>
+                <Box>{asset.assigned_project || "Not set"}</Box>
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Components</Box>
+                <Box>{componentCount}</Box>
+              </div>
+              <div className="summary-row">
+                <Box variant="awsui-key-label">Certificates</Box>
+                <Box>{certificates.length}</Box>
+              </div>
+            </SpaceBetween>
+          </Container>
+        </div>
 
         <div className="client-asset-workspace">
           <div className="client-asset-workspace__components">
@@ -205,24 +228,6 @@ export function ClientAssetViewPage() {
                             {humanizeEnum(certificate.status)}
                           </StatusIndicator>
                         </div>
-                        <div className="client-certificate-record__field">
-                          <span className="client-certificate-record__label">Test period</span>
-                          <span className="client-certificate-record__value">
-                            {formatMonthDuration(certificate.test_period_months)}
-                          </span>
-                        </div>
-                        <div className="client-certificate-record__field">
-                          <span className="client-certificate-record__label">Issue</span>
-                          <span className="client-certificate-record__value">
-                            {formatDate(certificate.issue_date)}
-                          </span>
-                        </div>
-                        <div className="client-certificate-record__field">
-                          <span className="client-certificate-record__label">Expiry</span>
-                          <span className="client-certificate-record__value">
-                            {formatDate(certificate.expiry_date)}
-                          </span>
-                        </div>
                         <div className="client-certificate-record__field client-certificate-record__field--action">
                           <span className="client-certificate-record__label">File</span>
                           <Button
@@ -232,6 +237,18 @@ export function ClientAssetViewPage() {
                           >
                             View file
                           </Button>
+                        </div>
+                        <div className="client-certificate-record__field">
+                          <span className="client-certificate-record__label">Test period</span>
+                          <span className="client-certificate-record__value">
+                            {formatMonthDuration(certificate.test_period_months)}
+                          </span>
+                        </div>
+                        <div className="client-certificate-record__field">
+                          <span className="client-certificate-record__label">Expiry</span>
+                          <span className="client-certificate-record__value">
+                            {formatDate(certificate.expiry_date)}
+                          </span>
                         </div>
                       </div>
                     ))}

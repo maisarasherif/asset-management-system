@@ -140,11 +140,13 @@ function getNextEquipmentTypeSortOrder(equipmentTypes: EquipmentType[]) {
   ) + 1;
 }
 
-function useCatalogData(selectedScopeId: string) {
+function useCatalogData(requestedScopeId: string) {
   const catalogScopesQuery = useQuery({
     queryKey: ["catalog-scopes"],
     queryFn: listCatalogScopes,
   });
+
+  const selectedScopeId = requestedScopeId || catalogScopesQuery.data?.[0]?.scope_id || "";
 
   const mainCategoriesQuery = useQuery({
     queryKey: ["catalog-scope-main-categories", selectedScopeId],
@@ -221,6 +223,7 @@ function useCatalogData(selectedScopeId: string) {
     mainCategoryMap,
     mainCategoryOptions,
     mainCategorySortOrderMap,
+    selectedScopeId,
     testTypesQuery,
   };
 }
@@ -652,14 +655,9 @@ export function CatalogPage() {
     mainCategoryMap,
     mainCategoryOptions,
     mainCategorySortOrderMap,
+    selectedScopeId: activeScopeId,
     testTypesQuery,
   } = catalogData;
-
-  useEffect(() => {
-    if (!selectedScopeId && catalogScopesQuery.data?.[0]) {
-      setSelectedScopeId(catalogScopesQuery.data[0].scope_id);
-    }
-  }, [catalogScopesQuery.data, selectedScopeId]);
 
   const dismissMainCategoryEditor = () => {
     setModalError("");
@@ -703,7 +701,7 @@ export function CatalogPage() {
     onEquipmentTypeSaved: dismissEquipmentTypeEditor,
     onMainCategorySaved: dismissMainCategoryEditor,
     onTestTypeSaved: dismissTestTypeEditor,
-    selectedScopeId,
+    selectedScopeId: activeScopeId,
     setModalError,
   });
 
@@ -773,7 +771,7 @@ export function CatalogPage() {
 
   const loading =
     catalogScopesQuery.isLoading ||
-    (Boolean(catalogScopesQuery.data?.length) && !selectedScopeId) ||
+    (Boolean(catalogScopesQuery.data?.length) && !activeScopeId) ||
     mainCategoriesQuery.isLoading ||
     categoriesQuery.isLoading ||
     testTypesQuery.isLoading ||
@@ -877,7 +875,7 @@ export function CatalogPage() {
   };
 
   const selectedScope =
-    catalogScopesQuery.data.find((scope) => scope.scope_id === selectedScopeId) ||
+    catalogScopesQuery.data.find((scope) => scope.scope_id === activeScopeId) ||
     catalogScopesQuery.data[0];
 
   return (
@@ -991,7 +989,7 @@ export function CatalogPage() {
       testTypeColumns={testTypeColumns}
       testTypeEditor={testTypeEditor}
       testTypes={testTypesQuery.data}
-      selectedScopeId={selectedScopeId}
+      selectedScopeId={activeScopeId}
     />
   );
 }

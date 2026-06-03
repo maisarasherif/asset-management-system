@@ -236,15 +236,6 @@ function WorkingHoursModal({ asset, loading, onDismiss, onSubmit, visible }: Wor
     note: "",
   });
 
-  useEffect(() => {
-    if (visible) {
-      setDraft({
-        working_hours: String(asset.working_hours),
-        note: "",
-      });
-    }
-  }, [asset.working_hours, visible]);
-
   return (
     <Modal
       visible={visible}
@@ -295,12 +286,6 @@ interface CompletionModalProps {
 
 function CompletionModal({ loading, onDismiss, onSubmit, visible }: CompletionModalProps) {
   const [draft, setDraft] = useState<CompletionDraft>({ completion_notes: "" });
-
-  useEffect(() => {
-    if (visible) {
-      setDraft({ completion_notes: "" });
-    }
-  }, [visible]);
 
   return (
     <Modal
@@ -494,6 +479,7 @@ function renderAssetRoutineMaintenancePage({
       </ContentLayout>
 
       <WorkingHoursModal
+        key={`working-hours-${hoursModalVisible ? "open" : "closed"}-${asset.working_hours}`}
         asset={asset}
         loading={updateHoursPending}
         onDismiss={onCloseHoursModal}
@@ -502,6 +488,7 @@ function renderAssetRoutineMaintenancePage({
       />
 
       <CompletionModal
+        key={`completion-${completeModalVisible ? "open" : "closed"}-${openMaintenanceEvent?.maintenance_event_id || "none"}`}
         loading={completePending}
         onDismiss={onCloseCompleteModal}
         onSubmit={onCompleteMaintenance}

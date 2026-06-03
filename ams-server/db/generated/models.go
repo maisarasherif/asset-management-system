@@ -186,6 +186,13 @@ type EquipmentType struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
+type ForgotPasswordRateLimit struct {
+	Key         string             `json:"key"`
+	Hits        int32              `json:"hits"`
+	WindowStart pgtype.Timestamptz `json:"window_start"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type MainCategory struct {
 	MainCategoryName string    `json:"main_category_name"`
 	Description      string    `json:"description"`
@@ -204,6 +211,15 @@ type NotificationFailure struct {
 	Tier           string             `json:"tier"`
 	ErrorMessage   string             `json:"error_message"`
 	FailedAt       pgtype.Timestamptz `json:"failed_at"`
+}
+
+type PasswordResetToken struct {
+	TokenID   uuid.UUID          `json:"token_id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	TokenHash string             `json:"token_hash"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	UsedAt    pgtype.Timestamptz `json:"used_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Project struct {

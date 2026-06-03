@@ -3,17 +3,27 @@ import {
   Box,
   Flashbar,
   HelpPanel,
-  SideNavigation,
-  SpaceBetween,
   TopNavigation,
 } from "@cloudscape-design/components";
+import {
+  IconCalendarTime,
+  IconCategory2,
+  IconFolder,
+  IconLayoutDashboard,
+  IconShieldCog,
+  IconTemplate,
+  IconUsers,
+  IconBriefcase,
+  type Icon,
+} from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Select } from "../shared/OptimizedSelect";
 import { listAllAssets, listAllClientAssets, logoutRequest } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
+import type { Role } from "../../types/ams";
 
 const TOP_NAV_I18N = {
   searchDismissIconAriaLabel: "Close search",
@@ -23,6 +33,56 @@ const TOP_NAV_I18N = {
   overflowMenuTriggerText: "More",
   overflowMenuTitleText: "All",
 };
+
+type NavigationItem = {
+  href: string;
+  icon: Icon;
+  text: string;
+};
+
+type NavigationGroup = {
+  label: string;
+  items: NavigationItem[];
+};
+
+function roleDisplayName(role: Role | undefined) {
+  switch (role) {
+    case "SUPER_ADMIN":
+      return "Top Administrator";
+    case "ADMIN":
+      return "Administrator";
+    case "USER":
+      return "User";
+    case "CLIENT":
+      return "Client";
+    default:
+      return "User";
+  }
+}
+
+function fallbackName(role: Role | undefined) {
+  switch (role) {
+    case "SUPER_ADMIN":
+      return "Super Admin";
+    case "ADMIN":
+      return "Administrator";
+    case "CLIENT":
+      return "Client";
+    default:
+      return "User";
+  }
+}
+
+function initialsForName(name: string) {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return initials || "U";
+}
 
 function getHelpPanelContent(pathname: string) {
   if (pathname.startsWith("/dashboard")) {
@@ -98,19 +158,22 @@ function getHelpPanelContent(pathname: string) {
   }
 
   return {
-    title: "AMS Cloudscape",
+    title: "AMS",
     content:
-      "This app is structured around asset-first navigation, Cloudscape page composition, and session-backed access to the live AMS API.",
+      "This app is structured around asset-first navigation and session-backed access to the live AMS API.",
   };
 }
 
 export function AppShellLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { items } = useFlashbar();
-  const { isAdmin, isClient, selectedAssetId, setSelectedAssetId } = useAuth();
+  const queryClient = useQueryClient();
+  const { clearAll, items } = useFlashbar();
+  const { isAdmin, isClient, logout, selectedAssetId, session, setSelectedAssetId } = useAuth();
   const [navigationOpen, setNavigationOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const assetsQuery = useQuery({
     queryKey: [isClient ? "client-assets" : "assets", "all"],
@@ -123,6 +186,31 @@ export function AppShellLayout() {
     }
   }, [assetsQuery.data, selectedAssetId, setSelectedAssetId]);
 
+  useEffect(() => {
+    if (!profileMenuOpen) {
+      return;
+    }
+
+    const closeProfileMenu = (event: MouseEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeProfileMenu);
+    return () => document.removeEventListener("mousedown", closeProfileMenu);
+  }, [profileMenuOpen]);
+
+  const logoutMutation = useMutation({
+    mutationFn: logoutRequest,
+    onSettled: () => {
+      queryClient.clear();
+      clearAll();
+      logout();
+      navigate("/login", { replace: true });
+    },
+  });
+
   const assetOptions = useMemo(
     () =>
       (assetsQuery.data || []).map((asset) => ({
@@ -134,6 +222,49 @@ export function AppShellLayout() {
 
   const selectedAssetOption =
     assetOptions.find((option) => option.value === selectedAssetId) ?? null;
+
+  const navigationGroups = useMemo<NavigationGroup[]>(() => {
+    if (isClient) {
+      return [
+        {
+          label: "Overview",
+          items: [{ href: "/client/assets", icon: IconBriefcase, text: "My assets" }],
+        },
+      ];
+    }
+
+    const groups: NavigationGroup[] = [
+      {
+        label: "Overview",
+        items: [
+          { href: "/dashboard", icon: IconLayoutDashboard, text: "Dashboard" },
+          { href: "/assets", icon: IconFolder, text: "Asset Directory" },
+        ],
+      },
+    ];
+
+    if (isAdmin) {
+      groups.push(
+        {
+          label: "Configuration",
+          items: [
+            { href: "/templates", icon: IconTemplate, text: "Templates" },
+            { href: "/catalog", icon: IconCategory2, text: "Catalog" },
+            { href: "/scheduler", icon: IconCalendarTime, text: "Scheduler" },
+          ],
+        },
+        {
+          label: "Management",
+          items: [
+            { href: "/client-access", icon: IconUsers, text: "Client Access" },
+            { href: "/administration", icon: IconShieldCog, text: "Administration" },
+          ],
+        }
+      );
+    }
+
+    return groups;
+  }, [isAdmin, isClient]);
 
   const helpPanel = getHelpPanelContent(location.pathname);
   const activeHref = location.pathname.startsWith("/assets")
@@ -151,14 +282,18 @@ export function AppShellLayout() {
               : location.pathname.startsWith("/administration")
                 ? "/administration"
                 : location.pathname;
+  const fullName = `${session?.firstName || ""} ${session?.lastName || ""}`.trim();
+  const profileName = fullName || fallbackName(session?.role);
+  const profileRole = roleDisplayName(session?.role);
+  const profileInitials = initialsForName(profileName);
 
   return (
     <AppLayout
       content={<div className="app-layout-content"><Outlet /></div>}
       navigation={
-        <SpaceBetween direction="vertical" size="l">
-          <div className="navigation-panel">
-            <Box variant="awsui-key-label">Current asset</Box>
+        <div className="brand-sidebar">
+          <div className="brand-sidebar__asset">
+            <span className="brand-sidebar__asset-label">Current asset</span>
             <Select
               ariaLabel="Select asset"
               disabled={assetsQuery.isLoading || assetOptions.length === 0}
@@ -192,38 +327,78 @@ export function AppShellLayout() {
               }}
             />
           </div>
-          <SideNavigation
-            activeHref={activeHref}
-            header={{ href: isClient ? "/client/assets" : "/dashboard", text: "AMS Cloudscape" }}
-            items={
-              isClient
-                ? [
-                    { type: "link", text: "My assets", href: "/client/assets" },
-                    { type: "link", text: "Account", href: "/account" },
-                  ]
-                : [
-                    { type: "link", text: "Dashboard", href: "/dashboard" },
-                    { type: "link", text: "Assets directory", href: "/assets" },
-                    ...(isAdmin
-	                      ? [
-	                          { type: "link" as const, text: "Templates", href: "/templates" },
-	                          { type: "link" as const, text: "Catalog", href: "/catalog" },
-	                          { type: "link" as const, text: "Administration", href: "/administration" },
-	                          { type: "link" as const, text: "Client access", href: "/client-access" },
-	                          { type: "link" as const, text: "Scheduler", href: "/scheduler" },
-	                        ]
-                      : []),
-                    { type: "link", text: "Account", href: "/account" },
-                  ]
-            }
-            onFollow={(event) => {
-              event.preventDefault();
-              if (event.detail.href) {
-                navigate(event.detail.href);
-              }
-            }}
-          />
-        </SpaceBetween>
+          <nav className="brand-sidebar__nav" aria-label="Primary navigation">
+            {navigationGroups.map((group) => (
+              <div className="brand-sidebar__group" key={group.label}>
+                <div className="brand-sidebar__group-label">{group.label}</div>
+                <div className="brand-sidebar__group-items">
+                  {group.items.map((item) => {
+                    const isActive = activeHref === item.href;
+                    const ItemIcon = item.icon;
+
+                    return (
+                      <button
+                        aria-current={isActive ? "page" : undefined}
+                        className={`brand-sidebar__nav-item${isActive ? " is-active" : ""}`}
+                        key={item.href}
+                        onClick={() => navigate(item.href)}
+                        type="button"
+                      >
+                        <ItemIcon aria-hidden="true" size={19} stroke={1.8} />
+                        <span>{item.text}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
+          <div className="brand-sidebar__profile" ref={profileMenuRef}>
+            {profileMenuOpen ? (
+              <div className="brand-sidebar__profile-menu" role="menu">
+                <button
+                  className="brand-sidebar__profile-menu-item"
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    navigate("/account");
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  Account
+                </button>
+                <button
+                  className="brand-sidebar__profile-menu-item"
+                  disabled={logoutMutation.isPending}
+                  onClick={() => {
+                    if (!logoutMutation.isPending) {
+                      logoutMutation.mutate();
+                    }
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : null}
+            <button
+              aria-expanded={profileMenuOpen}
+              aria-haspopup="menu"
+              className="brand-sidebar__profile-trigger"
+              onClick={() => setProfileMenuOpen((open) => !open)}
+              type="button"
+            >
+              <span className="brand-sidebar__avatar" aria-hidden="true">
+                {profileInitials}
+              </span>
+              <span className="brand-sidebar__profile-copy">
+                <span className="brand-sidebar__profile-name">{profileName}</span>
+                <span className="brand-sidebar__profile-role">{profileRole}</span>
+              </span>
+            </button>
+          </div>
+        </div>
       }
       navigationOpen={navigationOpen}
       notifications={<Flashbar items={items} stackItems />}
@@ -243,19 +418,7 @@ export function AppShellLayout() {
 
 export function AppChrome() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { clearAll } = useFlashbar();
-  const { logout, session } = useAuth();
-  const logoutMutation = useMutation({
-    mutationFn: logoutRequest,
-    onSettled: () => {
-      queryClient.clear();
-      clearAll();
-      logout();
-      navigate("/login", { replace: true });
-    },
-  });
-  const fullName = `${session?.firstName || ""} ${session?.lastName || ""}`.trim();
+  const { session } = useAuth();
 
   return (
     <>
@@ -264,36 +427,15 @@ export function AppChrome() {
           i18nStrings={TOP_NAV_I18N}
           identity={{
             href: session?.role === "CLIENT" ? "/client/assets" : "/dashboard",
-            title: "Asset Management System",
+            logo: {
+              alt: "Porto Marine Services",
+              src: "/porto-marine-logo.svg",
+            },
             onFollow: (event) => {
               event.preventDefault();
               navigate(session?.role === "CLIENT" ? "/client/assets" : "/dashboard");
             },
           }}
-          utilities={[
-            {
-              type: "menu-dropdown",
-              iconName: "user-profile",
-              text: fullName || "Account",
-              description: session?.email,
-              items: [
-                { id: "account", text: "Account" },
-                { id: "logout", text: "Sign out" },
-              ],
-              onItemClick: ({ detail }) => {
-                if (detail.id === "logout") {
-                  if (!logoutMutation.isPending) {
-                    logoutMutation.mutate();
-                  }
-                  return;
-                }
-
-                if (detail.id === "account") {
-                  navigate("/account");
-                }
-              },
-            },
-          ]}
         />
       </div>
       <AppShellLayout />

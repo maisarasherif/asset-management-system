@@ -123,6 +123,18 @@ export const ClientAssetViewPage = lazy(() =>
   }))
 );
 
+export const ForgotPasswordPage = lazy(() =>
+  import("../features/auth/ForgotPasswordPage").then((module) => ({
+    default: module.ForgotPasswordPage,
+  }))
+);
+
+export const ResetPasswordPage = lazy(() =>
+  import("../features/auth/ResetPasswordPage").then((module) => ({
+    default: module.ResetPasswordPage,
+  }))
+);
+
 export function RouteSuspense({ children }: { children: ReactNode }) {
   return (
     <Suspense fallback={<PageLoading>{"Loading the next page\u2026"}</PageLoading>}>

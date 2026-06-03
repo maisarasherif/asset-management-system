@@ -1,14 +1,12 @@
 *.txt
 .env
 *.pdf
-!tests/regression/fixtures/sample-certificate.pdf
+*.log
 /skills
 /themes
 /fixes
 /postman/*
-/docs/question*
-/docs/cert*
-/docs/*.html
+/docs/*
 
 
 /design-pocs

@@ -14,7 +14,7 @@ import {
   type SelectProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createComponent,
@@ -80,12 +80,6 @@ export function ComponentFormPage() {
     queryFn: listCatalogScopes,
   });
 
-  const categoriesQuery = useQuery({
-    queryKey: ["catalog-scope-categories", selectedScopeId, "component-form"],
-    queryFn: () => listAllCatalogScopeCategories(selectedScopeId),
-    enabled: Boolean(selectedScopeId),
-  });
-
   const allScopeCategoriesQuery = useQuery({
     queryKey: ["catalog-scope-categories", "component-form", "all-scopes"],
     queryFn: () =>
@@ -101,6 +95,19 @@ export function ComponentFormPage() {
     queryKey: ["component", componentId],
     queryFn: () => getComponent(componentId!),
     enabled: Boolean(componentId),
+  });
+
+  const defaultScopeId = catalogScopesQuery.data?.[0]?.scope_id ?? "";
+  const componentScopeId = findCategoryScopeId(
+    allScopeCategoriesQuery.data || [],
+    componentQuery.data?.scope_category_id ?? undefined
+  );
+  const activeScopeId = selectedScopeId || componentScopeId || defaultScopeId;
+
+  const categoriesQuery = useQuery({
+    queryKey: ["catalog-scope-categories", activeScopeId, "component-form"],
+    queryFn: () => listAllCatalogScopeCategories(activeScopeId),
+    enabled: Boolean(activeScopeId),
   });
 
   const baseForm: ComponentInput = componentQuery.data
@@ -139,22 +146,6 @@ export function ComponentFormPage() {
     };
   const form: ComponentInput = { ...baseForm, ...formDraft };
 
-  useEffect(() => {
-    if (!selectedScopeId && catalogScopesQuery.data?.[0]) {
-      setSelectedScopeId(catalogScopesQuery.data[0].scope_id);
-    }
-  }, [catalogScopesQuery.data, selectedScopeId]);
-
-  useEffect(() => {
-    const scopeId = findCategoryScopeId(
-      allScopeCategoriesQuery.data || [],
-      componentQuery.data?.scope_category_id ?? undefined
-    );
-    if (scopeId && scopeId !== selectedScopeId) {
-      setSelectedScopeId(scopeId);
-    }
-  }, [allScopeCategoriesQuery.data, componentQuery.data?.scope_category_id, selectedScopeId]);
-
   const scopeOptions = useMemo<SelectProps.Option[]>(
     () =>
       (catalogScopesQuery.data || []).map((scope: CatalogScope) => ({
@@ -165,7 +156,7 @@ export function ComponentFormPage() {
     [catalogScopesQuery.data]
   );
   const selectedScopeOption =
-    scopeOptions.find((option) => option.value === selectedScopeId) ?? null;
+    scopeOptions.find((option) => option.value === activeScopeId) ?? null;
 
   const categoryOptions = useMemo<CategorySelectOption[]>(() => {
     return (categoriesQuery.data || []).map((category) => ({
@@ -230,7 +221,7 @@ export function ComponentFormPage() {
     assetQuery.isLoading ||
     catalogScopesQuery.isLoading ||
     (isEditing && allScopeCategoriesQuery.isLoading) ||
-    (Boolean(catalogScopesQuery.data?.length) && !selectedScopeId) ||
+    (Boolean(catalogScopesQuery.data?.length) && !activeScopeId) ||
     categoriesQuery.isLoading ||
     (isEditing && componentQuery.isLoading)
   ) {

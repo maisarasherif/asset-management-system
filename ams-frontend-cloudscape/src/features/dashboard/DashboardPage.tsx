@@ -13,6 +13,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
+import { CertificateDonut } from "../../components/shared/CertificateDonut";
 import { RouterLink } from "../../components/shared/RouterLink";
 import { TableCellText } from "../../components/shared/TableCells";
 import {
@@ -25,7 +26,6 @@ import { useFlashbar } from "../../providers/flashbar-context";
 import type { AssetDashboardData } from "../../types/ams";
 import { formatDate, formatDateTime, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
-import { CertificateDonut } from "./CertificateDonut";
 
 type DashboardCertificate = AssetDashboardData["certificates"][number];
 

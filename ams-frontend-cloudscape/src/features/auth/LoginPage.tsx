@@ -74,7 +74,7 @@ export function LoginPage() {
             <div className="login-brand__logo-frame">
               <img
                 className="login-brand__logo"
-                src="/porto-marine-logo.png"
+                src="/porto-marine-logo.svg"
                 alt="Porto Marine Services"
               />
             </div>
@@ -192,6 +192,17 @@ export function LoginPage() {
                       onChange={({ detail }) => setPassword(detail.value)}
                     />
                   </FormField>
+                  <Box color="text-body-secondary">
+                    <Link
+                      href="/forgot-password"
+                      onFollow={(event) => {
+                        event.preventDefault();
+                        navigate("/forgot-password");
+                      }}
+                    >
+                      Forgot password?
+                    </Link>
+                  </Box>
                 </SpaceBetween>
               </Form>
             </form>

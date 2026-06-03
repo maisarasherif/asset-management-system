@@ -17,10 +17,12 @@ import {
   ClientAssetsPage,
   ComponentFormPage,
   DashboardPage,
+  ForgotPasswordPage,
   GuestOnly,
   RequireAdmin,
   RequireAuth,
   RouteSuspense,
+  ResetPasswordPage,
   SchedulerManagementPage,
   TemplateConfigurePage,
   TemplateCreatePage,
@@ -36,6 +38,28 @@ export const router = createBrowserRouter([
       <GuestOnly>
         <RouteSuspense>
           <LoginPage />
+        </RouteSuspense>
+      </GuestOnly>
+    ),
+  },
+  {
+    path: "/forgot-password",
+    errorElement: <RouteErrorPage />,
+    element: (
+      <GuestOnly>
+        <RouteSuspense>
+          <ForgotPasswordPage />
+        </RouteSuspense>
+      </GuestOnly>
+    ),
+  },
+  {
+    path: "/reset-password",
+    errorElement: <RouteErrorPage />,
+    element: (
+      <GuestOnly>
+        <RouteSuspense>
+          <ResetPasswordPage />
         </RouteSuspense>
       </GuestOnly>
     ),

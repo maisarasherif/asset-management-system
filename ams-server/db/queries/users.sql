@@ -73,8 +73,8 @@ LIMIT 1;
 -- name: GetUserPasswordByID :one
 SELECT password FROM users WHERE user_id = $1 LIMIT 1;
 
--- name: GetUserStatusByID :one
-SELECT status FROM users WHERE user_id = $1 LIMIT 1;
+-- name: GetUserSessionByID :one
+SELECT status, token FROM users WHERE user_id = $1 LIMIT 1;
 
 -- name: UpdateUser :execrows
 UPDATE users

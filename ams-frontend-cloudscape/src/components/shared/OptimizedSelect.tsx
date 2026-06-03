@@ -1,7 +1,7 @@
-import CloudscapeMultiselect, {
+import DesignMultiselect, {
   type MultiselectProps,
 } from "@cloudscape-design/components/multiselect";
-import CloudscapeSelect, { type SelectProps } from "@cloudscape-design/components/select";
+import DesignSelect, { type SelectProps } from "@cloudscape-design/components/select";
 import { forwardRef } from "react";
 
 export const Select = forwardRef<SelectProps.Ref, SelectProps>(
@@ -16,7 +16,7 @@ export const Select = forwardRef<SelectProps.Ref, SelectProps>(
     },
     ref
   ) => (
-    <CloudscapeSelect
+    <DesignSelect
       {...props}
       ref={ref}
       filteringAriaLabel={filteringAriaLabel || "Filter options"}
@@ -42,7 +42,7 @@ export const Multiselect = forwardRef<MultiselectProps.Ref, MultiselectProps>(
     },
     ref
   ) => (
-    <CloudscapeMultiselect
+    <DesignMultiselect
       {...props}
       ref={ref}
       filteringAriaLabel={filteringAriaLabel || "Filter options"}

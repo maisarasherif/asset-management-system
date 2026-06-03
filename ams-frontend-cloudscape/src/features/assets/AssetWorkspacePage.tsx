@@ -25,6 +25,7 @@ import {
   listAssetRoutineMaintenance,
   listAllCertificatesByComponent,
   listAllComponentsByAsset,
+  listTestTypes,
   getCertificateDownloadUrl,
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
@@ -36,8 +37,9 @@ import type {
   Certificate,
   ComponentRecord,
   SingleAssetEquipment,
+  TestType,
 } from "../../types/ams";
-import { formatDate, humanizeEnum } from "../../utils/format";
+import { formatDate, formatMonthDuration, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
 
 type ComponentGroupSection = {
@@ -122,6 +124,11 @@ export function AssetWorkspacePage() {
     queryKey: ["routine-maintenance", assetId],
     queryFn: () => listAssetRoutineMaintenance(assetId!),
     enabled: Boolean(assetId),
+  });
+
+  const testTypesQuery = useQuery({
+    queryKey: ["test-types"],
+    queryFn: listTestTypes,
   });
 
   useEffect(() => {
@@ -259,6 +266,7 @@ export function AssetWorkspacePage() {
     componentsQuery.isLoading ||
     catalogScopesQuery.isLoading ||
     scopeCategoriesQuery.isLoading ||
+    testTypesQuery.isLoading ||
     (isSingleEquipment && equipmentQuery.isLoading)
   ) {
     return <PageLoading>{"Loading the asset workspace\u2026"}</PageLoading>;
@@ -269,9 +277,11 @@ export function AssetWorkspacePage() {
     componentsQuery.isError ||
     catalogScopesQuery.isError ||
     scopeCategoriesQuery.isError ||
+    testTypesQuery.isError ||
     (isSingleEquipment && equipmentQuery.isError) ||
     !assetQuery.data ||
-    !componentsQuery.data
+    !componentsQuery.data ||
+    !testTypesQuery.data
   ) {
     return (
       <PageError
@@ -281,6 +291,7 @@ export function AssetWorkspacePage() {
           void componentsQuery.refetch();
           void catalogScopesQuery.refetch();
           void scopeCategoriesQuery.refetch();
+          void testTypesQuery.refetch();
           if (isSingleEquipment) {
             void equipmentQuery.refetch();
           }
@@ -289,11 +300,15 @@ export function AssetWorkspacePage() {
     );
   }
 
+  const testTypeMap = new Map(
+    testTypesQuery.data.map((testType: TestType) => [testType.test_id, testType])
+  );
+
   const certificateColumns: TableProps<Certificate>["columnDefinitions"] = [
     {
       id: "certificate",
       header: "Certificate",
-      width: "42%",
+      width: "34%",
       minWidth: 260,
       cell: (item) => (
         <TableCellText title={item.certificate_name}>
@@ -306,15 +321,8 @@ export function AssetWorkspacePage() {
       ),
     },
     {
-      id: "expiry",
-      header: "Expiry",
-      width: 140,
-      minWidth: 130,
-      cell: (item) => formatDate(item.expiry_date),
-    },
-    {
-      id: "status",
-      header: "Status",
+      id: "validity",
+      header: "Validity",
       width: 150,
       minWidth: 140,
       cell: (item) => (
@@ -325,7 +333,7 @@ export function AssetWorkspacePage() {
     },
     {
       id: "file",
-      header: "View file",
+      header: "File",
       width: 130,
       minWidth: 120,
       cell: (item) => (
@@ -340,6 +348,20 @@ export function AssetWorkspacePage() {
           View file
         </Button>
       ),
+    },
+    {
+      id: "test-period",
+      header: "Test period",
+      width: 150,
+      minWidth: 140,
+      cell: (item) => formatMonthDuration(testTypeMap.get(item.test_id)?.validity_duration),
+    },
+    {
+      id: "expiry",
+      header: "Expiry",
+      width: 140,
+      minWidth: 130,
+      cell: (item) => formatDate(item.expiry_date),
     },
   ];
 
