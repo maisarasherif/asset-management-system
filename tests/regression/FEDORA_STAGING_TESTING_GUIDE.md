@@ -223,7 +223,7 @@ This will:
 - Run Newman.
 - Recreate the isolated DB before Playwright.
 - Build and serve the frontend on `127.0.0.1:14175`.
-- Run Playwright.
+- Run the unified Playwright whole-app regression.
 - Drop the isolated DB.
 
 ## Targeted Runs
@@ -272,7 +272,15 @@ RUN_NEWMAN=0 \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-One Playwright spec:
+By default, Playwright runs only the unified main E2E:
+
+```text
+../tests/regression/e2e/whole-app-regression.spec.ts
+```
+
+Older feature-specific or mocked specs are kept for targeted diagnosis and are opt-in through `E2E_SPECS`.
+
+One non-default Playwright spec:
 
 ```bash
 RUN_GO_REGRESSION=0 \
