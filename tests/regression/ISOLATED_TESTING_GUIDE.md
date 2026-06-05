@@ -114,6 +114,20 @@ KEEP_DB=1 RUN_PLAYWRIGHT=0 bash tests/regression/run-vps-isolated-tests.sh
 
 When using `KEEP_DB=1`, note the printed database name and drop it manually after inspection.
 
+By default, the runner reclaims stale listeners on its configured test ports before it starts:
+
+```text
+API_PORT=18082
+FRONTEND_PORT=14175
+RECLAIM_TEST_PORTS=1
+```
+
+If you want the older behavior where occupied ports fail the run instead of being killed:
+
+```bash
+RECLAIM_TEST_PORTS=0 bash tests/regression/run-vps-isolated-tests.sh
+```
+
 ## Adding Tests For A New Feature
 
 Use all three layers when the feature crosses UI, API, and persistence boundaries:
@@ -141,6 +155,38 @@ tests/regression/fixtures/
 
 Large generated fixtures should be created by `run-vps-isolated-tests.sh` instead of committed. Keep generated fixture names documented in `tests/regression/README.md`.
 
+## Side Effects
+
+The runner disables real external notification side effects for isolated test runs:
+
+```text
+ALERT_RECIPIENT_EMAIL=""
+CLICKUP_API_TOKEN=""
+CLICKUP_LIST_ID=""
+```
+
+For new features that call external services, add a similar explicit test-mode gate or blank test configuration before adding regression coverage.
+
+## Playwright Authoring Notes
+
+Prefer role and label selectors:
+
+```ts
+page.getByRole("button", { name: "Save" });
+page.getByLabel("Working hours");
+```
+
+Scope locators to dialogs, sections, or table rows when labels repeat. Use API setup for expensive prerequisites, then exercise the actual user workflow through the UI. For dangerous or threshold-triggering flows, require an explicit env gate such as `PLAYWRIGHT_RUN_<FEATURE>_TRIGGER=1` and set it only inside the isolated runner.
+
+Important URL distinction:
+
+```text
+VITE_API_BASE_URL=http://127.0.0.1:18082
+PLAYWRIGHT_API_BASE_URL=http://127.0.0.1:18082/v1
+```
+
+The frontend build gets the API origin. Playwright API helpers can use the `/v1` base URL directly.
+
 ## Troubleshooting
 
 If `psql` is missing in WSL but installed on Windows, use Git Bash instead of Windows `bash.exe`.
@@ -151,7 +197,17 @@ If Go integration fails before your test runs, check shared fixture setup first:
 
 If Playwright fails because the frontend cannot reach the API, confirm `PLAYWRIGHT_API_BASE_URL` and `VITE_API_BASE_URL` are set by the runner. For mocked specs, confirm the spec routes `**/v1/**`.
 
-If a run is interrupted, check for leftover processes on ports `18082` or `14175`, and drop any leftover `ams_e2e_*` database before rerunning.
+If a run is interrupted, the next run will normally reclaim leftover listeners on ports `18082` or `14175`. If you disabled `RECLAIM_TEST_PORTS`, check those ports manually and drop any leftover `ams_e2e_*` database before rerunning.
+
+## Final Verification Checklist
+
+Before handing back feature work, report:
+
+- Which layers ran: Go, Newman, Playwright.
+- Whether they used an isolated database.
+- Exact pass/fail result.
+- Any known skipped checks or blockers.
+- Confirmation that no generated logs, local env files, reports, or throwaway DBs remain.
 
 ## Safety Rule
 

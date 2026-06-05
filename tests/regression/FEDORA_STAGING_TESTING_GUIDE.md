@@ -113,6 +113,78 @@ R2_S3_BUCKET=...
 
 Storage variables are needed for API tests that upload real files. If a feature does not touch file storage, you can run a targeted subset that avoids upload tests.
 
+For staging env files that use `APP_ENV=production`, real SMTP, ClickUp, and production frontend values, the isolated runner still starts its test API with:
+
+```text
+APP_ENV=test
+ALERT_RECIPIENT_EMAIL=""
+CLICKUP_API_TOKEN=""
+CLICKUP_LIST_ID=""
+ALLOWED_ORIGIN=http://127.0.0.1:<frontend-port>
+```
+
+This prevents the isolated regression run from sending real expiry emails or ClickUp tasks. Do not run the API binary manually with the staging `.env` for destructive tests; use the runner.
+
+## Peer Auth And Unix Socket Databases
+
+If staging uses PostgreSQL peer authentication over a Unix socket, the Linux user running the tests must match the database role in `DATABASE_URL`, unless `pg_ident.conf` maps it.
+
+For this URL shape:
+
+```text
+DATABASE_URL=postgres://ams_test_runner@/ams_db?host=/var/run/postgresql&sslmode=disable
+```
+
+the test command should run as the Linux user `ams_test_runner`. The runner will derive:
+
+```text
+postgres://ams_test_runner@/postgres?host=/var/run/postgresql&sslmode=disable
+postgres://ams_test_runner@/ams_e2e_<timestamp>?host=/var/run/postgresql&sslmode=disable
+```
+
+That means peer auth must allow the OS user `ams_test_runner` to connect as the DB role `ams_test_runner`.
+
+Create the matching Linux user if needed:
+
+```bash
+sudo useradd --system --create-home --shell /bin/bash ams_test_runner
+```
+
+Create or update the matching PostgreSQL role:
+
+```bash
+sudo -u postgres psql
+```
+
+```sql
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ams_test_runner') THEN
+        CREATE ROLE ams_test_runner LOGIN CREATEDB;
+    ELSE
+        ALTER ROLE ams_test_runner CREATEDB;
+    END IF;
+END $$;
+\q
+```
+
+Test peer auth:
+
+```bash
+sudo -iu ams_test_runner
+psql "postgres://ams_test_runner@/postgres?host=/var/run/postgresql&sslmode=disable" -c "select current_user, current_database();"
+```
+
+Run the isolated suite as that same Linux user:
+
+```bash
+sudo -iu ams_test_runner
+cd /path/to/asset-management-system
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+If the repository belongs to another Linux user, either clone a copy under `ams_test_runner` or grant this user read/write access. The runner writes `.vps-test-run/`, builds the frontend, and may create generated fixtures.
+
 If the database user cannot create databases, create a dedicated regression user or grant the right permission. Example:
 
 ```bash
@@ -256,6 +328,18 @@ FRONTEND_PORT=14176 \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
+By default, the runner reclaims stale listeners on its configured test ports before starting:
+
+```text
+RECLAIM_TEST_PORTS=1
+```
+
+If you want occupied ports to fail the run instead:
+
+```bash
+RECLAIM_TEST_PORTS=0 bash tests/regression/run-vps-isolated-tests.sh
+```
+
 Check listeners:
 
 ```bash
@@ -339,6 +423,8 @@ Interrupted run left processes:
 pkill -f ams-server-e2e || true
 pkill -f static-server.cjs || true
 ```
+
+Usually this is unnecessary because the next runner invocation reclaims listeners on `API_PORT` and `FRONTEND_PORT` when `RECLAIM_TEST_PORTS=1`.
 
 Interrupted run left a database:
 

@@ -13,6 +13,7 @@ DATABASE_NAME="${DATABASE_NAME:-ams_e2e_$(date +%Y%m%d%H%M%S)}"
 API_PORT="${API_PORT:-18082}"
 FRONTEND_PORT="${FRONTEND_PORT:-14175}"
 KEEP_DB="${KEEP_DB:-0}"
+RECLAIM_TEST_PORTS="${RECLAIM_TEST_PORTS:-1}"
 RUN_GO_REGRESSION="${RUN_GO_REGRESSION:-${RUN_REGRESSION:-0}}"
 RUN_NEWMAN="${RUN_NEWMAN:-1}"
 NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json}"
@@ -227,8 +228,27 @@ kill_port_listeners() {
   fi
 }
 
+prepare_test_port() {
+  local port="$1"
+  local name="$2"
+
+  if ensure_port_free "$port"; then
+    return 0
+  fi
+
+  if [[ "$RECLAIM_TEST_PORTS" == "1" ]]; then
+    echo "$name port $port is already in use; reclaiming configured test port"
+    kill_port_listeners "$port"
+    if ensure_port_free "$port"; then
+      return 0
+    fi
+  fi
+
+  fail "$name port $port is already in use. Stop the old process or rerun with ${name^^}_PORT=<free-port>."
+}
+
 start_api() {
-  ensure_port_free "$API_PORT" || fail "API port $API_PORT is already in use. Stop the old process or rerun with API_PORT=<free-port>."
+  prepare_test_port "$API_PORT" "API"
 
   echo "Starting isolated API on $API_BASE_URL"
   (
@@ -357,7 +377,7 @@ fi
 echo "Seeding isolated test admin"
 seed_e2e_admin
 
-ensure_port_free "$FRONTEND_PORT" || fail "Frontend port $FRONTEND_PORT is already in use. Stop the old process or rerun with FRONTEND_PORT=<free-port>."
+prepare_test_port "$FRONTEND_PORT" "Frontend"
 
 start_api
 verify_admin_login
