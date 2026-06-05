@@ -176,9 +176,10 @@ wait_for_http() {
   local url="$1"
   local name="$2"
   local log_path="$3"
+  local last_curl_log="$RUN_DIR/${name,,}-ready.curl.log"
 
   for _ in $(seq 1 90); do
-    if curl --fail --silent --show-error --max-time 2 "$url" >/dev/null 2>&1; then
+    if curl --noproxy "*" --fail --silent --show-error --max-time 2 "$url" >/dev/null 2>"$last_curl_log"; then
       return 0
     fi
 
@@ -192,6 +193,22 @@ wait_for_http() {
     sleep 1
   done
 
+  echo "$name readiness probe failed for $url"
+  if [[ -s "$last_curl_log" ]]; then
+    echo "Last curl error:"
+    cat "$last_curl_log" || true
+  fi
+  echo "Listeners on configured ports:"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp "sport = :$API_PORT or sport = :$FRONTEND_PORT" 2>/dev/null || true
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$API_PORT" -sTCP:LISTEN 2>/dev/null || true
+    lsof -nP -iTCP:"$FRONTEND_PORT" -sTCP:LISTEN 2>/dev/null || true
+  fi
+  if [[ -f "$log_path" ]]; then
+    echo "Recent $name stderr log:"
+    tail -n 80 "$log_path" || true
+  fi
   fail "$name did not become ready at $url. See $log_path"
 }
 
@@ -274,7 +291,7 @@ start_api() {
 verify_admin_login() {
   echo "Verifying isolated admin login"
   LOGIN_STATUS="$(
-    curl --silent --output "$RUN_DIR/login-check.json" --write-out "%{http_code}" \
+    curl --noproxy "*" --silent --output "$RUN_DIR/login-check.json" --write-out "%{http_code}" \
       --request POST "$API_BASE_URL/login" \
       --header "Content-Type: application/json" \
       --data "$(python3 - "$ADMIN_EMAIL" "$ADMIN_PASSWORD" <<'PY'
@@ -353,6 +370,8 @@ QUOTED_DATABASE_NAME="$(quote_identifier "$DATABASE_NAME")"
 API_ORIGIN="http://127.0.0.1:$API_PORT"
 API_BASE_URL="$API_ORIGIN/v1"
 FRONTEND_BASE_URL="http://127.0.0.1:$FRONTEND_PORT"
+export NO_PROXY="127.0.0.1,localhost,::1${NO_PROXY:+,$NO_PROXY}"
+export no_proxy="127.0.0.1,localhost,::1${no_proxy:+,$no_proxy}"
 
 mkdir -p "$RUN_DIR"
 

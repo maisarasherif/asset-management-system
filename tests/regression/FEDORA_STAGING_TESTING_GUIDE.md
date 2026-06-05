@@ -366,6 +366,18 @@ curl http://127.0.0.1:14175
 
 The runner binds to `127.0.0.1`, so firewall changes are usually not needed.
 
+If the API log says Gin is `Listening and serving HTTP on :18082` but the runner still says the API did not become ready, check proxy variables:
+
+```bash
+env | grep -i proxy
+```
+
+The runner exports `NO_PROXY`/`no_proxy` for `127.0.0.1`, `localhost`, and `::1`, and its own `curl` probes use `--noproxy "*"`. If you test manually, use:
+
+```bash
+curl --noproxy "*" http://127.0.0.1:18082/v1/health
+```
+
 ## Adding Future Feature Tests
 
 For every feature, decide which layers matter:
