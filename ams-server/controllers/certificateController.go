@@ -47,6 +47,9 @@ func currentCertificateStatus(storedStatus string, expiryDate *time.Time) string
 	return computeCertificateStatus(*expiryDate)
 }
 
+const maxCertificateFileSize = 10 * 1024 * 1024
+const maxCertificateUploadRequestSize = maxCertificateFileSize + 512*1024
+
 func GetCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -596,15 +599,20 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxCertificateUploadRequestSize)
 		file, header, err := c.Request.FormFile("file")
 		if err != nil {
+			var maxBytesError *http.MaxBytesError
+			if errors.As(err, &maxBytesError) {
+				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large, maximum size is 10MB"})
+				return
+			}
 			c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
 			return
 		}
 		defer file.Close()
 
-		const maxFileSize = 10 * 1024 * 1024
-		if header.Size > maxFileSize {
+		if header.Size > maxCertificateFileSize {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "file too large, maximum size is 10MB"})
 			return
 		}

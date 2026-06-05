@@ -2077,6 +2077,27 @@ test.describe("mocked refactored page smoke coverage", () => {
     await expectNoUnexpectedApi(state);
   });
 
+  test("CertificateFormPage rejects oversized certificate files before API submit", async ({ page }) => {
+    const state = await bootMockedAdmin(page, "/assets/asset-1/components/comp-1/certificates/new");
+
+    await page.getByLabel("Certificate name").fill("Oversized Certificate");
+    await selectOption(page, "Select a test type", "Annual Load Test");
+    await page.getByLabel("Certificate issue date").fill("2026-03-15");
+    await selectOption(page, "Select competent person", "Casey Competent");
+
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "oversized-certificate.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.alloc(10 * 1024 * 1024 + 1, 65),
+    });
+    await expect(page.getByText("Certificate file must be 10 MB or smaller.")).toBeVisible();
+
+    await page.getByRole("button", { name: "Create certificate" }).last().click();
+    expect(state.recorded.filter((request) => request.method === "POST" && request.path === "/v1/certificate")).toHaveLength(0);
+    expect(state.recorded.filter((request) => request.method === "POST" && request.path.endsWith("/file"))).toHaveLength(0);
+    await expectNoUnexpectedApi(state);
+  });
+
   test("CertificateFormPage preserves edit payload diff and hides create-only upload fields", async ({ page }) => {
     const state = await bootMockedAdmin(page, "/assets/asset-1/components/comp-1/certificates/cert-1/edit");
 
@@ -2105,6 +2126,24 @@ test.describe("mocked refactored page smoke coverage", () => {
     expect(updateRequest.body).not.toHaveProperty("expiry_date");
     await expect(page).toHaveURL(/\/assets\/asset-1\/components\/comp-1\/certificates\/cert-1$/);
     await expect(page.getByRole("heading", { name: "Updated Certificate" })).toBeVisible();
+    await expectNoUnexpectedApi(state);
+  });
+
+  test("CertificateDetailPage rejects oversized renewal files before upload", async ({ page }) => {
+    const state = await bootMockedAdmin(page, "/assets/asset-1/components/comp-1/certificates/cert-1");
+
+    await page.getByLabel("Certificate renewal issue date").fill("2026-02-01");
+    await page.getByLabel("Certificate renewal file").setInputFiles({
+      name: "oversized-renewal.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.alloc(10 * 1024 * 1024 + 1, 65),
+    });
+
+    await expect(page.getByText("File too large")).toBeVisible();
+    await expect(page.getByText("Certificate file must be 10 MB or smaller.")).toBeVisible();
+    await expect(page.getByText("oversized-renewal.pdf")).toHaveCount(0);
+    expect(state.recorded.filter((request) => request.method === "PATCH" && request.path === "/v1/certificate/cert-1")).toHaveLength(0);
+    expect(state.recorded.filter((request) => request.method === "POST" && request.path === "/v1/certificate/cert-1/file")).toHaveLength(0);
     await expectNoUnexpectedApi(state);
   });
 

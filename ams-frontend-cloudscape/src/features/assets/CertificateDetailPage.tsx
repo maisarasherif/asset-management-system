@@ -49,6 +49,11 @@ import {
   toDateInputValue,
   toIsoDate,
 } from "../../utils/format";
+import {
+  CERTIFICATE_FILE_MAX_LABEL,
+  certificateFileTooLargeMessage,
+  isCertificateFileTooLarge,
+} from "./certificateUploadLimits";
 
 function addMonths(dateValue: string, months: number) {
   const nextDate = new Date(`${dateValue}T00:00:00.000Z`);
@@ -122,6 +127,15 @@ export function CertificateDetailPage() {
     renewalIssueDate || toDateInputValue(certificateQuery.data?.issue_date);
   const renewalExpiryDateValue =
     renewalExpiryDate || toDateInputValue(certificateQuery.data?.expiry_date);
+  const handleFileChange = (file: File | null) => {
+    if (isCertificateFileTooLarge(file)) {
+      setSelectedFile(null);
+      setFileInputKey((current) => current + 1);
+      error("File too large", certificateFileTooLargeMessage());
+      return;
+    }
+    setSelectedFile(file);
+  };
 
   const downloadMutation = useMutation({
     mutationFn: async () => getCertificateDownloadUrl(certificateId!),
@@ -137,6 +151,9 @@ export function CertificateDetailPage() {
     mutationFn: async () => {
       if (!certificateId || !selectedFile || !selectedCompetentPersonId) {
         throw new Error("Choose a file and competent person before uploading.");
+      }
+      if (isCertificateFileTooLarge(selectedFile)) {
+        throw new Error(certificateFileTooLargeMessage());
       }
       if (!renewalIssueDateValue || !renewalExpiryDateValue) {
         throw new Error("Choose issue date and expiry date before uploading.");
@@ -315,7 +332,7 @@ export function CertificateDetailPage() {
     navigate,
     onDownload: () => downloadMutation.mutate(),
     onExpiryDateChange: setRenewalExpiryDate,
-    onFileChange: setSelectedFile,
+    onFileChange: handleFileChange,
     onIssueDateChange: (nextIssueDate) => {
       setRenewalIssueDate(nextIssueDate);
       setRenewalExpiryDate(
@@ -518,7 +535,7 @@ function renderCertificateDetailPage({
           <Container header={<Header variant="h2">Renew/change certificate</Header>}>
             <SpaceBetween direction="vertical" size="m">
               <Box color="text-body-secondary">
-                Upload PDF, JPEG, PNG, or WEBP files up to 10 MB.
+                Upload PDF, JPEG, PNG, or WEBP files up to {CERTIFICATE_FILE_MAX_LABEL}.
               </Box>
               <input
                 key={fileInputKey}

@@ -17,7 +17,7 @@ RUN_GO_REGRESSION="${RUN_GO_REGRESSION:-${RUN_REGRESSION:-0}}"
 RUN_NEWMAN="${RUN_NEWMAN:-1}"
 NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json}"
 RUN_PLAYWRIGHT="${RUN_PLAYWRIGHT:-1}"
-E2E_SPECS="${E2E_SPECS:-../tests/regression/e2e/api-auth-smoke.spec.ts ../tests/regression/e2e/auth-cookie-session.spec.ts ../tests/regression/e2e/template-catalog.spec.ts ../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/client-asset-certificates.spec.ts ../tests/regression/e2e/user-management-permissions.spec.ts ../tests/regression/e2e/single-asset-equipment.spec.ts ../tests/regression/e2e/scheduler-management.spec.ts}"
+E2E_SPECS="${E2E_SPECS:-../tests/regression/e2e/api-auth-smoke.spec.ts ../tests/regression/e2e/auth-cookie-session.spec.ts ../tests/regression/e2e/template-catalog.spec.ts ../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/client-asset-certificates.spec.ts ../tests/regression/e2e/user-management-permissions.spec.ts ../tests/regression/e2e/single-asset-equipment.spec.ts ../tests/regression/e2e/scheduler-management.spec.ts ../tests/regression/e2e/refactored-pages-mocked.spec.ts}"
 
 API_PID=""
 FRONTEND_PID=""
@@ -142,6 +142,23 @@ DO UPDATE SET
   status = 'ACTIVE',
   updated_at = NOW();
 SQL
+}
+
+prepare_newman_fixtures() {
+  local oversize_fixture="$REPO_ROOT/tests/regression/fixtures/oversize-certificate.pdf"
+
+  python3 - "$oversize_fixture" <<'PY'
+import os
+import sys
+
+path = sys.argv[1]
+target_size = 11 * 1024 * 1024
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "wb") as handle:
+    handle.write(b"%PDF-1.4\n")
+    handle.seek(target_size - 1)
+    handle.write(b"\n")
+PY
 }
 
 prepare_database() {
@@ -346,6 +363,7 @@ start_api
 verify_admin_login
 
 if [[ "$RUN_NEWMAN" == "1" ]]; then
+  prepare_newman_fixtures
   echo "Running Newman API regression collections"
   for collection in $NEWMAN_COLLECTIONS; do
     echo "Running Newman collection: $collection"

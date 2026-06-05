@@ -857,6 +857,37 @@ func TestUploadCertificateFile(t *testing.T) {
 	}
 }
 
+func TestUploadCertificateFileRejectsOversizeFile(t *testing.T) {
+	h := setupIntegrationTest(t)
+
+	componentID, testID := createComponentFixture(t, h, "Oversize Upload Component")
+	certificateID := stringField(t, createCertificate(t, h, certificatePayload(componentID, testID, 90)), "certificate_id")
+
+	raw := performMultipartRequest(t, h.router, h.adminToken, "/v1/certificate/"+certificateID+"/file", "file", "oversize.pdf", bytes.Repeat([]byte("A"), 10*1024*1024+1), map[string]string{}, http.StatusBadRequest)
+	body := decodeObject(t, raw)
+	assertField(t, body, "error", "file too large, maximum size is 10MB")
+
+	parsedCertificateID, err := utils.ParseUUID(certificateID, "certificate_id")
+	if err != nil {
+		t.Fatalf("failed to parse certificate id: %v", err)
+	}
+	queries := db.New(h.pool)
+	certificate, err := queries.GetCertificateByID(context.Background(), parsedCertificateID)
+	if err != nil {
+		t.Fatalf("failed to fetch certificate after oversized upload: %v", err)
+	}
+	if certificate.CertificateFile != "" {
+		t.Fatalf("expected oversized upload to leave certificate file empty, got %q", certificate.CertificateFile)
+	}
+	auditCount, err := queries.CountCertificateUploadAuditByCertificateID(context.Background(), parsedCertificateID)
+	if err != nil {
+		t.Fatalf("failed to count upload audit after oversized upload: %v", err)
+	}
+	if auditCount != 0 {
+		t.Fatalf("expected no upload audit rows for oversized upload, got %d", auditCount)
+	}
+}
+
 func TestGetCertificateSignedURL(t *testing.T) {
 	h := setupIntegrationTest(t)
 	requireStorageIntegrationEnv(t)
@@ -1478,6 +1509,9 @@ func createIntegrationUserToken(t *testing.T, pool *pgxpool.Pool, firstName, las
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
+	if err := utils.UpdateAccessToken(pool, user.UserID.String(), token); err != nil {
+		t.Fatalf("failed to persist integration user token: %v", err)
+	}
 	return token
 }
 
@@ -1632,10 +1666,49 @@ func createComponentFixture(t *testing.T, h *integrationHarness, componentName s
 
 	mainCategoryID := createMainCategory(t, h, componentName+" Main Category")
 	categoryID := createCategory(t, h, mainCategoryID, componentName+" Category")
+	createCatalogScopeFixture(t, h.pool, mainCategoryID, categoryID, componentName+" Scope")
 	testID := createTestType(t, h, componentName+" Test", 12)
 	assetID := stringField(t, createAsset(t, h, baseAssetPayload(componentName+" Asset")), "asset_id")
 	componentID := stringField(t, createComponent(t, h, componentPayload(assetID, categoryID, componentName)), "component_id")
 	return componentID, testID
+}
+
+func createCatalogScopeFixture(t *testing.T, pool *pgxpool.Pool, mainCategoryID, categoryID, name string) {
+	t.Helper()
+
+	parsedMainCategoryID, err := utils.ParseUUID(mainCategoryID, "main_category_id")
+	if err != nil {
+		t.Fatalf("failed to parse main category id: %v", err)
+	}
+	parsedCategoryID, err := utils.ParseUUID(categoryID, "category_id")
+	if err != nil {
+		t.Fatalf("failed to parse category id: %v", err)
+	}
+
+	queries := db.New(pool)
+	scope, err := queries.CreateCatalogScope(context.Background(), db.CreateCatalogScopeParams{
+		ScopeName:   name,
+		Description: name + " description",
+	})
+	if err != nil {
+		t.Fatalf("failed to create catalog scope: %v", err)
+	}
+	if _, err := queries.CreateCatalogScopeMainCategory(context.Background(), db.CreateCatalogScopeMainCategoryParams{
+		ScopeID:        scope.ScopeID,
+		MainCategoryID: parsedMainCategoryID,
+		SortOrder:      1,
+	}); err != nil {
+		t.Fatalf("failed to create catalog scope main category: %v", err)
+	}
+	if _, err := queries.CreateCatalogScopeCategory(context.Background(), db.CreateCatalogScopeCategoryParams{
+		ScopeID:        scope.ScopeID,
+		MainCategoryID: parsedMainCategoryID,
+		CategoryID:     parsedCategoryID,
+		SortOrder:      1,
+		Description:    name + " category",
+	}); err != nil {
+		t.Fatalf("failed to create catalog scope category: %v", err)
+	}
 }
 
 func createCompetentPersonFixture(t *testing.T, pool *pgxpool.Pool, name string) string {

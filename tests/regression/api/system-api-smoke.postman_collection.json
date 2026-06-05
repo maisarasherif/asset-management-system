@@ -1836,6 +1836,42 @@
           ]
         },
         {
+          "name": "Reject Oversize Certificate File",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "application/pdf",
+                  "src": "tests/regression/fixtures/oversize-certificate.pdf"
+                },
+                {
+                  "key": "competent_person_id",
+                  "value": "{{competent_person_id}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}/file"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(413);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.error).to.eql('file too large, maximum size is 10MB');"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Get Certificate File URL",
           "request": {
             "method": "GET",

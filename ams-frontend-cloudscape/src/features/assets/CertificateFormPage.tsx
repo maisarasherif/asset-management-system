@@ -30,6 +30,11 @@ import {
 import { Select } from "../../components/shared/OptimizedSelect";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useFlashbar } from "../../providers/flashbar-context";
+import {
+  CERTIFICATE_FILE_MAX_LABEL,
+  certificateFileTooLargeMessage,
+  isCertificateFileTooLarge,
+} from "./certificateUploadLimits";
 import type {
   Asset,
   Certificate,
@@ -275,6 +280,14 @@ export function CertificateFormPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const selectedCompetentPersonId = formDraft.selectedCompetentPersonId ?? "";
   const cancelTarget = (location.state as { from?: string } | null)?.from ?? `/assets/${assetId}`;
+  const handleFileChange = (file: File | null) => {
+    setSelectedFile(file);
+    if (isCertificateFileTooLarge(file)) {
+      setErrorMessage(certificateFileTooLargeMessage());
+    } else if (errorMessage === certificateFileTooLargeMessage()) {
+      setErrorMessage(null);
+    }
+  };
 
   const data = useCertificateFormData({ assetId, componentId, certificateId, isEditing, formDraft });
   const saveMutation = useCertificateSaveMutation({
@@ -341,7 +354,7 @@ export function CertificateFormPage() {
       isEditing={isEditing}
       isSaving={saveMutation.isPending}
       onCancel={() => navigate(cancelTarget)}
-      onFileChange={setSelectedFile}
+      onFileChange={handleFileChange}
       onFormChange={setFormDraft}
       onSubmit={handleSubmit}
       selectedCompetentPerson={data.selectedCompetentPerson}
@@ -392,6 +405,9 @@ function validateCertificateForm({
     }
     if (!selectedFile && selectedCompetentPersonId) {
       return "Choose a certificate file before selecting a competent person.";
+    }
+    if (isCertificateFileTooLarge(selectedFile)) {
+      return certificateFileTooLargeMessage();
     }
   }
   return null;
@@ -717,11 +733,11 @@ function CertificateUploadFields({
 }) {
   return (
     <>
-      <FormField label="Certificate file" description="Attach the source PDF or image for this certificate." stretch>
+      <FormField label="Certificate file" description={`Attach the source PDF or image for this certificate. Maximum size: ${CERTIFICATE_FILE_MAX_LABEL}.`} stretch>
         <FileUpload
           value={selectedFile ? [selectedFile] : []}
           onChange={({ detail }) => onFileChange(detail.value[0] ?? null)}
-          accept=".pdf,.png,.jpg,.jpeg"
+          accept=".pdf,.png,.jpg,.jpeg,.webp"
           i18nStrings={{
             uploadButtonText: (multiple) => (multiple ? "Choose files" : "Choose file"),
             dropzoneText: (multiple) => (multiple ? "Drop files to upload" : "Drop file to upload"),

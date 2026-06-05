@@ -1,5 +1,10 @@
-DELETE FROM river_job
-WHERE kind IN ('certificate_expiry_email', 'certificate_expiry_clickup');
+DO $$
+BEGIN
+    IF to_regclass('public.river_job') IS NOT NULL THEN
+        DELETE FROM river_job
+        WHERE kind IN ('certificate_expiry_email', 'certificate_expiry_clickup');
+    END IF;
+END $$;
 
 ALTER TABLE asset_maintenance_events
 DROP COLUMN IF EXISTS clickup_task_id,
