@@ -1025,8 +1025,8 @@ func ForceRenotifyCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		keyPrefix := fmt.Sprintf("cert-expiry:%s:%%", certificateID.String())
-		deleted, err := queries.DeleteScheduledTasksByKeyPrefix(ctx, db.DeleteScheduledTasksByKeyPrefixParams{
-			CertificateID:  certificateID,
+		deleted, err := queries.DeleteCertificateNotificationDeliveriesByKeyPrefix(ctx, db.DeleteCertificateNotificationDeliveriesByKeyPrefixParams{
+			SourceID:       certificateID,
 			IdempotencyKey: keyPrefix,
 		})
 		if err != nil {

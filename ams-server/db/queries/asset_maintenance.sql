@@ -92,9 +92,6 @@ RETURNING
     triggered_at_hours,
     previous_asset_status,
     status,
-    clickup_task_id,
-    notification_error,
-    notified_at,
     completed_at,
     completion_notes,
     created_at;
@@ -108,9 +105,6 @@ SELECT
     triggered_at_hours,
     previous_asset_status,
     status,
-    clickup_task_id,
-    notification_error,
-    notified_at,
     completed_at,
     completion_notes,
     created_at
@@ -129,9 +123,6 @@ SELECT
     triggered_at_hours,
     previous_asset_status,
     status,
-    clickup_task_id,
-    notification_error,
-    notified_at,
     completed_at,
     completion_notes,
     created_at
@@ -155,9 +146,6 @@ RETURNING
     triggered_at_hours,
     previous_asset_status,
     status,
-    clickup_task_id,
-    notification_error,
-    notified_at,
     completed_at,
     completion_notes,
     created_at;
@@ -199,11 +187,3 @@ RETURNING
     template_id,
     created_at,
     updated_at;
-
--- name: MarkMaintenanceNotificationResult :exec
-UPDATE asset_maintenance_events
-SET
-    clickup_task_id = sqlc.arg(clickup_task_id),
-    notification_error = sqlc.arg(notification_error),
-    notified_at = NOW()
-WHERE maintenance_event_id = sqlc.arg(maintenance_event_id);

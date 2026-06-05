@@ -46,10 +46,6 @@ sql:
             pointer: true
         - column: "asset_maintenance_events.created_at"
           go_type: "time.Time"
-        - column: "asset_maintenance_events.notified_at"
-          go_type:
-            type: "time.Time"
-            pointer: true
         - column: "asset_maintenance_events.completed_at"
           go_type:
             type: "time.Time"
@@ -66,8 +62,18 @@ sql:
           go_type: "time.Time"
         - column: "users.updated_at"
           go_type: "time.Time"
-        - column: "scheduled_tasks.sent_at"
+        - column: "notification_deliveries.created_at"
           go_type: "time.Time"
+        - column: "notification_deliveries.updated_at"
+          go_type: "time.Time"
+        - column: "notification_deliveries.sent_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "notification_deliveries.failed_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
         - column: "asset_templates.created_at"
           go_type: "time.Time"
         - column: "asset_templates.updated_at"

@@ -20,7 +20,7 @@ func GetCertificateNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
-		tasks, err := queries.GetCertificateNotificationTasksPaginated(ctx, db.GetCertificateNotificationTasksPaginatedParams{
+		tasks, err := queries.GetCertificateNotificationDeliveriesPaginated(ctx, db.GetCertificateNotificationDeliveriesPaginatedParams{
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -29,7 +29,7 @@ func GetCertificateNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountCertificateNotificationTasks(ctx)
+		total, err := queries.CountCertificateNotificationDeliveries(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificate notification tasks"})
 			return
@@ -37,6 +37,10 @@ func GetCertificateNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		response := make([]dto.CertificateNotificationTaskResponse, len(tasks))
 		for i, task := range tasks {
+			sentAt := time.Time{}
+			if task.SentAt != nil {
+				sentAt = *task.SentAt
+			}
 			response[i] = dto.CertificateNotificationTaskResponse{
 				TaskID:               task.TaskID.String(),
 				DisplayID:            task.DisplayID,
@@ -55,7 +59,7 @@ func GetCertificateNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
 				Status:               task.Status,
 				ExternalTaskID:       task.ExternalTaskID,
 				IdempotencyKey:       task.IdempotencyKey,
-				SentAt:               task.SentAt,
+				SentAt:               sentAt,
 			}
 		}
 
@@ -74,7 +78,7 @@ func GetCertificateNotificationFailures(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
-		failures, err := queries.GetCertificateNotificationFailuresPaginated(ctx, db.GetCertificateNotificationFailuresPaginatedParams{
+		failures, err := queries.GetCertificateNotificationDeliveryFailuresPaginated(ctx, db.GetCertificateNotificationDeliveryFailuresPaginatedParams{
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -83,7 +87,7 @@ func GetCertificateNotificationFailures(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountCertificateNotificationFailures(ctx)
+		total, err := queries.CountCertificateNotificationDeliveryFailures(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificate notification failures"})
 			return
@@ -91,6 +95,10 @@ func GetCertificateNotificationFailures(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		response := make([]dto.CertificateNotificationFailureResponse, len(failures))
 		for i, failure := range failures {
+			failedAt := time.Time{}
+			if failure.FailedAt != nil {
+				failedAt = *failure.FailedAt
+			}
 			response[i] = dto.CertificateNotificationFailureResponse{
 				ID:                   failure.ID.String(),
 				CertificateID:        failure.CertificateID.String(),
@@ -107,7 +115,7 @@ func GetCertificateNotificationFailures(pool *pgxpool.Pool) gin.HandlerFunc {
 				Channel:              failure.Channel,
 				Tier:                 failure.Tier,
 				ErrorMessage:         failure.ErrorMessage,
-				FailedAt:             failure.FailedAt.Time,
+				FailedAt:             failedAt,
 			}
 		}
 

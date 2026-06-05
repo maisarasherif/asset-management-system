@@ -685,25 +685,27 @@ func TestCertificateNotificationSchedulerAuditAndReset(t *testing.T) {
 	idempotencyKey := fmt.Sprintf("cert-expiry:%s:%s:7d:EMAIL", certificateID, expiryDate)
 	queries := db.New(h.pool)
 
-	slot, err := queries.ClaimNotificationSlot(context.Background(), db.ClaimNotificationSlotParams{
-		CertificateID:  certificateUUID,
-		Type:           "EMAIL",
+	slot, err := queries.ClaimNotificationDelivery(context.Background(), db.ClaimNotificationDeliveryParams{
+		SourceType:     utils.NotificationSourceCertificateExpiry,
+		SourceID:       certificateUUID,
+		Channel:        "EMAIL",
 		Tier:           "7d",
 		IdempotencyKey: idempotencyKey,
 	})
 	if err != nil {
-		t.Fatalf("failed to claim notification slot: %v", err)
+		t.Fatalf("failed to claim notification delivery: %v", err)
 	}
-	if err := queries.FinalizeNotificationSlot(context.Background(), db.FinalizeNotificationSlotParams{
-		ExternalTaskID: "email-message-id",
-		TaskID:         slot.TaskID,
+	if err := queries.MarkNotificationDeliverySent(context.Background(), db.MarkNotificationDeliverySentParams{
+		ExternalID: "email-message-id",
+		DeliveryID: slot.DeliveryID,
 	}); err != nil {
-		t.Fatalf("failed to finalize notification slot: %v", err)
+		t.Fatalf("failed to finalize notification delivery: %v", err)
 	}
 
-	_, err = queries.ClaimNotificationSlot(context.Background(), db.ClaimNotificationSlotParams{
-		CertificateID:  certificateUUID,
-		Type:           "EMAIL",
+	_, err = queries.ClaimNotificationDelivery(context.Background(), db.ClaimNotificationDeliveryParams{
+		SourceType:     utils.NotificationSourceCertificateExpiry,
+		SourceID:       certificateUUID,
+		Channel:        "EMAIL",
 		Tier:           "7d",
 		IdempotencyKey: idempotencyKey,
 	})
@@ -730,13 +732,14 @@ func TestCertificateNotificationSchedulerAuditAndReset(t *testing.T) {
 		t.Fatalf("expected reset to remove certificate notification audit rows, got %v", afterReset)
 	}
 
-	if _, err := queries.ClaimNotificationSlot(context.Background(), db.ClaimNotificationSlotParams{
-		CertificateID:  certificateUUID,
-		Type:           "EMAIL",
+	if _, err := queries.ClaimNotificationDelivery(context.Background(), db.ClaimNotificationDeliveryParams{
+		SourceType:     utils.NotificationSourceCertificateExpiry,
+		SourceID:       certificateUUID,
+		Channel:        "EMAIL",
 		Tier:           "7d",
 		IdempotencyKey: idempotencyKey,
 	}); err != nil {
-		t.Fatalf("expected reset to allow the same notification slot to be claimed again: %v", err)
+		t.Fatalf("expected reset to allow the same notification delivery to be claimed again: %v", err)
 	}
 }
 
@@ -752,12 +755,19 @@ func TestCertificateNotificationFailureAudit(t *testing.T) {
 	expiryDate := datePrefix(t, stringField(t, certificate, "expiry_date"))
 	idempotencyKey := fmt.Sprintf("cert-expiry:%s:%s:expired:CLICKUP", certificateID, expiryDate)
 
-	if err := db.New(h.pool).RecordNotificationFailure(context.Background(), db.RecordNotificationFailureParams{
-		CertificateID:  certificateUUID,
-		IdempotencyKey: idempotencyKey,
+	delivery, err := db.New(h.pool).ClaimNotificationDelivery(context.Background(), db.ClaimNotificationDeliveryParams{
+		SourceType:     utils.NotificationSourceCertificateExpiry,
+		SourceID:       certificateUUID,
 		Channel:        "CLICKUP",
 		Tier:           "expired",
-		ErrorMessage:   "ClickUp rejected the request",
+		IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		t.Fatalf("failed to seed notification delivery: %v", err)
+	}
+	if err := db.New(h.pool).MarkNotificationDeliveryFailed(context.Background(), db.MarkNotificationDeliveryFailedParams{
+		DeliveryID:   delivery.DeliveryID,
+		ErrorMessage: "ClickUp rejected the request",
 	}); err != nil {
 		t.Fatalf("failed to seed notification failure: %v", err)
 	}
@@ -770,6 +780,63 @@ func TestCertificateNotificationFailureAudit(t *testing.T) {
 	assertField(t, failure, "channel", "CLICKUP")
 	assertField(t, failure, "tier", "expired")
 	assertField(t, failure, "error_message", "ClickUp rejected the request")
+}
+
+func TestNotificationDeliveriesPreserveRiverRetryIdempotency(t *testing.T) {
+	h := setupIntegrationTest(t)
+	componentID, testID := createComponentFixture(t, h, "Scheduler Pending Cleanup Component")
+	certificate := createCertificate(t, h, certificatePayload(componentID, testID, 6))
+	certificateID := stringField(t, certificate, "certificate_id")
+	certificateUUID, err := utils.ParseUUID(certificateID, "certificate_id")
+	if err != nil {
+		t.Fatalf("failed to parse certificate id: %v", err)
+	}
+	expiryDate := datePrefix(t, stringField(t, certificate, "expiry_date"))
+	queries := db.New(h.pool)
+
+	emailKey := fmt.Sprintf("cert-expiry:%s:%s:7d:EMAIL", certificateID, expiryDate)
+	_, err = queries.ClaimNotificationDelivery(context.Background(), db.ClaimNotificationDeliveryParams{
+		SourceType:     utils.NotificationSourceCertificateExpiry,
+		SourceID:       certificateUUID,
+		Channel:        "EMAIL",
+		Tier:           "7d",
+		IdempotencyKey: emailKey,
+	})
+	if err != nil {
+		t.Fatalf("failed to claim email notification delivery: %v", err)
+	}
+
+	clickUpKey := fmt.Sprintf("cert-expiry:%s:%s:7d:CLICKUP", certificateID, expiryDate)
+	_, err = queries.ClaimNotificationDelivery(context.Background(), db.ClaimNotificationDeliveryParams{
+		SourceType:     utils.NotificationSourceCertificateExpiry,
+		SourceID:       certificateUUID,
+		Channel:        "CLICKUP",
+		Tier:           "7d",
+		IdempotencyKey: clickUpKey,
+	})
+	if err != nil {
+		t.Fatalf("failed to claim ClickUp notification delivery: %v", err)
+	}
+
+	if _, err := queries.ClaimNotificationDelivery(context.Background(), db.ClaimNotificationDeliveryParams{
+		SourceType:     utils.NotificationSourceCertificateExpiry,
+		SourceID:       certificateUUID,
+		Channel:        "EMAIL",
+		Tier:           "7d",
+		IdempotencyKey: emailKey,
+	}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("expected EMAIL delivery to remain claimed for River retry lifecycle, got %v", err)
+	}
+
+	if _, err := queries.ClaimNotificationDelivery(context.Background(), db.ClaimNotificationDeliveryParams{
+		SourceType:     utils.NotificationSourceCertificateExpiry,
+		SourceID:       certificateUUID,
+		Channel:        "CLICKUP",
+		Tier:           "7d",
+		IdempotencyKey: clickUpKey,
+	}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("expected CLICKUP delivery to remain claimed for River retry lifecycle, got %v", err)
+	}
 }
 
 func TestUploadCertificateFile(t *testing.T) {
@@ -1360,9 +1427,8 @@ func resetIntegrationDatabase(t *testing.T, pool *pgxpool.Pool) {
 
 	const truncateSQL = `
 TRUNCATE TABLE
+  notification_deliveries,
   asset_maintenance_events,
-  notification_failures,
-  scheduled_tasks,
   certificate_upload_audit,
   certificates,
   components,

@@ -73,6 +73,19 @@ export interface Asset {
 
 export type AssetMaintenanceStatus = "REQUIRED" | "COMPLETED" | "CANCELLED";
 
+export interface AssetMaintenanceNotificationDelivery {
+  delivery_id: string;
+  maintenance_event_id: string;
+  channel: NotificationChannel;
+  status: NotificationStatus;
+  external_id: string;
+  error_message: string;
+  created_at: string;
+  updated_at: string;
+  sent_at: string | null;
+  failed_at: string | null;
+}
+
 export interface AssetMaintenanceEvent {
   maintenance_event_id: string;
   display_id: string;
@@ -81,12 +94,10 @@ export interface AssetMaintenanceEvent {
   triggered_at_hours: number;
   previous_asset_status: string;
   status: AssetMaintenanceStatus;
-  clickup_task_id: string;
-  notification_error: string;
-  notified_at: string | null;
   completed_at: string | null;
   completion_notes: string;
   created_at: string;
+  notifications: AssetMaintenanceNotificationDelivery[];
 }
 
 export interface ComponentRecord {

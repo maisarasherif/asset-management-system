@@ -1,0 +1,1 @@
+-- Intentionally irreversible: legacy notification tables and mirror columns are purged.

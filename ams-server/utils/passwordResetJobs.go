@@ -73,6 +73,8 @@ func StartRiver(ctx context.Context, pool *pgxpool.Pool) (*river.Client[pgx.Tx],
 
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &PasswordResetEmailWorker{})
+	river.AddWorker(workers, &NotificationEmailWorker{pool: pool})
+	river.AddWorker(workers, &NotificationClickUpWorker{pool: pool})
 
 	client, err := river.NewClient(driver, &river.Config{
 		Logger:      riverLogger(),

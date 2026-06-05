@@ -42,9 +42,6 @@ type AssetMaintenanceEvent struct {
 	TriggeredAtHours    int64      `json:"triggered_at_hours"`
 	PreviousAssetStatus string     `json:"previous_asset_status"`
 	Status              string     `json:"status"`
-	ClickupTaskID       string     `json:"clickup_task_id"`
-	NotificationError   string     `json:"notification_error"`
-	NotifiedAt          *time.Time `json:"notified_at"`
 	CompletedAt         *time.Time `json:"completed_at"`
 	CompletionNotes     string     `json:"completion_notes"`
 	CreatedAt           time.Time  `json:"created_at"`
@@ -203,14 +200,21 @@ type MainCategory struct {
 	SortOrder        int32     `json:"sort_order"`
 }
 
-type NotificationFailure struct {
-	ID             uuid.UUID          `json:"id"`
-	CertificateID  uuid.UUID          `json:"certificate_id"`
-	IdempotencyKey string             `json:"idempotency_key"`
-	Channel        string             `json:"channel"`
-	Tier           string             `json:"tier"`
-	ErrorMessage   string             `json:"error_message"`
-	FailedAt       pgtype.Timestamptz `json:"failed_at"`
+type NotificationDelivery struct {
+	DeliveryID     uuid.UUID  `json:"delivery_id"`
+	DisplayID      string     `json:"display_id"`
+	SourceType     string     `json:"source_type"`
+	SourceID       uuid.UUID  `json:"source_id"`
+	Channel        string     `json:"channel"`
+	Status         string     `json:"status"`
+	Tier           string     `json:"tier"`
+	IdempotencyKey string     `json:"idempotency_key"`
+	ExternalID     string     `json:"external_id"`
+	ErrorMessage   string     `json:"error_message"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	SentAt         *time.Time `json:"sent_at"`
+	FailedAt       *time.Time `json:"failed_at"`
 }
 
 type PasswordResetToken struct {
@@ -229,18 +233,6 @@ type Project struct {
 	Status      string             `json:"status"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-type ScheduledTask struct {
-	Type           string    `json:"type"`
-	Status         string    `json:"status"`
-	SentAt         time.Time `json:"sent_at"`
-	ExternalTaskID string    `json:"external_task_id"`
-	TaskID         uuid.UUID `json:"task_id"`
-	DisplayID      string    `json:"display_id"`
-	CertificateID  uuid.UUID `json:"certificate_id"`
-	IdempotencyKey string    `json:"idempotency_key"`
-	Tier           string    `json:"tier"`
 }
 
 type SingleAssetEquipment struct {

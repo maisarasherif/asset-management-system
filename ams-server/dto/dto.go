@@ -294,6 +294,33 @@ type CompleteAssetMaintenanceInput struct {
 	CompletionNotes string `json:"completion_notes"`
 }
 
+type AssetMaintenanceNotificationDeliveryResponse struct {
+	DeliveryID         string     `json:"delivery_id"`
+	MaintenanceEventID string     `json:"maintenance_event_id"`
+	Channel            string     `json:"channel"`
+	Status             string     `json:"status"`
+	ExternalID         string     `json:"external_id"`
+	ErrorMessage       string     `json:"error_message"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	SentAt             *time.Time `json:"sent_at"`
+	FailedAt           *time.Time `json:"failed_at"`
+}
+
+type AssetMaintenanceEventResponse struct {
+	MaintenanceEventID  string                                         `json:"maintenance_event_id"`
+	DisplayID           string                                         `json:"display_id"`
+	AssetID             string                                         `json:"asset_id"`
+	DueAtHours          int64                                          `json:"due_at_hours"`
+	TriggeredAtHours    int64                                          `json:"triggered_at_hours"`
+	PreviousAssetStatus string                                         `json:"previous_asset_status"`
+	Status              string                                         `json:"status"`
+	CompletedAt         *time.Time                                     `json:"completed_at"`
+	CompletionNotes     string                                         `json:"completion_notes"`
+	CreatedAt           time.Time                                      `json:"created_at"`
+	Notifications       []AssetMaintenanceNotificationDeliveryResponse `json:"notifications"`
+}
+
 // ==================== Component DTOs ====================
 
 type ComponentInput struct {

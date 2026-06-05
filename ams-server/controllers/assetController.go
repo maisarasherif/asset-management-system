@@ -17,6 +17,7 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
 	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
+	"github.com/riverqueue/river"
 )
 
 var validate = validator.New()
@@ -311,7 +312,7 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-func UpdateAsset(pool *pgxpool.Pool) gin.HandlerFunc {
+func UpdateAsset(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
 		if !ok {
@@ -368,7 +369,7 @@ func UpdateAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		if _, err := triggerRoutineMaintenanceIfDue(c.Request.Context(), pool, assetID); err != nil {
+		if _, err := triggerRoutineMaintenanceIfDue(c.Request.Context(), pool, riverClient, assetID); err != nil {
 			logger.Log.Error().Err(err).
 				Str("asset_id", assetID.String()).
 				Msg("failed to evaluate routine maintenance after asset update")
@@ -417,7 +418,7 @@ func DeleteAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-func PatchAsset(pool *pgxpool.Pool) gin.HandlerFunc {
+func PatchAsset(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
 		if !ok {
@@ -499,7 +500,7 @@ func PatchAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		if _, err := triggerRoutineMaintenanceIfDue(c.Request.Context(), pool, assetID); err != nil {
+		if _, err := triggerRoutineMaintenanceIfDue(c.Request.Context(), pool, riverClient, assetID); err != nil {
 			logger.Log.Error().Err(err).
 				Str("asset_id", assetID.String()).
 				Msg("failed to evaluate routine maintenance after asset patch")
@@ -509,7 +510,7 @@ func PatchAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-func UpdateAssetWorkingHours(pool *pgxpool.Pool) gin.HandlerFunc {
+func UpdateAssetWorkingHours(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
 		if !ok {
@@ -567,7 +568,7 @@ func UpdateAssetWorkingHours(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		event, err := triggerRoutineMaintenanceIfDue(c.Request.Context(), pool, assetID)
+		event, err := triggerRoutineMaintenanceIfDue(c.Request.Context(), pool, riverClient, assetID)
 		if err != nil {
 			logger.Log.Error().Err(err).
 				Str("asset_id", assetID.String()).
@@ -614,11 +615,50 @@ func GetAssetRoutineMaintenance(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch routine maintenance"})
 			return
 		}
-		if events == nil {
-			events = []db.AssetMaintenanceEvent{}
+		deliveries, err := queries.GetRoutineMaintenanceNotificationDeliveriesForAsset(ctx, assetID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch routine maintenance notifications"})
+			return
 		}
 
-		c.JSON(http.StatusOK, events)
+		deliveriesByEvent := make(map[uuid.UUID][]dto.AssetMaintenanceNotificationDeliveryResponse, len(deliveries))
+		for _, delivery := range deliveries {
+			deliveriesByEvent[delivery.MaintenanceEventID] = append(deliveriesByEvent[delivery.MaintenanceEventID], dto.AssetMaintenanceNotificationDeliveryResponse{
+				DeliveryID:         delivery.DeliveryID.String(),
+				MaintenanceEventID: delivery.MaintenanceEventID.String(),
+				Channel:            delivery.Channel,
+				Status:             delivery.Status,
+				ExternalID:         delivery.ExternalID,
+				ErrorMessage:       delivery.ErrorMessage,
+				CreatedAt:          delivery.CreatedAt,
+				UpdatedAt:          delivery.UpdatedAt,
+				SentAt:             delivery.SentAt,
+				FailedAt:           delivery.FailedAt,
+			})
+		}
+
+		response := make([]dto.AssetMaintenanceEventResponse, 0, len(events))
+		for _, event := range events {
+			notifications := deliveriesByEvent[event.MaintenanceEventID]
+			if notifications == nil {
+				notifications = []dto.AssetMaintenanceNotificationDeliveryResponse{}
+			}
+			response = append(response, dto.AssetMaintenanceEventResponse{
+				MaintenanceEventID:  event.MaintenanceEventID.String(),
+				DisplayID:           event.DisplayID,
+				AssetID:             event.AssetID.String(),
+				DueAtHours:          event.DueAtHours,
+				TriggeredAtHours:    event.TriggeredAtHours,
+				PreviousAssetStatus: event.PreviousAssetStatus,
+				Status:              event.Status,
+				CompletedAt:         event.CompletedAt,
+				CompletionNotes:     event.CompletionNotes,
+				CreatedAt:           event.CreatedAt,
+				Notifications:       notifications,
+			})
+		}
+
+		c.JSON(http.StatusOK, response)
 	}
 }
 
@@ -689,7 +729,7 @@ func CompleteAssetRoutineMaintenance(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-func triggerRoutineMaintenanceIfDue(parent context.Context, pool *pgxpool.Pool, assetID uuid.UUID) (*db.AssetMaintenanceEvent, error) {
+func triggerRoutineMaintenanceIfDue(parent context.Context, pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx], assetID uuid.UUID) (*db.AssetMaintenanceEvent, error) {
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 
@@ -746,67 +786,120 @@ func triggerRoutineMaintenanceIfDue(parent context.Context, pool *pgxpool.Pool, 
 		return nil, err
 	}
 
-	notifyRoutineMaintenance(pool, event, asset.Name, asset.DisplayID)
+	notifyRoutineMaintenance(parent, pool, riverClient, event, asset.Name, asset.DisplayID)
 	return &event, nil
 }
 
-func notifyRoutineMaintenance(pool *pgxpool.Pool, event db.AssetMaintenanceEvent, assetName, assetDisplayID string) {
+func notifyRoutineMaintenance(parent context.Context, pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx], event db.AssetMaintenanceEvent, assetName, assetDisplayID string) {
 	recipientEmail := os.Getenv("ALERT_RECIPIENT_EMAIL")
 	recipientName := os.Getenv("ALERT_RECIPIENT_NAME")
 	if recipientName == "" {
 		recipientName = "Maintenance team"
 	}
 
-	errorsList := []string{}
-	if recipientEmail == "" {
-		errorsList = append(errorsList, "ALERT_RECIPIENT_EMAIL not set")
-	} else if err := utils.SendRoutineMaintenanceEmail(
-		recipientEmail,
-		recipientName,
-		assetName,
-		assetDisplayID,
-		event.TriggeredAtHours,
-		event.DueAtHours,
-	); err != nil {
-		errorsList = append(errorsList, "email: "+err.Error())
-	}
-
-	clickUpTaskID, err := utils.CreateRoutineMaintenanceClickUpTask(
-		assetName,
-		assetDisplayID,
-		event.TriggeredAtHours,
-		event.DueAtHours,
-	)
-	if err != nil {
-		errorsList = append(errorsList, "clickup: "+err.Error())
-	}
-
-	notificationError := strings.Join(errorsList, "; ")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 	defer cancel()
 
-	if err := db.New(pool).MarkMaintenanceNotificationResult(ctx, db.MarkMaintenanceNotificationResultParams{
-		MaintenanceEventID: event.MaintenanceEventID,
-		ClickupTaskID:      clickUpTaskID,
-		NotificationError:  notificationError,
-	}); err != nil {
-		logger.Log.Error().Err(err).
-			Str("maintenance_event_id", event.MaintenanceEventID.String()).
-			Msg("failed to record routine maintenance notification result")
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("maintenance_event_id", event.MaintenanceEventID.String()).Msg("failed to begin routine maintenance notification transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	if riverClient == nil {
+		recordRoutineMaintenanceNotificationConfigFailure(ctx, tx, event.MaintenanceEventID, utils.NotificationChannelEmail, "River client is not configured")
+		recordRoutineMaintenanceNotificationConfigFailure(ctx, tx, event.MaintenanceEventID, utils.NotificationChannelClickUp, "River client is not configured")
+		if err := tx.Commit(ctx); err != nil {
+			logger.Log.Error().Err(err).Str("maintenance_event_id", event.MaintenanceEventID.String()).Msg("failed to commit routine maintenance notification failure")
+		}
+		return
 	}
 
-	if notificationError != "" {
-		logger.Log.Error().
-			Str("maintenance_event_id", event.MaintenanceEventID.String()).
-			Str("notification_error", notificationError).
-			Msg("routine maintenance notification completed with errors")
+	if recipientEmail == "" {
+		recordRoutineMaintenanceNotificationConfigFailure(ctx, tx, event.MaintenanceEventID, utils.NotificationChannelEmail, "ALERT_RECIPIENT_EMAIL not set")
+	} else {
+		subject, body := utils.RoutineMaintenanceEmailMessage(recipientName, assetName, assetDisplayID, event.TriggeredAtHours, event.DueAtHours)
+		inserted, err := utils.EnqueueNotificationEmailTx(ctx, tx, riverClient, utils.NotificationDeliveryParams{
+			SourceType:     utils.NotificationSourceRoutineMaintenance,
+			SourceID:       event.MaintenanceEventID,
+			Channel:        utils.NotificationChannelEmail,
+			Tier:           "",
+			IdempotencyKey: buildRoutineMaintenanceNotificationKey(event.MaintenanceEventID, utils.NotificationChannelEmail),
+			Tags:           []string{"routine-maintenance", "email"},
+		}, utils.NotificationEmailArgs{
+			ToAddress: recipientEmail,
+			Subject:   subject,
+			Body:      body,
+		})
+		if err != nil {
+			logger.Log.Error().Err(err).Str("maintenance_event_id", event.MaintenanceEventID.String()).Msg("failed to enqueue routine maintenance email")
+		} else if !inserted {
+			logger.Log.Info().Str("maintenance_event_id", event.MaintenanceEventID.String()).Msg("routine maintenance email delivery already claimed")
+		}
+	}
+
+	if os.Getenv("CLICKUP_API_TOKEN") == "" || os.Getenv("CLICKUP_LIST_ID") == "" {
+		recordRoutineMaintenanceNotificationConfigFailure(ctx, tx, event.MaintenanceEventID, utils.NotificationChannelClickUp, "CLICKUP_API_TOKEN or CLICKUP_LIST_ID not set")
+	} else {
+		clickUpPayload := utils.RoutineMaintenanceClickUpPayload(assetName, assetDisplayID, event.TriggeredAtHours, event.DueAtHours)
+		inserted, err := utils.EnqueueNotificationClickUpTx(ctx, tx, riverClient, utils.NotificationDeliveryParams{
+			SourceType:     utils.NotificationSourceRoutineMaintenance,
+			SourceID:       event.MaintenanceEventID,
+			Channel:        utils.NotificationChannelClickUp,
+			Tier:           "",
+			IdempotencyKey: buildRoutineMaintenanceNotificationKey(event.MaintenanceEventID, utils.NotificationChannelClickUp),
+			Tags:           []string{"routine-maintenance", "clickup"},
+		}, utils.NotificationClickUpArgs{
+			Name:        clickUpPayload.Name,
+			Description: clickUpPayload.Description,
+			Priority:    clickUpPayload.Priority,
+			DueAt:       time.UnixMilli(clickUpPayload.DueDate),
+		})
+		if err != nil {
+			logger.Log.Error().Err(err).Str("maintenance_event_id", event.MaintenanceEventID.String()).Msg("failed to enqueue routine maintenance ClickUp task")
+		} else if !inserted {
+			logger.Log.Info().Str("maintenance_event_id", event.MaintenanceEventID.String()).Msg("routine maintenance ClickUp delivery already claimed")
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		logger.Log.Error().Err(err).Str("maintenance_event_id", event.MaintenanceEventID.String()).Msg("failed to commit routine maintenance notification enqueue")
 		return
 	}
 
 	logger.Log.Info().
 		Str("maintenance_event_id", event.MaintenanceEventID.String()).
-		Str("clickup_task_id", clickUpTaskID).
-		Msg("routine maintenance notification sent")
+		Msg("routine maintenance notifications enqueued")
+}
+
+func recordRoutineMaintenanceNotificationConfigFailure(ctx context.Context, tx pgx.Tx, maintenanceEventID uuid.UUID, channel, errorMessage string) {
+	queries := db.New(tx)
+	key := buildRoutineMaintenanceNotificationKey(maintenanceEventID, channel)
+	delivery, err := queries.ClaimNotificationDelivery(ctx, db.ClaimNotificationDeliveryParams{
+		SourceType:     utils.NotificationSourceRoutineMaintenance,
+		SourceID:       maintenanceEventID,
+		Channel:        channel,
+		Tier:           "",
+		IdempotencyKey: key,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return
+	}
+	if err != nil {
+		logger.Log.Error().Err(err).Str("maintenance_event_id", maintenanceEventID.String()).Str("channel", channel).Msg("failed to claim routine maintenance failed notification delivery")
+		return
+	}
+	if err := queries.MarkNotificationDeliveryFailed(ctx, db.MarkNotificationDeliveryFailedParams{
+		DeliveryID:   delivery.DeliveryID,
+		ErrorMessage: errorMessage,
+	}); err != nil {
+		logger.Log.Error().Err(err).Str("maintenance_event_id", maintenanceEventID.String()).Str("channel", channel).Msg("failed to mark routine maintenance notification delivery failed")
+	}
+}
+
+func buildRoutineMaintenanceNotificationKey(maintenanceEventID uuid.UUID, channel string) string {
+	return "routine-maintenance:" + maintenanceEventID.String() + ":" + channel
 }
 
 func assetInputMaintenanceInterval(input dto.AssetInput) int64 {

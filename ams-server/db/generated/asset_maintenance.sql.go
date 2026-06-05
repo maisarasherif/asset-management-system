@@ -28,9 +28,6 @@ RETURNING
     triggered_at_hours,
     previous_asset_status,
     status,
-    clickup_task_id,
-    notification_error,
-    notified_at,
     completed_at,
     completion_notes,
     created_at
@@ -52,9 +49,6 @@ func (q *Queries) CompleteOpenAssetMaintenanceEvent(ctx context.Context, arg Com
 		&i.TriggeredAtHours,
 		&i.PreviousAssetStatus,
 		&i.Status,
-		&i.ClickupTaskID,
-		&i.NotificationError,
-		&i.NotifiedAt,
 		&i.CompletedAt,
 		&i.CompletionNotes,
 		&i.CreatedAt,
@@ -87,9 +81,6 @@ RETURNING
     triggered_at_hours,
     previous_asset_status,
     status,
-    clickup_task_id,
-    notification_error,
-    notified_at,
     completed_at,
     completion_notes,
     created_at
@@ -118,9 +109,6 @@ func (q *Queries) CreateAssetMaintenanceEvent(ctx context.Context, arg CreateAss
 		&i.TriggeredAtHours,
 		&i.PreviousAssetStatus,
 		&i.Status,
-		&i.ClickupTaskID,
-		&i.NotificationError,
-		&i.NotifiedAt,
 		&i.CompletedAt,
 		&i.CompletionNotes,
 		&i.CreatedAt,
@@ -137,9 +125,6 @@ SELECT
     triggered_at_hours,
     previous_asset_status,
     status,
-    clickup_task_id,
-    notification_error,
-    notified_at,
     completed_at,
     completion_notes,
     created_at
@@ -161,9 +146,6 @@ func (q *Queries) GetOpenAssetMaintenanceEvent(ctx context.Context, assetID uuid
 		&i.TriggeredAtHours,
 		&i.PreviousAssetStatus,
 		&i.Status,
-		&i.ClickupTaskID,
-		&i.NotificationError,
-		&i.NotifiedAt,
 		&i.CompletedAt,
 		&i.CompletionNotes,
 		&i.CreatedAt,
@@ -180,9 +162,6 @@ SELECT
     triggered_at_hours,
     previous_asset_status,
     status,
-    clickup_task_id,
-    notification_error,
-    notified_at,
     completed_at,
     completion_notes,
     created_at
@@ -208,9 +187,6 @@ func (q *Queries) ListAssetMaintenanceEvents(ctx context.Context, assetID uuid.U
 			&i.TriggeredAtHours,
 			&i.PreviousAssetStatus,
 			&i.Status,
-			&i.ClickupTaskID,
-			&i.NotificationError,
-			&i.NotifiedAt,
 			&i.CompletedAt,
 			&i.CompletionNotes,
 			&i.CreatedAt,
@@ -433,26 +409,6 @@ func (q *Queries) MarkAssetMaintenanceRequired(ctx context.Context, assetID uuid
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const markMaintenanceNotificationResult = `-- name: MarkMaintenanceNotificationResult :exec
-UPDATE asset_maintenance_events
-SET
-    clickup_task_id = $1,
-    notification_error = $2,
-    notified_at = NOW()
-WHERE maintenance_event_id = $3
-`
-
-type MarkMaintenanceNotificationResultParams struct {
-	ClickupTaskID      string    `json:"clickup_task_id"`
-	NotificationError  string    `json:"notification_error"`
-	MaintenanceEventID uuid.UUID `json:"maintenance_event_id"`
-}
-
-func (q *Queries) MarkMaintenanceNotificationResult(ctx context.Context, arg MarkMaintenanceNotificationResultParams) error {
-	_, err := q.db.Exec(ctx, markMaintenanceNotificationResult, arg.ClickupTaskID, arg.NotificationError, arg.MaintenanceEventID)
-	return err
 }
 
 const updateAssetWorkingHours = `-- name: UpdateAssetWorkingHours :one

@@ -4,16 +4,18 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	controller "github.com/maisarasherif/asset-management-system/ams-server/controllers"
 	"github.com/maisarasherif/asset-management-system/ams-server/middleware"
+	"github.com/riverqueue/river"
 )
 
 func SetupProtectedRoutes(router *gin.Engine, pool *pgxpool.Pool) {
-	SetupProtectedRoutesWithJobs(router, pool, nil)
+	SetupProtectedRoutesWithJobs(router, pool, nil, nil)
 }
 
-func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverUIHandler http.Handler) {
+func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverUIHandler http.Handler, riverClient *river.Client[pgx.Tx]) {
 
 	// ===================Admin-Protected Routes======================================================
 	admin := router.Group("/v1")
@@ -38,9 +40,9 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 
 	// Asset Routes
 	admin.POST("/asset", controller.AddAsset(pool))
-	admin.PUT("/asset/:asset_id", controller.UpdateAsset(pool))
-	admin.PATCH("/asset/:asset_id", controller.PatchAsset(pool))
-	admin.PATCH("/asset/:asset_id/working-hours", controller.UpdateAssetWorkingHours(pool))
+	admin.PUT("/asset/:asset_id", controller.UpdateAsset(pool, riverClient))
+	admin.PATCH("/asset/:asset_id", controller.PatchAsset(pool, riverClient))
+	admin.PATCH("/asset/:asset_id/working-hours", controller.UpdateAssetWorkingHours(pool, riverClient))
 	admin.POST("/asset/:asset_id/routine-maintenance/complete", controller.CompleteAssetRoutineMaintenance(pool))
 	admin.DELETE("/asset/:asset_id", controller.DeleteAsset(pool))
 

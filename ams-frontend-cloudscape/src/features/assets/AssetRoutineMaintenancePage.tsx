@@ -141,6 +141,10 @@ export function AssetRoutineMaintenancePage() {
   const maintenanceRemaining = maintenanceConfigured
     ? asset.next_maintenance_due_hours - asset.working_hours
     : 0;
+  const openNotificationFailures =
+    openMaintenanceEvent?.notifications.filter(
+      (notification) => notification.status === "FAILED" && notification.error_message
+    ) ?? [];
 
   const maintenanceColumns: TableProps<AssetMaintenanceEvent>["columnDefinitions"] = [
     {
@@ -164,9 +168,9 @@ export function AssetRoutineMaintenancePage() {
         `${item.triggered_at_hours.toLocaleString()} / ${item.due_at_hours.toLocaleString()} h`,
     },
     {
-      id: "notified",
-      header: "Notified",
-      cell: (item) => formatDate(item.notified_at),
+      id: "notifications",
+      header: "Notifications",
+      cell: (item) => <NotificationDeliveryStatuses event={item} />,
     },
     {
       id: "completed",
@@ -195,6 +199,7 @@ export function AssetRoutineMaintenancePage() {
     onOpenHoursModal: () => setHoursModalVisible(true),
     onUpdateHours: (draft) => updateHoursMutation.mutate(draft),
     openMaintenanceEvent,
+    openNotificationFailures,
     updateHoursPending: updateHoursMutation.isPending,
   });
 }
@@ -219,6 +224,7 @@ interface AssetRoutineMaintenanceViewProps {
   onOpenHoursModal: () => void;
   onUpdateHours: (draft: WorkingHoursDraft) => void;
   openMaintenanceEvent: AssetMaintenanceEvent | null;
+  openNotificationFailures: AssetMaintenanceEvent["notifications"];
   updateHoursPending: boolean;
 }
 
@@ -316,6 +322,35 @@ function CompletionModal({ loading, onDismiss, onSubmit, visible }: CompletionMo
   );
 }
 
+function NotificationDeliveryStatuses({ event }: { event: AssetMaintenanceEvent }) {
+  if (event.notifications.length === 0) {
+    return <Box color="text-body-secondary">Not queued</Box>;
+  }
+
+  return (
+    <SpaceBetween direction="vertical" size="xxs">
+      {event.notifications.map((notification) => (
+        <StatusIndicator
+          key={notification.delivery_id}
+          type={notificationStatusType(notification.status)}
+        >
+          {humanizeEnum(notification.channel)}: {humanizeEnum(notification.status)}
+        </StatusIndicator>
+      ))}
+    </SpaceBetween>
+  );
+}
+
+function notificationStatusType(status: AssetMaintenanceEvent["notifications"][number]["status"]) {
+  if (status === "SENT") {
+    return "success";
+  }
+  if (status === "FAILED") {
+    return "error";
+  }
+  return "pending";
+}
+
 function renderAssetRoutineMaintenancePage({
   asset,
   assetId,
@@ -336,6 +371,7 @@ function renderAssetRoutineMaintenancePage({
   onOpenHoursModal,
   onUpdateHours,
   openMaintenanceEvent,
+  openNotificationFailures,
   updateHoursPending,
 }: AssetRoutineMaintenanceViewProps) {
   return (
@@ -444,9 +480,15 @@ function renderAssetRoutineMaintenancePage({
             </Alert>
           ) : null}
 
-          {openMaintenanceEvent?.notification_error ? (
+          {openNotificationFailures.length > 0 ? (
             <Alert type="warning">
-              Notification issue: {openMaintenanceEvent.notification_error}
+              Notification issue:{" "}
+              {openNotificationFailures
+                .map(
+                  (notification) =>
+                    `${humanizeEnum(notification.channel)}: ${notification.error_message}`
+                )
+                .join("; ")}
             </Alert>
           ) : null}
 

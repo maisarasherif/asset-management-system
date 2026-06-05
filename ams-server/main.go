@@ -20,8 +20,6 @@ func main() {
 	pool := databases.Connect()
 	defer pool.Close()
 
-	utils.StartExpiryScheduler(pool)
-
 	riverCtx, cancelRiver := context.WithCancel(context.Background())
 	defer cancelRiver()
 	riverClient, riverUIHandler, err := utils.StartRiver(riverCtx, pool)
@@ -35,6 +33,8 @@ func main() {
 			logger.Log.Error().Err(err).Msg("failed to stop River")
 		}
 	}()
+
+	utils.StartExpiryScheduler(pool, riverClient)
 
 	router := gin.New()
 	router.Use(
@@ -56,7 +56,7 @@ func main() {
 	controller.SeedAdminUser(pool)
 
 	routes.SetupUnprotectedRoutesWithRiver(router, pool, riverClient)
-	routes.SetupProtectedRoutesWithJobs(router, pool, riverUIHandler)
+	routes.SetupProtectedRoutesWithJobs(router, pool, riverUIHandler, riverClient)
 
 	port := os.Getenv("PORT")
 	if port == "" {

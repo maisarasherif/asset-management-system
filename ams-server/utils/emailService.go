@@ -2,22 +2,19 @@ package utils
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/logger"
+	"github.com/riverqueue/river"
 	"github.com/robfig/cron/v3"
 	"gopkg.in/gomail.v2"
 )
-
-const stalePendingNotificationMinutes = 10
 
 var certificateNotificationLocation = time.FixedZone("UTC+4", 4*60*60)
 
@@ -35,27 +32,8 @@ var notificationTiers = []NotificationTier{
 	{Name: "30d", MaxDays: 30, Label: "less than 30 days", EmailText: "is expiring in less than 30 days"},
 }
 
-func sendEmail(recipientEmail, recipientName, assetName, componentName, certificateName, expiryDate, tierLabel, timingText string) error {
-	smtpHost := os.Getenv("SMTP_HOST")
-	smtpPortStr := os.Getenv("SMTP_PORT")
-	smtpUser := os.Getenv("SMTP_USER")
-	smtpPassword := os.Getenv("SMTP_PASSWORD")
-	fromEmail := os.Getenv("FROM_EMAIL")
-
-	if smtpHost == "" || smtpPortStr == "" || smtpUser == "" || smtpPassword == "" || fromEmail == "" {
-		return fmt.Errorf("SMTP configuration is incomplete")
-	}
-
-	smtpPort, err := strconv.Atoi(smtpPortStr)
-	if err != nil {
-		return fmt.Errorf("invalid SMTP port: %v", err)
-	}
-
-	m := gomail.NewMessage()
-	m.SetHeader("From", fromEmail)
-	m.SetHeader("To", recipientEmail)
-	m.SetHeader("Subject", fmt.Sprintf("[%s] Certificate Expiry Alert - %s", tierLabel, certificateName))
-
+func CertificateExpiryEmailMessage(recipientName, assetName, componentName, certificateName, expiryDate, tierLabel, timingText string) (string, string) {
+	subject := fmt.Sprintf("[%s] Certificate Expiry Alert - %s", tierLabel, certificateName)
 	body := fmt.Sprintf(`
 		<html>
 		<body>
@@ -75,37 +53,11 @@ func sendEmail(recipientEmail, recipientName, assetName, componentName, certific
 		</html>
 	`, recipientName, timingText, assetName, componentName, certificateName, expiryDate)
 
-	m.SetBody("text/html", body)
-
-	d := gomail.NewDialer(smtpHost, smtpPort, smtpUser, smtpPassword)
-	if err := d.DialAndSend(m); err != nil {
-		return fmt.Errorf("failed to send email: %v", err)
-	}
-
-	return nil
+	return subject, body
 }
 
-func SendRoutineMaintenanceEmail(recipientEmail, recipientName, assetName, assetDisplayID string, workingHours, dueAtHours int64) error {
-	smtpHost := os.Getenv("SMTP_HOST")
-	smtpPortStr := os.Getenv("SMTP_PORT")
-	smtpUser := os.Getenv("SMTP_USER")
-	smtpPassword := os.Getenv("SMTP_PASSWORD")
-	fromEmail := os.Getenv("FROM_EMAIL")
-
-	if smtpHost == "" || smtpPortStr == "" || smtpUser == "" || smtpPassword == "" || fromEmail == "" {
-		return fmt.Errorf("SMTP configuration is incomplete")
-	}
-
-	smtpPort, err := strconv.Atoi(smtpPortStr)
-	if err != nil {
-		return fmt.Errorf("invalid SMTP port: %v", err)
-	}
-
-	m := gomail.NewMessage()
-	m.SetHeader("From", fromEmail)
-	m.SetHeader("To", recipientEmail)
-	m.SetHeader("Subject", "Routine Maintenance Required - "+assetName)
-
+func RoutineMaintenanceEmailMessage(recipientName, assetName, assetDisplayID string, workingHours, dueAtHours int64) (string, string) {
+	subject := "Routine Maintenance Required - " + assetName
 	body := fmt.Sprintf(`
 		<html>
 		<body>
@@ -125,14 +77,7 @@ func SendRoutineMaintenanceEmail(recipientEmail, recipientName, assetName, asset
 		</html>
 	`, recipientName, assetName, assetDisplayID, workingHours, dueAtHours)
 
-	m.SetBody("text/html", body)
-
-	d := gomail.NewDialer(smtpHost, smtpPort, smtpUser, smtpPassword)
-	if err := d.DialAndSend(m); err != nil {
-		return fmt.Errorf("failed to send email: %v", err)
-	}
-
-	return nil
+	return subject, body
 }
 
 func SendHTMLMail(recipientEmail, subject, body string) error {
@@ -165,7 +110,7 @@ func SendHTMLMail(recipientEmail, subject, body string) error {
 	return nil
 }
 
-func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiringCertificatesWithContextRow, recipientEmail, recipientName string) {
+func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx], cert db.GetExpiringCertificatesWithContextRow, recipientEmail, recipientName string) {
 	if cert.ExpiryDate == nil {
 		logger.Log.Warn().
 			Str("certificate_id", cert.CertificateID.String()).
@@ -188,7 +133,7 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiring
 			Str("tier", tier.Name).
 			Msg("ALERT_RECIPIENT_EMAIL not set, skipping expiry email")
 	} else {
-		notifyChannel(ctx, pool, cert, recipientEmail, recipientName, tier, expiryStr, "EMAIL")
+		enqueueEmailNotification(ctx, pool, riverClient, cert, recipientEmail, recipientName, tier, expiryStr)
 	}
 
 	if !clickUpConfigured() {
@@ -200,30 +145,51 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, cert db.GetExpiring
 		return
 	}
 
-	notifyChannel(ctx, pool, cert, recipientEmail, recipientName, tier, expiryStr, "CLICKUP")
+	enqueueClickUpNotification(ctx, pool, riverClient, cert, tier, expiryStr)
 }
 
-func notifyChannel(parent context.Context, pool *pgxpool.Pool, cert db.GetExpiringCertificatesWithContextRow, recipientEmail, recipientName string, tier NotificationTier, expiryStr, channel string) {
+func enqueueEmailNotification(parent context.Context, pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx], cert db.GetExpiringCertificatesWithContextRow, recipientEmail, recipientName string, tier NotificationTier, expiryStr string) {
+	if riverClient == nil {
+		logger.Log.Error().
+			Str("certificate_id", cert.CertificateID.String()).
+			Str("certificate", cert.CertificateName).
+			Str("tier", tier.Name).
+			Msg("River client is not configured, skipping certificate expiry email")
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 	defer cancel()
 
-	queries := db.New(pool)
-	key := buildIdempotencyKey(cert.CertificateID.String(), expiryStr, tier.Name, channel)
+	key := buildIdempotencyKey(cert.CertificateID.String(), expiryStr, tier.Name, "EMAIL")
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("key", key).Msg("failed to begin certificate expiry email enqueue transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
 
-	slot, err := queries.ClaimNotificationSlot(ctx, db.ClaimNotificationSlotParams{
-		CertificateID:  cert.CertificateID,
-		Type:           channel,
+	subject, body := CertificateExpiryEmailMessage(recipientName, cert.AssetName, cert.ComponentName, cert.CertificateName, expiryStr, tier.Label, tier.EmailText)
+	inserted, err := EnqueueNotificationEmailTx(ctx, tx, riverClient, NotificationDeliveryParams{
+		SourceType:     NotificationSourceCertificateExpiry,
+		SourceID:       cert.CertificateID,
+		Channel:        NotificationChannelEmail,
 		Tier:           tier.Name,
 		IdempotencyKey: key,
+		Tags:           []string{"certificate-expiry", "email"},
+	}, NotificationEmailArgs{
+		ToAddress: recipientEmail,
+		Subject:   subject,
+		Body:      body,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if !inserted && err == nil {
 		logger.Log.Info().
 			Str("certificate_id", cert.CertificateID.String()).
 			Str("certificate", cert.CertificateName).
 			Str("key", key).
-			Str("channel", channel).
+			Str("channel", "EMAIL").
 			Str("tier", tier.Name).
-			Msg("notification slot already claimed, skipping")
+			Msg("notification slot already claimed, skipping email enqueue")
 		return
 	}
 	if err != nil {
@@ -232,39 +198,19 @@ func notifyChannel(parent context.Context, pool *pgxpool.Pool, cert db.GetExpiri
 			Str("certificate_id", cert.CertificateID.String()).
 			Str("certificate", cert.CertificateName).
 			Str("key", key).
-			Str("channel", channel).
+			Str("channel", "EMAIL").
 			Str("tier", tier.Name).
-			Msg("failed to claim notification slot")
+			Msg("failed to claim email notification slot")
 		return
 	}
 
-	externalTaskID, sendErr := sendNotificationChannel(channel, cert, recipientEmail, recipientName, tier, expiryStr)
-	if sendErr != nil {
-		releaseNotificationSlot(ctx, queries, slot.TaskID, key, cert, channel, tier.Name)
-		recordNotificationFailure(ctx, queries, cert, key, channel, tier.Name, sendErr)
-		logger.Log.Error().
-			Err(sendErr).
-			Str("certificate_id", cert.CertificateID.String()).
-			Str("certificate", cert.CertificateName).
-			Str("key", key).
-			Str("channel", channel).
-			Str("tier", tier.Name).
-			Msg("notification send failed, slot released for retry")
-		return
-	}
-
-	if err := queries.FinalizeNotificationSlot(ctx, db.FinalizeNotificationSlotParams{
-		TaskID:         slot.TaskID,
-		ExternalTaskID: externalTaskID,
-	}); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		logger.Log.Error().
 			Err(err).
 			Str("certificate_id", cert.CertificateID.String()).
 			Str("certificate", cert.CertificateName).
 			Str("key", key).
-			Str("channel", channel).
-			Str("tier", tier.Name).
-			Msg("failed to finalize notification slot")
+			Msg("failed to commit certificate expiry email enqueue")
 		return
 	}
 
@@ -272,73 +218,92 @@ func notifyChannel(parent context.Context, pool *pgxpool.Pool, cert db.GetExpiri
 		Str("certificate_id", cert.CertificateID.String()).
 		Str("certificate", cert.CertificateName).
 		Str("key", key).
-		Str("channel", channel).
+		Str("channel", "EMAIL").
 		Str("tier", tier.Name).
-		Str("external_task_id", externalTaskID).
-		Msg("notification sent")
+		Msg("certificate expiry email enqueued")
 }
 
-func sendNotificationChannel(channel string, cert db.GetExpiringCertificatesWithContextRow, recipientEmail, recipientName string, tier NotificationTier, expiryStr string) (string, error) {
-	switch channel {
-	case "EMAIL":
-		return "", sendEmail(
-			recipientEmail,
-			recipientName,
-			cert.AssetName,
-			cert.ComponentName,
-			cert.CertificateName,
-			expiryStr,
-			tier.Label,
-			tier.EmailText,
-		)
-	case "CLICKUP":
-		return CreateClickUpTask(cert.CertificateName, cert.AssetName, cert.ComponentName, *cert.ExpiryDate)
-	default:
-		return "", fmt.Errorf("unsupported notification channel %q", channel)
-	}
-}
-
-func releaseNotificationSlot(ctx context.Context, queries *db.Queries, taskID uuid.UUID, key string, cert db.GetExpiringCertificatesWithContextRow, channel, tier string) {
-	if err := queries.ReleaseNotificationSlot(ctx, taskID); err != nil {
+func enqueueClickUpNotification(parent context.Context, pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx], cert db.GetExpiringCertificatesWithContextRow, tier NotificationTier, expiryStr string) {
+	if riverClient == nil {
 		logger.Log.Error().
-			Err(err).
 			Str("certificate_id", cert.CertificateID.String()).
 			Str("certificate", cert.CertificateName).
-			Str("key", key).
-			Str("channel", channel).
-			Str("tier", tier).
-			Msg("failed to release notification slot")
+			Str("tier", tier.Name).
+			Msg("River client is not configured, skipping certificate expiry ClickUp task")
+		return
 	}
-}
 
-func recordNotificationFailure(ctx context.Context, queries *db.Queries, cert db.GetExpiringCertificatesWithContextRow, key, channel, tier string, sendErr error) {
-	if err := queries.RecordNotificationFailure(ctx, db.RecordNotificationFailureParams{
-		CertificateID:  cert.CertificateID,
+	ctx, cancel := context.WithTimeout(parent, 60*time.Second)
+	defer cancel()
+
+	key := buildIdempotencyKey(cert.CertificateID.String(), expiryStr, tier.Name, "CLICKUP")
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("key", key).Msg("failed to begin certificate expiry ClickUp enqueue transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	clickUpPayload := CertificateExpiryClickUpPayload(cert.CertificateName, cert.AssetName, cert.ComponentName, *cert.ExpiryDate)
+	inserted, err := EnqueueNotificationClickUpTx(ctx, tx, riverClient, NotificationDeliveryParams{
+		SourceType:     NotificationSourceCertificateExpiry,
+		SourceID:       cert.CertificateID,
+		Channel:        NotificationChannelClickUp,
+		Tier:           tier.Name,
 		IdempotencyKey: key,
-		Channel:        channel,
-		Tier:           tier,
-		ErrorMessage:   sendErr.Error(),
-	}); err != nil {
+		Tags:           []string{"certificate-expiry", "clickup"},
+	}, NotificationClickUpArgs{
+		Name:        clickUpPayload.Name,
+		Description: clickUpPayload.Description,
+		Priority:    clickUpPayload.Priority,
+		DueAt:       time.UnixMilli(clickUpPayload.DueDate),
+	})
+	if !inserted && err == nil {
+		logger.Log.Info().
+			Str("certificate_id", cert.CertificateID.String()).
+			Str("certificate", cert.CertificateName).
+			Str("key", key).
+			Str("channel", "CLICKUP").
+			Str("tier", tier.Name).
+			Msg("notification slot already claimed, skipping ClickUp enqueue")
+		return
+	}
+	if err != nil {
 		logger.Log.Error().
 			Err(err).
 			Str("certificate_id", cert.CertificateID.String()).
 			Str("certificate", cert.CertificateName).
 			Str("key", key).
-			Str("channel", channel).
-			Str("tier", tier).
-			Msg("failed to record notification failure")
+			Str("channel", "CLICKUP").
+			Str("tier", tier.Name).
+			Msg("failed to claim ClickUp notification slot")
+		return
 	}
+
+	if err := tx.Commit(ctx); err != nil {
+		logger.Log.Error().
+			Err(err).
+			Str("certificate_id", cert.CertificateID.String()).
+			Str("certificate", cert.CertificateName).
+			Str("key", key).
+			Msg("failed to commit certificate expiry ClickUp enqueue")
+		return
+	}
+
+	logger.Log.Info().
+		Str("certificate_id", cert.CertificateID.String()).
+		Str("certificate", cert.CertificateName).
+		Str("key", key).
+		Str("channel", "CLICKUP").
+		Str("tier", tier.Name).
+		Msg("certificate expiry ClickUp task enqueued")
 }
 
-func runExpiryCheck(pool *pgxpool.Pool) {
+func runExpiryCheck(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	queries := db.New(pool)
-	if err := queries.ReleaseStalePendingSlots(ctx, stalePendingNotificationMinutes); err != nil {
-		logger.Log.Error().Err(err).Msg("failed to release stale pending notification slots")
-	}
-
 	recipientEmail := os.Getenv("ALERT_RECIPIENT_EMAIL")
 	recipientName := os.Getenv("ALERT_RECIPIENT_NAME")
 	if recipientName == "" {
@@ -369,7 +334,7 @@ func runExpiryCheck(pool *pgxpool.Pool) {
 		Msg("found expiring certificates, processing notifications")
 
 	for _, cert := range certificates {
-		notifyExpiring(context.Background(), pool, cert, recipientEmail, recipientName)
+		notifyExpiring(context.Background(), pool, riverClient, cert, recipientEmail, recipientName)
 	}
 }
 
@@ -405,8 +370,8 @@ func clickUpConfigured() bool {
 	return os.Getenv("CLICKUP_API_TOKEN") != "" && os.Getenv("CLICKUP_LIST_ID") != ""
 }
 
-func StartExpiryScheduler(pool *pgxpool.Pool) {
-	go runExpiryCheck(pool)
+func StartExpiryScheduler(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) {
+	go runExpiryCheck(pool, riverClient)
 
 	c := cron.New()
 
@@ -417,7 +382,7 @@ func StartExpiryScheduler(pool *pgxpool.Pool) {
 
 	_, err := c.AddFunc(schedule, func() {
 		logger.Log.Info().Msg("running daily certificate expiry check")
-		runExpiryCheck(pool)
+		runExpiryCheck(pool, riverClient)
 	})
 	if err != nil {
 		logger.Log.Error().Err(err).Msg("failed to register cron job")
