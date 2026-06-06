@@ -16,6 +16,8 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
+var errCategoryNotFound = errors.New("category not found")
+
 func getOrCreateMainCategory(ctx context.Context, queries *db.Queries, name, description string) (uuid.UUID, error) {
 	existing, err := queries.FindMainCategoryByName(ctx, name)
 	if err == nil {
@@ -52,6 +54,12 @@ func resolveScopeCategoryReference(ctx context.Context, queries *db.Queries, sco
 	if err != nil {
 		return uuid.Nil, uuid.Nil, err
 	}
+	if _, err := queries.GetCategoryByID(ctx, categoryID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, uuid.Nil, errCategoryNotFound
+		}
+		return uuid.Nil, uuid.Nil, err
+	}
 	scopeCategory, err := queries.GetCatalogScopeCategoryByCategoryID(ctx, categoryID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -60,6 +68,14 @@ func resolveScopeCategoryReference(ctx context.Context, queries *db.Queries, sco
 		return uuid.Nil, uuid.Nil, err
 	}
 	return categoryID, scopeCategory.ScopeCategoryID, nil
+}
+
+func writeScopeCategoryReferenceError(c *gin.Context, err error) {
+	status := http.StatusBadRequest
+	if errors.Is(err, errCategoryNotFound) {
+		status = http.StatusNotFound
+	}
+	c.JSON(status, gin.H{"error": err.Error()})
 }
 
 func getOrCreateCategory(ctx context.Context, queries *db.Queries, mainCategoryID uuid.UUID, name, description string) (uuid.UUID, error) {

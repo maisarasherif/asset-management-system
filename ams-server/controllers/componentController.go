@@ -142,12 +142,6 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, input.ScopeCategoryID, input.CategoryID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
 		asset, err := queries.GetAssetByID(ctx, assetID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
@@ -155,6 +149,12 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		if asset.AssetKind == "SINGLE_EQUIPMENT" {
 			c.JSON(http.StatusConflict, gin.H{"error": "single-asset equipment cannot have manual components"})
+			return
+		}
+
+		categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, input.ScopeCategoryID, input.CategoryID)
+		if err != nil {
+			writeScopeCategoryReferenceError(c, err)
 			return
 		}
 		component, err := queries.CreateComponent(ctx, db.CreateComponentParams{
@@ -216,7 +216,7 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, input.ScopeCategoryID, input.CategoryID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			writeScopeCategoryReferenceError(c, err)
 			return
 		}
 
@@ -360,7 +360,7 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			}
 			parsedCategoryID, parsedScopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, scopeCategoryValue, categoryValue)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				writeScopeCategoryReferenceError(c, err)
 				return
 			}
 			categoryID = parsedCategoryID

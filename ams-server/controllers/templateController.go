@@ -232,7 +232,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 		for _, componentInput := range input.Components {
 			categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, componentInput.ScopeCategoryID, componentInput.CategoryID)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				writeScopeCategoryReferenceError(c, err)
 				return
 			}
 
@@ -480,7 +480,7 @@ func AddTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, input.ScopeCategoryID, input.CategoryID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			writeScopeCategoryReferenceError(c, err)
 			return
 		}
 
@@ -670,7 +670,7 @@ func UpdateTemplateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		categoryID, scopeCategoryID, err := resolveScopeCategoryReference(ctx, queries, input.ScopeCategoryID, input.CategoryID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			writeScopeCategoryReferenceError(c, err)
 			return
 		}
 

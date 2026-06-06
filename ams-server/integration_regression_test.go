@@ -724,7 +724,7 @@ func TestCertificateNotificationSchedulerAuditAndReset(t *testing.T) {
 	assertField(t, task, "external_task_id", "email-message-id")
 
 	reset := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, "/v1/certificates/"+certificateID+"/notifications", nil, http.StatusOK))
-	assertField(t, reset, "certificate_id", certificateID)
+	assertField(t, reset, "message", "notification history cleared; certificate will be re-notified on next scheduler run")
 	assertField(t, reset, "cleared_tasks", 1)
 
 	afterReset := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/certificate-notifications?page=1&limit=20", nil, http.StatusOK))
@@ -1584,6 +1584,7 @@ func createCategory(t *testing.T, h *integrationHarness, mainCategoryID, name st
 	stringField(t, body, "display_id")
 	id := stringField(t, body, "category_id")
 	assertUUID(t, id)
+	assignCategoryToDefaultCatalogScope(t, h.pool, mainCategoryID, id, name)
 	return id
 }
 
@@ -1666,11 +1667,72 @@ func createComponentFixture(t *testing.T, h *integrationHarness, componentName s
 
 	mainCategoryID := createMainCategory(t, h, componentName+" Main Category")
 	categoryID := createCategory(t, h, mainCategoryID, componentName+" Category")
-	createCatalogScopeFixture(t, h.pool, mainCategoryID, categoryID, componentName+" Scope")
 	testID := createTestType(t, h, componentName+" Test", 12)
 	assetID := stringField(t, createAsset(t, h, baseAssetPayload(componentName+" Asset")), "asset_id")
 	componentID := stringField(t, createComponent(t, h, componentPayload(assetID, categoryID, componentName)), "component_id")
 	return componentID, testID
+}
+
+func assignCategoryToDefaultCatalogScope(t *testing.T, pool *pgxpool.Pool, mainCategoryID, categoryID, name string) {
+	t.Helper()
+
+	parsedMainCategoryID, err := utils.ParseUUID(mainCategoryID, "main_category_id")
+	if err != nil {
+		t.Fatalf("failed to parse main category id: %v", err)
+	}
+	parsedCategoryID, err := utils.ParseUUID(categoryID, "category_id")
+	if err != nil {
+		t.Fatalf("failed to parse category id: %v", err)
+	}
+
+	queries := db.New(pool)
+	scope, err := queries.GetDefaultCatalogScope(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get default catalog scope: %v", err)
+	}
+
+	if _, err := pool.Exec(context.Background(), `
+		INSERT INTO catalog_scope_main_categories (
+			display_id,
+			scope_id,
+			main_category_id,
+			sort_order
+		)
+		SELECT
+			next_display_id('catalog_scope_main_category_display_id_seq'),
+			$1,
+			$2,
+			COALESCE(MAX(sort_order), 0) + 1
+		FROM catalog_scope_main_categories
+		WHERE scope_id = $1
+		ON CONFLICT (scope_id, main_category_id) DO NOTHING
+	`, scope.ScopeID, parsedMainCategoryID); err != nil {
+		t.Fatalf("failed to assign main category to default catalog scope: %v", err)
+	}
+
+	if _, err := pool.Exec(context.Background(), `
+		INSERT INTO catalog_scope_categories (
+			display_id,
+			scope_id,
+			main_category_id,
+			category_id,
+			sort_order,
+			description
+		)
+		SELECT
+			next_display_id('catalog_scope_category_display_id_seq'),
+			$1,
+			$2,
+			$3,
+			COALESCE(MAX(sort_order), 0) + 1,
+			$4
+		FROM catalog_scope_categories
+		WHERE scope_id = $1
+		  AND main_category_id = $2
+		ON CONFLICT (scope_id, main_category_id, category_id) DO NOTHING
+	`, scope.ScopeID, parsedMainCategoryID, parsedCategoryID, name+" scope category"); err != nil {
+		t.Fatalf("failed to assign category to default catalog scope: %v", err)
+	}
 }
 
 func createCatalogScopeFixture(t *testing.T, pool *pgxpool.Pool, mainCategoryID, categoryID, name string) {
