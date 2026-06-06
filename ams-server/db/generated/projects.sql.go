@@ -135,6 +135,33 @@ func (q *Queries) GetProjectByID(ctx context.Context, projectID uuid.UUID) (Proj
 	return i, err
 }
 
+const getProjectByName = `-- name: GetProjectByName :one
+SELECT
+    project_id,
+    project_name,
+    description,
+    status,
+    created_at,
+    updated_at
+FROM projects
+WHERE LOWER(TRIM(project_name)) = LOWER(TRIM($1))
+LIMIT 1
+`
+
+func (q *Queries) GetProjectByName(ctx context.Context, projectName string) (Project, error) {
+	row := q.db.QueryRow(ctx, getProjectByName, projectName)
+	var i Project
+	err := row.Scan(
+		&i.ProjectID,
+		&i.ProjectName,
+		&i.Description,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listAllUserProjectAccess = `-- name: ListAllUserProjectAccess :many
 SELECT
     upa.access_id,

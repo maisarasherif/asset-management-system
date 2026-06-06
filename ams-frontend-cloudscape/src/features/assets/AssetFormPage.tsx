@@ -99,6 +99,16 @@ const ASSET_KIND_OPTIONS: SelectProps.Option[] = [
   },
 ];
 
+const NO_PROJECT_OPTION: SelectProps.Option = {
+  label: "No project - warehouse",
+  description: "Asset is stored in warehouse and not currently used for a project.",
+  value: "",
+};
+
+function normalizeProjectName(projectName: string) {
+  return projectName.trim().toLowerCase();
+}
+
 export function AssetFormPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -219,12 +229,14 @@ export function AssetFormPage() {
   const selectedAssetKindOption =
     ASSET_KIND_OPTIONS.find((option) => option.value === form.asset_kind) ?? null;
   const projectOptions = useMemo<SelectProps.Option[]>(
-    () =>
-      (projectsQuery.data || []).map((project) => ({
+    () => [
+      NO_PROJECT_OPTION,
+      ...(projectsQuery.data || []).map((project) => ({
         label: project.project_name,
         value: project.project_name,
         description: humanizeEnum(project.status),
       })),
+    ],
     [projectsQuery.data]
   );
   const selectedAssignedProjectOption =
@@ -295,6 +307,17 @@ export function AssetFormPage() {
         setErrorMessage("Select at least one certificate test type.");
         return;
       }
+    }
+    const assignedProject = form.assigned_project.trim();
+    const assignedProjectExists =
+      !assignedProject ||
+      (projectsQuery.data || []).some(
+        (project) =>
+          normalizeProjectName(project.project_name) === normalizeProjectName(assignedProject)
+      );
+    if (!assignedProjectExists) {
+      setErrorMessage("Choose a project from the projects table, or choose No project - warehouse.");
+      return;
     }
 
     setErrorMessage("");
@@ -467,7 +490,7 @@ function AssetInformation(props: AssetFormViewProps) {
               <Select
                 loadingText="Loading projects"
                 options={projectOptions}
-                placeholder="Select project"
+                placeholder="Choose project assignment"
                 selectedOption={selectedAssignedProjectOption}
                 statusType={projectsLoading ? "loading" : "finished"}
                 onChange={({ detail }) =>

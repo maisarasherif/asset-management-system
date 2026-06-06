@@ -78,6 +78,8 @@ interface RegressionFixture {
   projectName: string;
   assetId: string;
   assetName: string;
+  warehouseAssetId: string;
+  warehouseAssetName: string;
   componentId: string;
   componentName: string;
   certificateId: string;
@@ -183,6 +185,7 @@ async function createRegressionFixture(
   const templateName = `PW Whole Template ${suffix}`;
   const componentName = `PW Whole Component ${suffix}`;
   const assetName = `PW Whole Asset ${suffix}`;
+  const warehouseAssetName = `PW Warehouse Asset ${suffix}`;
   const sortOrderBase = Math.floor(Date.now() / 1000);
 
   const clientUser = await postJson<CreatedUser>(request, token, "/user", {
@@ -324,6 +327,19 @@ async function createRegressionFixture(
     template_id: template.template_id,
   });
 
+  const warehouseAsset = await postJson<CreatedAsset>(request, token, "/asset", {
+    name: warehouseAssetName,
+    photo: "",
+    datasheet: "",
+    description: "Created by Playwright to verify warehouse asset state.",
+    status: "ACTIVE",
+    asset_kind: "COMPONENTIZED",
+    location: "Warehouse A",
+    assigned_project: "",
+    maintenance_interval_hours: 0,
+    template_id: null,
+  });
+
   const components = await getJson<PaginatedResponse<ComponentRecord>>(
     request,
     token,
@@ -348,6 +364,8 @@ async function createRegressionFixture(
     projectName,
     assetId: asset.asset_id,
     assetName,
+    warehouseAssetId: warehouseAsset.asset_id,
+    warehouseAssetName,
     componentId,
     componentName,
     certificateId: certificate.certificate_id,
@@ -376,6 +394,7 @@ async function cleanupRegressionFixture(
 
   const token = await loginApi(request);
 
+  await deleteIfPresent(request, token, `/asset/${fixture.warehouseAssetId}`);
   await deleteIfPresent(request, token, `/asset/${fixture.assetId}`);
   await deleteIfPresent(request, token, `/template/${fixture.templateId}`);
   await deleteIfPresent(
@@ -501,14 +520,22 @@ test.describe("whole app regression", () => {
       await expectRoute(page, "/assets", [
         "Assets directory",
         fixture.assetName,
+        fixture.warehouseAssetName,
+        "No project - warehouse",
       ]);
       await expectRoute(page, "/assets/new", [
         "Create asset",
         "Asset information",
+        "No project - warehouse",
       ]);
       await expectRoute(page, `/assets/${fixture.assetId}/edit`, [
         "Edit asset",
         "Asset information",
+      ]);
+      await expectRoute(page, `/assets/${fixture.warehouseAssetId}/edit`, [
+        "Edit asset",
+        "Asset information",
+        "No project - warehouse",
       ]);
       await expectRoute(
         page,

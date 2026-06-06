@@ -139,6 +139,40 @@ func TestCreateAssetWithoutTemplate(t *testing.T) {
 	assertField(t, asset, "location", "Warehouse A")
 }
 
+func TestCreateAssetCanBeStoredInWarehouseWithoutProject(t *testing.T) {
+	h := setupIntegrationTest(t)
+
+	asset := createAsset(t, h, map[string]any{
+		"name":             "Warehouse Asset",
+		"photo":            "",
+		"datasheet":        "",
+		"description":      "Stored until project assignment",
+		"status":           "ACTIVE",
+		"location":         "Warehouse A",
+		"assigned_project": "",
+	})
+
+	assertField(t, asset, "assigned_project", "")
+	assertField(t, asset, "location", "Warehouse A")
+}
+
+func TestCreateAssetRejectsUnknownAssignedProject(t *testing.T) {
+	h := setupIntegrationTest(t)
+	missingProjectName := "Project Missing From Table " + uuid.NewString()
+
+	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/asset", map[string]any{
+		"name":             "Unknown Project Asset",
+		"photo":            "",
+		"datasheet":        "",
+		"description":      "Invalid project assignment",
+		"status":           "ACTIVE",
+		"location":         "Warehouse A",
+		"assigned_project": missingProjectName,
+	}, http.StatusBadRequest))
+
+	assertField(t, body, "error", "assigned project must reference an existing project")
+}
+
 func TestSingleAssetEquipmentCreationRegression(t *testing.T) {
 	h := setupIntegrationTest(t)
 
@@ -309,6 +343,7 @@ func TestUpdateAsset(t *testing.T) {
 	})
 
 	assetID := stringField(t, created, "asset_id")
+	ensureIntegrationProject(t, h, "Project Two")
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/asset/"+assetID, map[string]any{
 		"name":             "Updated Asset",
 		"photo":            "",
@@ -324,6 +359,19 @@ func TestUpdateAsset(t *testing.T) {
 	assertField(t, fetched, "description", "After update")
 	assertField(t, fetched, "status", "MAINTENANCE")
 	assertField(t, fetched, "location", "New Yard")
+	assertField(t, fetched, "assigned_project", "Project Two")
+
+	missingProjectName := "Unknown Edit Project " + uuid.NewString()
+	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/asset/"+assetID, map[string]any{
+		"name":             "Updated Asset",
+		"photo":            "",
+		"datasheet":        "",
+		"description":      "After update",
+		"status":           "MAINTENANCE",
+		"location":         "New Yard",
+		"assigned_project": missingProjectName,
+	}, http.StatusBadRequest))
+	assertField(t, body, "error", "assigned project must reference an existing project")
 }
 
 func TestPatchAsset(t *testing.T) {
@@ -340,11 +388,13 @@ func TestPatchAsset(t *testing.T) {
 
 	assetID := stringField(t, created, "asset_id")
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID, map[string]any{
-		"status": "INACTIVE",
+		"status":           "INACTIVE",
+		"assigned_project": "",
 	}, http.StatusOK)
 
 	fetched := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/asset/"+assetID, nil, http.StatusOK))
 	assertField(t, fetched, "status", "INACTIVE")
+	assertField(t, fetched, "assigned_project", "")
 	assertField(t, fetched, "name", "Patchable Asset")
 	assertField(t, fetched, "description", "Patch me")
 }
@@ -1640,10 +1690,37 @@ func createConfiguredTemplate(t *testing.T, h *integrationHarness, categoryID, t
 
 func createAsset(t *testing.T, h *integrationHarness, payload map[string]any) map[string]any {
 	t.Helper()
+	if assignedProject, ok := payload["assigned_project"].(string); ok {
+		ensureIntegrationProject(t, h, assignedProject)
+	}
 	body := unwrapEmbeddedObject(decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/asset", payload, http.StatusCreated)), "asset")
 	stringField(t, body, "display_id")
 	assertUUID(t, stringField(t, body, "asset_id"))
 	return body
+}
+
+func ensureIntegrationProject(t *testing.T, h *integrationHarness, projectName string) {
+	t.Helper()
+
+	trimmedProjectName := strings.TrimSpace(projectName)
+	if trimmedProjectName == "" {
+		return
+	}
+
+	queries := db.New(h.pool)
+	if _, err := queries.GetProjectByName(context.Background(), trimmedProjectName); err == nil {
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("failed to validate integration project %q: %v", trimmedProjectName, err)
+	}
+
+	if _, err := queries.CreateProject(context.Background(), db.CreateProjectParams{
+		ProjectName: trimmedProjectName,
+		Description: "Integration project fixture",
+		Status:      "ACTIVE",
+	}); err != nil {
+		t.Fatalf("failed to create integration project %q: %v", trimmedProjectName, err)
+	}
 }
 
 func createComponent(t *testing.T, h *integrationHarness, payload map[string]any) map[string]any {

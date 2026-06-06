@@ -101,6 +101,22 @@
       "value": ""
     },
     {
+      "key": "project_atlas_id",
+      "value": ""
+    },
+    {
+      "key": "project_manual_id",
+      "value": ""
+    },
+    {
+      "key": "project_manual_2_id",
+      "value": ""
+    },
+    {
+      "key": "warehouse_asset_id",
+      "value": ""
+    },
+    {
       "key": "component_id",
       "value": ""
     },
@@ -1303,6 +1319,36 @@
           ]
         },
         {
+          "name": "Create Project Atlas",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_name\": \"Project Atlas {{runSuffix}}\",\n  \"description\": \"Project row required before assigning templated asset\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/project"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('project_atlas_id', body.project_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create Asset From Template",
           "request": {
             "method": "POST",
@@ -1314,7 +1360,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Templated Asset {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Asset created from configured template\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Yard B\",\n  \"assigned_project\": \"Project Atlas\",\n  \"template_id\": \"{{configured_template_id}}\"\n}"
+              "raw": "{\n  \"name\": \"Templated Asset {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Asset created from configured template\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Yard B\",\n  \"assigned_project\": \"Project Atlas {{runSuffix}}\",\n  \"template_id\": \"{{configured_template_id}}\"\n}"
             },
             "url": "{{baseUrl}}/asset"
           },
@@ -1339,6 +1385,128 @@
       "name": "04 Assets Components Certificates",
       "item": [
         {
+          "name": "Create Project Manual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_name\": \"Project Manual {{runSuffix}}\",\n  \"description\": \"Project row required before assigning manual asset\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/project"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('project_manual_id', body.project_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Project Manual 2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_name\": \"Project Manual 2 {{runSuffix}}\",\n  \"description\": \"Second project row required before reassigning manual asset\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/project"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('project_manual_2_id', body.project_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Warehouse Asset Without Project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Warehouse Asset {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Asset stored in warehouse without project assignment\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Warehouse A\",\n  \"assigned_project\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/asset"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const envelope = pm.response.json();",
+                  "const body = envelope.asset || envelope;",
+                  "pm.expect(body.assigned_project).to.eql('');",
+                  "pm.collectionVariables.set('warehouse_asset_id', body.asset_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject Asset With Unknown Assigned Project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Unknown Project Asset {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Should fail because project is not in projects table\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Warehouse A\",\n  \"assigned_project\": \"Missing Project {{runSuffix}}\"\n}"
+            },
+            "url": "{{baseUrl}}/asset"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(400);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.error).to.eql('assigned project must reference an existing project');"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create Manual Asset",
           "request": {
             "method": "POST",
@@ -1350,7 +1518,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Manual Asset {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Manual asset for CRUD\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Warehouse A\",\n  \"assigned_project\": \"Project Manual\"\n}"
+              "raw": "{\n  \"name\": \"Manual Asset {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Manual asset for CRUD\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Warehouse A\",\n  \"assigned_project\": \"Project Manual {{runSuffix}}\"\n}"
             },
             "url": "{{baseUrl}}/asset"
           },
@@ -1417,7 +1585,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Manual Asset Updated {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Updated manual asset\",\n  \"status\": \"MAINTENANCE\",\n  \"location\": \"Warehouse B\",\n  \"assigned_project\": \"Project Manual 2\"\n}"
+              "raw": "{\n  \"name\": \"Manual Asset Updated {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Updated manual asset\",\n  \"status\": \"MAINTENANCE\",\n  \"location\": \"Warehouse B\",\n  \"assigned_project\": \"Project Manual 2 {{runSuffix}}\"\n}"
             },
             "url": "{{baseUrl}}/asset/{{asset_id}}"
           },
@@ -1428,6 +1596,26 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Manual Asset After Project Reassignment",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/asset/{{asset_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.assigned_project).to.eql(`Project Manual 2 ${pm.collectionVariables.get('runSuffix')}`);"
                 ]
               }
             }
@@ -1445,7 +1633,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+              "raw": "{\n  \"status\": \"ACTIVE\",\n  \"assigned_project\": \"\"\n}"
             },
             "url": "{{baseUrl}}/asset/{{asset_id}}"
           },
@@ -1456,6 +1644,27 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Manual Asset After Warehouse Patch",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/asset/{{asset_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.status).to.eql('ACTIVE');",
+                  "pm.expect(body.assigned_project).to.eql('');"
                 ]
               }
             }
@@ -1473,7 +1682,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n  \"name\": \"Component {{runSuffix}}\",\n  \"serial_number\": \"CMP-{{runSuffix}}\",\n  \"manufacturer\": \"Newman\",\n  \"description\": \"Component for smoke test\",\n  \"location\": \"Deck A\",\n  \"assigned_project\": \"Project Manual\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"CMP-1\",\n  \"class\": \"A\",\n  \"class_code\": \"CMP-A\",\n  \"safety_critical\": \"YES\"\n}"
+              "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n  \"name\": \"Component {{runSuffix}}\",\n  \"serial_number\": \"CMP-{{runSuffix}}\",\n  \"manufacturer\": \"Newman\",\n  \"description\": \"Component for smoke test\",\n  \"location\": \"Deck A\",\n  \"assigned_project\": \"Project Manual {{runSuffix}}\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"CMP-1\",\n  \"class\": \"A\",\n  \"class_code\": \"CMP-A\",\n  \"safety_critical\": \"YES\"\n}"
             },
             "url": "{{baseUrl}}/component"
           },
@@ -1557,7 +1766,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n  \"name\": \"Component Updated {{runSuffix}}\",\n  \"serial_number\": \"CMP-UPD-{{runSuffix}}\",\n  \"manufacturer\": \"Newman\",\n  \"description\": \"Updated component\",\n  \"location\": \"Deck B\",\n  \"assigned_project\": \"Project Manual 2\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"CMP-2\",\n  \"class\": \"B\",\n  \"class_code\": \"CMP-B\",\n  \"safety_critical\": \"NO\"\n}"
+              "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n  \"name\": \"Component Updated {{runSuffix}}\",\n  \"serial_number\": \"CMP-UPD-{{runSuffix}}\",\n  \"manufacturer\": \"Newman\",\n  \"description\": \"Updated component\",\n  \"location\": \"Deck B\",\n  \"assigned_project\": \"Project Manual 2 {{runSuffix}}\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"CMP-2\",\n  \"class\": \"B\",\n  \"class_code\": \"CMP-B\",\n  \"safety_critical\": \"NO\"\n}"
             },
             "url": "{{baseUrl}}/component/{{component_id}}"
           },
@@ -2050,6 +2259,24 @@
           "request": {
             "method": "DELETE",
             "url": "{{baseUrl}}/asset/{{asset_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Warehouse Asset",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/asset/{{warehouse_asset_id}}"
           },
           "event": [
             {

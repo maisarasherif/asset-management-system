@@ -7,7 +7,8 @@
 /fixes
 /postman/*
 /docs/*
-
+rules.md
+codex.md
 
 /design-pocs
 node_modules/

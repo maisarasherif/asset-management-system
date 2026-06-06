@@ -21,6 +21,18 @@ FROM projects
 WHERE project_id = $1
 LIMIT 1;
 
+-- name: GetProjectByName :one
+SELECT
+    project_id,
+    project_name,
+    description,
+    status,
+    created_at,
+    updated_at
+FROM projects
+WHERE LOWER(TRIM(project_name)) = LOWER(TRIM(sqlc.arg(project_name)))
+LIMIT 1;
+
 -- name: CreateProject :one
 INSERT INTO projects (
     project_name,

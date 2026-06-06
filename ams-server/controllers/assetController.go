@@ -21,6 +21,7 @@ import (
 )
 
 var validate = validator.New()
+var errAssignedProjectNotFound = errors.New("assigned project not found")
 
 func GetAssets(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -133,6 +134,12 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 				return
 			}
 
+			assignedProject, err := resolveAssetAssignedProject(ctx, queries, input.AssignedProject)
+			if err != nil {
+				respondToAssignedProjectError(c, err)
+				return
+			}
+
 			asset, err := queries.CreateAssetFromTemplate(ctx, db.CreateAssetFromTemplateParams{
 				Name:                     input.Name,
 				Photo:                    input.Photo,
@@ -140,7 +147,7 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 				Description:              input.Description,
 				Status:                   input.Status,
 				Location:                 input.Location,
-				AssignedProject:          input.AssignedProject,
+				AssignedProject:          assignedProject,
 				TemplateID:               templateID,
 				MaintenanceIntervalHours: assetInputMaintenanceInterval(input),
 			})
@@ -183,6 +190,12 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			defer tx.Rollback(ctx)
 
 			queries := db.New(tx)
+			assignedProject, err := resolveAssetAssignedProject(ctx, queries, input.AssignedProject)
+			if err != nil {
+				respondToAssignedProjectError(c, err)
+				return
+			}
+
 			equipmentTypeID, err := utils.ParseUUID(input.SingleEquipment.EquipmentTypeID, "equipment_type_id")
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -232,7 +245,7 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 				Status:                   input.Status,
 				AssetKind:                assetKind,
 				Location:                 input.Location,
-				AssignedProject:          input.AssignedProject,
+				AssignedProject:          assignedProject,
 				MaintenanceIntervalHours: assetInputMaintenanceInterval(input),
 			})
 			if err != nil {
@@ -255,7 +268,7 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 				Name:                   input.Name,
 				Description:            input.Description,
 				Location:               input.Location,
-				AssignedProject:        input.AssignedProject,
+				AssignedProject:        assignedProject,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add equipment certificate bridge"})
@@ -292,6 +305,12 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		assignedProject, err := resolveAssetAssignedProject(ctx, queries, input.AssignedProject)
+		if err != nil {
+			respondToAssignedProjectError(c, err)
+			return
+		}
+
 		asset, err := queries.CreateAsset(ctx, db.CreateAssetParams{
 			Name:                     input.Name,
 			Photo:                    input.Photo,
@@ -300,7 +319,7 @@ func AddAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			Status:                   input.Status,
 			AssetKind:                assetKind,
 			Location:                 input.Location,
-			AssignedProject:          input.AssignedProject,
+			AssignedProject:          assignedProject,
 			MaintenanceIntervalHours: assetInputMaintenanceInterval(input),
 		})
 		if err != nil {
@@ -349,6 +368,12 @@ func UpdateAsset(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) gin.Hand
 			maintenanceIntervalHours = *input.MaintenanceIntervalHours
 		}
 
+		assignedProject, err := resolveAssetAssignedProject(ctx, queries, input.AssignedProject)
+		if err != nil {
+			respondToAssignedProjectError(c, err)
+			return
+		}
+
 		_, err = queries.UpdateAsset(ctx, db.UpdateAssetParams{
 			Name:                     input.Name,
 			Photo:                    input.Photo,
@@ -356,7 +381,7 @@ func UpdateAsset(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) gin.Hand
 			Description:              input.Description,
 			Status:                   input.Status,
 			Location:                 input.Location,
-			AssignedProject:          input.AssignedProject,
+			AssignedProject:          assignedProject,
 			MaintenanceIntervalHours: maintenanceIntervalHours,
 			AssetID:                  assetID,
 		})
@@ -474,7 +499,12 @@ func PatchAsset(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) gin.Handl
 			location = *input.Location
 		}
 		if input.AssignedProject != nil {
-			assignedProject = *input.AssignedProject
+			resolvedAssignedProject, err := resolveAssetAssignedProject(ctx, queries, *input.AssignedProject)
+			if err != nil {
+				respondToAssignedProjectError(c, err)
+				return
+			}
+			assignedProject = resolvedAssignedProject
 		}
 		if input.MaintenanceIntervalHours != nil {
 			maintenanceIntervalHours = *input.MaintenanceIntervalHours
@@ -587,6 +617,32 @@ func UpdateAssetWorkingHours(pool *pgxpool.Pool, riverClient *river.Client[pgx.T
 			"maintenance_event": event,
 		})
 	}
+}
+
+func resolveAssetAssignedProject(ctx context.Context, queries *db.Queries, assignedProject string) (string, error) {
+	trimmedAssignedProject := strings.TrimSpace(assignedProject)
+	if trimmedAssignedProject == "" {
+		return "", nil
+	}
+
+	project, err := queries.GetProjectByName(ctx, trimmedAssignedProject)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", errAssignedProjectNotFound
+		}
+		return "", err
+	}
+
+	return project.ProjectName, nil
+}
+
+func respondToAssignedProjectError(c *gin.Context, err error) {
+	if errors.Is(err, errAssignedProjectNotFound) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "assigned project must reference an existing project"})
+		return
+	}
+
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate assigned project"})
 }
 
 func GetAssetRoutineMaintenance(pool *pgxpool.Pool) gin.HandlerFunc {

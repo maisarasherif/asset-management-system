@@ -159,7 +159,7 @@ export function AssetsDirectoryPage() {
                       <div className="asset-directory-card__meta">
                         <div className="asset-directory-card__meta-item">
                           <Box variant="awsui-key-label">Assigned project</Box>
-                          <Box>{asset.assigned_project || "Not set"}</Box>
+                          <Box>{asset.assigned_project || "No project - warehouse"}</Box>
                         </div>
                         <div className="asset-directory-card__meta-item">
                           <Box variant="awsui-key-label">Location</Box>
