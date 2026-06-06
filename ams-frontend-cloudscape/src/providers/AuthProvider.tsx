@@ -166,6 +166,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       selectedAssetId,
       isAdmin: session?.role === "ADMIN" || session?.role === "SUPER_ADMIN",
+      isSuperAdmin: session?.role === "SUPER_ADMIN",
 			isClient: session?.role === "CLIENT",
 			isAuthenticated: Boolean(session),
 			isSessionLoading,

@@ -145,7 +145,7 @@ function getHelpPanelContent(pathname: string) {
     return {
       title: "Scheduler management",
       content:
-        "Review certificate notification outcomes, inspect send failures, and clear notification history for a certificate when an administrator needs the scheduler to notify again.",
+        "Review notification jobs, inspect send failures, and run the certificate expiry scheduler manually when the cron schedule should not wait.",
     };
   }
 
@@ -169,7 +169,7 @@ export function AppShellLayout() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { clearAll, items } = useFlashbar();
-  const { isAdmin, isClient, logout, selectedAssetId, session, setSelectedAssetId } = useAuth();
+  const { isAdmin, isClient, isSuperAdmin, logout, selectedAssetId, session, setSelectedAssetId } = useAuth();
   const [navigationOpen, setNavigationOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -250,7 +250,9 @@ export function AppShellLayout() {
           items: [
             { href: "/templates", icon: IconTemplate, text: "Templates" },
             { href: "/catalog", icon: IconCategory2, text: "Catalog" },
-            { href: "/scheduler", icon: IconCalendarTime, text: "Scheduler" },
+            ...(isSuperAdmin
+              ? [{ href: "/scheduler", icon: IconCalendarTime, text: "Scheduler" }]
+              : []),
           ],
         },
         {
@@ -264,7 +266,7 @@ export function AppShellLayout() {
     }
 
     return groups;
-  }, [isAdmin, isClient]);
+  }, [isAdmin, isClient, isSuperAdmin]);
 
   const helpPanel = getHelpPanelContent(location.pathname);
   const activeHref = location.pathname.startsWith("/assets")

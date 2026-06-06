@@ -65,12 +65,6 @@ WHERE source_type = sqlc.arg(source_type)
   AND status != 'SENT'
   AND error_message != '';
 
--- name: DeleteCertificateNotificationDeliveriesByKeyPrefix :execrows
-DELETE FROM notification_deliveries
-WHERE source_type = 'certificate_expiry'
-  AND source_id = sqlc.arg(source_id)
-  AND idempotency_key LIKE sqlc.arg(idempotency_key);
-
 -- name: GetCertificateNotificationDeliveriesPaginated :many
 SELECT
     nd.delivery_id AS task_id,

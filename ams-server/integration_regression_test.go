@@ -737,7 +737,7 @@ func TestCertificateStatusComputation(t *testing.T) {
 	}
 }
 
-func TestCertificateNotificationSchedulerAuditAndReset(t *testing.T) {
+func TestCertificateNotificationSchedulerAudit(t *testing.T) {
 	h := setupIntegrationTest(t)
 	componentID, testID := createComponentFixture(t, h, "Scheduler Notification Component")
 	certificate := createCertificate(t, h, certificatePayload(componentID, testID, 6))
@@ -790,25 +790,18 @@ func TestCertificateNotificationSchedulerAuditAndReset(t *testing.T) {
 	assertField(t, task, "tier", "7d")
 	assertField(t, task, "status", "SENT")
 	assertField(t, task, "external_task_id", "email-message-id")
+}
 
-	reset := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, "/v1/certificates/"+certificateID+"/notifications", nil, http.StatusOK))
-	assertField(t, reset, "message", "notification history cleared; certificate will be re-notified on next scheduler run")
-	assertField(t, reset, "cleared_tasks", 1)
+func TestSchedulerRoutesRequireSuperAdminAndAllowManualRun(t *testing.T) {
+	h := setupIntegrationTest(t)
+	adminToken := createIntegrationUserToken(t, h.pool, "Scheduler", "Admin", "scheduler-admin@example.com", "admin-password", "ADMIN")
 
-	afterReset := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/certificate-notifications?page=1&limit=20", nil, http.StatusOK))
-	if len(dataArray(t, afterReset)) != 0 {
-		t.Fatalf("expected reset to remove certificate notification audit rows, got %v", afterReset)
-	}
+	performJSONRequest(t, h.router, adminToken, http.MethodGet, "/v1/scheduler/certificate-notifications?page=1&limit=20", nil, http.StatusForbidden)
+	performJSONRequest(t, h.router, adminToken, http.MethodPost, "/v1/scheduler/run", nil, http.StatusForbidden)
 
-	if _, err := queries.ClaimNotificationDelivery(context.Background(), db.ClaimNotificationDeliveryParams{
-		SourceType:     utils.NotificationSourceCertificateExpiry,
-		SourceID:       certificateUUID,
-		Channel:        "EMAIL",
-		Tier:           "7d",
-		IdempotencyKey: idempotencyKey,
-	}); err != nil {
-		t.Fatalf("expected reset to allow the same notification delivery to be claimed again: %v", err)
-	}
+	run := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/scheduler/run", nil, http.StatusOK))
+	assertField(t, run, "message", "certificate expiry scheduler run completed")
+	assertField(t, run, "processed_certificates", 0)
 }
 
 func TestCertificateNotificationFailureAudit(t *testing.T) {

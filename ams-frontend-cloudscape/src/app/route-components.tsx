@@ -191,6 +191,24 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   return children;
 }
 
+export function RequireSuperAdmin({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isSessionLoading, isSuperAdmin } = useAuth();
+
+  if (isSessionLoading) {
+    return <AuthCheckPage />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate replace to="/login" />;
+  }
+
+  if (!isSuperAdmin) {
+    return <Navigate replace to="/dashboard" />;
+  }
+
+  return children;
+}
+
 export function GuestOnly({ children }: { children: ReactNode }) {
   const { isAuthenticated, isSessionLoading } = useAuth();
 

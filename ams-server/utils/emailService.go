@@ -349,8 +349,8 @@ func enqueueClickUpNotification(parent context.Context, pool *pgxpool.Pool, rive
 		Msg("certificate expiry ClickUp task enqueued")
 }
 
-func runExpiryCheck(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+func RunExpiryCheck(parent context.Context, pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) (int, error) {
+	ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 	defer cancel()
 
 	queries := db.New(pool)
@@ -371,12 +371,12 @@ func runExpiryCheck(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) {
 	certificates, err := queries.GetExpiringCertificatesWithContext(ctx, &thresholdDate)
 	if err != nil {
 		logger.Log.Error().Err(err).Msg("failed to fetch expiring certificates")
-		return
+		return 0, err
 	}
 
 	if len(certificates) == 0 {
 		logger.Log.Info().Msg("no expiring certificates found")
-		return
+		return 0, nil
 	}
 
 	logger.Log.Info().
@@ -384,7 +384,15 @@ func runExpiryCheck(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) {
 		Msg("found expiring certificates, processing notifications")
 
 	for _, cert := range certificates {
-		notifyExpiring(context.Background(), pool, riverClient, cert, recipientEmail, recipientName)
+		notifyExpiring(ctx, pool, riverClient, cert, recipientEmail, recipientName)
+	}
+
+	return len(certificates), nil
+}
+
+func runExpiryCheck(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) {
+	if _, err := RunExpiryCheck(context.Background(), pool, riverClient); err != nil {
+		logger.Log.Error().Err(err).Msg("certificate expiry check failed")
 	}
 }
 

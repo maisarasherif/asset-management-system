@@ -5,29 +5,22 @@ import {
   Button,
   Container,
   ContentLayout,
-  FormField,
   Header,
-  Modal,
   SpaceBetween,
   Table,
-  type SelectProps,
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { Select } from "../../components/shared/OptimizedSelect";
 import { TableCellText } from "../../components/shared/TableCells";
 import {
-  forceRenotifyCertificate,
   listAllCertificateNotificationFailures,
   listAllCertificateNotificationTasks,
-  listAllCertificatesWithContext,
+  runCertificateExpiryScheduler,
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type {
   CertificateNotificationFailure,
   CertificateNotificationTask,
-  CertificateWithContext,
   NotificationSourceType,
   NotificationStatus,
   NotificationTier,
@@ -52,15 +45,6 @@ function tierBadge(tier: NotificationTier) {
 function sourceBadge(sourceType: NotificationSourceType) {
   const color = sourceType === "certificate_expiry" ? "blue" : "grey";
   return <Badge color={color}>{humanizeEnum(sourceType)}</Badge>;
-}
-
-function certificateLabel(certificate: Pick<CertificateWithContext, "certificate_display_id" | "certificate_name" | "asset_display_id" | "asset_name">) {
-  return `${certificate.certificate_display_id} - ${certificate.certificate_name}`;
-}
-
-function certificateDescription(certificate: Pick<CertificateWithContext, "asset_display_id" | "asset_name" | "component_name" | "expiry_date">) {
-  const expiry = certificate.expiry_date ? formatDateTime(certificate.expiry_date) : "No expiry date";
-  return `${certificate.asset_display_id} - ${certificate.asset_name} / ${certificate.component_name} / ${expiry}`;
 }
 
 function notificationSourceLabel(
@@ -97,13 +81,7 @@ function copyableKey(key: string) {
 export function SchedulerManagementPage() {
   const queryClient = useQueryClient();
   const { error, success } = useFlashbar();
-  const [selectedCertificateId, setSelectedCertificateId] = useState("");
-  const [confirmReset, setConfirmReset] = useState(false);
 
-  const certificatesQuery = useQuery({
-    queryKey: ["certificates-with-context", "all"],
-    queryFn: listAllCertificatesWithContext,
-  });
   const tasksQuery = useQuery({
     queryKey: ["certificate-notification-tasks", "all"],
     queryFn: listAllCertificateNotificationTasks,
@@ -113,38 +91,18 @@ export function SchedulerManagementPage() {
     queryFn: listAllCertificateNotificationFailures,
   });
 
-  const certificateOptions = useMemo<SelectProps.Option[]>(
-    () =>
-      (certificatesQuery.data || []).map((certificate) => ({
-        label: certificateLabel(certificate),
-        value: certificate.certificate_id,
-        description: certificateDescription(certificate),
-      })),
-    [certificatesQuery.data]
-  );
-
-  const selectedCertificate = useMemo(
-    () =>
-      (certificatesQuery.data || []).find(
-        (certificate) => certificate.certificate_id === selectedCertificateId
-      ) || null,
-    [certificatesQuery.data, selectedCertificateId]
-  );
-  const selectedOption =
-    certificateOptions.find((option) => option.value === selectedCertificateId) ?? null;
-
-  const resetMutation = useMutation({
-    mutationFn: forceRenotifyCertificate,
+  const runMutation = useMutation({
+    mutationFn: runCertificateExpiryScheduler,
     onSuccess: async (response) => {
       await queryClient.invalidateQueries({ queryKey: ["certificate-notification-tasks"] });
-      setConfirmReset(false);
+      await queryClient.invalidateQueries({ queryKey: ["certificate-notification-failures"] });
       success(
-        "Notification history cleared",
-        `${response.cleared_tasks} notification slot${response.cleared_tasks === 1 ? "" : "s"} cleared.`
+        "Scheduler run completed",
+        `${response.processed_certificates} certificate${response.processed_certificates === 1 ? "" : "s"} processed.`
       );
     },
     onError: (mutationError: Error) => {
-      error("Reset failed", mutationError.message);
+      error("Scheduler run failed", mutationError.message);
     },
   });
 
@@ -290,27 +248,35 @@ export function SchedulerManagementPage() {
     },
   ];
 
-  const isInitialLoading =
-    certificatesQuery.isLoading || tasksQuery.isLoading || failuresQuery.isLoading;
-  const hasLoadError = certificatesQuery.isError || tasksQuery.isError || failuresQuery.isError;
+  const isInitialLoading = tasksQuery.isLoading || failuresQuery.isLoading;
+  const hasLoadError = tasksQuery.isError || failuresQuery.isError;
 
   return (
     <ContentLayout
       header={
         <Header
           variant="h1"
-          description="Review notification jobs, inspect failure history, and clear a certificate's expiry notification history."
+          description="Review notification jobs, inspect failure history, and run the certificate expiry scheduler manually when needed."
           actions={
-            <Button
-              iconName="refresh"
-              loading={tasksQuery.isFetching || failuresQuery.isFetching}
-              onClick={() => {
-                void tasksQuery.refetch();
-                void failuresQuery.refetch();
-              }}
-            >
-              Refresh
-            </Button>
+            <SpaceBetween direction="horizontal" size="xs">
+              <Button
+                iconName="refresh"
+                loading={tasksQuery.isFetching || failuresQuery.isFetching}
+                onClick={() => {
+                  void tasksQuery.refetch();
+                  void failuresQuery.refetch();
+                }}
+              >
+                Refresh
+              </Button>
+              <Button
+                loading={runMutation.isPending}
+                variant="primary"
+                onClick={() => runMutation.mutate()}
+              >
+                Run scheduler now
+              </Button>
+            </SpaceBetween>
           }
         >
           Scheduler management
@@ -321,49 +287,6 @@ export function SchedulerManagementPage() {
         {hasLoadError ? (
           <Alert type="error">Scheduler data could not be loaded. Refresh the page or try again later.</Alert>
         ) : null}
-
-        <Container
-          header={
-            <Header
-              variant="h2"
-              actions={
-                <Button
-                  variant="primary"
-                  disabled={!selectedCertificateId}
-                  onClick={() => setConfirmReset(true)}
-                >
-                  Clear notification history
-                </Button>
-              }
-            >
-              Force re-notify
-            </Header>
-          }
-        >
-          <SpaceBetween size="m">
-            <FormField
-              label="Certificate"
-              description="Clearing history removes certificate expiry notification slots for the selected certificate. The next scheduler run can send the matching expiry-tier notifications again."
-              stretch
-            >
-              <Select
-                ariaLabel="Select certificate"
-                disabled={certificatesQuery.isLoading || certificateOptions.length === 0}
-                loadingText="Loading certificates"
-                options={certificateOptions}
-                placeholder="Select a certificate"
-                selectedOption={selectedOption}
-                statusType={certificatesQuery.isLoading ? "loading" : "finished"}
-                onChange={({ detail }) => setSelectedCertificateId(detail.selectedOption.value || "")}
-              />
-            </FormField>
-            {selectedCertificate ? (
-              <Box color="text-body-secondary">
-                {certificateDescription(selectedCertificate)}
-              </Box>
-            ) : null}
-          </SpaceBetween>
-        </Container>
 
         <Container
           header={
@@ -392,7 +315,7 @@ export function SchedulerManagementPage() {
         >
           <Table
             columnDefinitions={failureColumns}
-            empty={<Box color="text-body-secondary">No failed certificate notifications have been recorded.</Box>}
+            empty={<Box color="text-body-secondary">No failed notification jobs have been recorded.</Box>}
             items={failuresQuery.data || []}
             loading={isInitialLoading}
             loadingText="Loading failure audit"
@@ -401,35 +324,6 @@ export function SchedulerManagementPage() {
           />
         </Container>
       </SpaceBetween>
-
-      <Modal
-        visible={confirmReset}
-        header="Clear notification history"
-        onDismiss={() => setConfirmReset(false)}
-        footer={
-          <SpaceBetween direction="horizontal" size="xs">
-            <Button onClick={() => setConfirmReset(false)}>Cancel</Button>
-            <Button
-              loading={resetMutation.isPending}
-              variant="primary"
-              onClick={() => selectedCertificateId && resetMutation.mutate(selectedCertificateId)}
-            >
-              Clear history
-            </Button>
-          </SpaceBetween>
-        }
-      >
-        <SpaceBetween size="s">
-          <Box>
-            {selectedCertificate
-              ? certificateLabel(selectedCertificate)
-              : "The selected certificate"} will be eligible for notification again on the next scheduler run.
-          </Box>
-          <Alert type="warning">
-            Certificate expiry audit and failure rows for this certificate are cleared.
-          </Alert>
-        </SpaceBetween>
-      </Modal>
     </ContentLayout>
   );
 }

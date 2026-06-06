@@ -26,6 +26,14 @@
 - When asset assignment affects a focused Newman/Postman collection, include both project-backed assets and no-project/warehouse assets in that same collection.
 - If a Newman failure leaves downstream URLs with blank IDs, fix the first failed setup request instead of chasing the later blank-ID failures.
 
+## Scheduler and Notification Jobs
+
+- Treat notification configuration skips as auditable outcomes when the feature has a delivery audit surface; do not hide skipped email or ClickUp work in logs only.
+- When `notification_deliveries` is used by multiple sources, preserve `source_type`, `source_id`, and readable source context in API/UI audit responses instead of assuming every row is certificate-backed.
+- Keep scheduler UI copy aligned with actual destructive behavior. If a reset deletes failed rows as well as successful rows, say that directly.
+- After changing SQLC query files, run `sqlc generate` and keep the generated query layer in sync with the source SQL.
+- If a frontend build updates generated cache metadata such as TypeScript build info, do not include that metadata in the feature diff unless it is intentionally part of the change.
+
 ## Manual Regression Testing
 
 After every feature update, the user will manually run the following regression tests later and report the results back.

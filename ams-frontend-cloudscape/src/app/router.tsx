@@ -21,6 +21,7 @@ import {
   GuestOnly,
   RequireAdmin,
   RequireAuth,
+  RequireSuperAdmin,
   RouteSuspense,
   ResetPasswordPage,
   SchedulerManagementPage,
@@ -268,11 +269,11 @@ export const router = createBrowserRouter([
       {
         path: "scheduler",
         element: (
-          <RequireAdmin>
+          <RequireSuperAdmin>
             <RouteSuspense>
               <SchedulerManagementPage />
             </RouteSuspense>
-          </RequireAdmin>
+          </RequireSuperAdmin>
         ),
       },
       {

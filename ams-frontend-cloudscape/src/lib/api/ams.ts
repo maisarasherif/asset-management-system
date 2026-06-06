@@ -38,7 +38,6 @@ import type {
   ProjectInput,
   MainCategoryInput,
   ComponentRecord,
-  ForceRenotifyResponse,
   ForgotPasswordInput,
   LoginResponse,
   MainCategory,
@@ -51,6 +50,7 @@ import type {
 	  TestTypeInput,
 	  TestType,
   SingleAssetEquipment,
+  SchedulerRunResponse,
   ResetPasswordInput,
   UpdatePasswordInput,
   UpdateUserInput,
@@ -770,9 +770,9 @@ export function listAllCertificateNotificationFailures() {
   return fetchAllPages((page) => listCertificateNotificationFailures(page));
 }
 
-export function forceRenotifyCertificate(certificateId: string) {
-  return apiRequest<ForceRenotifyResponse>(`/v1/certificates/${certificateId}/notifications`, {
-    method: "DELETE",
+export function runCertificateExpiryScheduler() {
+  return apiRequest<SchedulerRunResponse>("/v1/scheduler/run", {
+    method: "POST",
   });
 }
 

@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
+	"github.com/riverqueue/river"
 )
 
 func GetCertificateNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
@@ -130,6 +132,21 @@ func GetCertificateNotificationFailures(pool *pgxpool.Pool) gin.HandlerFunc {
 		c.JSON(http.StatusOK, dto.PaginatedResponse{
 			Data: response,
 			Meta: utils.BuildMeta(query, total),
+		})
+	}
+}
+
+func RunCertificateExpiryScheduler(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		processed, err := utils.RunExpiryCheck(c.Request.Context(), pool, riverClient)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to run certificate expiry scheduler"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":                "certificate expiry scheduler run completed",
+			"processed_certificates": processed,
 		})
 	}
 }

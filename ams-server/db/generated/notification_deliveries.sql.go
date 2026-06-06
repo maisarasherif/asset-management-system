@@ -127,26 +127,6 @@ func (q *Queries) CountUnresolvedNotificationDeliveryErrors(ctx context.Context,
 	return count, err
 }
 
-const deleteCertificateNotificationDeliveriesByKeyPrefix = `-- name: DeleteCertificateNotificationDeliveriesByKeyPrefix :execrows
-DELETE FROM notification_deliveries
-WHERE source_type = 'certificate_expiry'
-  AND source_id = $1
-  AND idempotency_key LIKE $2
-`
-
-type DeleteCertificateNotificationDeliveriesByKeyPrefixParams struct {
-	SourceID       uuid.UUID `json:"source_id"`
-	IdempotencyKey string    `json:"idempotency_key"`
-}
-
-func (q *Queries) DeleteCertificateNotificationDeliveriesByKeyPrefix(ctx context.Context, arg DeleteCertificateNotificationDeliveriesByKeyPrefixParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteCertificateNotificationDeliveriesByKeyPrefix, arg.SourceID, arg.IdempotencyKey)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const getCertificateNotificationDeliveriesPaginated = `-- name: GetCertificateNotificationDeliveriesPaginated :many
 SELECT
     nd.delivery_id AS task_id,

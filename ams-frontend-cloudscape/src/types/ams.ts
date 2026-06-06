@@ -216,8 +216,8 @@ export interface CertificateNotificationFailure {
   failed_at: string;
 }
 
-export interface ForceRenotifyResponse extends MessageResponse {
-  cleared_tasks: number;
+export interface SchedulerRunResponse extends MessageResponse {
+  processed_certificates: number;
 }
 
 export interface Category {

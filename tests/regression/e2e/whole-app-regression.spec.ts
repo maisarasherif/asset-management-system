@@ -601,6 +601,7 @@ test.describe("whole app regression", () => {
       ]);
       await expectRoute(page, "/scheduler", [
         "Scheduler management",
+        "Run scheduler now",
         "Job audit",
       ]);
       await expectRoute(page, "/account", ["Account", ADMIN_EMAIL!]);

@@ -3,7 +3,6 @@ import {
   request as playwrightRequest,
   test,
   type APIRequestContext,
-  type Page,
 } from "@playwright/test";
 
 const API_BASE_URL = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8080/v1";
@@ -45,10 +44,6 @@ interface CreatedComponent {
 
 interface CreatedCertificate {
   certificate_id: string;
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function loginApi(request: APIRequestContext) {
@@ -103,28 +98,13 @@ async function deleteIfPresent(request: APIRequestContext, token: string, path: 
   expect([200, 404]).toContain(response.status());
 }
 
-async function selectCertificate(page: Page, certificateName: string) {
-  await page.getByRole("button", { name: "Certificate Select" }).click();
-
-  const optionByRole = page.getByRole("option", {
-    name: new RegExp(escapeRegExp(certificateName)),
-  });
-
-  if ((await optionByRole.count()) > 0) {
-    await optionByRole.first().click();
-    return;
-  }
-
-  await page.getByText(certificateName).last().click();
-}
-
 test.describe("scheduler management flow", () => {
   test.skip(
     !ADMIN_EMAIL || !ADMIN_PASSWORD,
     "Set PLAYWRIGHT_ADMIN_EMAIL and PLAYWRIGHT_ADMIN_PASSWORD to run E2E tests."
   );
 
-  test("admin can inspect scheduler audit tables and clear notification history", async ({
+  test("super admin can inspect scheduler audit tables and run the scheduler", async ({
     page,
   }) => {
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -256,19 +236,12 @@ test.describe("scheduler management flow", () => {
 
       await page.goto("/scheduler");
       await expect(page.getByRole("heading", { name: "Scheduler management" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Force re-notify" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Run scheduler now" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Job audit" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Failure audit" })).toBeVisible();
 
-      await selectCertificate(page, certificateName);
-      await page.getByRole("button", { name: "Clear notification history" }).click();
-
-      const dialog = page.getByRole("dialog", { name: "Clear notification history" });
-      await expect(dialog).toBeVisible();
-      await expect(dialog.getByText(certificateName)).toBeVisible();
-      await dialog.getByRole("button", { name: "Clear history" }).click();
-
-      await expect(page.getByText("Notification history cleared")).toBeVisible();
+      await page.getByRole("button", { name: "Run scheduler now" }).click();
+      await expect(page.getByText("Scheduler run completed")).toBeVisible();
     } finally {
       if (assetId) {
         await deleteIfPresent(setupRequest, token, `/asset/${assetId}`);

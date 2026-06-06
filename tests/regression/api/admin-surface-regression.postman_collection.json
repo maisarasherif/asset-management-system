@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "73e7e3a8-9a54-4e41-b551-8bf27a8c6a71",
     "name": "AMS Admin Surface Regression",
-    "description": "Newman regression for current admin-only surfaces that support the Cloudscape Administration, Client access, Catalog equipment, and Scheduler management screens.",
+    "description": "Newman regression for current admin and super-admin surfaces that support the Cloudscape Administration, Client access, Catalog equipment, and Scheduler management screens.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -503,7 +503,22 @@
       }]
     },
     {
-      "name": "25 Delete Equipment Type",
+      "name": "25 Run Scheduler Now",
+      "request": { "method": "POST", "url": "{{baseUrl}}/scheduler/run" },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('scheduler manual run succeeds', function () {",
+          "  pm.response.to.have.status(200);",
+          "  const body = pm.response.json();",
+          "  pm.expect(body.message).to.eql('certificate expiry scheduler run completed');",
+          "  pm.expect(body.processed_certificates).to.be.a('number');",
+          "});"
+        ] }
+      }]
+    },
+    {
+      "name": "26 Delete Equipment Type",
       "request": { "method": "DELETE", "url": "{{baseUrl}}/equipment-type/{{equipment_type_id}}" },
       "event": [{
         "listen": "test",

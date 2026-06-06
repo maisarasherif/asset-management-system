@@ -28,8 +28,6 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	admin.PUT("/user/:user_id/password", controller.AdminUpdateUserPassword(pool))
 	admin.DELETE("/user/:user_id", controller.DeleteUser(pool))
 	admin.GET("/user-management-audit-logs", controller.GetUserManagementAuditLogs(pool))
-	admin.GET("/scheduler/certificate-notifications", controller.GetCertificateNotificationTasks(pool))
-	admin.GET("/scheduler/notification-failures", controller.GetCertificateNotificationFailures(pool))
 	admin.GET("/projects", controller.GetProjects(pool))
 	admin.POST("/project", controller.AddProject(pool))
 	admin.PUT("/project/:project_id", controller.UpdateProject(pool))
@@ -58,7 +56,6 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	admin.PATCH("/certificate/:certificate_id", controller.PatchCertificate(pool))
 	admin.DELETE("/certificate/:certificate_id", controller.DeleteCertificate(pool))
 	admin.POST("/certificate/:certificate_id/file", controller.UploadCertificateFile(pool))
-	admin.DELETE("/certificates/:certificate_id/notifications", controller.ForceRenotifyCertificate(pool))
 
 	// Main Category Routes
 	admin.POST("/main-category", controller.AddMainCategory(pool))
@@ -197,6 +194,16 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	client.GET("/assets", controller.GetClientAssets(pool))
 	client.GET("/asset/:asset_id", controller.GetClientAsset(pool))
 	client.GET("/certificate/:certificate_id/file", controller.GetClientCertificateFile(pool))
+
+	scheduler := router.Group("/v1")
+	scheduler.Use(
+		middleware.AuthMiddleware(),
+		middleware.ActiveUserMiddleware(pool),
+		middleware.SuperAdminMiddleware(),
+	)
+	scheduler.GET("/scheduler/certificate-notifications", controller.GetCertificateNotificationTasks(pool))
+	scheduler.GET("/scheduler/notification-failures", controller.GetCertificateNotificationFailures(pool))
+	scheduler.POST("/scheduler/run", controller.RunCertificateExpiryScheduler(pool, riverClient))
 
 	if riverUIHandler != nil {
 		jobs := router.Group("/v1/admin/jobs")

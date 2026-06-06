@@ -3,8 +3,9 @@ import type { AuthSession } from "../types/ams";
 
 export interface AuthContextValue {
   session: AuthSession | null;
-  selectedAssetId: string | null;
+	selectedAssetId: string | null;
 	isAdmin: boolean;
+	isSuperAdmin: boolean;
 	isClient: boolean;
 	isAuthenticated: boolean;
 	isSessionLoading: boolean;

@@ -2180,6 +2180,79 @@
           ]
         },
         {
+          "name": "Run Scheduler Now",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/scheduler/run"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.message).to.eql('certificate expiry scheduler run completed');",
+                  "pm.expect(body.processed_certificates).to.be.a('number');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Scheduler Job Audit",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/scheduler/certificate-notifications?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.data).to.be.an('array');",
+                  "pm.expect(body.meta).to.be.an('object');",
+                  "body.data.forEach((item) => {",
+                  "  pm.expect(item).to.have.property('source_type');",
+                  "  pm.expect(item).to.have.property('source_id');",
+                  "  pm.expect(item).to.have.property('source_name');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Scheduler Failure Audit",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/scheduler/notification-failures?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.data).to.be.an('array');",
+                  "pm.expect(body.meta).to.be.an('object');",
+                  "body.data.forEach((item) => {",
+                  "  pm.expect(item).to.have.property('source_type');",
+                  "  pm.expect(item).to.have.property('source_id');",
+                  "  pm.expect(item).to.have.property('source_name');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Get Spun-Up Components By Asset",
           "request": {
             "method": "GET",
