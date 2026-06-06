@@ -53,6 +53,18 @@
       "value": ""
     },
     {
+      "key": "warehouseAssetName",
+      "value": ""
+    },
+    {
+      "key": "singleProjectName",
+      "value": ""
+    },
+    {
+      "key": "single_project_id",
+      "value": ""
+    },
+    {
       "key": "equipment_type_id",
       "value": ""
     },
@@ -69,7 +81,15 @@
       "value": ""
     },
     {
+      "key": "warehouse_asset_id",
+      "value": ""
+    },
+    {
       "key": "self_component_id",
+      "value": ""
+    },
+    {
+      "key": "warehouse_self_component_id",
       "value": ""
     },
     {
@@ -113,6 +133,8 @@
           "pm.collectionVariables.set('visualTestName', `Newman Single Visual ${suffix}`);",
           "pm.collectionVariables.set('loadTestName', `Newman Single Load ${suffix}`);",
           "pm.collectionVariables.set('assetName', `Newman Single Equipment Asset ${suffix}`);",
+          "pm.collectionVariables.set('warehouseAssetName', `Newman Warehouse Single Equipment Asset ${suffix}`);",
+          "pm.collectionVariables.set('singleProjectName', `Newman Single Project ${suffix}`);",
           "pm.collectionVariables.set('mainCategoryName', `Newman Single Main ${suffix}`);",
           "pm.collectionVariables.set('categoryName', `Newman Single Category ${suffix}`);"
         ]
@@ -414,7 +436,7 @@
       ]
     },
     {
-      "name": "05 Create Single Equipment Asset",
+      "name": "10 Create Single Equipment Project",
       "request": {
         "method": "POST",
         "header": [
@@ -425,7 +447,41 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"{{assetName}}\",\n  \"status\": \"ACTIVE\",\n  \"asset_kind\": \"SINGLE_EQUIPMENT\",\n  \"location\": \"Newman Yard\",\n  \"assigned_project\": \"Newman Project\",\n  \"description\": \"Created by Newman to verify single-asset equipment.\",\n  \"single_equipment\": {\n    \"equipment_type_id\": \"{{equipment_type_id}}\",\n    \"test_type_ids\": [\"{{visual_test_id}}\", \"{{load_test_id}}\", \"{{visual_test_id}}\"]\n  }\n}"
+          "raw": "{\n  \"project_name\": \"{{singleProjectName}}\",\n  \"description\": \"Created by Newman for single-asset equipment regression.\",\n  \"status\": \"ACTIVE\"\n}"
+        },
+        "url": "{{baseUrl}}/project"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('single-equipment project is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.project_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(body.project_name).to.eql(pm.collectionVariables.get('singleProjectName'));",
+              "  pm.collectionVariables.set('single_project_id', body.project_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Create Project Single Equipment Asset",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{assetName}}\",\n  \"status\": \"ACTIVE\",\n  \"asset_kind\": \"SINGLE_EQUIPMENT\",\n  \"location\": \"Newman Yard\",\n  \"assigned_project\": \"{{singleProjectName}}\",\n  \"description\": \"Created by Newman to verify project-assigned single-asset equipment.\",\n  \"single_equipment\": {\n    \"equipment_type_id\": \"{{equipment_type_id}}\",\n    \"test_type_ids\": [\"{{visual_test_id}}\", \"{{load_test_id}}\", \"{{visual_test_id}}\"]\n  }\n}"
         },
         "url": "{{baseUrl}}/asset"
       },
@@ -440,6 +496,7 @@
               "  const body = pm.response.json();",
               "  pm.expect(body.asset_id).to.match(/^[0-9a-f-]{36}$/i);",
               "  pm.expect(body.asset_kind).to.eql('SINGLE_EQUIPMENT');",
+              "  pm.expect(body.assigned_project).to.eql(pm.collectionVariables.get('singleProjectName'));",
               "  pm.collectionVariables.set('asset_id', body.asset_id);",
               "});"
             ]
@@ -448,7 +505,7 @@
       ]
     },
     {
-      "name": "06 Read Single Equipment Context",
+      "name": "12 Read Project Single Equipment Context",
       "request": {
         "method": "GET",
         "header": [],
@@ -473,7 +530,7 @@
       ]
     },
     {
-      "name": "07 Self Component Is Only Component",
+      "name": "13 Project Self Component Is Only Component",
       "request": {
         "method": "GET",
         "header": [],
@@ -499,7 +556,7 @@
       ]
     },
     {
-      "name": "08 Certificate Slots Are Created Once",
+      "name": "14 Project Certificate Slots Are Created Once",
       "request": {
         "method": "GET",
         "header": [],
@@ -525,7 +582,120 @@
       ]
     },
     {
-      "name": "09 Manual Component Is Rejected",
+      "name": "15 Create Warehouse Single Equipment Asset",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{warehouseAssetName}}\",\n  \"status\": \"ACTIVE\",\n  \"asset_kind\": \"SINGLE_EQUIPMENT\",\n  \"location\": \"Newman Warehouse\",\n  \"assigned_project\": \"\",\n  \"description\": \"Created by Newman to verify warehouse single-asset equipment.\",\n  \"single_equipment\": {\n    \"equipment_type_id\": \"{{equipment_type_id}}\",\n    \"test_type_ids\": [\"{{visual_test_id}}\", \"{{load_test_id}}\", \"{{visual_test_id}}\"]\n  }\n}"
+        },
+        "url": "{{baseUrl}}/asset"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('warehouse single-equipment asset is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.asset_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(body.asset_kind).to.eql('SINGLE_EQUIPMENT');",
+              "  pm.expect(body.assigned_project).to.eql('');",
+              "  pm.collectionVariables.set('warehouse_asset_id', body.asset_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 Read Warehouse Single Equipment Context",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/asset/{{warehouse_asset_id}}/single-equipment"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('warehouse single-equipment context points to equipment type and self component', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.equipment_type_id).to.eql(pm.collectionVariables.get('equipment_type_id'));",
+              "  pm.expect(body.self_component_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.collectionVariables.set('warehouse_self_component_id', body.self_component_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 Warehouse Self Component Is Only Component",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/components/asset/{{warehouse_asset_id}}?page=1&limit=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('warehouse asset has exactly one category-less self component', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.data).to.have.length(1);",
+              "  pm.expect(body.data[0].component_id).to.eql(pm.collectionVariables.get('warehouse_self_component_id'));",
+              "  pm.expect(body.data[0].component_kind).to.eql('SELF');",
+              "  pm.expect(body.data[0].category_id).to.eql(null);",
+              "  pm.expect(body.data[0].assigned_project).to.eql('');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 Warehouse Certificate Slots Are Created Once",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/certificates/component/{{warehouse_self_component_id}}?page=1&limit=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('warehouse certificate slots are unique and pending', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.data).to.have.length(2);",
+              "  const names = body.data.map((certificate) => certificate.certificate_name).sort();",
+              "  pm.expect(names).to.eql([pm.collectionVariables.get('loadTestName'), pm.collectionVariables.get('visualTestName')].sort());",
+              "  pm.expect(body.data.every((certificate) => certificate.status === 'PENDING')).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 Manual Component Is Rejected",
       "request": {
         "method": "POST",
         "header": [
@@ -557,7 +727,7 @@
       ]
     },
     {
-      "name": "10 Equipment Type Delete Is Blocked While Assigned",
+      "name": "20 Equipment Type Delete Is Blocked While Assigned",
       "request": {
         "method": "DELETE",
         "header": [],
@@ -578,7 +748,7 @@
       ]
     },
     {
-      "name": "11 Delete Asset",
+      "name": "21 Delete Project Single Equipment Asset",
       "request": {
         "method": "DELETE",
         "header": [],
@@ -591,6 +761,25 @@
             "type": "text/javascript",
             "exec": [
               "pm.test('asset cleanup succeeds', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 Delete Warehouse Single Equipment Asset",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/asset/{{warehouse_asset_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('warehouse asset cleanup succeeds', function () { pm.response.to.have.status(200); });"
             ]
           }
         }
@@ -677,7 +866,7 @@
       ]
     },
     {
-      "name": "12 Delete Equipment Type",
+      "name": "23 Delete Equipment Type",
       "request": {
         "method": "DELETE",
         "header": [],
@@ -696,7 +885,7 @@
       ]
     },
     {
-      "name": "13 Delete Visual Test Type",
+      "name": "24 Delete Visual Test Type",
       "request": {
         "method": "DELETE",
         "header": [],
@@ -715,7 +904,7 @@
       ]
     },
     {
-      "name": "14 Delete Load Test Type",
+      "name": "25 Delete Load Test Type",
       "request": {
         "method": "DELETE",
         "header": [],
