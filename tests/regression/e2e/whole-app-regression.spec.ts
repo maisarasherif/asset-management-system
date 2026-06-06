@@ -455,14 +455,21 @@ async function expectRoute(
   }
 }
 
-async function expectOversizeCertificateUploadGuard(page: Page) {
+async function expectOversizeCertificateUploadGuard(
+  page: Page,
+  options: { expectFileNameCleared?: boolean } = {},
+) {
+  const fileName = "oversized-certificate.pdf";
   await page.locator('input[type="file"]').setInputFiles({
-    name: "oversized-certificate.pdf",
+    name: fileName,
     mimeType: "application/pdf",
     buffer: Buffer.alloc(10 * 1024 * 1024 + 1, 65),
   });
 
   await expectVisibleText(page, "Certificate file must be 10 MB or smaller.");
+  if (options.expectFileNameCleared) {
+    await expect(page.getByText(fileName)).toHaveCount(0);
+  }
 }
 
 test.describe("whole app regression", () => {
@@ -528,6 +535,9 @@ test.describe("whole app regression", () => {
         `/assets/${fixture.assetId}/components/${fixture.componentId}/certificates/${fixture.certificateId}`,
         [fixture.certificateName, "Certificate summary"],
       );
+      await expectOversizeCertificateUploadGuard(page, {
+        expectFileNameCleared: true,
+      });
       await expectRoute(
         page,
         `/assets/${fixture.assetId}/components/${fixture.componentId}/certificates/${fixture.certificateId}/edit`,

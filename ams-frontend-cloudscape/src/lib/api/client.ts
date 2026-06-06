@@ -17,16 +17,15 @@ interface RequestOptions {
   responseMode?: ResponseMode;
 }
 
-const API_BASE_URL = (
-	import.meta.env.VITE_API_BASE_URL || ""
-).replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(
+  /\/$/,
+  "",
+);
 
 let unauthorizedHandler: (() => void) | null = null;
 
-export function configureApiClient(config: {
-	onUnauthorized: () => void;
-}) {
-	unauthorizedHandler = config.onUnauthorized;
+export function configureApiClient(config: { onUnauthorized: () => void }) {
+  unauthorizedHandler = config.onUnauthorized;
 }
 
 async function parseBody(response: Response): Promise<unknown> {
@@ -43,25 +42,37 @@ async function parseBody(response: Response): Promise<unknown> {
   return null;
 }
 
+function looksLikeHtml(value: string) {
+  return /^\s*</.test(value) || /<html[\s>]/i.test(value);
+}
+
+function fallbackErrorMessage(status: number) {
+  if (status === 413) {
+    return "The uploaded file is too large. Choose a smaller file and try again.";
+  }
+
+  return `Request failed (${status})`;
+}
+
 export async function apiRequest<T>(
   path: string,
   init: RequestInit = {},
-  options: RequestOptions = {}
+  options: RequestOptions = {},
 ): Promise<T> {
   const auth = options.auth ?? true;
   const responseMode = options.responseMode ?? "json";
-	const headers = new Headers(init.headers);
-	const body = init.body;
+  const headers = new Headers(init.headers);
+  const body = init.body;
 
-	if (body && !(body instanceof FormData) && !headers.has("Content-Type")) {
-		headers.set("Content-Type", "application/json");
-	}
+  if (body && !(body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
-	const response = await fetch(`${API_BASE_URL}${path}`, {
-		...init,
-		credentials: "include",
-		headers,
-	});
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers,
+  });
 
   if (response.status === 401 && auth) {
     unauthorizedHandler?.();
@@ -77,8 +88,10 @@ export async function apiRequest<T>(
       typeof errorBody.error === "string"
         ? errorBody.error
         : null) ||
-      (typeof errorBody === "string" ? errorBody : null) ||
-      `Request failed (${response.status})`;
+      (typeof errorBody === "string" && !looksLikeHtml(errorBody)
+        ? errorBody
+        : null) ||
+      fallbackErrorMessage(response.status);
 
     throw new ApiError(message, response.status, errorBody);
   }

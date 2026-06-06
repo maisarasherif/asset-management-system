@@ -28,6 +28,7 @@ import {
   patchCertificate,
   uploadCertificateFile,
 } from "../../lib/api/ams";
+import { ApiError } from "../../lib/api/client";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { Select } from "../../components/shared/OptimizedSelect";
 import { TableCellText } from "../../components/shared/TableCells";
@@ -63,8 +64,13 @@ function addMonths(dateValue: string, months: number) {
 
   const targetYear = nextDate.getUTCFullYear();
   const targetMonth = nextDate.getUTCMonth() + months;
-  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
-  nextDate.setUTCMonth(targetMonth, Math.min(nextDate.getUTCDate(), lastDayOfTargetMonth));
+  const lastDayOfTargetMonth = new Date(
+    Date.UTC(targetYear, targetMonth + 1, 0),
+  ).getUTCDate();
+  nextDate.setUTCMonth(
+    targetMonth,
+    Math.min(nextDate.getUTCDate(), lastDayOfTargetMonth),
+  );
   return nextDate.toISOString().slice(0, 10);
 }
 
@@ -76,7 +82,8 @@ export function CertificateDetailPage() {
   const { isAdmin } = useAuth();
   const { error, success } = useFlashbar();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedCompetentPersonId, setSelectedCompetentPersonId] = useState("");
+  const [selectedCompetentPersonId, setSelectedCompetentPersonId] =
+    useState("");
   const [renewalIssueDate, setRenewalIssueDate] = useState("");
   const [renewalExpiryDate, setRenewalExpiryDate] = useState("");
   const [fileInputKey, setFileInputKey] = useState(0);
@@ -118,11 +125,13 @@ export function CertificateDetailPage() {
 
   const testTypeName = !certificateQuery.data?.test_id
     ? "Not set"
-    : testTypesQuery.data?.find((testType) => testType.test_id === certificateQuery.data?.test_id)
-        ?.test_name || certificateQuery.data.test_id;
+    : testTypesQuery.data?.find(
+        (testType) => testType.test_id === certificateQuery.data?.test_id,
+      )?.test_name || certificateQuery.data.test_id;
   const selectedTestType =
-    testTypesQuery.data?.find((testType) => testType.test_id === certificateQuery.data?.test_id) ??
-    null;
+    testTypesQuery.data?.find(
+      (testType) => testType.test_id === certificateQuery.data?.test_id,
+    ) ?? null;
   const renewalIssueDateValue =
     renewalIssueDate || toDateInputValue(certificateQuery.data?.issue_date);
   const renewalExpiryDateValue =
@@ -165,11 +174,16 @@ export function CertificateDetailPage() {
         throw new Error("Expiry date must be on or after the issue date.");
       }
 
+      const uploadResponse = await uploadCertificateFile(
+        certificateId,
+        selectedFile,
+        selectedCompetentPersonId,
+      );
       await patchCertificate(certificateId, {
         issue_date: toIsoDate(renewalIssueDateValue),
         expiry_date: toIsoDate(renewalExpiryDateValue),
       });
-      return uploadCertificateFile(certificateId, selectedFile, selectedCompetentPersonId);
+      return uploadResponse;
     },
     onSuccess: async () => {
       setSelectedFile(null);
@@ -179,14 +193,26 @@ export function CertificateDetailPage() {
       setFileInputKey((current) => current + 1);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["uploads", certificateId] }),
-        queryClient.invalidateQueries({ queryKey: ["certificate", certificateId] }),
-        queryClient.invalidateQueries({ queryKey: ["certificates", componentId] }),
+        queryClient.invalidateQueries({
+          queryKey: ["certificate", certificateId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["certificates", componentId],
+        }),
         queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
       ]);
-      success("Certificate renewed", "The certificate dates and document have been updated.");
+      success(
+        "Certificate renewed",
+        "The certificate dates and document have been updated.",
+      );
     },
     onError: (mutationError: Error) => {
-      error("Upload failed", mutationError.message);
+      error(
+        "Upload failed",
+        mutationError instanceof ApiError && mutationError.status === 413
+          ? certificateFileTooLargeMessage()
+          : mutationError.message,
+      );
     },
   });
 
@@ -236,85 +262,92 @@ export function CertificateDetailPage() {
     );
   }
 
-  const competentPersonOptions: SelectProps.Option[] = (competentPersonsQuery.data || []).map(
-    (person) => ({
-      label: person.full_name,
-      value: person.competent_person_id,
-      description: `${person.person_type} - ${person.competency_category_name}`,
-    })
-  );
+  const competentPersonOptions: SelectProps.Option[] = (
+    competentPersonsQuery.data || []
+  ).map((person) => ({
+    label: person.full_name,
+    value: person.competent_person_id,
+    description: `${person.person_type} - ${person.competency_category_name}`,
+  }));
   const selectedCompetentPerson =
     competentPersonsQuery.data?.find(
-      (person) => person.competent_person_id === selectedCompetentPersonId
+      (person) => person.competent_person_id === selectedCompetentPersonId,
     ) ?? null;
   const selectedCompetentPersonOption =
-    competentPersonOptions.find((option) => option.value === selectedCompetentPersonId) ?? null;
+    competentPersonOptions.find(
+      (option) => option.value === selectedCompetentPersonId,
+    ) ?? null;
 
-  const uploadColumns: TableProps<CertificateUploadAudit>["columnDefinitions"] = [
-    {
-      id: "file",
-      header: "File",
-      width: "28%",
-      minWidth: 240,
-      cell: (item) => <TableCellText title={item.file_name}>{item.file_name}</TableCellText>,
-    },
-    {
-      id: "uploadedBy",
-      header: "Uploaded by",
-      width: "18%",
-      minWidth: 170,
-      cell: (item) => (
-        <TableCellText title={item.uploaded_by_name || "Unknown"}>
-          {item.uploaded_by_name || "Unknown"}
-        </TableCellText>
-      ),
-    },
-    {
-      id: "competentPerson",
-      header: "Competent Person",
-      width: "18%",
-      minWidth: 180,
-      cell: (item) => (
-        <TableCellText title={item.competent_person_name || "Not recorded"}>
-          {item.competent_person_name || "Not recorded"}
-        </TableCellText>
-      ),
-    },
-    {
-      id: "competencyCategory",
-      header: "Competency category",
-      width: "20%",
-      minWidth: 200,
-      cell: (item) => (
-        <TableCellText title={item.competency_category_name || "Not recorded"}>
-          {item.competency_category_name || "Not recorded"}
-        </TableCellText>
-      ),
-    },
-    {
-      id: "uploadedAt",
-      header: "Uploaded at",
-      width: 190,
-      minWidth: 180,
-      cell: (item) => formatDateTime(item.uploaded_at),
-    },
-    {
-      id: "view",
-      header: "View",
-      width: 120,
-      minWidth: 120,
-      cell: (item) => (
-        <span className="upload-history-view-action">
-          <Button
-            loading={uploadViewMutation.isPending}
-            onClick={() => uploadViewMutation.mutate(item.uuid)}
+  const uploadColumns: TableProps<CertificateUploadAudit>["columnDefinitions"] =
+    [
+      {
+        id: "file",
+        header: "File",
+        width: "28%",
+        minWidth: 240,
+        cell: (item) => (
+          <TableCellText title={item.file_name}>{item.file_name}</TableCellText>
+        ),
+      },
+      {
+        id: "uploadedBy",
+        header: "Uploaded by",
+        width: "18%",
+        minWidth: 170,
+        cell: (item) => (
+          <TableCellText title={item.uploaded_by_name || "Unknown"}>
+            {item.uploaded_by_name || "Unknown"}
+          </TableCellText>
+        ),
+      },
+      {
+        id: "competentPerson",
+        header: "Competent Person",
+        width: "18%",
+        minWidth: 180,
+        cell: (item) => (
+          <TableCellText title={item.competent_person_name || "Not recorded"}>
+            {item.competent_person_name || "Not recorded"}
+          </TableCellText>
+        ),
+      },
+      {
+        id: "competencyCategory",
+        header: "Competency category",
+        width: "20%",
+        minWidth: 200,
+        cell: (item) => (
+          <TableCellText
+            title={item.competency_category_name || "Not recorded"}
           >
-            View
-          </Button>
-        </span>
-      ),
-    },
-  ];
+            {item.competency_category_name || "Not recorded"}
+          </TableCellText>
+        ),
+      },
+      {
+        id: "uploadedAt",
+        header: "Uploaded at",
+        width: 190,
+        minWidth: 180,
+        cell: (item) => formatDateTime(item.uploaded_at),
+      },
+      {
+        id: "view",
+        header: "View",
+        width: 120,
+        minWidth: 120,
+        cell: (item) => (
+          <span className="upload-history-view-action">
+            <Button
+              loading={uploadViewMutation.isPending}
+              onClick={() => uploadViewMutation.mutate(item.uuid)}
+            >
+              View
+            </Button>
+          </span>
+        ),
+      },
+    ];
 
   return renderCertificateDetailPage({
     asset: assetQuery.data,
@@ -338,7 +371,7 @@ export function CertificateDetailPage() {
       setRenewalExpiryDate(
         nextIssueDate && selectedTestType
           ? addMonths(nextIssueDate, selectedTestType.validity_duration)
-          : renewalExpiryDateValue
+          : renewalExpiryDateValue,
       );
     },
     onRenew: () => uploadMutation.mutate(),
@@ -443,15 +476,22 @@ function renderCertificateDetailPage({
         <Header
           actions={
             <SpaceBetween direction="horizontal" size="xs">
-              <Button onClick={() => navigate(`/assets/${assetId}?component=${componentId}`)}>
+              <Button
+                onClick={() =>
+                  navigate(`/assets/${assetId}?component=${componentId}`)
+                }
+              >
                 Back to asset
               </Button>
               {isAdmin ? (
                 <Button
                   onClick={() =>
-                    navigate(`/assets/${assetId}/components/${componentId}/certificates/${certificateId}/edit`, {
-                      state: { from: locationPath },
-                    })
+                    navigate(
+                      `/assets/${assetId}/components/${componentId}/certificates/${certificateId}/edit`,
+                      {
+                        state: { from: locationPath },
+                      },
+                    )
                   }
                 >
                   Edit certificate
@@ -503,39 +543,47 @@ function renderCertificateDetailPage({
             <SpaceBetween direction="vertical" size="s">
               <div className="summary-row">
                 <Box variant="awsui-key-label">Asset</Box>
-              <Box>{asset.name}</Box>
+                <Box>{asset.name}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Component</Box>
-              <Box>{component.name}</Box>
+                <Box>{component.name}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">IMCA Ref</Box>
-              <Box>{certificate.imca_ref || "Not set"}</Box>
+                <Box>{certificate.imca_ref || "Not set"}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">IMCA D018</Box>
-              <Box>{certificate.imca_d018 || "Not set"}</Box>
+                <Box>{certificate.imca_d018 || "Not set"}</Box>
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Certificate file</Box>
-              <Box>{certificate.certificate_file ? "Attached" : "No file uploaded"}</Box>
+                <Box>
+                  {certificate.certificate_file
+                    ? "Attached"
+                    : "No file uploaded"}
+                </Box>
               </div>
             </SpaceBetween>
           </Container>
 
           <Container header={<Header variant="h2">Maintenance notes</Header>}>
             <Box color="text-body-secondary">
-            {certificate.maintenance_notes || "No maintenance notes are recorded."}
+              {certificate.maintenance_notes ||
+                "No maintenance notes are recorded."}
             </Box>
           </Container>
         </ColumnLayout>
 
         {isAdmin ? (
-          <Container header={<Header variant="h2">Renew/change certificate</Header>}>
+          <Container
+            header={<Header variant="h2">Renew/change certificate</Header>}
+          >
             <SpaceBetween direction="vertical" size="m">
               <Box color="text-body-secondary">
-                Upload PDF, JPEG, PNG, or WEBP files up to {CERTIFICATE_FILE_MAX_LABEL}.
+                Upload PDF, JPEG, PNG, or WEBP files up to{" "}
+                {CERTIFICATE_FILE_MAX_LABEL}.
               </Box>
               <input
                 key={fileInputKey}
@@ -543,7 +591,13 @@ function renderCertificateDetailPage({
                 className="file-input"
                 type="file"
                 accept=".pdf,image/jpeg,image/png,image/webp"
-              onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+                onChange={(event) => {
+                  const nextFile = event.target.files?.[0] ?? null;
+                  onFileChange(nextFile);
+                  if (isCertificateFileTooLarge(nextFile)) {
+                    event.currentTarget.value = "";
+                  }
+                }}
               />
               <ColumnLayout columns={2}>
                 <FormField label="Issue date">
@@ -577,12 +631,14 @@ function renderCertificateDetailPage({
                   options={competentPersonOptions}
                   placeholder="Select competent person"
                   selectedOption={selectedCompetentPersonOption}
-                statusType={competentPersonsLoading ? "loading" : "finished"}
+                  statusType={competentPersonsLoading ? "loading" : "finished"}
                   loadingText="Loading competent persons"
                   empty="No active competent persons are available."
                   onChange={({ detail }) =>
-                  onSelectedCompetentPersonChange(detail.selectedOption.value || "")
-                }
+                    onSelectedCompetentPersonChange(
+                      detail.selectedOption.value || "",
+                    )
+                  }
                 />
               </FormField>
               {selectedCompetentPerson ? (
@@ -599,9 +655,9 @@ function renderCertificateDetailPage({
                     !renewalIssueDateValue ||
                     !renewalExpiryDateValue
                   }
-                loading={uploadPending}
-                variant="primary"
-                onClick={onRenew}
+                  loading={uploadPending}
+                  variant="primary"
+                  onClick={onRenew}
                 >
                   Renew/change certificate
                 </Button>
@@ -619,21 +675,25 @@ function renderCertificateDetailPage({
               columnDefinitions={uploadColumns.map((column) =>
                 column.id === "view"
                   ? {
-                    ...column,
-                    cell: (item: CertificateUploadAudit) => (
-                      <span className="upload-history-view-action">
-                        <Button
-                          loading={uploadViewPending}
-                          onClick={() => onViewUpload(item.uuid)}
-                        >
-                          View
-                        </Button>
-                      </span>
-                    ),
-                  }
-                  : column
+                      ...column,
+                      cell: (item: CertificateUploadAudit) => (
+                        <span className="upload-history-view-action">
+                          <Button
+                            loading={uploadViewPending}
+                            onClick={() => onViewUpload(item.uuid)}
+                          >
+                            View
+                          </Button>
+                        </span>
+                      ),
+                    }
+                  : column,
               )}
-              empty={<Box color="text-body-secondary">No uploads recorded for this certificate.</Box>}
+              empty={
+                <Box color="text-body-secondary">
+                  No uploads recorded for this certificate.
+                </Box>
+              }
               items={uploads}
               loading={uploadsLoading}
               loadingText="Loading upload history"
