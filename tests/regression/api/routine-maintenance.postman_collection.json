@@ -25,7 +25,23 @@
       "value": ""
     },
     {
+      "key": "routineProjectName",
+      "value": ""
+    },
+    {
       "key": "token",
+      "value": ""
+    },
+    {
+      "key": "routine_project_id",
+      "value": ""
+    },
+    {
+      "key": "project_asset_id",
+      "value": ""
+    },
+    {
+      "key": "project_maintenance_event_id",
       "value": ""
     },
     {
@@ -45,7 +61,8 @@
         "exec": [
           "const suffix = pm.collectionVariables.get('runSuffix') || Date.now().toString();",
           "pm.collectionVariables.set('runSuffix', suffix);",
-          "pm.collectionVariables.set('routineAssetName', `Routine Maintenance Newman ${suffix}`);"
+          "pm.collectionVariables.set('routineAssetName', `Routine Maintenance Newman ${suffix}`);",
+          "pm.collectionVariables.set('routineProjectName', `Routine Maintenance QA ${suffix}`);"
         ]
       }
     }
@@ -88,7 +105,7 @@
       ]
     },
     {
-      "name": "02 Create Asset With Maintenance Interval",
+      "name": "02 Create Routine Maintenance Project",
       "request": {
         "method": "POST",
         "header": [
@@ -99,7 +116,151 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"{{routineAssetName}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Newman routine maintenance regression asset\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Newman Test Yard\",\n  \"assigned_project\": \"Routine Maintenance QA\",\n  \"maintenance_interval_hours\": 100\n}"
+          "raw": "{\n  \"project_name\": \"{{routineProjectName}}\",\n  \"description\": \"Newman routine maintenance regression project\",\n  \"status\": \"ACTIVE\"\n}"
+        },
+        "url": "{{baseUrl}}/project"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('routine maintenance project is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.project_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(body.project_name).to.eql(pm.collectionVariables.get('routineProjectName'));",
+              "  pm.collectionVariables.set('routine_project_id', body.project_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Create Project Asset With Maintenance Interval",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{routineAssetName}} Project\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Newman routine maintenance regression asset with project\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Newman Test Yard\",\n  \"assigned_project\": \"{{routineProjectName}}\",\n  \"maintenance_interval_hours\": 50\n}"
+        },
+        "url": "{{baseUrl}}/asset"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('project-assigned asset is created with interval threshold', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const envelope = pm.response.json();",
+              "  const asset = envelope.asset || envelope;",
+              "  pm.expect(asset.asset_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(asset.assigned_project).to.eql(pm.collectionVariables.get('routineProjectName'));",
+              "  pm.expect(asset.maintenance_interval_hours).to.eql(50);",
+              "  pm.expect(asset.next_maintenance_due_hours).to.eql(50);",
+              "  pm.collectionVariables.set('project_asset_id', asset.asset_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Update Project Asset At Threshold",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"working_hours\": 50,\n  \"note\": \"Newman project asset threshold reached\"\n}"
+        },
+        "url": "{{baseUrl}}/asset/{{project_asset_id}}/working-hours"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('project-assigned asset triggers required maintenance', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.asset.assigned_project).to.eql(pm.collectionVariables.get('routineProjectName'));",
+              "  pm.expect(body.asset.status).to.eql('MAINTENANCE');",
+              "  pm.expect(body.maintenance_event).to.be.an('object');",
+              "  pm.expect(body.maintenance_event.status).to.eql('REQUIRED');",
+              "  pm.expect(body.maintenance_event.due_at_hours).to.eql(50);",
+              "  pm.collectionVariables.set('project_maintenance_event_id', body.maintenance_event.maintenance_event_id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Complete Project Asset Routine Maintenance",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"completion_notes\": \"Completed project asset by Newman regression\"\n}"
+        },
+        "url": "{{baseUrl}}/asset/{{project_asset_id}}/routine-maintenance/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('project-assigned asset maintenance completes', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.maintenance_event.maintenance_event_id).to.eql(pm.collectionVariables.get('project_maintenance_event_id'));",
+              "  pm.expect(body.maintenance_event.status).to.eql('COMPLETED');",
+              "  pm.expect(body.asset.status).to.eql('ACTIVE');",
+              "  pm.expect(body.asset.assigned_project).to.eql(pm.collectionVariables.get('routineProjectName'));",
+              "  pm.expect(body.asset.next_maintenance_due_hours).to.eql(100);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Create Warehouse Asset With Maintenance Interval",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{routineAssetName}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Newman routine maintenance regression asset\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Newman Test Yard\",\n  \"assigned_project\": \"\",\n  \"maintenance_interval_hours\": 100\n}"
         },
         "url": "{{baseUrl}}/asset"
       },
@@ -116,6 +277,7 @@
               "  pm.expect(asset.asset_id).to.match(/^[0-9a-f-]{36}$/i);",
               "  pm.expect(asset.name).to.eql(pm.collectionVariables.get('routineAssetName'));",
               "  pm.expect(asset.status).to.eql('ACTIVE');",
+              "  pm.expect(asset.assigned_project).to.eql('');",
               "  pm.expect(asset.working_hours).to.eql(0);",
               "  pm.expect(asset.maintenance_interval_hours).to.eql(100);",
               "  pm.expect(asset.next_maintenance_due_hours).to.eql(100);",
@@ -127,7 +289,7 @@
       ]
     },
     {
-      "name": "03 Update Hours Below Threshold",
+      "name": "07 Update Warehouse Asset Hours Below Threshold",
       "request": {
         "method": "PATCH",
         "header": [
@@ -162,7 +324,7 @@
       ]
     },
     {
-      "name": "04 List Events Before Threshold",
+      "name": "08 List Warehouse Asset Events Before Threshold",
       "request": {
         "method": "GET",
         "url": "{{baseUrl}}/asset/{{asset_id}}/routine-maintenance"
@@ -184,7 +346,7 @@
       ]
     },
     {
-      "name": "05 Update Hours At Threshold",
+      "name": "09 Update Warehouse Asset Hours At Threshold",
       "request": {
         "method": "PATCH",
         "header": [
@@ -224,7 +386,7 @@
       ]
     },
     {
-      "name": "06 Repeat Hours Above Threshold",
+      "name": "10 Repeat Warehouse Asset Hours Above Threshold",
       "request": {
         "method": "PATCH",
         "header": [
@@ -258,7 +420,7 @@
       ]
     },
     {
-      "name": "07 List Events After Repeat",
+      "name": "11 List Warehouse Asset Events After Repeat",
       "request": {
         "method": "GET",
         "url": "{{baseUrl}}/asset/{{asset_id}}/routine-maintenance"
@@ -283,7 +445,7 @@
       ]
     },
     {
-      "name": "08 Reject Decreasing Working Hours",
+      "name": "12 Reject Decreasing Warehouse Asset Working Hours",
       "request": {
         "method": "PATCH",
         "header": [
@@ -315,7 +477,7 @@
       ]
     },
     {
-      "name": "09 Complete Routine Maintenance",
+      "name": "13 Complete Warehouse Asset Routine Maintenance",
       "request": {
         "method": "POST",
         "header": [
@@ -353,7 +515,7 @@
       ]
     },
     {
-      "name": "10 List Events After Completion",
+      "name": "14 List Warehouse Asset Events After Completion",
       "request": {
         "method": "GET",
         "url": "{{baseUrl}}/asset/{{asset_id}}/routine-maintenance"
@@ -377,7 +539,27 @@
       ]
     },
     {
-      "name": "11 Delete Regression Asset",
+      "name": "15 Delete Project Regression Asset",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/asset/{{project_asset_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('project regression asset cleanup succeeds', function () {",
+              "  pm.expect([200, 404]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 Delete Warehouse Regression Asset",
       "request": {
         "method": "DELETE",
         "url": "{{baseUrl}}/asset/{{asset_id}}"
