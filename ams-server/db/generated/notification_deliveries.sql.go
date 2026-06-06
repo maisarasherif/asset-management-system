@@ -84,7 +84,6 @@ func (q *Queries) ClaimNotificationDelivery(ctx context.Context, arg ClaimNotifi
 const countCertificateNotificationDeliveries = `-- name: CountCertificateNotificationDeliveries :one
 SELECT COUNT(*)
 FROM notification_deliveries
-WHERE source_type = 'certificate_expiry'
 `
 
 func (q *Queries) CountCertificateNotificationDeliveries(ctx context.Context) (int64, error) {
@@ -97,8 +96,7 @@ func (q *Queries) CountCertificateNotificationDeliveries(ctx context.Context) (i
 const countCertificateNotificationDeliveryFailures = `-- name: CountCertificateNotificationDeliveryFailures :one
 SELECT COUNT(*)
 FROM notification_deliveries
-WHERE source_type = 'certificate_expiry'
-  AND status = 'FAILED'
+WHERE status = 'FAILED'
 `
 
 func (q *Queries) CountCertificateNotificationDeliveryFailures(ctx context.Context) (int64, error) {
@@ -153,16 +151,28 @@ const getCertificateNotificationDeliveriesPaginated = `-- name: GetCertificateNo
 SELECT
     nd.delivery_id AS task_id,
     nd.display_id,
-    nd.source_id AS certificate_id,
-    cert.display_id AS certificate_display_id,
-    cert.certificate_name,
+    nd.source_type,
+    nd.source_id::text AS source_id,
+    CASE
+        WHEN nd.source_type = 'certificate_expiry' THEN COALESCE(cert.display_id, '')
+        WHEN nd.source_type = 'routine_maintenance' THEN COALESCE(ame.display_id, '')
+        ELSE ''
+    END AS source_display_id,
+    (CASE
+        WHEN nd.source_type = 'certificate_expiry' THEN COALESCE(cert.certificate_name, '')
+        WHEN nd.source_type = 'routine_maintenance' THEN 'Routine maintenance'
+        ELSE nd.source_type
+    END)::text AS source_name,
+    COALESCE(cert.certificate_id::text, '')::text AS certificate_id,
+    COALESCE(cert.display_id, '') AS certificate_display_id,
+    COALESCE(cert.certificate_name, '') AS certificate_name,
     cert.expiry_date,
-    comp.component_id,
-    comp.display_id AS component_display_id,
-    comp.name AS component_name,
-    asset.asset_id,
-    asset.display_id AS asset_display_id,
-    asset.name AS asset_name,
+    COALESCE(comp.component_id::text, '')::text AS component_id,
+    COALESCE(comp.display_id, '') AS component_display_id,
+    COALESCE(comp.name, '') AS component_name,
+    COALESCE(cert_asset.asset_id::text, maintenance_asset.asset_id::text, '')::text AS asset_id,
+    COALESCE(cert_asset.display_id, maintenance_asset.display_id, '') AS asset_display_id,
+    COALESCE(cert_asset.name, maintenance_asset.name, '') AS asset_name,
     nd.channel AS type,
     nd.tier,
     nd.status,
@@ -170,10 +180,11 @@ SELECT
     nd.idempotency_key,
     COALESCE(nd.sent_at, nd.failed_at, nd.created_at) AS sent_at
 FROM notification_deliveries nd
-JOIN certificates cert ON cert.certificate_id = nd.source_id
-JOIN components comp ON comp.component_id = cert.component_id
-JOIN assets asset ON asset.asset_id = comp.asset_id
-WHERE nd.source_type = 'certificate_expiry'
+LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
+LEFT JOIN components comp ON comp.component_id = cert.component_id
+LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
+LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
 ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC
 LIMIT $1 OFFSET $2
 `
@@ -186,14 +197,18 @@ type GetCertificateNotificationDeliveriesPaginatedParams struct {
 type GetCertificateNotificationDeliveriesPaginatedRow struct {
 	TaskID               uuid.UUID  `json:"task_id"`
 	DisplayID            string     `json:"display_id"`
-	CertificateID        uuid.UUID  `json:"certificate_id"`
+	SourceType           string     `json:"source_type"`
+	SourceID             string     `json:"source_id"`
+	SourceDisplayID      string     `json:"source_display_id"`
+	SourceName           string     `json:"source_name"`
+	CertificateID        string     `json:"certificate_id"`
 	CertificateDisplayID string     `json:"certificate_display_id"`
 	CertificateName      string     `json:"certificate_name"`
 	ExpiryDate           *time.Time `json:"expiry_date"`
-	ComponentID          uuid.UUID  `json:"component_id"`
+	ComponentID          string     `json:"component_id"`
 	ComponentDisplayID   string     `json:"component_display_id"`
 	ComponentName        string     `json:"component_name"`
-	AssetID              uuid.UUID  `json:"asset_id"`
+	AssetID              string     `json:"asset_id"`
 	AssetDisplayID       string     `json:"asset_display_id"`
 	AssetName            string     `json:"asset_name"`
 	Type                 string     `json:"type"`
@@ -216,6 +231,10 @@ func (q *Queries) GetCertificateNotificationDeliveriesPaginated(ctx context.Cont
 		if err := rows.Scan(
 			&i.TaskID,
 			&i.DisplayID,
+			&i.SourceType,
+			&i.SourceID,
+			&i.SourceDisplayID,
+			&i.SourceName,
 			&i.CertificateID,
 			&i.CertificateDisplayID,
 			&i.CertificateName,
@@ -246,27 +265,40 @@ func (q *Queries) GetCertificateNotificationDeliveriesPaginated(ctx context.Cont
 const getCertificateNotificationDeliveryFailuresPaginated = `-- name: GetCertificateNotificationDeliveryFailuresPaginated :many
 SELECT
     nd.delivery_id AS id,
-    nd.source_id AS certificate_id,
-    cert.display_id AS certificate_display_id,
-    cert.certificate_name,
+    nd.source_type,
+    nd.source_id::text AS source_id,
+    CASE
+        WHEN nd.source_type = 'certificate_expiry' THEN COALESCE(cert.display_id, '')
+        WHEN nd.source_type = 'routine_maintenance' THEN COALESCE(ame.display_id, '')
+        ELSE ''
+    END AS source_display_id,
+    (CASE
+        WHEN nd.source_type = 'certificate_expiry' THEN COALESCE(cert.certificate_name, '')
+        WHEN nd.source_type = 'routine_maintenance' THEN 'Routine maintenance'
+        ELSE nd.source_type
+    END)::text AS source_name,
+    COALESCE(cert.certificate_id::text, '')::text AS certificate_id,
+    COALESCE(cert.display_id, '') AS certificate_display_id,
+    COALESCE(cert.certificate_name, '') AS certificate_name,
     cert.expiry_date,
-    comp.component_id,
-    comp.display_id AS component_display_id,
-    comp.name AS component_name,
-    asset.asset_id,
-    asset.display_id AS asset_display_id,
-    asset.name AS asset_name,
+    COALESCE(comp.component_id::text, '')::text AS component_id,
+    COALESCE(comp.display_id, '') AS component_display_id,
+    COALESCE(comp.name, '') AS component_name,
+    COALESCE(cert_asset.asset_id::text, maintenance_asset.asset_id::text, '')::text AS asset_id,
+    COALESCE(cert_asset.display_id, maintenance_asset.display_id, '') AS asset_display_id,
+    COALESCE(cert_asset.name, maintenance_asset.name, '') AS asset_name,
     nd.idempotency_key,
     nd.channel,
     nd.tier,
     nd.error_message,
     COALESCE(nd.failed_at, nd.updated_at) AS failed_at
 FROM notification_deliveries nd
-JOIN certificates cert ON cert.certificate_id = nd.source_id
-JOIN components comp ON comp.component_id = cert.component_id
-JOIN assets asset ON asset.asset_id = comp.asset_id
-WHERE nd.source_type = 'certificate_expiry'
-  AND nd.status = 'FAILED'
+LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
+LEFT JOIN components comp ON comp.component_id = cert.component_id
+LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
+LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
+WHERE nd.status = 'FAILED'
 ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC
 LIMIT $1 OFFSET $2
 `
@@ -278,14 +310,18 @@ type GetCertificateNotificationDeliveryFailuresPaginatedParams struct {
 
 type GetCertificateNotificationDeliveryFailuresPaginatedRow struct {
 	ID                   uuid.UUID  `json:"id"`
-	CertificateID        uuid.UUID  `json:"certificate_id"`
+	SourceType           string     `json:"source_type"`
+	SourceID             string     `json:"source_id"`
+	SourceDisplayID      string     `json:"source_display_id"`
+	SourceName           string     `json:"source_name"`
+	CertificateID        string     `json:"certificate_id"`
 	CertificateDisplayID string     `json:"certificate_display_id"`
 	CertificateName      string     `json:"certificate_name"`
 	ExpiryDate           *time.Time `json:"expiry_date"`
-	ComponentID          uuid.UUID  `json:"component_id"`
+	ComponentID          string     `json:"component_id"`
 	ComponentDisplayID   string     `json:"component_display_id"`
 	ComponentName        string     `json:"component_name"`
-	AssetID              uuid.UUID  `json:"asset_id"`
+	AssetID              string     `json:"asset_id"`
 	AssetDisplayID       string     `json:"asset_display_id"`
 	AssetName            string     `json:"asset_name"`
 	IdempotencyKey       string     `json:"idempotency_key"`
@@ -306,6 +342,10 @@ func (q *Queries) GetCertificateNotificationDeliveryFailuresPaginated(ctx contex
 		var i GetCertificateNotificationDeliveryFailuresPaginatedRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.SourceType,
+			&i.SourceID,
+			&i.SourceDisplayID,
+			&i.SourceName,
 			&i.CertificateID,
 			&i.CertificateDisplayID,
 			&i.CertificateName,

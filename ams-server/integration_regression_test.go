@@ -445,6 +445,21 @@ func TestRoutineMaintenanceThresholdFlowIsIdempotent(t *testing.T) {
 	assertField(t, triggeredEvent, "triggered_at_hours", 100)
 	eventID := stringField(t, triggeredEvent, "maintenance_event_id")
 
+	failureAudit := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/notification-failures?page=1&limit=20", nil, http.StatusOK))
+	routineFailure := findByStringField(t, dataArray(t, failureAudit), "idempotency_key", "routine-maintenance:"+eventID+":EMAIL")
+	assertField(t, routineFailure, "source_type", "routine_maintenance")
+	assertField(t, routineFailure, "source_id", eventID)
+	assertField(t, routineFailure, "source_name", "Routine maintenance")
+	assertField(t, routineFailure, "asset_id", assetID)
+	assertField(t, routineFailure, "channel", "EMAIL")
+	assertField(t, routineFailure, "error_message", "River client is not configured")
+
+	jobAudit := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/certificate-notifications?page=1&limit=20", nil, http.StatusOK))
+	routineJob := findByStringField(t, dataArray(t, jobAudit), "idempotency_key", "routine-maintenance:"+eventID+":EMAIL")
+	assertField(t, routineJob, "source_type", "routine_maintenance")
+	assertField(t, routineJob, "source_id", eventID)
+	assertField(t, routineJob, "status", "FAILED")
+
 	duplicate := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID+"/working-hours", map[string]any{
 		"working_hours": 125,
 		"note":          "Same maintenance cycle",
@@ -766,6 +781,9 @@ func TestCertificateNotificationSchedulerAuditAndReset(t *testing.T) {
 	audit := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/certificate-notifications?page=1&limit=20", nil, http.StatusOK))
 	tasks := dataArray(t, audit)
 	task := findByStringField(t, tasks, "idempotency_key", idempotencyKey)
+	assertField(t, task, "source_type", "certificate_expiry")
+	assertField(t, task, "source_id", certificateID)
+	assertField(t, task, "source_name", stringField(t, certificate, "certificate_name"))
 	assertField(t, task, "certificate_id", certificateID)
 	assertField(t, task, "certificate_name", stringField(t, certificate, "certificate_name"))
 	assertField(t, task, "type", "EMAIL")
@@ -825,6 +843,9 @@ func TestCertificateNotificationFailureAudit(t *testing.T) {
 	audit := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/notification-failures?page=1&limit=20", nil, http.StatusOK))
 	failures := dataArray(t, audit)
 	failure := findByStringField(t, failures, "idempotency_key", idempotencyKey)
+	assertField(t, failure, "source_type", "certificate_expiry")
+	assertField(t, failure, "source_id", certificateID)
+	assertField(t, failure, "source_name", stringField(t, certificate, "certificate_name"))
 	assertField(t, failure, "certificate_id", certificateID)
 	assertField(t, failure, "certificate_name", stringField(t, certificate, "certificate_name"))
 	assertField(t, failure, "channel", "CLICKUP")

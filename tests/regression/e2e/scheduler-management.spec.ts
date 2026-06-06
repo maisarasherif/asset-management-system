@@ -257,7 +257,7 @@ test.describe("scheduler management flow", () => {
       await page.goto("/scheduler");
       await expect(page.getByRole("heading", { name: "Scheduler management" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Force re-notify" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Notification audit" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Job audit" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Failure audit" })).toBeVisible();
 
       await selectCertificate(page, certificateName);

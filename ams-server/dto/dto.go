@@ -135,6 +135,10 @@ type UserManagementAuditLogResponse struct {
 type CertificateNotificationTaskResponse struct {
 	TaskID               string     `json:"task_id"`
 	DisplayID            string     `json:"display_id"`
+	SourceType           string     `json:"source_type"`
+	SourceID             string     `json:"source_id"`
+	SourceDisplayID      string     `json:"source_display_id"`
+	SourceName           string     `json:"source_name"`
 	CertificateID        string     `json:"certificate_id"`
 	CertificateDisplayID string     `json:"certificate_display_id"`
 	CertificateName      string     `json:"certificate_name"`
@@ -155,6 +159,10 @@ type CertificateNotificationTaskResponse struct {
 
 type CertificateNotificationFailureResponse struct {
 	ID                   string     `json:"id"`
+	SourceType           string     `json:"source_type"`
+	SourceID             string     `json:"source_id"`
+	SourceDisplayID      string     `json:"source_display_id"`
+	SourceName           string     `json:"source_name"`
 	CertificateID        string     `json:"certificate_id"`
 	CertificateDisplayID string     `json:"certificate_display_id"`
 	CertificateName      string     `json:"certificate_name"`

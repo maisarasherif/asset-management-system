@@ -164,12 +164,17 @@ export interface CertificateWithContext {
 }
 
 export type NotificationChannel = "EMAIL" | "CLICKUP";
-export type NotificationTier = "expired" | "1d" | "7d" | "30d";
+export type NotificationSourceType = "certificate_expiry" | "routine_maintenance";
+export type NotificationTier = "" | "expired" | "1d" | "7d" | "30d";
 export type NotificationStatus = "PENDING" | "SENT" | "FAILED";
 
 export interface CertificateNotificationTask {
   task_id: string;
   display_id: string;
+  source_type: NotificationSourceType;
+  source_id: string;
+  source_display_id: string;
+  source_name: string;
   certificate_id: string;
   certificate_display_id: string;
   certificate_name: string;
@@ -190,6 +195,10 @@ export interface CertificateNotificationTask {
 
 export interface CertificateNotificationFailure {
   id: string;
+  source_type: NotificationSourceType;
+  source_id: string;
+  source_display_id: string;
+  source_name: string;
   certificate_id: string;
   certificate_display_id: string;
   certificate_name: string;

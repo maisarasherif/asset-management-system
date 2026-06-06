@@ -28,6 +28,7 @@ import type {
   CertificateNotificationFailure,
   CertificateNotificationTask,
   CertificateWithContext,
+  NotificationSourceType,
   NotificationStatus,
   NotificationTier,
 } from "../../types/ams";
@@ -39,10 +40,18 @@ function statusBadge(status: NotificationStatus) {
 }
 
 function tierBadge(tier: NotificationTier) {
+  if (!tier) {
+    return <Box color="text-body-secondary">-</Box>;
+  }
   if (tier === "expired") {
     return <Badge color="red">Expired</Badge>;
   }
   return <Badge color="blue">{tier}</Badge>;
+}
+
+function sourceBadge(sourceType: NotificationSourceType) {
+  const color = sourceType === "certificate_expiry" ? "blue" : "grey";
+  return <Badge color={color}>{humanizeEnum(sourceType)}</Badge>;
 }
 
 function certificateLabel(certificate: Pick<CertificateWithContext, "certificate_display_id" | "certificate_name" | "asset_display_id" | "asset_name">) {
@@ -52,6 +61,27 @@ function certificateLabel(certificate: Pick<CertificateWithContext, "certificate
 function certificateDescription(certificate: Pick<CertificateWithContext, "asset_display_id" | "asset_name" | "component_name" | "expiry_date">) {
   const expiry = certificate.expiry_date ? formatDateTime(certificate.expiry_date) : "No expiry date";
   return `${certificate.asset_display_id} - ${certificate.asset_name} / ${certificate.component_name} / ${expiry}`;
+}
+
+function notificationSourceLabel(
+  item: Pick<CertificateNotificationTask | CertificateNotificationFailure, "source_display_id" | "source_name">
+) {
+  return item.source_display_id
+    ? `${item.source_display_id} - ${item.source_name}`
+    : item.source_name || "-";
+}
+
+function notificationSourceDescription(
+  item: Pick<
+    CertificateNotificationTask | CertificateNotificationFailure,
+    "asset_display_id" | "asset_name" | "component_name"
+  >
+) {
+  const asset = item.asset_display_id ? `${item.asset_display_id} - ${item.asset_name}` : item.asset_name;
+  if (!asset) {
+    return "No asset context";
+  }
+  return item.component_name ? `${asset} / ${item.component_name}` : asset;
 }
 
 function copyableKey(key: string) {
@@ -128,21 +158,29 @@ export function SchedulerManagementPage() {
       sortingField: "sent_at",
     },
     {
-      id: "certificate",
-      header: "Certificate",
+      id: "source",
+      header: "Source",
       width: "28%",
       minWidth: 260,
       cell: (item) => (
         <SpaceBetween size="xxs">
-          <TableCellText title={`${item.certificate_display_id} - ${item.certificate_name}`}>
-            <Box>{item.certificate_display_id} - {item.certificate_name}</Box>
+          <TableCellText title={notificationSourceLabel(item)}>
+            <Box>{notificationSourceLabel(item)}</Box>
           </TableCellText>
-          <TableCellText title={`${item.asset_display_id} - ${item.asset_name}`}>
-            <Box color="text-body-secondary">{item.asset_display_id} - {item.asset_name}</Box>
+          <TableCellText title={notificationSourceDescription(item)}>
+            <Box color="text-body-secondary">{notificationSourceDescription(item)}</Box>
           </TableCellText>
         </SpaceBetween>
       ),
-      sortingField: "certificate_name",
+      sortingField: "source_name",
+    },
+    {
+      id: "source_type",
+      header: "Source type",
+      width: 170,
+      minWidth: 150,
+      cell: (item) => sourceBadge(item.source_type),
+      sortingField: "source_type",
     },
     {
       id: "channel",
@@ -196,21 +234,29 @@ export function SchedulerManagementPage() {
       sortingField: "failed_at",
     },
     {
-      id: "certificate",
-      header: "Certificate",
+      id: "source",
+      header: "Source",
       width: "28%",
       minWidth: 260,
       cell: (item) => (
         <SpaceBetween size="xxs">
-          <TableCellText title={`${item.certificate_display_id} - ${item.certificate_name}`}>
-            <Box>{item.certificate_display_id} - {item.certificate_name}</Box>
+          <TableCellText title={notificationSourceLabel(item)}>
+            <Box>{notificationSourceLabel(item)}</Box>
           </TableCellText>
-          <TableCellText title={`${item.asset_display_id} - ${item.asset_name}`}>
-            <Box color="text-body-secondary">{item.asset_display_id} - {item.asset_name}</Box>
+          <TableCellText title={notificationSourceDescription(item)}>
+            <Box color="text-body-secondary">{notificationSourceDescription(item)}</Box>
           </TableCellText>
         </SpaceBetween>
       ),
-      sortingField: "certificate_name",
+      sortingField: "source_name",
+    },
+    {
+      id: "source_type",
+      header: "Source type",
+      width: 170,
+      minWidth: 150,
+      cell: (item) => sourceBadge(item.source_type),
+      sortingField: "source_type",
     },
     {
       id: "channel",
@@ -253,7 +299,7 @@ export function SchedulerManagementPage() {
       header={
         <Header
           variant="h1"
-          description="Review certificate notification slots, inspect failure history, and clear a certificate's expiry notification history."
+          description="Review notification jobs, inspect failure history, and clear a certificate's expiry notification history."
           actions={
             <Button
               iconName="refresh"
@@ -297,7 +343,7 @@ export function SchedulerManagementPage() {
           <SpaceBetween size="m">
             <FormField
               label="Certificate"
-              description="Clearing history removes successful notification slots for the selected certificate. The next scheduler run can send the matching expiry-tier notifications again."
+              description="Clearing history removes certificate expiry notification slots for the selected certificate. The next scheduler run can send the matching expiry-tier notifications again."
               stretch
             >
               <Select
@@ -322,13 +368,13 @@ export function SchedulerManagementPage() {
         <Container
           header={
             <Header counter={`(${tasksQuery.data?.length || 0})`} variant="h2">
-              Notification audit
+              Job audit
             </Header>
           }
         >
           <Table
             columnDefinitions={taskColumns}
-            empty={<Box color="text-body-secondary">No certificate notification slots have been recorded.</Box>}
+            empty={<Box color="text-body-secondary">No notification jobs have been recorded.</Box>}
             items={tasksQuery.data || []}
             loading={isInitialLoading}
             loadingText="Loading notification audit"
@@ -380,7 +426,7 @@ export function SchedulerManagementPage() {
               : "The selected certificate"} will be eligible for notification again on the next scheduler run.
           </Box>
           <Alert type="warning">
-            Failure audit rows are preserved for troubleshooting. Only certificate notification slots are cleared.
+            Certificate expiry audit and failure rows for this certificate are cleared.
           </Alert>
         </SpaceBetween>
       </Modal>

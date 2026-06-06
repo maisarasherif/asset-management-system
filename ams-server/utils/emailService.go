@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -126,12 +127,19 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, riverClient *river.
 	}
 
 	expiryStr := formatCertificateExpiryDate(*cert.ExpiryDate)
+	if riverClient == nil {
+		recordCertificateNotificationConfigFailure(ctx, pool, cert, tier, expiryStr, NotificationChannelEmail, "River client is not configured")
+		recordCertificateNotificationConfigFailure(ctx, pool, cert, tier, expiryStr, NotificationChannelClickUp, "River client is not configured")
+		return
+	}
+
 	if recipientEmail == "" {
 		logger.Log.Warn().
 			Str("certificate_id", cert.CertificateID.String()).
 			Str("certificate", cert.CertificateName).
 			Str("tier", tier.Name).
 			Msg("ALERT_RECIPIENT_EMAIL not set, skipping expiry email")
+		recordCertificateNotificationConfigFailure(ctx, pool, cert, tier, expiryStr, NotificationChannelEmail, "ALERT_RECIPIENT_EMAIL not set")
 	} else {
 		enqueueEmailNotification(ctx, pool, riverClient, cert, recipientEmail, recipientName, tier, expiryStr)
 	}
@@ -142,10 +150,52 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, riverClient *river.
 			Str("certificate", cert.CertificateName).
 			Str("tier", tier.Name).
 			Msg("ClickUp configuration not set, skipping expiry ClickUp task")
+		recordCertificateNotificationConfigFailure(ctx, pool, cert, tier, expiryStr, NotificationChannelClickUp, "CLICKUP_API_TOKEN or CLICKUP_LIST_ID not set")
 		return
 	}
 
 	enqueueClickUpNotification(ctx, pool, riverClient, cert, tier, expiryStr)
+}
+
+func recordCertificateNotificationConfigFailure(parent context.Context, pool *pgxpool.Pool, cert db.GetExpiringCertificatesWithContextRow, tier NotificationTier, expiryStr, channel, errorMessage string) {
+	ctx, cancel := context.WithTimeout(parent, 60*time.Second)
+	defer cancel()
+
+	key := buildIdempotencyKey(cert.CertificateID.String(), expiryStr, tier.Name, channel)
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("key", key).Msg("failed to begin certificate expiry notification failure transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	queries := db.New(tx)
+	delivery, err := queries.ClaimNotificationDelivery(ctx, db.ClaimNotificationDeliveryParams{
+		SourceType:     NotificationSourceCertificateExpiry,
+		SourceID:       cert.CertificateID,
+		Channel:        channel,
+		Tier:           tier.Name,
+		IdempotencyKey: key,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return
+	}
+	if err != nil {
+		logger.Log.Error().Err(err).Str("key", key).Msg("failed to claim certificate expiry failed notification delivery")
+		return
+	}
+
+	if err := queries.MarkNotificationDeliveryFailed(ctx, db.MarkNotificationDeliveryFailedParams{
+		DeliveryID:   delivery.DeliveryID,
+		ErrorMessage: errorMessage,
+	}); err != nil {
+		logger.Log.Error().Err(err).Str("key", key).Msg("failed to mark certificate expiry notification delivery failed")
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		logger.Log.Error().Err(err).Str("key", key).Msg("failed to commit certificate expiry notification failure")
+	}
 }
 
 func enqueueEmailNotification(parent context.Context, pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx], cert db.GetExpiringCertificatesWithContextRow, recipientEmail, recipientName string, tier NotificationTier, expiryStr string) {
