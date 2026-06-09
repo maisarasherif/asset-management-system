@@ -34,6 +34,18 @@ const TOP_NAV_I18N = {
   overflowMenuTitleText: "All",
 };
 
+const APP_LAYOUT_ARIA_LABELS = {
+  navigation: "Primary navigation",
+  navigationClose: "Close primary navigation",
+  navigationToggle: "Open primary navigation",
+  notifications: "Notifications",
+  tools: "Page help",
+  toolsClose: "Close page help",
+  toolsToggle: "Open page help",
+};
+
+const DESKTOP_NAVIGATION_QUERY = "(min-width: 1101px)";
+
 type NavigationItem = {
   href: string;
   icon: Icon;
@@ -82,6 +94,10 @@ function initialsForName(name: string) {
     .join("");
 
   return initials || "U";
+}
+
+function isDesktopNavigation() {
+  return typeof window !== "undefined" && window.matchMedia(DESKTOP_NAVIGATION_QUERY).matches;
 }
 
 function getHelpPanelContent(pathname: string) {
@@ -171,6 +187,7 @@ export function AppShellLayout() {
   const { clearAll, items } = useFlashbar();
   const { isAdmin, isClient, isSuperAdmin, logout, selectedAssetId, session, setSelectedAssetId } = useAuth();
   const [navigationOpen, setNavigationOpen] = useState(true);
+  const [desktopNavigation, setDesktopNavigation] = useState(() => isDesktopNavigation());
   const [toolsOpen, setToolsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -200,6 +217,25 @@ export function AppShellLayout() {
     document.addEventListener("mousedown", closeProfileMenu);
     return () => document.removeEventListener("mousedown", closeProfileMenu);
   }, [profileMenuOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia(DESKTOP_NAVIGATION_QUERY);
+    const syncNavigationMode = () => {
+      const nextDesktopNavigation = mediaQuery.matches;
+      setDesktopNavigation(nextDesktopNavigation);
+      if (nextDesktopNavigation) {
+        setNavigationOpen(true);
+      }
+    };
+
+    syncNavigationMode();
+    mediaQuery.addEventListener("change", syncNavigationMode);
+    return () => mediaQuery.removeEventListener("change", syncNavigationMode);
+  }, []);
 
   const logoutMutation = useMutation({
     mutationFn: logoutRequest,
@@ -291,6 +327,7 @@ export function AppShellLayout() {
 
   return (
     <AppLayout
+      ariaLabels={APP_LAYOUT_ARIA_LABELS}
       content={<div className="app-layout-content"><Outlet /></div>}
       navigation={
         <div className="brand-sidebar">
@@ -402,7 +439,7 @@ export function AppShellLayout() {
           </div>
         </div>
       }
-      navigationOpen={navigationOpen}
+      navigationOpen={desktopNavigation ? true : navigationOpen}
       notifications={<Flashbar items={items} stackItems />}
       stickyNotifications
       tools={
@@ -411,7 +448,9 @@ export function AppShellLayout() {
         </HelpPanel>
       }
       toolsOpen={toolsOpen}
-      onNavigationChange={({ detail }) => setNavigationOpen(detail.open)}
+      onNavigationChange={({ detail }) => {
+        setNavigationOpen(desktopNavigation ? true : detail.open);
+      }}
       onToolsChange={({ detail }) => setToolsOpen(detail.open)}
       headerSelector="#top-navigation"
     />

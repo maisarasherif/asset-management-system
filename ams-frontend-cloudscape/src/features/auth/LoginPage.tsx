@@ -81,16 +81,14 @@ export function LoginPage() {
           </div>
 
           <div className="login-hero">
-            <div className="login-hero__eyebrow">Assets Management System</div>
+            <div className="login-hero__eyebrow">Asset management system</div>
             <h1 className="login-hero__title">
-              Where
-              <br />
-              Innovation
+              Where Innovation{" "}
               <span>Meets Depth</span>
             </h1>
             <p>
-              Comprehensive asset certifications tracking, routine maintenance scheduling, and compliance management
-              for offshore marine and diving operations.
+              Track asset certificates, routine maintenance, and manage compliance for offshore marine and diving
+              operations.
             </p>
           </div>
 

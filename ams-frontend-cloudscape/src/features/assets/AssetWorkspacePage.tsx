@@ -2,6 +2,7 @@ import {
   Alert,
   Box,
   Button,
+  ButtonDropdown,
   ColumnLayout,
   Container,
   ContentLayout,
@@ -82,6 +83,61 @@ const SINGLE_EQUIPMENT_CERTIFICATE_EMPTY = (
 const COMPONENT_CERTIFICATE_EMPTY = (
   <Box color="text-body-secondary">No certificates exist for this component yet.</Box>
 );
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function daysUntil(expiryDate: string | null | undefined) {
+  if (!expiryDate) {
+    return null;
+  }
+
+  const expiry = new Date(expiryDate);
+  if (Number.isNaN(expiry.getTime())) {
+    return null;
+  }
+
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const expiryStart = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate()).getTime();
+  return Math.ceil((expiryStart - todayStart) / DAY_MS);
+}
+
+function certificateRiskRank(certificate: Certificate) {
+  if (certificate.status === "EXPIRED") return 0;
+  if (certificate.status === "EXPIRING_SOON") return 1;
+  if (certificate.status === "PENDING") return 2;
+  return 3;
+}
+
+function certificateTimingLabel(certificate: Certificate) {
+  const days = daysUntil(certificate.expiry_date);
+
+  if (days === null) {
+    return "Expiry date unavailable";
+  }
+
+  if (days < 0) {
+    return `${Math.abs(days)} d overdue`;
+  }
+
+  if (days === 0) {
+    return "Due today";
+  }
+
+  return `${days} d remaining`;
+}
+
+function sortCertificatesByRisk(certificates: Certificate[]) {
+  return [...certificates].sort((a, b) => {
+    const riskDelta = certificateRiskRank(a) - certificateRiskRank(b);
+    if (riskDelta !== 0) {
+      return riskDelta;
+    }
+
+    const firstExpiry = a.expiry_date ? new Date(a.expiry_date).getTime() : Number.POSITIVE_INFINITY;
+    const secondExpiry = b.expiry_date ? new Date(b.expiry_date).getTime() : Number.POSITIVE_INFINITY;
+    return firstExpiry - secondExpiry;
+  });
+}
 
 export function AssetWorkspacePage() {
   const navigate = useNavigate();
@@ -308,8 +364,8 @@ export function AssetWorkspacePage() {
     {
       id: "certificate",
       header: "Certificate",
-      width: "34%",
-      minWidth: 260,
+      width: "28%",
+      minWidth: 210,
       cell: (item) => (
         <TableCellText title={item.certificate_name}>
           <RouterLink
@@ -323,8 +379,8 @@ export function AssetWorkspacePage() {
     {
       id: "validity",
       header: "Validity",
-      width: 150,
-      minWidth: 140,
+      width: 120,
+      minWidth: 110,
       cell: (item) => (
         <StatusIndicator type={certificateStatusType(item.status)}>
           {humanizeEnum(item.status)}
@@ -334,8 +390,8 @@ export function AssetWorkspacePage() {
     {
       id: "file",
       header: "File",
-      width: 130,
-      minWidth: 120,
+      width: 120,
+      minWidth: 110,
       cell: (item) => (
         <Button
           disabled={!item.certificate_file}
@@ -352,25 +408,38 @@ export function AssetWorkspacePage() {
     {
       id: "test-period",
       header: "Test period",
-      width: 150,
-      minWidth: 140,
+      width: 125,
+      minWidth: 115,
       cell: (item) => formatMonthDuration(testTypeMap.get(item.test_id)?.validity_duration),
     },
     {
       id: "expiry",
       header: "Expiry",
-      width: 140,
-      minWidth: 130,
+      width: 125,
+      minWidth: 115,
       cell: (item) => formatDate(item.expiry_date),
+    },
+    {
+      id: "timing",
+      header: "Timing",
+      width: 135,
+      minWidth: 125,
+      cell: (item) => (
+        <Box color={item.status === "EXPIRED" ? "text-status-error" : "text-body-secondary"}>
+          {certificateTimingLabel(item)}
+        </Box>
+      ),
     },
   ];
 
   const componentCount = isSingleEquipment
     ? 1
     : componentsQuery.data.filter((component) => component.component_kind !== "SELF").length;
-  const certificateItems = (certificatesQuery.data || []).filter(
-    (certificate): certificate is Certificate =>
-      Boolean(certificate && certificate.certificate_id)
+  const certificateItems = sortCertificatesByRisk(
+    (certificatesQuery.data || []).filter(
+      (certificate): certificate is Certificate =>
+        Boolean(certificate && certificate.certificate_id)
+    )
   );
   const certificateCount = certificateItems.length;
   const maintenanceEvents = maintenanceQuery.data || [];
@@ -435,21 +504,52 @@ function AssetWorkspaceHeader({
   return (
     <Header
       actions={
-        <SpaceBetween direction="horizontal" size="xs">
-          <Button onClick={() => navigate("/dashboard")}>Open dashboard</Button>
-          <Button onClick={() => navigate(`/assets/${assetId}/routine-maintenance`)}>
-            Open maintenance
-          </Button>
-          <Button disabled={!asset.datasheet} href={asset.datasheet || undefined} target="_blank">
-            Open datasheet
-          </Button>
-          {isAdmin ? <Button onClick={() => navigate(`/assets/${assetId}/edit`)}>Edit asset</Button> : null}
-          {isAdmin && !isSingleEquipment ? (
-            <Button variant="primary" onClick={() => navigate(`/assets/${assetId}/components/new`)}>
-              Add component
-            </Button>
-          ) : null}
-        </SpaceBetween>
+        <div className="app-header-actions">
+          <div className="app-header-actions__desktop">
+            <SpaceBetween direction="horizontal" size="xs">
+              <Button variant="primary" onClick={() => navigate("/dashboard")}>Open dashboard</Button>
+              <Button onClick={() => navigate(`/assets/${assetId}/routine-maintenance`)}>
+                Open maintenance
+              </Button>
+              <Button disabled={!asset.datasheet} href={asset.datasheet || undefined} target="_blank">
+                Open datasheet
+              </Button>
+              {isAdmin ? <Button onClick={() => navigate(`/assets/${assetId}/edit`)}>Edit asset</Button> : null}
+              {isAdmin && !isSingleEquipment ? (
+                <Button onClick={() => navigate(`/assets/${assetId}/components/new`)}>
+                  Add component
+                </Button>
+              ) : null}
+            </SpaceBetween>
+          </div>
+          <div className="app-header-actions__mobile">
+            <Button variant="primary" onClick={() => navigate("/dashboard")}>Open dashboard</Button>
+            <ButtonDropdown
+              items={[
+                { id: "maintenance", text: "Open maintenance" },
+                { id: "datasheet", text: "Open datasheet", disabled: !asset.datasheet },
+                ...(isAdmin ? [{ id: "edit-asset", text: "Edit asset" }] : []),
+                ...(isAdmin && !isSingleEquipment ? [{ id: "add-component", text: "Add component" }] : []),
+              ]}
+              onItemClick={({ detail }) => {
+                if (detail.id === "maintenance") {
+                  navigate(`/assets/${assetId}/routine-maintenance`);
+                }
+                if (detail.id === "datasheet" && asset.datasheet) {
+                  window.open(asset.datasheet, "_blank", "noopener,noreferrer");
+                }
+                if (detail.id === "edit-asset") {
+                  navigate(`/assets/${assetId}/edit`);
+                }
+                if (detail.id === "add-component") {
+                  navigate(`/assets/${assetId}/components/new`);
+                }
+              }}
+            >
+              More actions
+            </ButtonDropdown>
+          </div>
+        </div>
       }
       description={`${asset.display_id} - ${asset.location || "No location set"}`}
       variant="h1"
@@ -727,7 +827,7 @@ function SingleEquipmentDetail({
         <Box>{equipment?.display_id || "Not set"}</Box>
       </div>
       <div className="summary-row">
-        <Box variant="awsui-key-label">Certificate bridge</Box>
+        <Box variant="awsui-key-label">Certificate reference</Box>
         <Box>{selectedComponent?.display_id}</Box>
       </div>
       <div className="summary-row">
@@ -812,10 +912,10 @@ function CertificatesHeader({
       description={
         selectedComponent
           ? isSingleEquipment
-            ? "Certificate records for this asset."
+            ? "Certificate records for this asset, sorted by highest compliance risk first."
             : "Certificate records for the selected component."
           : isSingleEquipment
-            ? "The equipment bridge must load before certificates can be shown."
+            ? "The equipment context must load before certificates can be shown."
             : "A component must be selected before certificates can be shown."
       }
       variant="h2"
