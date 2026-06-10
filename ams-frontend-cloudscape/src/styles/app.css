@@ -1505,6 +1505,14 @@ body {
 }
 
 @media (max-width: 1100px) {
+  .brand-sidebar {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .brand-sidebar__profile {
+    flex: 0 0 auto;
+  }
+
   .login-page {
     grid-template-columns: 1fr;
   }
