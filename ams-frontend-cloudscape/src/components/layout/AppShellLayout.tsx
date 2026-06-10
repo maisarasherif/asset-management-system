@@ -3,19 +3,10 @@ import {
   Box,
   Flashbar,
   HelpPanel,
+  SideNavigation,
   TopNavigation,
+  type SideNavigationProps,
 } from "@cloudscape-design/components";
-import {
-  IconCalendarTime,
-  IconCategory2,
-  IconFolder,
-  IconLayoutDashboard,
-  IconShieldCog,
-  IconTemplate,
-  IconUsers,
-  IconBriefcase,
-  type Icon,
-} from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -48,7 +39,6 @@ const DESKTOP_NAVIGATION_QUERY = "(min-width: 1101px)";
 
 type NavigationItem = {
   href: string;
-  icon: Icon;
   text: string;
 };
 
@@ -264,7 +254,7 @@ export function AppShellLayout() {
       return [
         {
           label: "Overview",
-          items: [{ href: "/client/assets", icon: IconBriefcase, text: "My assets" }],
+          items: [{ href: "/client/assets", text: "My assets" }],
         },
       ];
     }
@@ -273,8 +263,8 @@ export function AppShellLayout() {
       {
         label: "Overview",
         items: [
-          { href: "/dashboard", icon: IconLayoutDashboard, text: "Dashboard" },
-          { href: "/assets", icon: IconFolder, text: "Asset Directory" },
+          { href: "/dashboard", text: "Dashboard" },
+          { href: "/assets", text: "Asset Directory" },
         ],
       },
     ];
@@ -284,18 +274,18 @@ export function AppShellLayout() {
         {
           label: "Configuration",
           items: [
-            { href: "/templates", icon: IconTemplate, text: "Templates" },
-            { href: "/catalog", icon: IconCategory2, text: "Catalog" },
+            { href: "/templates", text: "Templates" },
+            { href: "/catalog", text: "Catalog" },
             ...(isSuperAdmin
-              ? [{ href: "/scheduler", icon: IconCalendarTime, text: "Scheduler" }]
+              ? [{ href: "/scheduler", text: "Scheduler" }]
               : []),
           ],
         },
         {
           label: "Management",
           items: [
-            { href: "/client-access", icon: IconUsers, text: "Client Access" },
-            { href: "/administration", icon: IconShieldCog, text: "Administration" },
+            { href: "/client-access", text: "Client Access" },
+            { href: "/administration", text: "Administration" },
           ],
         }
       );
@@ -320,6 +310,19 @@ export function AppShellLayout() {
               : location.pathname.startsWith("/administration")
                 ? "/administration"
                 : location.pathname;
+  const sideNavigationItems = useMemo<SideNavigationProps.Item[]>(
+    () =>
+      navigationGroups.map((group) => ({
+        type: "section-group",
+        title: group.label,
+        items: group.items.map((item) => ({
+          type: "link",
+          text: item.text,
+          href: item.href,
+        })),
+      })),
+    [navigationGroups]
+  );
   const fullName = `${session?.firstName || ""} ${session?.lastName || ""}`.trim();
   const profileName = fullName || fallbackName(session?.role);
   const profileRole = roleDisplayName(session?.role);
@@ -331,67 +334,52 @@ export function AppShellLayout() {
       content={<div className="app-layout-content"><Outlet /></div>}
       navigation={
         <div className="brand-sidebar">
-          <div className="brand-sidebar__asset">
-            <span className="brand-sidebar__asset-label">Current asset</span>
-            <Select
-              ariaLabel="Select asset"
-              disabled={assetsQuery.isLoading || assetOptions.length === 0}
-              loadingText="Loading assets"
-              options={assetOptions}
-              placeholder="Select an asset"
-              selectedOption={selectedAssetOption}
-              statusType={assetsQuery.isLoading ? "loading" : "finished"}
-              onChange={({ detail }) => {
-                const nextAssetId = detail.selectedOption.value ?? null;
-                setSelectedAssetId(nextAssetId);
+          <SideNavigation
+            activeHref={activeHref}
+            className="brand-sidebar__side-navigation"
+            items={sideNavigationItems}
+            itemsControl={
+              <div className="brand-sidebar__asset">
+                <span className="brand-sidebar__asset-label">Current asset</span>
+                <Select
+                  ariaLabel="Select asset"
+                  disabled={assetsQuery.isLoading || assetOptions.length === 0}
+                  loadingText="Loading assets"
+                  options={assetOptions}
+                  placeholder="Select an asset"
+                  selectedOption={selectedAssetOption}
+                  statusType={assetsQuery.isLoading ? "loading" : "finished"}
+                  onChange={({ detail }) => {
+                    const nextAssetId = detail.selectedOption.value ?? null;
+                    setSelectedAssetId(nextAssetId);
 
-                if (!nextAssetId) return;
+                    if (!nextAssetId) return;
 
-                if (isClient) {
-                  navigate(`/client/assets/${nextAssetId}`);
-                  return;
-                }
+                    if (isClient) {
+                      navigate(`/client/assets/${nextAssetId}`);
+                      return;
+                    }
 
-                if (location.pathname.includes("/routine-maintenance")) {
-                  navigate(`/assets/${nextAssetId}/routine-maintenance`);
-                  return;
-                }
+                    if (location.pathname.includes("/routine-maintenance")) {
+                      navigate(`/assets/${nextAssetId}/routine-maintenance`);
+                      return;
+                    }
 
-                if (location.pathname.startsWith("/assets/") && !location.pathname.endsWith("/new")) {
-                  navigate(`/assets/${nextAssetId}`);
-                  return;
-                }
+                    if (location.pathname.startsWith("/assets/") && !location.pathname.endsWith("/new")) {
+                      navigate(`/assets/${nextAssetId}`);
+                      return;
+                    }
 
-                navigate("/dashboard");
-              }}
-            />
-          </div>
-          <nav className="brand-sidebar__nav" aria-label="Primary navigation">
-            {navigationGroups.map((group) => (
-              <div className="brand-sidebar__group" key={group.label}>
-                <div className="brand-sidebar__group-label">{group.label}</div>
-                <div className="brand-sidebar__group-items">
-                  {group.items.map((item) => {
-                    const isActive = activeHref === item.href;
-                    const ItemIcon = item.icon;
-
-                    return (
-                      <button
-                        aria-current={isActive ? "page" : undefined}
-                        className={`brand-sidebar__nav-item${isActive ? " is-active" : ""}`}
-                        key={item.href}
-                        onClick={() => navigate(item.href)}
-                        type="button"
-                      >
-                        <ItemIcon aria-hidden="true" size={19} stroke={1.8} />
-                        <span>{item.text}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                    navigate("/dashboard");
+                  }}
+                />
               </div>
-            ))}
-          </nav>
+            }
+            onFollow={(event) => {
+              event.preventDefault();
+              navigate(event.detail.href);
+            }}
+          />
           <div className="brand-sidebar__profile" ref={profileMenuRef}>
             {profileMenuOpen ? (
               <div className="brand-sidebar__profile-menu" role="menu">
