@@ -266,7 +266,8 @@ SELECT
     cert.status,
     cert.test_id,
     COALESCE(test.test_name, '') AS test_name,
-    COALESCE(test.validity_duration, 0)::int AS test_period_months,
+    test.validity_duration AS test_period_months,
+    COALESCE(test.requires_renewal, TRUE)::boolean AS test_requires_renewal,
     cert.imca_ref,
     cert.imca_d018,
     cert.maintenance_notes,
@@ -298,23 +299,24 @@ type GetClientCertificatesByAssetParams struct {
 }
 
 type GetClientCertificatesByAssetRow struct {
-	CertificateID    uuid.UUID  `json:"certificate_id"`
-	DisplayID        string     `json:"display_id"`
-	ComponentID      uuid.UUID  `json:"component_id"`
-	CertificateName  string     `json:"certificate_name"`
-	IssueDate        *time.Time `json:"issue_date"`
-	ExpiryDate       *time.Time `json:"expiry_date"`
-	IssuingAuthority string     `json:"issuing_authority"`
-	Status           string     `json:"status"`
-	TestID           uuid.UUID  `json:"test_id"`
-	TestName         string     `json:"test_name"`
-	TestPeriodMonths int32      `json:"test_period_months"`
-	ImcaRef          string     `json:"imca_ref"`
-	ImcaD018         string     `json:"imca_d018"`
-	MaintenanceNotes string     `json:"maintenance_notes"`
-	HasFile          bool       `json:"has_file"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	CertificateID       uuid.UUID  `json:"certificate_id"`
+	DisplayID           string     `json:"display_id"`
+	ComponentID         uuid.UUID  `json:"component_id"`
+	CertificateName     string     `json:"certificate_name"`
+	IssueDate           *time.Time `json:"issue_date"`
+	ExpiryDate          *time.Time `json:"expiry_date"`
+	IssuingAuthority    string     `json:"issuing_authority"`
+	Status              string     `json:"status"`
+	TestID              uuid.UUID  `json:"test_id"`
+	TestName            string     `json:"test_name"`
+	TestPeriodMonths    *int32     `json:"test_period_months"`
+	TestRequiresRenewal bool       `json:"test_requires_renewal"`
+	ImcaRef             string     `json:"imca_ref"`
+	ImcaD018            string     `json:"imca_d018"`
+	MaintenanceNotes    string     `json:"maintenance_notes"`
+	HasFile             bool       `json:"has_file"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetClientCertificatesByAsset(ctx context.Context, arg GetClientCertificatesByAssetParams) ([]GetClientCertificatesByAssetRow, error) {
@@ -338,6 +340,7 @@ func (q *Queries) GetClientCertificatesByAsset(ctx context.Context, arg GetClien
 			&i.TestID,
 			&i.TestName,
 			&i.TestPeriodMonths,
+			&i.TestRequiresRenewal,
 			&i.ImcaRef,
 			&i.ImcaD018,
 			&i.MaintenanceNotes,

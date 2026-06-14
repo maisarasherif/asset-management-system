@@ -40,7 +40,7 @@ import type {
   TemplateComponentInput,
   TemplateConfigurationComponent,
 } from "../../types/ams";
-import { formatMonthDuration, humanizeEnum } from "../../utils/format";
+import { formatRenewalDuration, humanizeEnum } from "../../utils/format";
 
 type EditorMode = "create" | "edit";
 
@@ -283,7 +283,7 @@ function useTemplateConfigureData(templateId: string | undefined, requestedScope
       (testTypesQuery.data || []).map((testType) => ({
         label: testType.test_name,
         value: testType.test_id,
-        description: `${formatMonthDuration(testType.validity_duration)} validity`,
+        description: formatRenewalDuration(testType.requires_renewal, testType.validity_duration),
       })),
     [testTypesQuery.data]
   );

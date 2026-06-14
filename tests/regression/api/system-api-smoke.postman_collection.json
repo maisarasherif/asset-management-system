@@ -850,7 +850,41 @@
                   "pm.response.to.have.status(201);",
                   "const body = pm.response.json();",
                   "pm.expect(body.test_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "pm.expect(body.requires_renewal).to.eql(true);",
                   "pm.collectionVariables.set('test_id', body.test_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create One-Time Test Certificate Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"test_name\": \"Manufacturer Certificate {{runSuffix}}\",\n  \"requires_renewal\": false,\n  \"description\": \"One-time certificate type for smoke test\"\n}"
+            },
+            "url": "{{baseUrl}}/test-type"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.test_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "pm.expect(body.requires_renewal).to.eql(false);",
+                  "pm.expect(body.validity_duration).to.eql(null);",
+                  "pm.collectionVariables.set('one_time_test_id', body.test_id);"
                 ]
               }
             }
@@ -1841,6 +1875,40 @@
           ]
         },
         {
+          "name": "Create One-Time Certificate Without Expiry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Manufacturer Certificate {{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Manufacturer\",\n  \"test_id\": \"{{one_time_test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Smoke one-time certificate\"\n}"
+            },
+            "url": "{{baseUrl}}/certificate"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.certificate_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "pm.expect(body.test_id).to.eql(pm.collectionVariables.get('one_time_test_id'));",
+                  "pm.expect(body.expiry_date).to.eql(null);",
+                  "pm.expect(body.status).to.eql('VALID');",
+                  "pm.collectionVariables.set('one_time_certificate_id', body.certificate_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Get Certificates",
           "request": {
             "method": "GET",
@@ -2499,6 +2567,24 @@
           "request": {
             "method": "DELETE",
             "url": "{{baseUrl}}/test-type/{{test_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete One-Time Test Certificate Type",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/test-type/{{one_time_test_id}}"
           },
           "event": [
             {

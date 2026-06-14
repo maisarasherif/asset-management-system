@@ -40,7 +40,7 @@ import type {
   SingleAssetEquipment,
   TestType,
 } from "../../types/ams";
-import { formatDate, formatMonthDuration, humanizeEnum } from "../../utils/format";
+import { formatDate, formatRenewalDuration, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
 
 type ComponentGroupSection = {
@@ -407,10 +407,13 @@ export function AssetWorkspacePage() {
     },
     {
       id: "test-period",
-      header: "Test period",
+      header: "Renewal",
       width: 125,
       minWidth: 115,
-      cell: (item) => formatMonthDuration(testTypeMap.get(item.test_id)?.validity_duration),
+      cell: (item) => {
+        const testType = testTypeMap.get(item.test_id);
+        return formatRenewalDuration(testType?.requires_renewal, testType?.validity_duration);
+      },
     },
     {
       id: "expiry",

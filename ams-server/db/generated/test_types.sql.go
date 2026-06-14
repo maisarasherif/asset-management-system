@@ -12,19 +12,21 @@ import (
 )
 
 const createTestType = `-- name: CreateTestType :one
-INSERT INTO test_types (display_id, test_name, validity_duration, description)
-VALUES (next_display_id('test_type_display_id_seq'), $1, $2, $3)
+INSERT INTO test_types (display_id, test_name, validity_duration, requires_renewal, description)
+VALUES (next_display_id('test_type_display_id_seq'), $1, $2, $3, $4)
 RETURNING
     test_id,
     display_id,
     test_name,
     validity_duration,
+    requires_renewal,
     description
 `
 
 type CreateTestTypeParams struct {
 	TestName         string `json:"test_name"`
-	ValidityDuration int32  `json:"validity_duration"`
+	ValidityDuration *int32 `json:"validity_duration"`
+	RequiresRenewal  bool   `json:"requires_renewal"`
 	Description      string `json:"description"`
 }
 
@@ -32,18 +34,25 @@ type CreateTestTypeRow struct {
 	TestID           uuid.UUID `json:"test_id"`
 	DisplayID        string    `json:"display_id"`
 	TestName         string    `json:"test_name"`
-	ValidityDuration int32     `json:"validity_duration"`
+	ValidityDuration *int32    `json:"validity_duration"`
+	RequiresRenewal  bool      `json:"requires_renewal"`
 	Description      string    `json:"description"`
 }
 
 func (q *Queries) CreateTestType(ctx context.Context, arg CreateTestTypeParams) (CreateTestTypeRow, error) {
-	row := q.db.QueryRow(ctx, createTestType, arg.TestName, arg.ValidityDuration, arg.Description)
+	row := q.db.QueryRow(ctx, createTestType,
+		arg.TestName,
+		arg.ValidityDuration,
+		arg.RequiresRenewal,
+		arg.Description,
+	)
 	var i CreateTestTypeRow
 	err := row.Scan(
 		&i.TestID,
 		&i.DisplayID,
 		&i.TestName,
 		&i.ValidityDuration,
+		&i.RequiresRenewal,
 		&i.Description,
 	)
 	return i, err
@@ -67,6 +76,7 @@ SELECT
     display_id,
     test_name,
     validity_duration,
+    requires_renewal,
     description
 FROM test_types
 ORDER BY test_name ASC
@@ -76,7 +86,8 @@ type GetAllTestTypesRow struct {
 	TestID           uuid.UUID `json:"test_id"`
 	DisplayID        string    `json:"display_id"`
 	TestName         string    `json:"test_name"`
-	ValidityDuration int32     `json:"validity_duration"`
+	ValidityDuration *int32    `json:"validity_duration"`
+	RequiresRenewal  bool      `json:"requires_renewal"`
 	Description      string    `json:"description"`
 }
 
@@ -94,6 +105,7 @@ func (q *Queries) GetAllTestTypes(ctx context.Context) ([]GetAllTestTypesRow, er
 			&i.DisplayID,
 			&i.TestName,
 			&i.ValidityDuration,
+			&i.RequiresRenewal,
 			&i.Description,
 		); err != nil {
 			return nil, err
@@ -139,6 +151,7 @@ SELECT
     display_id,
     test_name,
     validity_duration,
+    requires_renewal,
     description
 FROM test_types
 WHERE test_id = $1
@@ -149,7 +162,8 @@ type GetTestTypeByIDRow struct {
 	TestID           uuid.UUID `json:"test_id"`
 	DisplayID        string    `json:"display_id"`
 	TestName         string    `json:"test_name"`
-	ValidityDuration int32     `json:"validity_duration"`
+	ValidityDuration *int32    `json:"validity_duration"`
+	RequiresRenewal  bool      `json:"requires_renewal"`
 	Description      string    `json:"description"`
 }
 
@@ -161,6 +175,7 @@ func (q *Queries) GetTestTypeByID(ctx context.Context, testID uuid.UUID) (GetTes
 		&i.DisplayID,
 		&i.TestName,
 		&i.ValidityDuration,
+		&i.RequiresRenewal,
 		&i.Description,
 	)
 	return i, err
@@ -168,13 +183,14 @@ func (q *Queries) GetTestTypeByID(ctx context.Context, testID uuid.UUID) (GetTes
 
 const updateTestType = `-- name: UpdateTestType :execrows
 UPDATE test_types
-SET test_name = $1, validity_duration = $2, description = $3
-WHERE test_id = $4
+SET test_name = $1, validity_duration = $2, requires_renewal = $3, description = $4
+WHERE test_id = $5
 `
 
 type UpdateTestTypeParams struct {
 	TestName         string    `json:"test_name"`
-	ValidityDuration int32     `json:"validity_duration"`
+	ValidityDuration *int32    `json:"validity_duration"`
+	RequiresRenewal  bool      `json:"requires_renewal"`
 	Description      string    `json:"description"`
 	TestID           uuid.UUID `json:"test_id"`
 }
@@ -183,6 +199,7 @@ func (q *Queries) UpdateTestType(ctx context.Context, arg UpdateTestTypeParams) 
 	result, err := q.db.Exec(ctx, updateTestType,
 		arg.TestName,
 		arg.ValidityDuration,
+		arg.RequiresRenewal,
 		arg.Description,
 		arg.TestID,
 	)

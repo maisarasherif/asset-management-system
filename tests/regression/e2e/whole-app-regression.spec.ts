@@ -94,6 +94,8 @@ interface RegressionFixture {
   scopeCategoryId: string;
   testId: string;
   testName: string;
+  oneTimeTestId: string;
+  oneTimeTestName: string;
   accessId: string;
 }
 
@@ -276,6 +278,17 @@ async function createRegressionFixture(
       description: "Created by Playwright for whole-app route regression.",
     },
   );
+  const oneTimeTestName = `PW Manufacturer Certificate ${suffix}`;
+  const oneTimeTestType = await postJson<CreatedTestType>(
+    request,
+    token,
+    "/test-type",
+    {
+      test_name: oneTimeTestName,
+      requires_renewal: false,
+      description: "Created by Playwright to verify one-time certificate types.",
+    },
+  );
 
   const template = await postJson<CreatedTemplate>(
     request,
@@ -380,6 +393,8 @@ async function createRegressionFixture(
     scopeCategoryId: scopeCategory.scope_category_id,
     testId: testType.test_id,
     testName,
+    oneTimeTestId: oneTimeTestType.test_id,
+    oneTimeTestName,
     accessId: access.access_id,
   };
 }
@@ -414,6 +429,7 @@ async function cleanupRegressionFixture(
     `/main-category/${fixture.mainCategoryId}`,
   );
   await deleteIfPresent(request, token, `/test-type/${fixture.testId}`);
+  await deleteIfPresent(request, token, `/test-type/${fixture.oneTimeTestId}`);
   await deleteIfPresent(
     request,
     token,
@@ -590,9 +606,12 @@ test.describe("whole app regression", () => {
 
       await expectRoute(page, "/catalog", [
         "Catalog",
+        "Test / Certificate types",
         fixture.mainCategoryName,
         fixture.categoryName,
         fixture.testName,
+        fixture.oneTimeTestName,
+        "No renewal",
       ]);
       await expectRoute(page, "/administration", ["Administration", "Users"]);
       await expectRoute(page, "/client-access", [

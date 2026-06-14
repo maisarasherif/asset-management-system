@@ -681,6 +681,32 @@ func TestCreateCertificate(t *testing.T) {
 	assertField(t, certificate, "status", "VALID")
 }
 
+func TestCreateOneTimeCertificateWithoutExpiry(t *testing.T) {
+	h := setupIntegrationTest(t)
+	componentID, renewableTestID := createComponentFixture(t, h, "One Time Certificate Component")
+	oneTimeTestType := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/test-type", map[string]any{
+		"test_name":        "Manufacturer One-Time Certificate",
+		"requires_renewal": false,
+		"description":      "Manufacturer certificate with no renewal cycle",
+	}, http.StatusCreated))
+	assertField(t, oneTimeTestType, "requires_renewal", false)
+	assertField(t, oneTimeTestType, "validity_duration", nil)
+	oneTimeTestID := stringField(t, oneTimeTestType, "test_id")
+
+	oneTimePayload := certificatePayload(componentID, oneTimeTestID, 90)
+	oneTimePayload["certificate_name"] = "Manufacturer certificate"
+	oneTimePayload["expiry_date"] = nil
+	certificate := createCertificate(t, h, oneTimePayload)
+	assertField(t, certificate, "test_id", oneTimeTestID)
+	assertField(t, certificate, "expiry_date", nil)
+	assertField(t, certificate, "status", "VALID")
+
+	renewablePayload := certificatePayload(componentID, renewableTestID, 90)
+	renewablePayload["expiry_date"] = nil
+	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/certificate", renewablePayload, http.StatusBadRequest))
+	assertField(t, body, "error", "expiry date is required for renewable test/certificate types")
+}
+
 func TestCreateCertificateExpiryBeforeIssue(t *testing.T) {
 	h := setupIntegrationTest(t)
 	componentID, testID := createComponentFixture(t, h, "Bad Certificate Component")

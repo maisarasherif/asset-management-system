@@ -369,15 +369,15 @@ type PatchComponentInput struct {
 // ==================== Certificate DTOs ====================
 
 type CertificateInput struct {
-	ComponentID      string    `json:"component_id" validate:"required,uuid"`
-	CertificateName  string    `json:"certificate_name" validate:"required,min=2,max=200"`
-	IssueDate        time.Time `json:"issue_date" validate:"required"`
-	ExpiryDate       time.Time `json:"expiry_date" validate:"required"`
-	IssuingAuthority string    `json:"issuing_authority" validate:"required,min=2,max=200"`
-	TestID           string    `json:"test_id" validate:"required,uuid"`
-	IMCARef          string    `json:"imca_ref"`
-	IMCAD018         string    `json:"imca_d018"`
-	MaintenanceNotes string    `json:"maintenance_notes"`
+	ComponentID      string     `json:"component_id" validate:"required,uuid"`
+	CertificateName  string     `json:"certificate_name" validate:"required,min=2,max=200"`
+	IssueDate        time.Time  `json:"issue_date" validate:"required"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	IssuingAuthority string     `json:"issuing_authority" validate:"required,min=2,max=200"`
+	TestID           string     `json:"test_id" validate:"required,uuid"`
+	IMCARef          string     `json:"imca_ref"`
+	IMCAD018         string     `json:"imca_d018"`
+	MaintenanceNotes string     `json:"maintenance_notes"`
 }
 
 type PatchCertificateInput struct {
@@ -396,13 +396,15 @@ type PatchCertificateInput struct {
 
 type TestTypeInput struct {
 	TestName         string `json:"test_name" validate:"required,min=2,max=100"`
-	ValidityDuration int32  `json:"validity_duration" validate:"required,min=1"`
+	ValidityDuration *int32 `json:"validity_duration" validate:"omitempty,min=1"`
+	RequiresRenewal  *bool  `json:"requires_renewal"`
 	Description      string `json:"description"`
 }
 
 type PatchTestTypeInput struct {
 	TestName         *string `json:"test_name" validate:"omitempty,min=2,max=100"`
 	ValidityDuration *int32  `json:"validity_duration" validate:"omitempty,min=1"`
+	RequiresRenewal  *bool   `json:"requires_renewal"`
 	Description      *string `json:"description"`
 }
 
@@ -479,7 +481,8 @@ type TemplateComponentTestDetailResponse struct {
 	Position                       int32     `json:"position"`
 	CreatedAt                      time.Time `json:"created_at"`
 	TestName                       string    `json:"test_name"`
-	ValidityDuration               int32     `json:"validity_duration"`
+	ValidityDuration               *int32    `json:"validity_duration"`
+	RequiresRenewal                bool      `json:"requires_renewal"`
 	Description                    string    `json:"description"`
 }
 

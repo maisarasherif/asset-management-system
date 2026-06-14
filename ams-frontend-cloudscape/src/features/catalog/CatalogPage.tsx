@@ -2,6 +2,7 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   ColumnLayout,
   Container,
   ContentLayout,
@@ -50,7 +51,7 @@ import type {
   EquipmentType,
   TestType,
 } from "../../types/ams";
-import { formatMonthDuration } from "../../utils/format";
+import { formatRenewalDuration } from "../../utils/format";
 
 type MainCategoryEditor =
   | {
@@ -79,6 +80,7 @@ type TestTypeEditor =
       id?: string;
       test_name: string;
       validity_duration: string;
+      requires_renewal: boolean;
       description: string;
     }
   | null;
@@ -312,7 +314,8 @@ function useCatalogMutations({
     mutationFn: async (editor: NonNullable<TestTypeEditor>) => {
       const payload = {
         test_name: editor.test_name.trim(),
-        validity_duration: Number(editor.validity_duration),
+        validity_duration: editor.requires_renewal ? Number(editor.validity_duration) : null,
+        requires_renewal: editor.requires_renewal,
         description: editor.description.trim(),
       };
 
@@ -322,13 +325,13 @@ function useCatalogMutations({
       await queryClient.invalidateQueries({ queryKey: ["test-types"] });
       onTestTypeSaved();
       success(
-        editor.mode === "create" ? "Test type created" : "Test type updated",
-        "The test type catalog is ready for template and certificate flows."
+        editor.mode === "create" ? "Test / Certificate type created" : "Test / Certificate type updated",
+        "The catalog is ready for template and certificate flows."
       );
     },
     onError: (mutationError: Error) => {
       setModalError(mutationError.message);
-      error("Test type save failed", mutationError.message);
+      error("Test / Certificate type save failed", mutationError.message);
     },
   });
 
@@ -564,17 +567,17 @@ function useCatalogColumns({
     () => [
       {
         id: "name",
-        header: "Test type",
+        header: "Test / Certificate type",
         width: "22%",
         minWidth: 180,
         cell: (item) => <TruncatedCell value={item.test_name} />,
       },
       {
         id: "duration",
-        header: "Validity duration",
+        header: "Renewal",
         width: 180,
         minWidth: 160,
-        cell: (item) => formatMonthDuration(item.validity_duration),
+        cell: (item) => formatRenewalDuration(item.requires_renewal, item.validity_duration),
       },
       {
         id: "description",
@@ -763,7 +766,8 @@ export function CatalogPage() {
           mode: "edit",
           id: testType.test_id,
           test_name: testType.test_name,
-          validity_duration: String(testType.validity_duration),
+          validity_duration: testType.validity_duration === null ? "" : String(testType.validity_duration),
+          requires_renewal: testType.requires_renewal,
           description: testType.description || "",
         });
       },
@@ -840,10 +844,10 @@ export function CatalogPage() {
   const saveTestType = (editor: NonNullable<TestTypeEditor>) => {
     const validityDuration = Number(editor.validity_duration);
     if (editor.test_name.trim().length < 2) {
-      setModalError("Test type name must be at least 2 characters.");
+      setModalError("Test / Certificate type name must be at least 2 characters.");
       return;
     }
-    if (!Number.isFinite(validityDuration) || validityDuration < 1) {
+    if (editor.requires_renewal && (!Number.isFinite(validityDuration) || validityDuration < 1)) {
       setModalError("Validity duration must be a positive number of months.");
       return;
     }
@@ -938,6 +942,7 @@ export function CatalogPage() {
           mode: "create",
           test_name: "",
           validity_duration: "12",
+          requires_renewal: true,
           description: "",
         });
       }}
@@ -1132,13 +1137,13 @@ function CatalogView({
           />
 
           <CatalogTableSection
-            actionText="Create test type"
+            actionText="Create test / certificate type"
             columnDefinitions={testTypeColumns}
-            description="Test types define certificate families and their expected validity period."
-            emptyText="No test types are defined yet."
+            description="Test / Certificate types define certificate families and renewal requirements."
+            emptyText="No test / certificate types are defined yet."
             items={testTypes}
             onAction={onCreateTestType}
-            title="Test types"
+            title="Test / Certificate types"
             trackBy="test_id"
           />
 
@@ -1301,8 +1306,8 @@ function CatalogSummary({ categories, equipmentTypes, mainCategories, testTypes 
       />
       <CatalogSummaryItem
         count={testTypes.length}
-        description="Default certificate test definitions and validity windows."
-        title="Test types"
+        description="Default certificate definitions and renewal windows."
+        title="Test / Certificate types"
       />
       <CatalogSummaryItem
         count={equipmentTypes.length}
@@ -1733,7 +1738,7 @@ function TestTypeEditorModal({
       <SpaceBetween direction="horizontal" size="xs">
         <Button onClick={onDismiss}>Cancel</Button>
         <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
-          {draft?.mode === "edit" ? "Save changes" : "Create test type"}
+          {draft?.mode === "edit" ? "Save changes" : "Create type"}
         </Button>
       </SpaceBetween>
     ),
@@ -1743,13 +1748,13 @@ function TestTypeEditorModal({
   return (
     <Modal
       visible={visible}
-      header={draft?.mode === "edit" ? "Edit test type" : "Create test type"}
+      header={draft?.mode === "edit" ? "Edit test / certificate type" : "Create test / certificate type"}
       onDismiss={onDismiss}
       footer={footer}
     >
       <SpaceBetween direction="vertical" size="l">
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
-        <FormField label="Test type name">
+        <FormField label="Test / Certificate type name">
           <Input
             value={draft?.test_name || ""}
             onChange={({ detail }) =>
@@ -1757,15 +1762,33 @@ function TestTypeEditorModal({
             }
           />
         </FormField>
-        <FormField label="Validity duration (months)">
-          <Input
-            inputMode="numeric"
-            value={draft?.validity_duration || ""}
-            onChange={({ detail }) =>
-              setDraft((current) => current && { ...current, validity_duration: detail.value })
-            }
-          />
-        </FormField>
+        <Checkbox
+          checked={draft?.requires_renewal ?? true}
+          onChange={({ detail }) =>
+            setDraft((current) =>
+              current
+                ? {
+                    ...current,
+                    requires_renewal: detail.checked,
+                    validity_duration: detail.checked ? current.validity_duration || "12" : "",
+                  }
+                : current
+            )
+          }
+        >
+          Requires renewal
+        </Checkbox>
+        {draft?.requires_renewal ?? true ? (
+          <FormField label="Validity duration (months)">
+            <Input
+              inputMode="numeric"
+              value={draft?.validity_duration || ""}
+              onChange={({ detail }) =>
+                setDraft((current) => current && { ...current, validity_duration: detail.value })
+              }
+            />
+          </FormField>
+        ) : null}
         <FormField label="Description">
           <Textarea
             rows={6}

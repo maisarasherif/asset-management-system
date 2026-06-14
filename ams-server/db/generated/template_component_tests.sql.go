@@ -194,6 +194,7 @@ SELECT
     tct.created_at,
     tt.test_name,
     tt.validity_duration,
+    tt.requires_renewal,
     tt.description
 FROM template_component_tests tct
 JOIN test_types tt ON tt.test_id = tct.test_id
@@ -209,7 +210,8 @@ type GetTemplateComponentTestsWithDetailRow struct {
 	Position                       int32     `json:"position"`
 	CreatedAt                      time.Time `json:"created_at"`
 	TestName                       string    `json:"test_name"`
-	ValidityDuration               int32     `json:"validity_duration"`
+	ValidityDuration               *int32    `json:"validity_duration"`
+	RequiresRenewal                bool      `json:"requires_renewal"`
 	Description                    string    `json:"description"`
 }
 
@@ -231,6 +233,7 @@ func (q *Queries) GetTemplateComponentTestsWithDetail(ctx context.Context, templ
 			&i.CreatedAt,
 			&i.TestName,
 			&i.ValidityDuration,
+			&i.RequiresRenewal,
 			&i.Description,
 		); err != nil {
 			return nil, err
@@ -253,6 +256,7 @@ SELECT
     tct.created_at,
     tt.test_name,
     tt.validity_duration,
+    tt.requires_renewal,
     tt.description
 FROM template_component_tests tct
 JOIN test_types tt ON tt.test_id = tct.test_id
@@ -269,7 +273,8 @@ type GetTemplateComponentTestsWithDetailByTemplateIDRow struct {
 	Position                       int32     `json:"position"`
 	CreatedAt                      time.Time `json:"created_at"`
 	TestName                       string    `json:"test_name"`
-	ValidityDuration               int32     `json:"validity_duration"`
+	ValidityDuration               *int32    `json:"validity_duration"`
+	RequiresRenewal                bool      `json:"requires_renewal"`
 	Description                    string    `json:"description"`
 }
 
@@ -291,6 +296,7 @@ func (q *Queries) GetTemplateComponentTestsWithDetailByTemplateID(ctx context.Co
 			&i.CreatedAt,
 			&i.TestName,
 			&i.ValidityDuration,
+			&i.RequiresRenewal,
 			&i.Description,
 		); err != nil {
 			return nil, err

@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -13,6 +14,27 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
+
+func testTypeRenewalValues(input dto.TestTypeInput) (bool, *int32, error) {
+	requiresRenewal := true
+	if input.RequiresRenewal != nil {
+		requiresRenewal = *input.RequiresRenewal
+	}
+	return validateTestTypeRenewal(requiresRenewal, input.ValidityDuration)
+}
+
+func validateTestTypeRenewal(requiresRenewal bool, validityDuration *int32) (bool, *int32, error) {
+	if requiresRenewal {
+		if validityDuration == nil {
+			return requiresRenewal, validityDuration, fmt.Errorf("validity duration is required for renewable test/certificate types")
+		}
+		return requiresRenewal, validityDuration, nil
+	}
+	if validityDuration != nil {
+		return requiresRenewal, validityDuration, fmt.Errorf("validity duration must be omitted for one-time test/certificate types")
+	}
+	return requiresRenewal, nil, nil
+}
 
 func AddTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -25,6 +47,11 @@ func AddTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
 			return
 		}
+		requiresRenewal, validityDuration, err := testTypeRenewalValues(input)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -33,7 +60,8 @@ func AddTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		testType, err := queries.CreateTestType(ctx, db.CreateTestTypeParams{
 			TestName:         input.TestName,
-			ValidityDuration: input.ValidityDuration,
+			ValidityDuration: validityDuration,
+			RequiresRenewal:  requiresRenewal,
 			Description:      input.Description,
 		})
 		if err != nil {
@@ -61,6 +89,11 @@ func UpdateTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
 			return
 		}
+		requiresRenewal, validityDuration, err := testTypeRenewalValues(input)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
@@ -69,7 +102,8 @@ func UpdateTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		rows, err := queries.UpdateTestType(ctx, db.UpdateTestTypeParams{
 			TestName:         input.TestName,
-			ValidityDuration: input.ValidityDuration,
+			ValidityDuration: validityDuration,
+			RequiresRenewal:  requiresRenewal,
 			Description:      input.Description,
 			TestID:           testID,
 		})
@@ -120,21 +154,34 @@ func PatchTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		testName := existing.TestName
 		validityDuration := existing.ValidityDuration
+		requiresRenewal := existing.RequiresRenewal
 		description := existing.Description
 
 		if input.TestName != nil {
 			testName = *input.TestName
 		}
 		if input.ValidityDuration != nil {
-			validityDuration = *input.ValidityDuration
+			validityDuration = input.ValidityDuration
+		}
+		if input.RequiresRenewal != nil {
+			requiresRenewal = *input.RequiresRenewal
+			if !requiresRenewal && input.ValidityDuration == nil {
+				validityDuration = nil
+			}
 		}
 		if input.Description != nil {
 			description = *input.Description
+		}
+		requiresRenewal, validityDuration, err = validateTestTypeRenewal(requiresRenewal, validityDuration)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 
 		rows, err := queries.UpdateTestType(ctx, db.UpdateTestTypeParams{
 			TestName:         testName,
 			ValidityDuration: validityDuration,
+			RequiresRenewal:  requiresRenewal,
 			Description:      description,
 			TestID:           testID,
 		})

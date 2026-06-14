@@ -74,6 +74,10 @@ function addMonths(dateValue: string, months: number) {
   return nextDate.toISOString().slice(0, 10);
 }
 
+function testTypeRequiresExpiry(testType: TestType | null | undefined) {
+  return testType?.requires_renewal ?? true;
+}
+
 export function CertificateDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -132,6 +136,7 @@ export function CertificateDetailPage() {
     testTypesQuery.data?.find(
       (testType) => testType.test_id === certificateQuery.data?.test_id,
     ) ?? null;
+  const selectedTypeRequiresExpiry = testTypeRequiresExpiry(selectedTestType);
   const renewalIssueDateValue =
     renewalIssueDate || toDateInputValue(certificateQuery.data?.issue_date);
   const renewalExpiryDateValue =
@@ -164,10 +169,14 @@ export function CertificateDetailPage() {
       if (isCertificateFileTooLarge(selectedFile)) {
         throw new Error(certificateFileTooLargeMessage());
       }
-      if (!renewalIssueDateValue || !renewalExpiryDateValue) {
+      if (!renewalIssueDateValue) {
+        throw new Error("Choose issue date before uploading.");
+      }
+      if (selectedTypeRequiresExpiry && !renewalExpiryDateValue) {
         throw new Error("Choose issue date and expiry date before uploading.");
       }
       if (
+        selectedTypeRequiresExpiry &&
         new Date(renewalExpiryDateValue).getTime() <
         new Date(renewalIssueDateValue).getTime()
       ) {
@@ -181,7 +190,7 @@ export function CertificateDetailPage() {
       );
       await patchCertificate(certificateId, {
         issue_date: toIsoDate(renewalIssueDateValue),
-        expiry_date: toIsoDate(renewalExpiryDateValue),
+        ...(selectedTypeRequiresExpiry ? { expiry_date: toIsoDate(renewalExpiryDateValue) } : {}),
       });
       return uploadResponse;
     },
@@ -369,9 +378,11 @@ export function CertificateDetailPage() {
     onIssueDateChange: (nextIssueDate) => {
       setRenewalIssueDate(nextIssueDate);
       setRenewalExpiryDate(
-        nextIssueDate && selectedTestType
-          ? addMonths(nextIssueDate, selectedTestType.validity_duration)
-          : renewalExpiryDateValue,
+        nextIssueDate && selectedTestType && selectedTypeRequiresExpiry
+          ? addMonths(nextIssueDate, selectedTestType.validity_duration ?? 0)
+          : selectedTypeRequiresExpiry
+            ? renewalExpiryDateValue
+            : "",
       );
     },
     onRenew: () => uploadMutation.mutate(),
@@ -384,6 +395,7 @@ export function CertificateDetailPage() {
     selectedCompetentPersonOption,
     selectedFile,
     selectedTestType,
+    selectedTypeRequiresExpiry,
     testTypeName,
     uploadColumns,
     uploadPending: uploadMutation.isPending,
@@ -424,6 +436,7 @@ interface CertificateDetailPageViewProps {
   selectedCompetentPersonOption: SelectProps.Option | null;
   selectedFile: File | null;
   selectedTestType: TestType | null;
+  selectedTypeRequiresExpiry: boolean;
   testTypeName: string;
   uploadColumns: TableProps<CertificateUploadAudit>["columnDefinitions"];
   uploadPending: boolean;
@@ -462,6 +475,7 @@ function renderCertificateDetailPage({
   selectedCompetentPersonOption,
   selectedFile,
   selectedTestType,
+  selectedTypeRequiresExpiry,
   testTypeName,
   uploadColumns,
   uploadPending,
@@ -578,7 +592,7 @@ function renderCertificateDetailPage({
 
         {isAdmin ? (
           <Container
-            header={<Header variant="h2">Renew/change certificate</Header>}
+            header={<Header variant="h2">{selectedTypeRequiresExpiry ? "Renew/change certificate" : "Upload/change certificate"}</Header>}
           >
             <SpaceBetween direction="vertical" size="m">
               <Box color="text-body-secondary">
@@ -609,22 +623,28 @@ function renderCertificateDetailPage({
                     onChange={(event) => onIssueDateChange(event.target.value)}
                   />
                 </FormField>
-                <FormField
-                  description={
-                    selectedTestType && renewalIssueDateValue
-                      ? "Auto-filled from the selected certificate test validity."
-                      : undefined
-                  }
-                  label="Expiry date"
-                >
-                  <input
-                    aria-label="Certificate renewal expiry date"
-                    className="app-native-input"
-                    value={renewalExpiryDateValue}
-                    type="date"
-                    onChange={(event) => onExpiryDateChange(event.target.value)}
-                  />
-                </FormField>
+                {selectedTypeRequiresExpiry ? (
+                  <FormField
+                    description={
+                      selectedTestType && renewalIssueDateValue
+                        ? "Auto-filled from the selected certificate test validity."
+                        : undefined
+                    }
+                    label="Expiry date"
+                  >
+                    <input
+                      aria-label="Certificate renewal expiry date"
+                      className="app-native-input"
+                      value={renewalExpiryDateValue}
+                      type="date"
+                      onChange={(event) => onExpiryDateChange(event.target.value)}
+                    />
+                  </FormField>
+                ) : (
+                  <FormField label="Expiry date">
+                    <Box color="text-body-secondary">No renewal required</Box>
+                  </FormField>
+                )}
               </ColumnLayout>
               <FormField label="Competent Person">
                 <Select
@@ -653,13 +673,13 @@ function renderCertificateDetailPage({
                     !selectedFile ||
                     !selectedCompetentPersonId ||
                     !renewalIssueDateValue ||
-                    !renewalExpiryDateValue
+                    (selectedTypeRequiresExpiry && !renewalExpiryDateValue)
                   }
                   loading={uploadPending}
                   variant="primary"
                   onClick={onRenew}
                 >
-                  Renew/change certificate
+                  {selectedTypeRequiresExpiry ? "Renew/change certificate" : "Upload/change certificate"}
                 </Button>
                 {selectedFile ? <Box>{selectedFile.name}</Box> : null}
               </SpaceBetween>

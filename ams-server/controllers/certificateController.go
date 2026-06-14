@@ -47,6 +47,35 @@ func currentCertificateStatus(storedStatus string, expiryDate *time.Time) string
 	return computeCertificateStatus(*expiryDate)
 }
 
+func validateCertificateRenewalDates(requiresRenewal bool, issueDate *time.Time, expiryDate *time.Time) error {
+	if requiresRenewal {
+		if expiryDate == nil {
+			return fmt.Errorf("expiry date is required for renewable test/certificate types")
+		}
+		if issueDate != nil && expiryDate.Before(*issueDate) {
+			return fmt.Errorf("expiry date must be after issue date")
+		}
+		return nil
+	}
+	if expiryDate != nil {
+		return fmt.Errorf("expiry date must be omitted for one-time test/certificate types")
+	}
+	return nil
+}
+
+func certificateStatusForRenewalMode(requiresRenewal bool, issueDate *time.Time, expiryDate *time.Time, fallback string) string {
+	if requiresRenewal {
+		if expiryDate != nil {
+			return computeCertificateStatus(*expiryDate)
+		}
+		return currentCertificateStatus(fallback, expiryDate)
+	}
+	if issueDate != nil {
+		return "VALID"
+	}
+	return currentCertificateStatus(fallback, expiryDate)
+}
+
 const maxCertificateFileSize = 10 * 1024 * 1024
 const maxCertificateUploadRequestSize = maxCertificateFileSize + 512*1024
 
@@ -188,11 +217,6 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		if input.ExpiryDate.Before(input.IssueDate) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "expiry date must be after issue date"})
-			return
-		}
-
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
@@ -216,7 +240,7 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		_, err = queries.GetTestTypeByID(ctx, testID)
+		testType, err := queries.GetTestTypeByID(ctx, testID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
@@ -226,18 +250,21 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		// dto uses time.Time, db expects *time.Time
 		issueDate := input.IssueDate
 		expiryDate := input.ExpiryDate
+		if err := validateCertificateRenewalDates(testType.RequiresRenewal, &issueDate, expiryDate); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		certificate, err := queries.CreateCertificate(ctx, db.CreateCertificateParams{
 			ComponentID:      componentID,
 			CertificateName:  input.CertificateName,
 			IssueDate:        &issueDate,
-			ExpiryDate:       &expiryDate,
+			ExpiryDate:       expiryDate,
 			CertificateFile:  "",
 			IssuingAuthority: input.IssuingAuthority,
-			Status:           computeCertificateStatus(input.ExpiryDate),
+			Status:           certificateStatusForRenewalMode(testType.RequiresRenewal, &issueDate, expiryDate, ""),
 			TestID:           testID,
 			ImcaRef:          input.IMCARef,
 			ImcaD018:         input.IMCAD018,
@@ -285,11 +312,6 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		if input.ExpiryDate.Before(input.IssueDate) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "expiry date must be after issue date"})
-			return
-		}
-
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
@@ -319,7 +341,7 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		_, err = queries.GetTestTypeByID(ctx, testID)
+		testType, err := queries.GetTestTypeByID(ctx, testID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
@@ -331,13 +353,17 @@ func UpdateCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		issueDate := input.IssueDate
 		expiryDate := input.ExpiryDate
-		newStatus := computeCertificateStatus(input.ExpiryDate)
+		if err := validateCertificateRenewalDates(testType.RequiresRenewal, &issueDate, expiryDate); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		newStatus := certificateStatusForRenewalMode(testType.RequiresRenewal, &issueDate, expiryDate, existing.Status)
 
 		rows, err := queries.UpdateCertificate(ctx, db.UpdateCertificateParams{
 			ComponentID:      componentID,
 			CertificateName:  input.CertificateName,
 			IssueDate:        &issueDate,
-			ExpiryDate:       &expiryDate,
+			ExpiryDate:       expiryDate,
 			CertificateFile:  existing.CertificateFile,
 			IssuingAuthority: input.IssuingAuthority,
 			Status:           newStatus,
@@ -511,35 +537,34 @@ func PatchCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			maintenanceNotes = *input.MaintenanceNotes
 		}
 
-		// date validation — only if both are non-nil
-		if issueDate != nil && expiryDate != nil && expiryDate.Before(*issueDate) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "expiry date must be after issue date"})
-			return
-		}
-
 		_, err = queries.GetComponentByID(ctx, componentID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
 			return
 		}
 
-		if input.TestID != nil {
-			_, err = queries.GetTestTypeByID(ctx, testID)
-			if err != nil {
-				if errors.Is(err, pgx.ErrNoRows) {
-					c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
-					return
-				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate test type"})
+		testType, err := queries.GetTestTypeByID(ctx, testID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
 				return
 			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate test type"})
+			return
+		}
+		if !testType.RequiresRenewal {
+			if input.ExpiryDate != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "expiry date must be omitted for one-time test/certificate types"})
+				return
+			}
+			expiryDate = nil
+		}
+		if testType.RequiresRenewal && issueDate != nil && expiryDate != nil && expiryDate.Before(*issueDate) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "expiry date must be after issue date"})
+			return
 		}
 
-		// compute status only if expiry date is set, otherwise keep PENDING
-		newStatus := existing.Status
-		if expiryDate != nil {
-			newStatus = computeCertificateStatus(*expiryDate)
-		}
+		newStatus := certificateStatusForRenewalMode(testType.RequiresRenewal, issueDate, expiryDate, existing.Status)
 
 		rows, err := queries.UpdateCertificate(ctx, db.UpdateCertificateParams{
 			ComponentID:      componentID,

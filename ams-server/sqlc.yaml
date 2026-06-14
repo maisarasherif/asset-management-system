@@ -28,6 +28,10 @@ sql:
           go_type:
             type: "time.Time"
             pointer: true
+        - column: "test_types.validity_duration"
+          go_type:
+            type: "int32"
+            pointer: true
         - column: "certificates.created_at"
           go_type: "time.Time"
         - column: "certificates.updated_at"

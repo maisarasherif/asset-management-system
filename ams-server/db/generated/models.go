@@ -277,10 +277,11 @@ type TemplateComponentTest struct {
 
 type TestType struct {
 	TestName         string    `json:"test_name"`
-	ValidityDuration int32     `json:"validity_duration"`
+	ValidityDuration *int32    `json:"validity_duration"`
 	Description      string    `json:"description"`
 	TestID           uuid.UUID `json:"test_id"`
 	DisplayID        string    `json:"display_id"`
+	RequiresRenewal  bool      `json:"requires_renewal"`
 }
 
 type User struct {

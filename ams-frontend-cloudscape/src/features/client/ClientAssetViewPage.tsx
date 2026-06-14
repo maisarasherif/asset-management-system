@@ -18,7 +18,7 @@ import {
   getClientCertificateDownloadUrl,
 } from "../../lib/api/ams";
 import { countCertificateStatuses } from "../../utils/certificateStatusCounts";
-import { formatDate, formatMonthDuration, humanizeEnum } from "../../utils/format";
+import { formatDate, formatRenewalDuration, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
 import { useFlashbar } from "../../providers/flashbar-context";
 
@@ -239,9 +239,12 @@ export function ClientAssetViewPage() {
                           </Button>
                         </div>
                         <div className="client-certificate-record__field">
-                          <span className="client-certificate-record__label">Test period</span>
+                          <span className="client-certificate-record__label">Renewal</span>
                           <span className="client-certificate-record__value">
-                            {formatMonthDuration(certificate.test_period_months)}
+                            {formatRenewalDuration(
+                              certificate.test_requires_renewal,
+                              certificate.test_period_months
+                            )}
                           </span>
                         </div>
                         <div className="client-certificate-record__field">

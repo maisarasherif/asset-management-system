@@ -64,6 +64,7 @@ SELECT
     tct.created_at,
     tt.test_name,
     tt.validity_duration,
+    tt.requires_renewal,
     tt.description
 FROM template_component_tests tct
 JOIN test_types tt ON tt.test_id = tct.test_id
@@ -80,6 +81,7 @@ SELECT
     tct.created_at,
     tt.test_name,
     tt.validity_duration,
+    tt.requires_renewal,
     tt.description
 FROM template_component_tests tct
 JOIN test_types tt ON tt.test_id = tct.test_id

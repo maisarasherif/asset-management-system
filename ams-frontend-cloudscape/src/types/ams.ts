@@ -283,7 +283,8 @@ export interface TestType {
   test_id: string;
   display_id: string;
   test_name: string;
-  validity_duration: number;
+  validity_duration: number | null;
+  requires_renewal: boolean;
   description: string;
 }
 
@@ -350,7 +351,8 @@ export interface TemplateComponentTest {
   position: number;
   created_at: string;
   test_name: string;
-  validity_duration: number;
+  validity_duration: number | null;
+  requires_renewal: boolean;
   description: string;
 }
 
@@ -462,7 +464,7 @@ export interface CertificateInput {
   component_id: string;
   certificate_name: string;
   issue_date: string;
-  expiry_date: string;
+  expiry_date: string | null;
   issuing_authority: string;
   test_id: string;
   imca_ref: string;
@@ -474,7 +476,7 @@ export interface PatchCertificateInput {
   component_id?: string;
   certificate_name?: string;
   issue_date?: string;
-  expiry_date?: string;
+  expiry_date?: string | null;
   issuing_authority?: string;
   test_id?: string;
   imca_ref?: string;
@@ -645,7 +647,8 @@ export interface CategoryInput {
 
 export interface TestTypeInput {
   test_name: string;
-  validity_duration: number;
+  validity_duration: number | null;
+  requires_renewal: boolean;
   description: string;
 }
 
@@ -680,7 +683,8 @@ export interface ClientCertificate {
   status: CertificateStatus;
   test_id: string;
   test_name: string;
-  test_period_months: number;
+  test_period_months: number | null;
+  test_requires_renewal: boolean;
   imca_ref: string;
   imca_d018: string;
   maintenance_notes: string;

@@ -589,6 +589,7 @@ func GetTemplateConfiguration(pool *pgxpool.Pool) gin.HandlerFunc {
 					CreatedAt:                      test.CreatedAt,
 					TestName:                       test.TestName,
 					ValidityDuration:               test.ValidityDuration,
+					RequiresRenewal:                test.RequiresRenewal,
 					Description:                    test.Description,
 				},
 			)

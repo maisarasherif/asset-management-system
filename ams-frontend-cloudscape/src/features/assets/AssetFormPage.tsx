@@ -32,7 +32,7 @@ import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { AssetInput, AssetStatus } from "../../types/ams";
-import { humanizeEnum } from "../../utils/format";
+import { formatRenewalDuration, humanizeEnum } from "../../utils/format";
 
 type AssetFormViewProps = {
   assetId: string | undefined;
@@ -263,7 +263,7 @@ export function AssetFormPage() {
     () =>
       (testTypesQuery.data || []).map((testType) => ({
         label: testType.test_name,
-        description: `${testType.validity_duration} month validity`,
+        description: formatRenewalDuration(testType.requires_renewal, testType.validity_duration),
         value: testType.test_id,
       })),
     [testTypesQuery.data]

@@ -45,6 +45,11 @@ export function formatMonthDuration(value?: number | null): string {
   return `${value} ${value === 1 ? "month" : "months"}`;
 }
 
+export function formatRenewalDuration(requiresRenewal?: boolean, value?: number | null): string {
+  if (requiresRenewal === false) return "No renewal";
+  return formatMonthDuration(value);
+}
+
 export function humanizeEnum(
   value: AssetStatus | CertificateStatus | SafetyCritical | string
 ): string {

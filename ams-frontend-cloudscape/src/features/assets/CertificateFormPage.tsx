@@ -44,7 +44,7 @@ import type {
   PatchCertificateInput,
   TestType,
 } from "../../types/ams";
-import { formatMonthDuration, toDateInputValue, toIsoDate } from "../../utils/format";
+import { formatRenewalDuration, toDateInputValue, toIsoDate } from "../../utils/format";
 
 type CertificateFormState = {
   component_id: string;
@@ -74,6 +74,10 @@ function addMonths(dateValue: string, months: number) {
   }
   date.setUTCMonth(date.getUTCMonth() + months);
   return date.toISOString().slice(0, 10);
+}
+
+function testTypeRequiresExpiry(testType: TestType | null | undefined) {
+  return testType?.requires_renewal ?? true;
 }
 
 function buildPatchPayload(baseForm: CertificateFormState, nextForm: CertificateFormState): PatchCertificateInput {
@@ -117,7 +121,7 @@ function mapTestTypeOptions(testTypes?: TestType[]): SelectProps.Option[] {
     testTypes?.map((testType) => ({
       label: testType.test_name,
       value: testType.test_id,
-      description: formatMonthDuration(testType.validity_duration),
+      description: formatRenewalDuration(testType.requires_renewal, testType.validity_duration),
     })) ?? []
   );
 }
@@ -312,11 +316,16 @@ export function CertificateFormPage() {
     return <PageError title="Unable to load certificate form" description="Refresh the page and try again." />;
   }
 
-  const suggestedExpiry = !isEditing ? addMonths(data.form.issue_date, data.selectedTestType?.validity_duration ?? 0) : "";
+  const selectedTypeRequiresExpiry = testTypeRequiresExpiry(data.selectedTestType);
+  const suggestedExpiry =
+    !isEditing && selectedTypeRequiresExpiry
+      ? addMonths(data.form.issue_date, data.selectedTestType?.validity_duration ?? 0)
+      : "";
   const handleSubmit = () => {
     const validationError = validateCertificateForm({
       form: data.form,
       isEditing,
+      selectedTestType: data.selectedTestType,
       selectedFile,
       selectedCompetentPersonId,
     });
@@ -335,7 +344,7 @@ export function CertificateFormPage() {
             certificate_name: data.form.certificate_name.trim(),
             issuing_authority: data.form.issuing_authority.trim(),
             issue_date: toIsoDate(data.form.issue_date)!,
-            expiry_date: toIsoDate(data.form.expiry_date)!,
+            expiry_date: selectedTypeRequiresExpiry ? toIsoDate(data.form.expiry_date)! : null,
             imca_ref: data.form.imca_ref.trim(),
             imca_d018: data.form.imca_d018.trim(),
             maintenance_notes: data.form.maintenance_notes.trim(),
@@ -365,7 +374,10 @@ export function CertificateFormPage() {
           ? {
               label: data.selectedTestType.test_name,
               value: data.selectedTestType.test_id,
-              description: formatMonthDuration(data.selectedTestType.validity_duration),
+              description: formatRenewalDuration(
+                data.selectedTestType.requires_renewal,
+                data.selectedTestType.validity_duration
+              ),
             }
           : null
       }
@@ -379,11 +391,13 @@ export function CertificateFormPage() {
 function validateCertificateForm({
   form,
   isEditing,
+  selectedTestType,
   selectedFile,
   selectedCompetentPersonId,
 }: {
   form: CertificateFormState;
   isEditing: boolean;
+  selectedTestType: TestType | null;
   selectedFile: File | null;
   selectedCompetentPersonId: string;
 }) {
@@ -394,10 +408,14 @@ function validateCertificateForm({
     return "Choose a test type.";
   }
   if (!isEditing) {
-    if (!form.issue_date || !form.expiry_date) {
+    const requiresExpiry = testTypeRequiresExpiry(selectedTestType);
+    if (!form.issue_date) {
+      return "Issue date is required.";
+    }
+    if (requiresExpiry && !form.expiry_date) {
       return "Issue and expiry dates are required.";
     }
-    if (new Date(form.expiry_date) < new Date(form.issue_date)) {
+    if (requiresExpiry && new Date(form.expiry_date) < new Date(form.issue_date)) {
       return "Expiry date must be after issue date.";
     }
     if (selectedFile && !selectedCompetentPersonId) {
@@ -629,7 +647,7 @@ function CertificateCoreFields({
         />
       </FormField>
 
-      <FormField label="Test type" description="Determines certificate validity period and compliance category." stretch>
+      <FormField label="Test / Certificate type" description="Determines certificate renewal and compliance category." stretch>
         <Select
           selectedOption={selectedTestTypeOption}
           options={testTypeOptions}
@@ -638,10 +656,13 @@ function CertificateCoreFields({
             const nextTestType = testTypes.find((testType) => testType.test_id === detail.selectedOption.value);
             onFormChange((draft) => {
               const issueDate = draft.issue_date ?? form.issue_date;
+              const requiresExpiry = testTypeRequiresExpiry(nextTestType);
               return {
                 ...draft,
                 test_id: detail.selectedOption.value ?? "",
-                expiry_date: addMonths(issueDate, nextTestType?.validity_duration ?? 0) || draft.expiry_date,
+                expiry_date: requiresExpiry
+                  ? addMonths(issueDate, nextTestType?.validity_duration ?? 0) || draft.expiry_date
+                  : "",
               };
             });
           }}
@@ -698,20 +719,28 @@ function CertificateDateFields({
             onFormChange((draft) => ({
               ...draft,
               issue_date: issueDate,
-              expiry_date: addMonths(issueDate, selectedTestType?.validity_duration ?? 0) || draft.expiry_date,
+              expiry_date: testTypeRequiresExpiry(selectedTestType)
+                ? addMonths(issueDate, selectedTestType?.validity_duration ?? 0) || draft.expiry_date
+                : "",
             }));
           }}
         />
       </FormField>
-      <FormField label="Expiry date" description={suggestedExpiry ? `Suggested: ${suggestedExpiry}` : undefined} stretch>
-        <input
-          aria-label="Certificate expiry date"
-          className="native-date-input"
-          type="date"
-          value={form.expiry_date}
-          onChange={(event) => onFormChange((draft) => ({ ...draft, expiry_date: event.target.value }))}
-        />
-      </FormField>
+      {testTypeRequiresExpiry(selectedTestType) ? (
+        <FormField label="Expiry date" description={suggestedExpiry ? `Suggested: ${suggestedExpiry}` : undefined} stretch>
+          <input
+            aria-label="Certificate expiry date"
+            className="native-date-input"
+            type="date"
+            value={form.expiry_date}
+            onChange={(event) => onFormChange((draft) => ({ ...draft, expiry_date: event.target.value }))}
+          />
+        </FormField>
+      ) : (
+        <FormField label="Expiry date" stretch>
+          <Box color="text-body-secondary">No renewal required</Box>
+        </FormField>
+      )}
     </ColumnLayout>
   );
 }
@@ -796,7 +825,10 @@ function CertificateContextPanel({
         <ContextRow label="Asset" value={asset?.name ?? "Unknown"} />
         <ContextRow label="Component" value={component?.name ?? "Unknown"} />
         <ContextRow label="Component type" value={component?.equipment_type ?? "Not specified"} />
-        <ContextRow label="Selected validity" value={formatMonthDuration(selectedTestType?.validity_duration)} />
+        <ContextRow
+          label="Selected renewal"
+          value={formatRenewalDuration(selectedTestType?.requires_renewal, selectedTestType?.validity_duration)}
+        />
       </SpaceBetween>
     </Container>
   );
