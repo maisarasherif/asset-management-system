@@ -6,7 +6,7 @@ import {
 	useState,
 	type PropsWithChildren,
 } from "react";
-import { getSession } from "../lib/api/ams";
+import { getSession, logoutRequest } from "../lib/api/ams";
 import { configureApiClient } from "../lib/api/client";
 import { sessionFromLoginResponse } from "./auth-session";
 import { AuthContext, type AuthContextValue } from "./auth-context";
@@ -25,6 +25,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 	const [session, setSession] = useState<AuthSession | null>(null);
 	const [isSessionLoading, setIsSessionLoading] = useState(true);
 	const sessionVersion = useRef(0);
+	const expiryLogoutInFlight = useRef(false);
 	const [selectedAssetId, setSelectedAssetIdState] = useState<string | null>(() =>
 		readStoredAsset()
 	);
@@ -60,9 +61,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
 	}, []);
 
 	const expireSession = useCallback(() => {
-		clearSession();
-		localStorage.setItem(LOGOUT_BROADCAST_KEY, String(Date.now()));
-		redirectToLogin();
+		if (expiryLogoutInFlight.current) {
+			return;
+		}
+
+		expiryLogoutInFlight.current = true;
+		void logoutRequest()
+			.catch(() => undefined)
+			.finally(() => {
+				clearSession();
+				localStorage.setItem(LOGOUT_BROADCAST_KEY, String(Date.now()));
+				redirectToLogin();
+				expiryLogoutInFlight.current = false;
+			});
 	}, [clearSession, redirectToLogin]);
 
   const setSelectedAssetId = useCallback((assetId: string | null) => {

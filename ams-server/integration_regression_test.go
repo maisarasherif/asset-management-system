@@ -1251,15 +1251,40 @@ func TestLogoutClearsAccessTokenCookie(t *testing.T) {
 		t.Fatalf("logout returned %d, expected %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
 
-	for _, cookie := range recorder.Result().Cookies() {
-		if cookie.Name == utils.AccessTokenCookieName {
-			if cookie.MaxAge >= 0 {
-				t.Fatalf("expected logout cookie to clear access token, got MaxAge %d", cookie.MaxAge)
-			}
-			return
-		}
+	assertAccessTokenCookieCleared(t, recorder)
+}
+
+func TestInvalidAccessTokenCookieClearsCookie(t *testing.T) {
+	h := setupIntegrationTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/session", nil)
+	req.AddCookie(&http.Cookie{Name: utils.AccessTokenCookieName, Value: "not-a-valid-token"})
+	recorder := httptest.NewRecorder()
+	h.router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("session returned %d, expected %d: %s", recorder.Code, http.StatusUnauthorized, recorder.Body.String())
 	}
-	t.Fatal("expected logout to clear access token cookie")
+
+	assertAccessTokenCookieCleared(t, recorder)
+}
+
+func TestMismatchedAccessTokenCookieClearsCookie(t *testing.T) {
+	h := setupIntegrationTest(t)
+	user := createIntegrationUser(t, h.pool, "Stale", "Cookie", "stale-cookie@example.com", "user-password", "USER")
+	token, _, err := utils.GenerateAccessToken(user.Email, user.FirstName, user.LastName, user.Role, user.UserID.String())
+	if err != nil {
+		t.Fatalf("failed to generate token: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/session", nil)
+	req.AddCookie(&http.Cookie{Name: utils.AccessTokenCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+	h.router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("session returned %d, expected %d: %s", recorder.Code, http.StatusUnauthorized, recorder.Body.String())
+	}
+
+	assertAccessTokenCookieCleared(t, recorder)
 }
 
 func TestLoginWrongPassword(t *testing.T) {
@@ -1626,6 +1651,20 @@ func createIntegrationUser(t *testing.T, pool *pgxpool.Pool, firstName, lastName
 		t.Fatalf("failed to create integration user: %v", err)
 	}
 	return user
+}
+
+func assertAccessTokenCookieCleared(t *testing.T, recorder *httptest.ResponseRecorder) {
+	t.Helper()
+
+	for _, cookie := range recorder.Result().Cookies() {
+		if cookie.Name == utils.AccessTokenCookieName {
+			if cookie.MaxAge >= 0 {
+				t.Fatalf("expected response cookie to clear access token, got MaxAge %d", cookie.MaxAge)
+			}
+			return
+		}
+	}
+	t.Fatal("expected response to clear access token cookie")
 }
 
 func mustGetIntegrationUserByEmail(t *testing.T, pool *pgxpool.Pool, email string) db.GetUserByEmailRow {

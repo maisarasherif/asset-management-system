@@ -17,6 +17,14 @@ import (
 const AccessTokenCookieName = "ams_access_token"
 const accessTokenTTL = 6 * time.Hour
 
+type AccessTokenSource string
+
+const (
+	AccessTokenSourceNone          AccessTokenSource = ""
+	AccessTokenSourceAuthorization AccessTokenSource = "authorization"
+	AccessTokenSourceCookie        AccessTokenSource = "cookie"
+)
+
 type SignedDetails struct {
 	Email     string
 	FirstName string
@@ -140,25 +148,30 @@ func ValidateToken(tokenString string) (*SignedDetails, error) {
 }
 
 func GetAccessToken(c *gin.Context) (string, error) {
+	token, _, err := GetAccessTokenWithSource(c)
+	return token, err
+}
+
+func GetAccessTokenWithSource(c *gin.Context) (string, AccessTokenSource, error) {
 	authHeader := c.Request.Header.Get("Authorization")
 	if strings.TrimSpace(authHeader) != "" {
 		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-			return "", errors.New("invalid authorization header format")
+			return "", AccessTokenSourceNone, errors.New("invalid authorization header format")
 		}
 
 		token := authHeader[7:]
 		if token == "" {
-			return "", errors.New("bearer token is required")
+			return "", AccessTokenSourceNone, errors.New("bearer token is required")
 		}
 
-		return token, nil
+		return token, AccessTokenSourceAuthorization, nil
 	}
 
 	if token, err := c.Cookie(AccessTokenCookieName); err == nil && strings.TrimSpace(token) != "" {
-		return token, nil
+		return token, AccessTokenSourceCookie, nil
 	}
 
-	return "", errors.New("authorization header or access token cookie is required")
+	return "", AccessTokenSourceNone, errors.New("authorization header or access token cookie is required")
 }
 
 func GetUserIdFromContext(c *gin.Context) (string, error) {

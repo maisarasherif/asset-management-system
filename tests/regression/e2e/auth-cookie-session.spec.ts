@@ -53,3 +53,55 @@ test.describe("HTTP-only cookie session", () => {
     await expect(page.getByText("Checking your session...")).toHaveCount(0);
   });
 });
+
+test.describe("HTTP-only cookie expiry", () => {
+  test("scheduled session expiry clears the server cookie before showing login", async ({ page }) => {
+    let logoutCalls = 0;
+
+    await page.route("**/v1/**", async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const path = url.pathname.replace(/^\/v1/, "");
+
+      if (path === "/session" && request.method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            user_id: "user-admin",
+            first_name: "Ada",
+            last_name: "Admin",
+            email: "admin@example.test",
+            role: "SUPER_ADMIN",
+            status: "ACTIVE",
+            expires_at: new Date(Date.now() + 1000).toISOString(),
+            can_manage_user_passwords: true,
+          }),
+        });
+        return;
+      }
+
+      if (path === "/logout" && request.method() === "POST") {
+        logoutCalls += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "user logged out successfully" }),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: [], meta: { page: 1, limit: 20, total: 0, total_pages: 0 } }),
+      });
+    });
+
+    await page.goto("/dashboard");
+
+    await expect(page).toHaveURL(/\/login$/);
+    await expect.poll(() => logoutCalls).toBe(1);
+    await expect(page.getByRole("heading", { name: "Staff login" })).toBeVisible();
+  });
+});

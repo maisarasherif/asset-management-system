@@ -13,9 +13,11 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
+const accessTokenSourceContextKey = "accessTokenSource"
+
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token, err := utils.GetAccessToken(c)
+		token, tokenSource, err := utils.GetAccessTokenWithSource(c)
 
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
@@ -32,6 +34,9 @@ func AuthMiddleware() gin.HandlerFunc {
 		claims, err := utils.ValidateToken(token)
 
 		if err != nil {
+			if tokenSource == utils.AccessTokenSourceCookie {
+				utils.ClearAccessTokenCookie(c)
+			}
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			c.Abort()
 			return
@@ -44,6 +49,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Set("lastName", claims.LastName)
 		c.Set("expiresAt", claims.ExpiresAt.Time)
 		c.Set("accessToken", token)
+		c.Set(accessTokenSourceContextKey, tokenSource)
 
 		c.Next()
 	}
@@ -86,6 +92,9 @@ func ActiveUserMiddleware(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		presentedToken, _ := c.Get("accessToken")
 		if session.Token == "" || presentedToken != session.Token {
+			if tokenSource, _ := c.Get(accessTokenSourceContextKey); tokenSource == utils.AccessTokenSourceCookie {
+				utils.ClearAccessTokenCookie(c)
+			}
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "session expired. Please sign in again."})
 			c.Abort()
 			return
