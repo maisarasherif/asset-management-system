@@ -49,6 +49,10 @@ interface CreatedTestType {
   test_id: string;
 }
 
+interface CreatedCompetencyCategory {
+  competency_category_id: string;
+}
+
 interface CreatedTemplate {
   template_id: string;
 }
@@ -64,6 +68,10 @@ interface ComponentRecord {
 interface CertificateRecord {
   certificate_id: string;
   certificate_name: string;
+}
+
+interface CertificateDetail extends CertificateRecord {
+  competency_category_ids: string[];
 }
 
 interface PaginatedResponse<T> {
@@ -96,6 +104,7 @@ interface RegressionFixture {
   testName: string;
   oneTimeTestId: string;
   oneTimeTestName: string;
+  competencyCategoryId: string;
   accessId: string;
 }
 
@@ -290,6 +299,18 @@ async function createRegressionFixture(
     },
   );
 
+  const competencyCategory = await postJson<CreatedCompetencyCategory>(
+    request,
+    token,
+    "/competency-category",
+    {
+      category_code: `PW-WHOLE-CERT-${suffix}`,
+      category_name: `PW Whole Certifier ${suffix}`,
+      description: "Created by Playwright to verify limited certificate competent-person categories.",
+      active: true,
+    },
+  );
+
   const template = await postJson<CreatedTemplate>(
     request,
     token,
@@ -324,7 +345,9 @@ async function createRegressionFixture(
           tests: [
             {
               test_id: testType.test_id,
-              competency_category_ids: [],
+              competency_category_ids: [
+                competencyCategory.competency_category_id,
+              ],
             },
           ],
         },
@@ -373,6 +396,14 @@ async function createRegressionFixture(
   );
   expect(certificates.data).toHaveLength(1);
   const certificate = certificates.data[0];
+  const certificateDetail = await getJson<CertificateDetail>(
+    request,
+    token,
+    `/certificate/${certificate.certificate_id}`,
+  );
+  expect(certificateDetail.competency_category_ids).toContain(
+    competencyCategory.competency_category_id,
+  );
 
   return {
     suffix,
@@ -400,6 +431,7 @@ async function createRegressionFixture(
     testName,
     oneTimeTestId: oneTimeTestType.test_id,
     oneTimeTestName,
+    competencyCategoryId: competencyCategory.competency_category_id,
     accessId: access.access_id,
   };
 }

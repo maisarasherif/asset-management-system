@@ -137,6 +137,10 @@
       "value": ""
     },
     {
+      "key": "limited_certificate_id",
+      "value": ""
+    },
+    {
       "key": "catalog_scope_id",
       "value": ""
     },
@@ -2079,6 +2083,57 @@
           ]
         },
         {
+          "name": "Create Limited Category Certificate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Limited Category Certificate {{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"expiry_date\": \"2027-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Bureau Veritas\",\n  \"test_id\": \"{{test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Smoke certificate with limited competent-person category\",\n  \"competency_category_ids\": [\"{{competency_category_id}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/certificate"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('limited_certificate_id', body.certificate_id);",
+                  "pm.expect(body.competency_category_ids).to.include(pm.collectionVariables.get('competency_category_id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Limited Category Certificate",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificate/{{limited_certificate_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.competency_category_ids).to.include(pm.collectionVariables.get('competency_category_id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Upload Certificate File",
           "request": {
             "method": "POST",
@@ -2346,6 +2401,24 @@
           "request": {
             "method": "GET",
             "url": "{{baseUrl}}/certificates/component/{{spun_component_id}}?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Limited Category Certificate",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/certificate/{{limited_certificate_id}}"
           },
           "event": [
             {
