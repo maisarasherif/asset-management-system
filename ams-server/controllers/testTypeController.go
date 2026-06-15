@@ -140,7 +140,14 @@ func PatchTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		queries := db.New(pool)
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin test type transaction"})
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		queries := db.New(tx)
 
 		existing, err := queries.GetTestTypeByID(ctx, testID)
 		if err != nil {
@@ -191,6 +198,10 @@ func PatchTestType(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		if rows == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "test type not found"})
+			return
+		}
+		if err := tx.Commit(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit test type"})
 			return
 		}
 

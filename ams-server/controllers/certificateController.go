@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
@@ -45,6 +46,52 @@ func currentCertificateStatus(storedStatus string, expiryDate *time.Time) string
 		return storedStatus
 	}
 	return computeCertificateStatus(*expiryDate)
+}
+
+func buildCertificateResponse(
+	ctx context.Context,
+	queries *db.Queries,
+	certificateID uuid.UUID,
+	displayID string,
+	componentID uuid.UUID,
+	certificateName string,
+	issueDate *time.Time,
+	expiryDate *time.Time,
+	certificateFile string,
+	issuingAuthority string,
+	status string,
+	testID uuid.UUID,
+	imcaRef string,
+	imcaD018 string,
+	maintenanceNotes string,
+	createdAt time.Time,
+	updatedAt time.Time,
+) (dto.CertificateResponse, error) {
+	categories, err := queries.GetCompetencyCategoriesByCertificateID(ctx, certificateID)
+	if err != nil {
+		return dto.CertificateResponse{}, err
+	}
+	categoryIDs, allowedCategories := buildCompetencyCategoryRules(categories)
+
+	return dto.CertificateResponse{
+		CertificateID:               certificateID.String(),
+		DisplayID:                   displayID,
+		ComponentID:                 componentID.String(),
+		CertificateName:             certificateName,
+		IssueDate:                   issueDate,
+		ExpiryDate:                  expiryDate,
+		CertificateFile:             certificateFile,
+		IssuingAuthority:            issuingAuthority,
+		Status:                      status,
+		TestID:                      testID.String(),
+		IMCARef:                     imcaRef,
+		IMCAD018:                    imcaD018,
+		MaintenanceNotes:            maintenanceNotes,
+		CompetencyCategoryIDs:       categoryIDs,
+		AllowedCompetencyCategories: allowedCategories,
+		CreatedAt:                   createdAt,
+		UpdatedAt:                   updatedAt,
+	}, nil
 }
 
 func validateCertificateRenewalDates(requiresRenewal bool, issueDate *time.Time, expiryDate *time.Time) error {
@@ -134,8 +181,31 @@ func GetCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 		certificate.Status = currentCertificateStatus(certificate.Status, certificate.ExpiryDate)
+		response, err := buildCertificateResponse(
+			ctx,
+			queries,
+			certificate.CertificateID,
+			certificate.DisplayID,
+			certificate.ComponentID,
+			certificate.CertificateName,
+			certificate.IssueDate,
+			certificate.ExpiryDate,
+			certificate.CertificateFile,
+			certificate.IssuingAuthority,
+			certificate.Status,
+			certificate.TestID,
+			certificate.ImcaRef,
+			certificate.ImcaD018,
+			certificate.MaintenanceNotes,
+			certificate.CreatedAt,
+			certificate.UpdatedAt,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificate competency categories"})
+			return
+		}
 
-		c.JSON(http.StatusOK, certificate)
+		c.JSON(http.StatusOK, response)
 	}
 }
 
@@ -233,10 +303,27 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		categoryIDs, err := parseCompetencyCategoryIDs(input.CompetencyCategoryIDs)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin certificate creation transaction"})
+			return
+		}
+		defer tx.Rollback(ctx)
+		queries = db.New(tx)
 
 		_, err = queries.GetComponentByID(ctx, componentID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+		if err := validateActiveCompetencyCategoryIDs(ctx, queries, categoryIDs); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -274,6 +361,37 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add certificate"})
 			return
 		}
+		if err := setCertificateCompetencyCategories(ctx, queries, certificate.CertificateID, categoryIDs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set certificate competency categories"})
+			return
+		}
+		response, err := buildCertificateResponse(
+			ctx,
+			queries,
+			certificate.CertificateID,
+			certificate.DisplayID,
+			certificate.ComponentID,
+			certificate.CertificateName,
+			certificate.IssueDate,
+			certificate.ExpiryDate,
+			certificate.CertificateFile,
+			certificate.IssuingAuthority,
+			certificate.Status,
+			certificate.TestID,
+			certificate.ImcaRef,
+			certificate.ImcaD018,
+			certificate.MaintenanceNotes,
+			certificate.CreatedAt,
+			certificate.UpdatedAt,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificate competency categories"})
+			return
+		}
+		if err := tx.Commit(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit certificate creation"})
+			return
+		}
 
 		expiryStr := ""
 		if certificate.ExpiryDate != nil {
@@ -291,7 +409,7 @@ func AddCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 			Str("created_by", userID).
 			Msg("certificate added successfully")
 
-		c.JSON(http.StatusCreated, certificate)
+		c.JSON(http.StatusCreated, response)
 	}
 }
 
@@ -682,6 +800,25 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 		if !competencyCategory.Active {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "competency category is inactive"})
 			return
+		}
+		configuredCategoryCount, err := queries.CountCertificateCompetencyCategories(ctx, certificateID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate certificate competency requirements"})
+			return
+		}
+		if configuredCategoryCount > 0 {
+			allowedCategoryCount, err := queries.CountCertificateCompetencyCategoryByIDs(ctx, db.CountCertificateCompetencyCategoryByIDsParams{
+				CertificateID:        certificateID,
+				CompetencyCategoryID: competentPerson.CompetencyCategoryID,
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate certificate competency requirements"})
+				return
+			}
+			if allowedCategoryCount == 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "competent person category is not allowed for this certificate"})
+				return
+			}
 		}
 
 		key, err := utils.UploadFile(ctx, file, header)

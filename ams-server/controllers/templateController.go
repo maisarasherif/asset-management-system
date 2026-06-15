@@ -148,7 +148,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		categoryIDs, testIDs, err := collectConfigureReferenceIDs(input.Components)
+		categoryIDs, testIDs, competencyCategoryIDs, err := collectConfigureReferenceIDs(input.Components)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -161,6 +161,12 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		testUUIDs, err := utils.ParseUUIDSlice(testIDs, "test_id")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		competencyCategoryUUIDs, err := utils.ParseUUIDSlice(competencyCategoryIDs, "competency_category_id")
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -213,6 +219,11 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 				"error":            "one or more test types were not found",
 				"missing_test_ids": missingTestIDs,
 			})
+			return
+		}
+
+		if err := validateActiveCompetencyCategoryIDs(ctx, queries, competencyCategoryUUIDs); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -312,18 +323,33 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 			}
 			keptComponentIDs[templateComponentID] = struct{}{}
 
-			for _, testIDValue := range componentInput.TestIDs {
-				testID, err := utils.ParseUUID(testIDValue, "test_id")
+			testItems, err := configureComponentTestItems(componentInput)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			for _, testItem := range testItems {
+				testID, err := utils.ParseUUID(testItem.TestID, "test_id")
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+					return
+				}
+				testCompetencyCategoryIDs, err := parseCompetencyCategoryIDs(testItem.CompetencyCategoryIDs)
 				if err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 					return
 				}
 
-				if _, err := queries.CreateTemplateComponentTest(ctx, db.CreateTemplateComponentTestParams{
+				tct, err := queries.CreateTemplateComponentTest(ctx, db.CreateTemplateComponentTestParams{
 					TemplateComponentID: templateComponentID,
 					TestID:              testID,
-				}); err != nil {
+				})
+				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign test to template component"})
+					return
+				}
+				if err := setTemplateComponentTestCompetencyCategories(ctx, queries, tct.TemplateComponentTestID, testCompetencyCategoryIDs); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set template test competency categories"})
 					return
 				}
 				totalTests++
@@ -399,11 +425,28 @@ func DeleteTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-func collectConfigureReferenceIDs(components []dto.ConfigureTemplateComponentItem) ([]string, []string, error) {
+func configureComponentTestItems(component dto.ConfigureTemplateComponentItem) ([]dto.ConfigureTemplateComponentTestItem, error) {
+	if len(component.Tests) > 0 {
+		return component.Tests, nil
+	}
+
+	tests := make([]dto.ConfigureTemplateComponentTestItem, 0, len(component.TestIDs))
+	for _, testID := range component.TestIDs {
+		tests = append(tests, dto.ConfigureTemplateComponentTestItem{
+			TestID:                testID,
+			CompetencyCategoryIDs: []string{},
+		})
+	}
+	return tests, nil
+}
+
+func collectConfigureReferenceIDs(components []dto.ConfigureTemplateComponentItem) ([]string, []string, []string, error) {
 	categoryIDs := make([]string, 0, len(components))
 	testIDs := make([]string, 0)
+	competencyCategoryIDs := make([]string, 0)
 	seenCategoryIDs := make(map[string]struct{}, len(components))
 	seenTestIDs := make(map[string]struct{})
+	seenCompetencyCategoryIDs := make(map[string]struct{})
 
 	for _, component := range components {
 		if _, exists := seenCategoryIDs[component.CategoryID]; !exists {
@@ -411,10 +454,19 @@ func collectConfigureReferenceIDs(components []dto.ConfigureTemplateComponentIte
 			categoryIDs = append(categoryIDs, component.CategoryID)
 		}
 
-		componentSeenTests := make(map[string]struct{}, len(component.TestIDs))
-		for _, testID := range component.TestIDs {
+		testItems, err := configureComponentTestItems(component)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if len(testItems) == 0 {
+			return nil, nil, nil, fmt.Errorf("assign at least one test type to component %q", component.Name)
+		}
+
+		componentSeenTests := make(map[string]struct{}, len(testItems))
+		for _, testItem := range testItems {
+			testID := testItem.TestID
 			if _, exists := componentSeenTests[testID]; exists {
-				return nil, nil, fmt.Errorf("duplicate test_id %q found in component %q", testID, component.Name)
+				return nil, nil, nil, fmt.Errorf("duplicate test_id %q found in component %q", testID, component.Name)
 			}
 			componentSeenTests[testID] = struct{}{}
 
@@ -422,10 +474,17 @@ func collectConfigureReferenceIDs(components []dto.ConfigureTemplateComponentIte
 				seenTestIDs[testID] = struct{}{}
 				testIDs = append(testIDs, testID)
 			}
+			for _, competencyCategoryID := range testItem.CompetencyCategoryIDs {
+				if _, exists := seenCompetencyCategoryIDs[competencyCategoryID]; exists {
+					continue
+				}
+				seenCompetencyCategoryIDs[competencyCategoryID] = struct{}{}
+				competencyCategoryIDs = append(competencyCategoryIDs, competencyCategoryID)
+			}
 		}
 	}
 
-	return categoryIDs, testIDs, nil
+	return categoryIDs, testIDs, competencyCategoryIDs, nil
 }
 
 func missingIDs(requested []uuid.UUID, found []uuid.UUID) []string {
@@ -578,6 +637,13 @@ func GetTemplateConfiguration(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		testsByComponent := make(map[uuid.UUID][]dto.TemplateComponentTestDetailResponse, len(components))
 		for _, test := range tests {
+			competencyCategories, err := queries.GetCompetencyCategoriesByTemplateComponentTestID(ctx, test.TemplateComponentTestID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch template test competency categories"})
+				return
+			}
+			competencyCategoryIDs, allowedCompetencyCategories := buildCompetencyCategoryRules(competencyCategories)
+
 			testsByComponent[test.TemplateComponentID] = append(
 				testsByComponent[test.TemplateComponentID],
 				dto.TemplateComponentTestDetailResponse{
@@ -591,6 +657,8 @@ func GetTemplateConfiguration(pool *pgxpool.Pool) gin.HandlerFunc {
 					ValidityDuration:               test.ValidityDuration,
 					RequiresRenewal:                test.RequiresRenewal,
 					Description:                    test.Description,
+					CompetencyCategoryIDs:          competencyCategoryIDs,
+					AllowedCompetencyCategories:    allowedCompetencyCategories,
 				},
 			)
 		}
@@ -763,9 +831,22 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		queries := db.New(pool)
+		categoryIDs, err := parseCompetencyCategoryIDs(input.CompetencyCategoryIDs)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
-		_, err := queries.GetTemplateComponentByID(ctx, templateComponentID)
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin template component test transaction"})
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		queries := db.New(tx)
+
+		_, err = queries.GetTemplateComponentByID(ctx, templateComponentID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "template component not found"})
@@ -790,6 +871,10 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch test type"})
 			return
 		}
+		if err := validateActiveCompetencyCategoryIDs(ctx, queries, categoryIDs); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		tct, err := queries.CreateTemplateComponentTest(ctx, db.CreateTemplateComponentTestParams{
 			TemplateComponentID: templateComponentID,
@@ -797,6 +882,14 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add test to template component"})
+			return
+		}
+		if err := setTemplateComponentTestCompetencyCategories(ctx, queries, tct.TemplateComponentTestID, categoryIDs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set template test competency categories"})
+			return
+		}
+		if err := tx.Commit(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit template component test"})
 			return
 		}
 
@@ -832,7 +925,31 @@ func GetTemplateComponentTests(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, dto.NormalizeListData(tests))
+		response := make([]dto.TemplateComponentTestDetailResponse, 0, len(tests))
+		for _, test := range tests {
+			competencyCategories, err := queries.GetCompetencyCategoriesByTemplateComponentTestID(ctx, test.TemplateComponentTestID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch template test competency categories"})
+				return
+			}
+			competencyCategoryIDs, allowedCompetencyCategories := buildCompetencyCategoryRules(competencyCategories)
+			response = append(response, dto.TemplateComponentTestDetailResponse{
+				TemplateComponentTestID:        test.TemplateComponentTestID.String(),
+				TemplateComponentTestDisplayID: test.TemplateComponentTestDisplayID,
+				TemplateComponentID:            test.TemplateComponentID.String(),
+				TestID:                         test.TestID.String(),
+				Position:                       test.Position,
+				CreatedAt:                      test.CreatedAt,
+				TestName:                       test.TestName,
+				ValidityDuration:               test.ValidityDuration,
+				RequiresRenewal:                test.RequiresRenewal,
+				Description:                    test.Description,
+				CompetencyCategoryIDs:          competencyCategoryIDs,
+				AllowedCompetencyCategories:    allowedCompetencyCategories,
+			})
+		}
+
+		c.JSON(http.StatusOK, dto.NormalizeListData(response))
 	}
 }
 

@@ -109,6 +109,69 @@ JOIN competency_categories cc ON cc.competency_category_id = cp.competency_categ
 WHERE cp.active = TRUE AND cc.active = TRUE
 ORDER BY cp.full_name ASC;
 
+-- name: GetCompetencyCategoriesByTemplateComponentTestID :many
+SELECT
+    cc.competency_category_id,
+    cc.category_code,
+    cc.category_name,
+    cc.description,
+    cc.active,
+    cc.created_at,
+    cc.updated_at
+FROM template_component_test_competency_categories tctcc
+JOIN competency_categories cc ON cc.competency_category_id = tctcc.competency_category_id
+WHERE tctcc.template_component_test_id = $1
+ORDER BY cc.category_name ASC;
+
+-- name: CountActiveCompetencyCategoriesByIDs :one
+SELECT COUNT(*)
+FROM competency_categories
+WHERE active = TRUE
+  AND competency_category_id = ANY($1::uuid[]);
+
+-- name: DeleteTemplateComponentTestCompetencyCategories :execrows
+DELETE FROM template_component_test_competency_categories
+WHERE template_component_test_id = $1;
+
+-- name: AddTemplateComponentTestCompetencyCategory :execrows
+INSERT INTO template_component_test_competency_categories (template_component_test_id, competency_category_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: GetCompetencyCategoriesByCertificateID :many
+SELECT
+    cc.competency_category_id,
+    cc.category_code,
+    cc.category_name,
+    cc.description,
+    cc.active,
+    cc.created_at,
+    cc.updated_at
+FROM certificate_competency_categories ccc
+JOIN competency_categories cc ON cc.competency_category_id = ccc.competency_category_id
+WHERE ccc.certificate_id = $1
+ORDER BY cc.category_name ASC;
+
+-- name: DeleteCertificateCompetencyCategories :execrows
+DELETE FROM certificate_competency_categories
+WHERE certificate_id = $1;
+
+-- name: AddCertificateCompetencyCategory :execrows
+INSERT INTO certificate_competency_categories (certificate_id, competency_category_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: CountCertificateCompetencyCategories :one
+SELECT COUNT(*)
+FROM certificate_competency_categories
+WHERE certificate_id = $1;
+
+-- name: CountCertificateCompetencyCategoryByIDs :one
+SELECT COUNT(*)
+FROM certificate_competency_categories
+WHERE certificate_id = sqlc.arg(certificate_id)
+  AND competency_category_id = sqlc.arg(competency_category_id);
+
 -- name: CountCompetentPersons :one
 SELECT COUNT(*) FROM competent_persons;
 

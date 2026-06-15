@@ -321,7 +321,12 @@ async function createRegressionFixture(
           class: "A",
           class_code: "A1",
           safety_critical: "YES",
-          test_ids: [testType.test_id],
+          tests: [
+            {
+              test_id: testType.test_id,
+              competency_category_ids: [],
+            },
+          ],
         },
       ],
     },

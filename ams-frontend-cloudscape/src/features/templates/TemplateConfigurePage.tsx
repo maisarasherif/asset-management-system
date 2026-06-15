@@ -28,6 +28,7 @@ import {
   getTemplate,
   getTemplateConfiguration,
   listAllCatalogScopeCategories,
+  listActiveCompetencyCategories,
   listCatalogScopes,
   listTestTypes,
 } from "../../lib/api/ams";
@@ -36,6 +37,7 @@ import type {
   AssetTemplate,
   CatalogScope,
   CatalogScopeCategory,
+  CompetencyCategory,
   SafetyCritical,
   TemplateComponentInput,
   TemplateConfigurationComponent,
@@ -44,8 +46,13 @@ import { formatRenewalDuration, humanizeEnum } from "../../utils/format";
 
 type EditorMode = "create" | "edit";
 
+type TemplateTestRequirementDraft = {
+  test_id: string;
+  competency_category_ids: string[];
+};
+
 interface TemplateComponentFormState extends TemplateComponentInput {
-  test_ids: string[];
+  tests: TemplateTestRequirementDraft[];
 }
 
 type CategorySelectOption = SelectProps.Option & { categoryId?: string };
@@ -89,6 +96,7 @@ type TemplateConfigureViewProps = {
   selectedSafetyOption: SelectProps.Option | null;
   template: AssetTemplate;
   templateId: string;
+  competencyCategoryOptions: MultiselectProps.Option[];
   testOptions: MultiselectProps.Option[];
   totalTests: number;
 };
@@ -114,7 +122,7 @@ function createEmptyDraft(): TemplateComponentFormState {
     class: "",
     class_code: "",
     safety_critical: "NO",
-    test_ids: [],
+    tests: [],
   };
 }
 
@@ -134,7 +142,10 @@ function toDraft(component: TemplateConfigurationComponent): TemplateComponentFo
     class: component.class || "",
     class_code: component.class_code || "",
     safety_critical: component.safety_critical,
-    test_ids: (component.tests ?? []).map((test) => test.test_id),
+    tests: (component.tests ?? []).map((test) => ({
+      test_id: test.test_id,
+      competency_category_ids: test.competency_category_ids ?? [],
+    })),
   };
 }
 
@@ -165,7 +176,7 @@ function toConfigurationPayload(
   return {
     template_component_id: component.template_component_id,
     ...buildPayload(source),
-    test_ids: source.test_ids,
+    tests: source.tests,
   };
 }
 
@@ -179,7 +190,7 @@ function buildNextConfiguration(
       ...configuration.map((component) => toConfigurationPayload(component)),
       {
         ...buildPayload(draft),
-        test_ids: draft.test_ids,
+        tests: draft.tests,
       },
     ];
   }
@@ -198,7 +209,7 @@ function validateDraft(draft: TemplateComponentFormState) {
   if (draft.name.trim().length < 2) {
     return "Component name must be at least 2 characters.";
   }
-  if (draft.test_ids.length === 0) {
+  if (draft.tests.length === 0) {
     return "Assign at least one test type.";
   }
   return "";
@@ -252,6 +263,11 @@ function useTemplateConfigureData(templateId: string | undefined, requestedScope
     queryFn: listTestTypes,
   });
 
+  const competencyCategoriesQuery = useQuery({
+    queryKey: ["competency-categories", "active"],
+    queryFn: listActiveCompetencyCategories,
+  });
+
   const categoryMap = useMemo(
     () => {
       const labels = new Map<string, string>();
@@ -288,9 +304,21 @@ function useTemplateConfigureData(templateId: string | undefined, requestedScope
     [testTypesQuery.data]
   );
 
+  const competencyCategoryOptions = useMemo<MultiselectProps.Option[]>(
+    () =>
+      (competencyCategoriesQuery.data || []).map((category: CompetencyCategory) => ({
+        label: category.category_name,
+        value: category.competency_category_id,
+        description: category.description || undefined,
+      })),
+    [competencyCategoriesQuery.data]
+  );
+
   return {
     allScopeCategoriesQuery,
     catalogScopesQuery,
+    competencyCategoriesQuery,
+    competencyCategoryOptions,
     categoriesQuery,
     categoryMap,
     categoryOptions,
@@ -469,6 +497,8 @@ export function TemplateConfigurePage() {
     categoriesQuery,
     categoryMap,
     categoryOptions,
+    competencyCategoriesQuery,
+    competencyCategoryOptions,
     configurationQuery,
     selectedScopeId: activeScopeId,
     templateQuery,
@@ -535,7 +565,8 @@ export function TemplateConfigurePage() {
     catalogScopesQuery.isLoading ||
     allScopeCategoriesQuery.isLoading ||
     (Boolean(catalogScopesQuery.data?.length) && !activeScopeId) ||
-    testTypesQuery.isLoading
+    testTypesQuery.isLoading ||
+    competencyCategoriesQuery.isLoading
   ) {
     return <PageLoading>{"Loading the template configuration workspace\u2026"}</PageLoading>;
   }
@@ -546,10 +577,12 @@ export function TemplateConfigurePage() {
     categoriesQuery.isError ||
     catalogScopesQuery.isError ||
     testTypesQuery.isError ||
+    competencyCategoriesQuery.isError ||
     !templateQuery.data ||
     !catalogScopesQuery.data ||
     !categoriesQuery.data ||
-    !testTypesQuery.data
+    !testTypesQuery.data ||
+    !competencyCategoriesQuery.data
   ) {
     return (
       <PageError
@@ -560,6 +593,7 @@ export function TemplateConfigurePage() {
           void catalogScopesQuery.refetch();
           void categoriesQuery.refetch();
           void testTypesQuery.refetch();
+          void competencyCategoriesQuery.refetch();
         }}
       />
     );
@@ -628,6 +662,7 @@ export function TemplateConfigurePage() {
       selectedSafetyOption={selectedSafetyOption}
       template={template}
       templateId={templateId}
+      competencyCategoryOptions={competencyCategoryOptions}
       testOptions={testOptions}
       totalTests={totalTests}
     />
@@ -657,6 +692,7 @@ function TemplateConfigureView({
   selectedSafetyOption,
   template,
   templateId,
+  competencyCategoryOptions,
   testOptions,
   totalTests,
 }: TemplateConfigureViewProps) {
@@ -701,6 +737,7 @@ function TemplateConfigureView({
         savePending={savePending}
         selectedCatalogScope={selectedCatalogScope}
         selectedSafetyOption={selectedSafetyOption}
+        competencyCategoryOptions={competencyCategoryOptions}
         testOptions={testOptions}
         visible={editorVisible}
       />
@@ -847,6 +884,7 @@ type TemplateComponentEditorModalProps = {
   savePending: boolean;
   selectedCatalogScope: SelectProps.Option | null;
   selectedSafetyOption: SelectProps.Option | null;
+  competencyCategoryOptions: MultiselectProps.Option[];
   testOptions: MultiselectProps.Option[];
   visible: boolean;
 };
@@ -863,6 +901,7 @@ function TemplateComponentEditorModal({
   savePending,
   selectedCatalogScope,
   selectedSafetyOption,
+  competencyCategoryOptions,
   testOptions,
   visible,
 }: TemplateComponentEditorModalProps) {
@@ -882,7 +921,7 @@ function TemplateComponentEditorModal({
     SAFETY_OPTIONS.find((option) => option.value === localDraft.safety_critical) ??
     selectedSafetyOption;
   const localSelectedTests = testOptions.filter((option) =>
-    localDraft.test_ids.includes(option.value || "")
+    localDraft.tests.some((test) => test.test_id === option.value)
   );
 
   return (
@@ -928,6 +967,7 @@ function TemplateComponentEditorModal({
           onDraftChange={setLocalDraft}
           selectedSafetyOption={localSelectedSafetyOption}
           selectedTests={localSelectedTests}
+          competencyCategoryOptions={competencyCategoryOptions}
           testOptions={testOptions}
         />
       </SpaceBetween>
@@ -1048,12 +1088,14 @@ function TemplateComponentDetailsFields({ draft, onDraftChange }: TemplateCompon
 }
 
 type TemplateComponentClassificationFieldsProps = TemplateComponentFieldProps & {
+  competencyCategoryOptions: MultiselectProps.Option[];
   selectedSafetyOption: SelectProps.Option | null;
   selectedTests: MultiselectProps.Option[];
   testOptions: MultiselectProps.Option[];
 };
 
 function TemplateComponentClassificationFields({
+  competencyCategoryOptions,
   draft,
   onDraftChange,
   selectedSafetyOption,
@@ -1125,12 +1167,63 @@ function TemplateComponentClassificationFields({
             onChange={({ detail }) =>
               onDraftChange((currentDraft) => ({
                 ...currentDraft,
-                test_ids: detail.selectedOptions.flatMap((option) => (option.value ? [option.value] : [])),
+                tests: detail.selectedOptions.flatMap((option) => {
+                  if (!option.value) {
+                    return [];
+                  }
+                  const existing = currentDraft.tests.find((test) => test.test_id === option.value);
+                  return [
+                    existing ?? {
+                      test_id: option.value,
+                      competency_category_ids: [],
+                    },
+                  ];
+                }),
               }))
             }
           />
         </div>
       </FormField>
+      {draft.tests.length > 0 ? (
+        <SpaceBetween size="s">
+          {draft.tests.map((testRequirement) => {
+            const testOption = testOptions.find((option) => option.value === testRequirement.test_id);
+            const selectedCategoryOptions = competencyCategoryOptions.filter((option) =>
+              testRequirement.competency_category_ids.includes(option.value ?? "")
+            );
+
+            return (
+              <FormField
+                key={testRequirement.test_id}
+                label={`${testOption?.label ?? "Test"} competent-person categories`}
+                description="No selection allows any active category."
+              >
+                <Multiselect
+                  selectedOptions={selectedCategoryOptions}
+                  options={competencyCategoryOptions}
+                  placeholder="Select categories"
+                  empty="No active competency categories are available."
+                  onChange={({ detail }) =>
+                    onDraftChange((currentDraft) => ({
+                      ...currentDraft,
+                      tests: currentDraft.tests.map((test) =>
+                        test.test_id === testRequirement.test_id
+                          ? {
+                              ...test,
+                              competency_category_ids: detail.selectedOptions
+                                .map((option) => option.value)
+                                .filter((value): value is string => Boolean(value)),
+                            }
+                          : test
+                      ),
+                    }))
+                  }
+                />
+              </FormField>
+            );
+          })}
+        </SpaceBetween>
+      ) : null}
     </SpaceBetween>
   );
 }

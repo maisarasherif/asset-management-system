@@ -12,6 +12,90 @@ import (
 	"github.com/google/uuid"
 )
 
+const addCertificateCompetencyCategory = `-- name: AddCertificateCompetencyCategory :execrows
+INSERT INTO certificate_competency_categories (certificate_id, competency_category_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddCertificateCompetencyCategoryParams struct {
+	CertificateID        uuid.UUID `json:"certificate_id"`
+	CompetencyCategoryID uuid.UUID `json:"competency_category_id"`
+}
+
+func (q *Queries) AddCertificateCompetencyCategory(ctx context.Context, arg AddCertificateCompetencyCategoryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addCertificateCompetencyCategory, arg.CertificateID, arg.CompetencyCategoryID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const addTemplateComponentTestCompetencyCategory = `-- name: AddTemplateComponentTestCompetencyCategory :execrows
+INSERT INTO template_component_test_competency_categories (template_component_test_id, competency_category_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddTemplateComponentTestCompetencyCategoryParams struct {
+	TemplateComponentTestID uuid.UUID `json:"template_component_test_id"`
+	CompetencyCategoryID    uuid.UUID `json:"competency_category_id"`
+}
+
+func (q *Queries) AddTemplateComponentTestCompetencyCategory(ctx context.Context, arg AddTemplateComponentTestCompetencyCategoryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addTemplateComponentTestCompetencyCategory, arg.TemplateComponentTestID, arg.CompetencyCategoryID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const countActiveCompetencyCategoriesByIDs = `-- name: CountActiveCompetencyCategoriesByIDs :one
+SELECT COUNT(*)
+FROM competency_categories
+WHERE active = TRUE
+  AND competency_category_id = ANY($1::uuid[])
+`
+
+func (q *Queries) CountActiveCompetencyCategoriesByIDs(ctx context.Context, dollar_1 []uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveCompetencyCategoriesByIDs, dollar_1)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countCertificateCompetencyCategories = `-- name: CountCertificateCompetencyCategories :one
+SELECT COUNT(*)
+FROM certificate_competency_categories
+WHERE certificate_id = $1
+`
+
+func (q *Queries) CountCertificateCompetencyCategories(ctx context.Context, certificateID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificateCompetencyCategories, certificateID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countCertificateCompetencyCategoryByIDs = `-- name: CountCertificateCompetencyCategoryByIDs :one
+SELECT COUNT(*)
+FROM certificate_competency_categories
+WHERE certificate_id = $1
+  AND competency_category_id = $2
+`
+
+type CountCertificateCompetencyCategoryByIDsParams struct {
+	CertificateID        uuid.UUID `json:"certificate_id"`
+	CompetencyCategoryID uuid.UUID `json:"competency_category_id"`
+}
+
+func (q *Queries) CountCertificateCompetencyCategoryByIDs(ctx context.Context, arg CountCertificateCompetencyCategoryByIDsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificateCompetencyCategoryByIDs, arg.CertificateID, arg.CompetencyCategoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countCertificateUploadAuditByCompetentPersonID = `-- name: CountCertificateUploadAuditByCompetentPersonID :one
 SELECT COUNT(*)
 FROM certificate_upload_audit
@@ -165,6 +249,32 @@ func (q *Queries) CreateCompetentPerson(ctx context.Context, arg CreateCompetent
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteCertificateCompetencyCategories = `-- name: DeleteCertificateCompetencyCategories :execrows
+DELETE FROM certificate_competency_categories
+WHERE certificate_id = $1
+`
+
+func (q *Queries) DeleteCertificateCompetencyCategories(ctx context.Context, certificateID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCertificateCompetencyCategories, certificateID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteTemplateComponentTestCompetencyCategories = `-- name: DeleteTemplateComponentTestCompetencyCategories :execrows
+DELETE FROM template_component_test_competency_categories
+WHERE template_component_test_id = $1
+`
+
+func (q *Queries) DeleteTemplateComponentTestCompetencyCategories(ctx context.Context, templateComponentTestID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteTemplateComponentTestCompetencyCategories, templateComponentTestID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getActiveCompetencyCategories = `-- name: GetActiveCompetencyCategories :many
@@ -377,6 +487,92 @@ func (q *Queries) GetAllCompetentPersonsPaginated(ctx context.Context, arg GetAl
 			&i.CompetencyCategoryCode,
 			&i.CompetencyCategoryName,
 			&i.CompetencyCategoryDescription,
+			&i.Active,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCompetencyCategoriesByCertificateID = `-- name: GetCompetencyCategoriesByCertificateID :many
+SELECT
+    cc.competency_category_id,
+    cc.category_code,
+    cc.category_name,
+    cc.description,
+    cc.active,
+    cc.created_at,
+    cc.updated_at
+FROM certificate_competency_categories ccc
+JOIN competency_categories cc ON cc.competency_category_id = ccc.competency_category_id
+WHERE ccc.certificate_id = $1
+ORDER BY cc.category_name ASC
+`
+
+func (q *Queries) GetCompetencyCategoriesByCertificateID(ctx context.Context, certificateID uuid.UUID) ([]CompetencyCategory, error) {
+	rows, err := q.db.Query(ctx, getCompetencyCategoriesByCertificateID, certificateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CompetencyCategory
+	for rows.Next() {
+		var i CompetencyCategory
+		if err := rows.Scan(
+			&i.CompetencyCategoryID,
+			&i.CategoryCode,
+			&i.CategoryName,
+			&i.Description,
+			&i.Active,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCompetencyCategoriesByTemplateComponentTestID = `-- name: GetCompetencyCategoriesByTemplateComponentTestID :many
+SELECT
+    cc.competency_category_id,
+    cc.category_code,
+    cc.category_name,
+    cc.description,
+    cc.active,
+    cc.created_at,
+    cc.updated_at
+FROM template_component_test_competency_categories tctcc
+JOIN competency_categories cc ON cc.competency_category_id = tctcc.competency_category_id
+WHERE tctcc.template_component_test_id = $1
+ORDER BY cc.category_name ASC
+`
+
+func (q *Queries) GetCompetencyCategoriesByTemplateComponentTestID(ctx context.Context, templateComponentTestID uuid.UUID) ([]CompetencyCategory, error) {
+	rows, err := q.db.Query(ctx, getCompetencyCategoriesByTemplateComponentTestID, templateComponentTestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CompetencyCategory
+	for rows.Next() {
+		var i CompetencyCategory
+		if err := rows.Scan(
+			&i.CompetencyCategoryID,
+			&i.CategoryCode,
+			&i.CategoryName,
+			&i.Description,
 			&i.Active,
 			&i.CreatedAt,
 			&i.UpdatedAt,

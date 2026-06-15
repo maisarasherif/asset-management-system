@@ -369,15 +369,16 @@ type PatchComponentInput struct {
 // ==================== Certificate DTOs ====================
 
 type CertificateInput struct {
-	ComponentID      string     `json:"component_id" validate:"required,uuid"`
-	CertificateName  string     `json:"certificate_name" validate:"required,min=2,max=200"`
-	IssueDate        time.Time  `json:"issue_date" validate:"required"`
-	ExpiryDate       *time.Time `json:"expiry_date"`
-	IssuingAuthority string     `json:"issuing_authority" validate:"required,min=2,max=200"`
-	TestID           string     `json:"test_id" validate:"required,uuid"`
-	IMCARef          string     `json:"imca_ref"`
-	IMCAD018         string     `json:"imca_d018"`
-	MaintenanceNotes string     `json:"maintenance_notes"`
+	ComponentID           string     `json:"component_id" validate:"required,uuid"`
+	CertificateName       string     `json:"certificate_name" validate:"required,min=2,max=200"`
+	IssueDate             time.Time  `json:"issue_date" validate:"required"`
+	ExpiryDate            *time.Time `json:"expiry_date"`
+	IssuingAuthority      string     `json:"issuing_authority" validate:"required,min=2,max=200"`
+	TestID                string     `json:"test_id" validate:"required,uuid"`
+	IMCARef               string     `json:"imca_ref"`
+	IMCAD018              string     `json:"imca_d018"`
+	MaintenanceNotes      string     `json:"maintenance_notes"`
+	CompetencyCategoryIDs []string   `json:"competency_category_ids" validate:"omitempty,dive,uuid"`
 }
 
 type PatchCertificateInput struct {
@@ -406,6 +407,34 @@ type PatchTestTypeInput struct {
 	ValidityDuration *int32  `json:"validity_duration" validate:"omitempty,min=1"`
 	RequiresRenewal  *bool   `json:"requires_renewal"`
 	Description      *string `json:"description"`
+}
+
+type CompetencyCategoryRuleResponse struct {
+	CompetencyCategoryID string `json:"competency_category_id"`
+	CategoryCode         string `json:"category_code"`
+	CategoryName         string `json:"category_name"`
+	Description          string `json:"description"`
+	Active               bool   `json:"active"`
+}
+
+type CertificateResponse struct {
+	CertificateID               string                           `json:"certificate_id"`
+	DisplayID                   string                           `json:"display_id"`
+	ComponentID                 string                           `json:"component_id"`
+	CertificateName             string                           `json:"certificate_name"`
+	IssueDate                   *time.Time                       `json:"issue_date"`
+	ExpiryDate                  *time.Time                       `json:"expiry_date"`
+	CertificateFile             string                           `json:"certificate_file"`
+	IssuingAuthority            string                           `json:"issuing_authority"`
+	Status                      string                           `json:"status"`
+	TestID                      string                           `json:"test_id"`
+	IMCARef                     string                           `json:"imca_ref"`
+	IMCAD018                    string                           `json:"imca_d018"`
+	MaintenanceNotes            string                           `json:"maintenance_notes"`
+	CompetencyCategoryIDs       []string                         `json:"competency_category_ids"`
+	AllowedCompetencyCategories []CompetencyCategoryRuleResponse `json:"allowed_competency_categories"`
+	CreatedAt                   time.Time                        `json:"created_at"`
+	UpdatedAt                   time.Time                        `json:"updated_at"`
 }
 
 // ==================== Equipment Type DTOs ====================
@@ -447,26 +476,33 @@ type TemplateComponentInput struct {
 }
 
 type TemplateComponentTestInput struct {
-	TestID string `json:"test_id" validate:"required,uuid"`
+	TestID                string   `json:"test_id" validate:"required,uuid"`
+	CompetencyCategoryIDs []string `json:"competency_category_ids" validate:"omitempty,dive,uuid"`
+}
+
+type ConfigureTemplateComponentTestItem struct {
+	TestID                string   `json:"test_id" validate:"required,uuid"`
+	CompetencyCategoryIDs []string `json:"competency_category_ids" validate:"omitempty,dive,uuid"`
 }
 
 type ConfigureTemplateComponentItem struct {
-	TemplateComponentID string   `json:"template_component_id"`
-	CategoryID          string   `json:"category_id" validate:"required,uuid"`
-	ScopeCategoryID     string   `json:"scope_category_id" validate:"omitempty,uuid"`
-	Name                string   `json:"name" validate:"required,min=2,max=200"`
-	Description         string   `json:"description"`
-	SerialNumber        string   `json:"serial_number"`
-	Manufacturer        string   `json:"manufacturer"`
-	Location            string   `json:"location"`
-	AssignedProject     string   `json:"assigned_project"`
-	EquipmentType       string   `json:"equipment_type"`
-	Structure           string   `json:"structure"`
-	Model               string   `json:"model"`
-	Class               string   `json:"class"`
-	ClassCode           string   `json:"class_code"`
-	SafetyCritical      string   `json:"safety_critical" validate:"required,oneof=YES NO"`
-	TestIDs             []string `json:"test_ids" validate:"required,dive,required,uuid"`
+	TemplateComponentID string                               `json:"template_component_id"`
+	CategoryID          string                               `json:"category_id" validate:"required,uuid"`
+	ScopeCategoryID     string                               `json:"scope_category_id" validate:"omitempty,uuid"`
+	Name                string                               `json:"name" validate:"required,min=2,max=200"`
+	Description         string                               `json:"description"`
+	SerialNumber        string                               `json:"serial_number"`
+	Manufacturer        string                               `json:"manufacturer"`
+	Location            string                               `json:"location"`
+	AssignedProject     string                               `json:"assigned_project"`
+	EquipmentType       string                               `json:"equipment_type"`
+	Structure           string                               `json:"structure"`
+	Model               string                               `json:"model"`
+	Class               string                               `json:"class"`
+	ClassCode           string                               `json:"class_code"`
+	SafetyCritical      string                               `json:"safety_critical" validate:"required,oneof=YES NO"`
+	TestIDs             []string                             `json:"test_ids" validate:"omitempty,dive,required,uuid"`
+	Tests               []ConfigureTemplateComponentTestItem `json:"tests" validate:"omitempty,dive"`
 }
 
 type ConfigureTemplateInput struct {
@@ -474,16 +510,18 @@ type ConfigureTemplateInput struct {
 }
 
 type TemplateComponentTestDetailResponse struct {
-	TemplateComponentTestID        string    `json:"template_component_test_id"`
-	TemplateComponentTestDisplayID string    `json:"template_component_test_display_id"`
-	TemplateComponentID            string    `json:"template_component_id"`
-	TestID                         string    `json:"test_id"`
-	Position                       int32     `json:"position"`
-	CreatedAt                      time.Time `json:"created_at"`
-	TestName                       string    `json:"test_name"`
-	ValidityDuration               *int32    `json:"validity_duration"`
-	RequiresRenewal                bool      `json:"requires_renewal"`
-	Description                    string    `json:"description"`
+	TemplateComponentTestID        string                           `json:"template_component_test_id"`
+	TemplateComponentTestDisplayID string                           `json:"template_component_test_display_id"`
+	TemplateComponentID            string                           `json:"template_component_id"`
+	TestID                         string                           `json:"test_id"`
+	Position                       int32                            `json:"position"`
+	CreatedAt                      time.Time                        `json:"created_at"`
+	TestName                       string                           `json:"test_name"`
+	ValidityDuration               *int32                           `json:"validity_duration"`
+	RequiresRenewal                bool                             `json:"requires_renewal"`
+	Description                    string                           `json:"description"`
+	CompetencyCategoryIDs          []string                         `json:"competency_category_ids"`
+	AllowedCompetencyCategories    []CompetencyCategoryRuleResponse `json:"allowed_competency_categories"`
 }
 
 type TemplateConfigurationComponentResponse struct {

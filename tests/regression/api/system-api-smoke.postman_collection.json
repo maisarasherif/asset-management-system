@@ -1173,7 +1173,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"test_id\": \"{{test_id}}\"\n}"
+              "raw": "{\n  \"test_id\": \"{{test_id}}\",\n  \"competency_category_ids\": []\n}"
             },
             "url": "{{baseUrl}}/template-component/{{manual_template_component_id}}/test"
           },
@@ -1292,7 +1292,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"components\": [\n    {\n      \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n      \"name\": \"Config Hook {{runSuffix}}\",\n      \"description\": \"Configured hook\",\n      \"serial_number\": \"\",\n      \"manufacturer\": \"Newman\",\n      \"location\": \"\",\n      \"assigned_project\": \"\",\n      \"equipment_type\": \"Hook\",\n      \"structure\": \"Fixed\",\n      \"model\": \"CFG-1\",\n      \"class\": \"A\",\n      \"class_code\": \"CFG-A\",\n      \"safety_critical\": \"YES\",\n      \"test_ids\": [\"{{test_id}}\"]\n    },\n    {\n      \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n      \"name\": \"Config Rope {{runSuffix}}\",\n      \"description\": \"Configured rope\",\n      \"serial_number\": \"\",\n      \"manufacturer\": \"Newman\",\n      \"location\": \"\",\n      \"assigned_project\": \"\",\n      \"equipment_type\": \"Rope\",\n      \"structure\": \"Flexible\",\n      \"model\": \"CFG-2\",\n      \"class\": \"B\",\n      \"class_code\": \"CFG-B\",\n      \"safety_critical\": \"YES\",\n      \"test_ids\": [\"{{test_id}}\"]\n    }\n  ]\n}"
+              "raw": "{\n  \"components\": [\n    {\n      \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n      \"name\": \"Config Hook {{runSuffix}}\",\n      \"description\": \"Configured hook\",\n      \"serial_number\": \"\",\n      \"manufacturer\": \"Newman\",\n      \"location\": \"\",\n      \"assigned_project\": \"\",\n      \"equipment_type\": \"Hook\",\n      \"structure\": \"Fixed\",\n      \"model\": \"CFG-1\",\n      \"class\": \"A\",\n      \"class_code\": \"CFG-A\",\n      \"safety_critical\": \"YES\",\n      \"tests\": [{\"test_id\": \"{{test_id}}\", \"competency_category_ids\": []}]\n    },\n    {\n      \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n      \"name\": \"Config Rope {{runSuffix}}\",\n      \"description\": \"Configured rope\",\n      \"serial_number\": \"\",\n      \"manufacturer\": \"Newman\",\n      \"location\": \"\",\n      \"assigned_project\": \"\",\n      \"equipment_type\": \"Rope\",\n      \"structure\": \"Flexible\",\n      \"model\": \"CFG-2\",\n      \"class\": \"B\",\n      \"class_code\": \"CFG-B\",\n      \"safety_critical\": \"YES\",\n      \"tests\": [{\"test_id\": \"{{test_id}}\", \"competency_category_ids\": []}]\n    }\n  ]\n}"
             },
             "url": "{{baseUrl}}/template/{{configured_template_id}}/configuration"
           },
@@ -1856,7 +1856,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Certificate {{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"expiry_date\": \"2027-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Bureau Veritas\",\n  \"test_id\": \"{{test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Smoke certificate\"\n}"
+              "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Certificate {{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"expiry_date\": \"2027-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Bureau Veritas\",\n  \"test_id\": \"{{test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Smoke certificate\",\n  \"competency_category_ids\": []\n}"
             },
             "url": "{{baseUrl}}/certificate"
           },
@@ -1886,7 +1886,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Manufacturer Certificate {{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Manufacturer\",\n  \"test_id\": \"{{one_time_test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Smoke one-time certificate\"\n}"
+              "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Manufacturer Certificate {{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Manufacturer\",\n  \"test_id\": \"{{one_time_test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Smoke one-time certificate\",\n  \"competency_category_ids\": []\n}"
             },
             "url": "{{baseUrl}}/certificate"
           },

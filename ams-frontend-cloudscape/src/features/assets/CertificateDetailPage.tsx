@@ -78,6 +78,10 @@ function testTypeRequiresExpiry(testType: TestType | null | undefined) {
   return testType?.requires_renewal ?? true;
 }
 
+function categoryRulesAllowCompetentPerson(allowedCategoryIDs: string[], person: CompetentPerson) {
+  return allowedCategoryIDs.length === 0 || allowedCategoryIDs.includes(person.competency_category_id);
+}
+
 export function CertificateDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -165,6 +169,15 @@ export function CertificateDetailPage() {
     mutationFn: async () => {
       if (!certificateId || !selectedFile || !selectedCompetentPersonId) {
         throw new Error("Choose a file and competent person before uploading.");
+      }
+      const selectedCompetentPerson = competentPersonsQuery.data?.find(
+        (person) => person.competent_person_id === selectedCompetentPersonId,
+      );
+      if (
+        selectedCompetentPerson &&
+        !categoryRulesAllowCompetentPerson(certificateQuery.data?.competency_category_ids ?? [], selectedCompetentPerson)
+      ) {
+        throw new Error("Select a competent person allowed for this certificate.");
       }
       if (isCertificateFileTooLarge(selectedFile)) {
         throw new Error(certificateFileTooLargeMessage());
@@ -271,15 +284,17 @@ export function CertificateDetailPage() {
     );
   }
 
-  const competentPersonOptions: SelectProps.Option[] = (
-    competentPersonsQuery.data || []
-  ).map((person) => ({
+  const allowedCategoryIDs = certificateQuery.data.competency_category_ids ?? [];
+  const allowedCompetentPersons = (competentPersonsQuery.data || []).filter((person) =>
+    categoryRulesAllowCompetentPerson(allowedCategoryIDs, person)
+  );
+  const competentPersonOptions: SelectProps.Option[] = allowedCompetentPersons.map((person) => ({
     label: person.full_name,
     value: person.competent_person_id,
     description: `${person.person_type} - ${person.competency_category_name}`,
   }));
   const selectedCompetentPerson =
-    competentPersonsQuery.data?.find(
+    allowedCompetentPersons.find(
       (person) => person.competent_person_id === selectedCompetentPersonId,
     ) ?? null;
   const selectedCompetentPersonOption =

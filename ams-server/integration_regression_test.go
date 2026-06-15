@@ -46,6 +46,17 @@ func TestTemplateConfigurationAndSpinUpRegression(t *testing.T) {
 	categoryID := createCategory(t, h, mainCategoryID, "Lifting Equipment")
 	testOneID := createTestType(t, h, "Annual Inspection", 12)
 	testTwoID := createTestType(t, h, "Load Test", 6)
+	queries := db.New(h.pool)
+	expertCategory, err := queries.CreateCompetencyCategory(context.Background(), db.CreateCompetencyCategoryParams{
+		CategoryCode: "EXPERT_ONLY",
+		CategoryName: "Expert Only",
+		Description:  "Requires expert competent person",
+		Active:       true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create competency category: %v", err)
+	}
+	expertCategoryID := expertCategory.CompetencyCategoryID.String()
 	templateID := createTemplate(t, h, "Offshore Crane Template")
 
 	configureResponse := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPut, fmt.Sprintf("/v1/template/%s/configuration", templateID), map[string]any{
@@ -64,7 +75,12 @@ func TestTemplateConfigurationAndSpinUpRegression(t *testing.T) {
 
 	reconfigureResponse := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPut, fmt.Sprintf("/v1/template/%s/configuration", templateID), map[string]any{
 		"components": []map[string]any{
-			templateComponentPayload(categoryID, "Control Panel", []string{testOneID}),
+			templateComponentPayloadWithTestRules(categoryID, "Control Panel", []map[string]any{
+				{
+					"test_id":                 testOneID,
+					"competency_category_ids": []string{expertCategoryID},
+				},
+			}),
 		},
 	}, http.StatusOK))
 	assertField(t, reconfigureResponse, "components_configured", 1)
@@ -83,6 +99,7 @@ func TestTemplateConfigurationAndSpinUpRegression(t *testing.T) {
 		t.Fatalf("expected 1 template component test after replace, got %d", len(templateTests))
 	}
 	assertField(t, templateTests[0], "test_id", testOneID)
+	assertField(t, templateTests[0], "competency_category_ids", []any{expertCategoryID})
 
 	assetObject := createAsset(t, h, map[string]any{
 		"name":             "Configured Asset",
@@ -116,6 +133,9 @@ func TestTemplateConfigurationAndSpinUpRegression(t *testing.T) {
 	}
 	assertField(t, spunUpCertificates[0], "status", "PENDING")
 	assertField(t, spunUpCertificates[0], "test_id", testOneID)
+	spunUpCertificateID := stringField(t, spunUpCertificates[0], "certificate_id")
+	spunUpCertificate := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, fmt.Sprintf("/v1/certificate/%s", spunUpCertificateID), nil, http.StatusOK))
+	assertField(t, spunUpCertificate, "competency_category_ids", []any{expertCategoryID})
 
 	deleteUsedTemplateResponse := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, fmt.Sprintf("/v1/template/%s", templateID), nil, http.StatusConflict))
 	assertField(t, deleteUsedTemplateResponse, "error", "template is in use by existing assets")
@@ -947,6 +967,58 @@ func TestUploadCertificateFile(t *testing.T) {
 	}
 }
 
+func TestUploadCertificateFileRejectsDisallowedCompetentPersonCategory(t *testing.T) {
+	h := setupIntegrationTest(t)
+
+	componentID, testID := createComponentFixture(t, h, "Restricted Upload Component")
+	certificateID := stringField(t, createCertificate(t, h, certificatePayload(componentID, testID, 90)), "certificate_id")
+
+	queries := db.New(h.pool)
+	allowedCategory, err := queries.CreateCompetencyCategory(context.Background(), db.CreateCompetencyCategoryParams{
+		CategoryCode: "ALLOWED_UPLOAD",
+		CategoryName: "Allowed Upload Category",
+		Description:  "Allowed for restricted upload test",
+		Active:       true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create allowed competency category: %v", err)
+	}
+	disallowedCategory, err := queries.CreateCompetencyCategory(context.Background(), db.CreateCompetencyCategoryParams{
+		CategoryCode: "DISALLOWED_UPLOAD",
+		CategoryName: "Disallowed Upload Category",
+		Description:  "Not allowed for restricted upload test",
+		Active:       true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create disallowed competency category: %v", err)
+	}
+	parsedCertificateID, err := uuid.Parse(certificateID)
+	if err != nil {
+		t.Fatalf("failed to parse certificate id: %v", err)
+	}
+	if _, err := queries.AddCertificateCompetencyCategory(context.Background(), db.AddCertificateCompetencyCategoryParams{
+		CertificateID:        parsedCertificateID,
+		CompetencyCategoryID: allowedCategory.CompetencyCategoryID,
+	}); err != nil {
+		t.Fatalf("failed to restrict certificate competency categories: %v", err)
+	}
+	disallowedPerson, err := queries.CreateCompetentPerson(context.Background(), db.CreateCompetentPersonParams{
+		FullName:             "Disallowed Upload Person",
+		PersonType:           "Internal",
+		Organization:         "Integration",
+		CompetencyCategoryID: disallowedCategory.CompetencyCategoryID,
+		Active:               true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create disallowed competent person: %v", err)
+	}
+
+	body := decodeObject(t, performMultipartRequest(t, h.router, h.adminToken, "/v1/certificate/"+certificateID+"/file", "file", "certificate.pdf", []byte("%PDF-1.4 restricted document"), map[string]string{
+		"competent_person_id": disallowedPerson.CompetentPersonID.String(),
+	}, http.StatusBadRequest))
+	assertField(t, body, "error", "competent person category is not allowed for this certificate")
+}
+
 func TestUploadCertificateFileRejectsOversizeFile(t *testing.T) {
 	h := setupIntegrationTest(t)
 
@@ -1576,10 +1648,12 @@ TRUNCATE TABLE
   notification_deliveries,
   asset_maintenance_events,
   certificate_upload_audit,
+  certificate_competency_categories,
   certificates,
   components,
   single_asset_equipment,
   assets,
+  template_component_test_competency_categories,
   template_component_tests,
   template_components,
   asset_templates,
@@ -2005,6 +2079,13 @@ func templateComponentPayload(categoryID, name string, testIDs []string) map[str
 		"safety_critical":  "YES",
 		"test_ids":         testIDs,
 	}
+}
+
+func templateComponentPayloadWithTestRules(categoryID, name string, tests []map[string]any) map[string]any {
+	payload := templateComponentPayload(categoryID, name, nil)
+	payload["tests"] = tests
+	delete(payload, "test_ids")
+	return payload
 }
 
 func certificatePayload(componentID, testID string, expiryOffsetDays int) map[string]any {

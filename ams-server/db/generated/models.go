@@ -117,6 +117,12 @@ type Certificate struct {
 	TemplateComponentTestID *uuid.UUID `json:"template_component_test_id"`
 }
 
+type CertificateCompetencyCategory struct {
+	CertificateID        uuid.UUID          `json:"certificate_id"`
+	CompetencyCategoryID uuid.UUID          `json:"competency_category_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+}
+
 type CertificateUploadAudit struct {
 	FileKey           string             `json:"file_key"`
 	FileName          string             `json:"file_name"`
@@ -273,6 +279,12 @@ type TemplateComponentTest struct {
 	DisplayID               string    `json:"display_id"`
 	TemplateComponentID     uuid.UUID `json:"template_component_id"`
 	TestID                  uuid.UUID `json:"test_id"`
+}
+
+type TemplateComponentTestCompetencyCategory struct {
+	TemplateComponentTestID uuid.UUID          `json:"template_component_test_id"`
+	CompetencyCategoryID    uuid.UUID          `json:"competency_category_id"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 }
 
 type TestType struct {

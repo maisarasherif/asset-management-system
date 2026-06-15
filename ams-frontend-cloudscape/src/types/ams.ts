@@ -138,6 +138,8 @@ export interface Certificate {
   imca_ref: string;
   imca_d018: string;
   maintenance_notes: string;
+  competency_category_ids: string[];
+  allowed_competency_categories: CompetencyCategoryRule[];
   created_at: string;
   updated_at: string;
 }
@@ -288,6 +290,14 @@ export interface TestType {
   description: string;
 }
 
+export interface CompetencyCategoryRule {
+  competency_category_id: string;
+  category_code: string;
+  category_name: string;
+  description: string;
+  active: boolean;
+}
+
 export interface EquipmentType {
   equipment_type_id: string;
   display_id: string;
@@ -354,6 +364,8 @@ export interface TemplateComponentTest {
   validity_duration: number | null;
   requires_renewal: boolean;
   description: string;
+  competency_category_ids: string[];
+  allowed_competency_categories: CompetencyCategoryRule[];
 }
 
 export interface CertificateUploadAudit {
@@ -470,6 +482,7 @@ export interface CertificateInput {
   imca_ref: string;
   imca_d018: string;
   maintenance_notes: string;
+  competency_category_ids: string[];
 }
 
 export interface PatchCertificateInput {
@@ -603,7 +616,11 @@ export interface TemplateComponentInput {
 
 export interface ConfigureTemplateComponentItem extends TemplateComponentInput {
   template_component_id?: string;
-  test_ids: string[];
+  test_ids?: string[];
+  tests: Array<{
+    test_id: string;
+    competency_category_ids: string[];
+  }>;
 }
 
 export interface ConfigureTemplateInput {

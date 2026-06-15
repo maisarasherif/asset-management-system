@@ -686,10 +686,14 @@ export function listTemplateComponentTests(templateComponentId: string) {
   );
 }
 
-export function addTemplateComponentTest(templateComponentId: string, testId: string) {
+export function addTemplateComponentTest(
+  templateComponentId: string,
+  testId: string,
+  competencyCategoryIds: string[] = []
+) {
   return apiRequest<TemplateComponentTest>(`/v1/template-component/${templateComponentId}/test`, {
     method: "POST",
-    body: JSON.stringify({ test_id: testId }),
+    body: JSON.stringify({ test_id: testId, competency_category_ids: competencyCategoryIds }),
   });
 }
 
