@@ -960,8 +960,6 @@ function TemplateComponentEditorModal({
           selectedCategory={localSelectedCategory}
         />
 
-        <TemplateComponentDetailsFields draft={localDraft} onDraftChange={setLocalDraft} />
-
         <TemplateComponentClassificationFields
           draft={localDraft}
           onDraftChange={setLocalDraft}
@@ -1048,45 +1046,6 @@ function TemplateComponentCoreFields({
   );
 }
 
-function TemplateComponentDetailsFields({ draft, onDraftChange }: TemplateComponentFieldProps) {
-  return (
-    <ColumnLayout columns={2}>
-      <FormField label="Serial number">
-        <Input
-          value={draft.serial_number}
-          onChange={({ detail }) =>
-            onDraftChange((currentDraft) => ({ ...currentDraft, serial_number: detail.value }))
-          }
-        />
-      </FormField>
-      <FormField label="Manufacturer">
-        <Input
-          value={draft.manufacturer}
-          onChange={({ detail }) =>
-            onDraftChange((currentDraft) => ({ ...currentDraft, manufacturer: detail.value }))
-          }
-        />
-      </FormField>
-      <FormField label="Assigned project">
-        <Input
-          value={draft.assigned_project}
-          onChange={({ detail }) =>
-            onDraftChange((currentDraft) => ({ ...currentDraft, assigned_project: detail.value }))
-          }
-        />
-      </FormField>
-      <FormField label="Location">
-        <Input
-          value={draft.location}
-          onChange={({ detail }) =>
-            onDraftChange((currentDraft) => ({ ...currentDraft, location: detail.value }))
-          }
-        />
-      </FormField>
-    </ColumnLayout>
-  );
-}
-
 type TemplateComponentClassificationFieldsProps = TemplateComponentFieldProps & {
   competencyCategoryOptions: MultiselectProps.Option[];
   selectedSafetyOption: SelectProps.Option | null;
@@ -1104,60 +1063,18 @@ function TemplateComponentClassificationFields({
 }: TemplateComponentClassificationFieldsProps) {
   return (
     <SpaceBetween size="m">
-      <ColumnLayout columns={2}>
-        <FormField label="Equipment type">
-          <Input
-            value={draft.equipment_type}
-            onChange={({ detail }) =>
-              onDraftChange((currentDraft) => ({ ...currentDraft, equipment_type: detail.value }))
-            }
-          />
-        </FormField>
-        <FormField label="Structure">
-          <Input
-            value={draft.structure}
-            onChange={({ detail }) =>
-              onDraftChange((currentDraft) => ({ ...currentDraft, structure: detail.value }))
-            }
-          />
-        </FormField>
-        <FormField label="Model">
-          <Input
-            value={draft.model}
-            onChange={({ detail }) =>
-              onDraftChange((currentDraft) => ({ ...currentDraft, model: detail.value }))
-            }
-          />
-        </FormField>
-        <FormField label="Class">
-          <Input
-            value={draft.class}
-            onChange={({ detail }) =>
-              onDraftChange((currentDraft) => ({ ...currentDraft, class: detail.value }))
-            }
-          />
-        </FormField>
-        <FormField label="Class code">
-          <Input
-            value={draft.class_code}
-            onChange={({ detail }) =>
-              onDraftChange((currentDraft) => ({ ...currentDraft, class_code: detail.value }))
-            }
-          />
-        </FormField>
-        <FormField label="Safety critical">
-          <Select
-            options={SAFETY_OPTIONS}
-            selectedOption={selectedSafetyOption}
-            onChange={({ detail }) =>
-              onDraftChange((currentDraft) => ({
-                ...currentDraft,
-                safety_critical: (detail.selectedOption.value || "NO") as SafetyCritical,
-              }))
-            }
-          />
-        </FormField>
-      </ColumnLayout>
+      <FormField label="Safety critical">
+        <Select
+          options={SAFETY_OPTIONS}
+          selectedOption={selectedSafetyOption}
+          onChange={({ detail }) =>
+            onDraftChange((currentDraft) => ({
+              ...currentDraft,
+              safety_critical: (detail.selectedOption.value || "NO") as SafetyCritical,
+            }))
+          }
+        />
+      </FormField>
       <FormField label="Assigned test types">
         <div data-testid="template-component-tests">
           <Multiselect
@@ -1195,7 +1112,7 @@ function TemplateComponentClassificationFields({
             return (
               <FormField
                 key={testRequirement.test_id}
-                label={`${testOption?.label ?? "Test"} competent-person categories`}
+                label={`${testOption?.label ?? "Test"} Competency Categories`}
                 description="No selection allows any active category."
               >
                 <Multiselect

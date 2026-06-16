@@ -1016,12 +1016,17 @@ async function installMockApi(page: Page) {
               component.template_component_id ===
               componentPayload.template_component_id,
           );
-          const testIds = componentPayload.test_ids || [];
+          const testRequirements =
+            componentPayload.tests ??
+            (componentPayload.test_ids || []).map((testId) => ({
+              test_id: testId,
+              competency_category_ids: [],
+            }));
           const nextComponentId =
             componentPayload.template_component_id || `tc-${index + 1}`;
-          const nextTests = testIds.map((testId, testIndex) => {
+          const nextTests = testRequirements.map((testRequirement, testIndex) => {
             const testType = state.testTypes.find(
-              (item) => item.test_id === testId,
+              (item) => item.test_id === testRequirement.test_id,
             )!;
             const templateComponentTestId = `tct-${index + 1}-${testIndex + 1}`;
             return {
@@ -1029,16 +1034,20 @@ async function installMockApi(page: Page) {
               template_component_test_display_id:
                 templateComponentTestId.toUpperCase(),
               template_component_id: nextComponentId,
-              test_id: testId,
+              test_id: testRequirement.test_id,
               position: testIndex + 1,
               created_at: "2026-01-05T00:00:00.000Z",
               test_name: testType.test_name,
               validity_duration: testType.validity_duration,
               description: testType.description,
+              competency_category_ids:
+                testRequirement.competency_category_ids ?? [],
+              allowed_competency_categories: [],
             };
           });
           const componentFields = { ...componentPayload };
           delete componentFields.test_ids;
+          delete componentFields.tests;
 
           return {
             ...existing,
@@ -1647,6 +1656,17 @@ test.describe("mocked refactored page smoke coverage", () => {
       name: "Add template component",
     });
     await expect(componentDialog).toBeVisible();
+    await expect(componentDialog.getByLabel("Serial number")).toHaveCount(0);
+    await expect(componentDialog.getByLabel("Manufacturer")).toHaveCount(0);
+    await expect(componentDialog.getByLabel("Assigned project")).toHaveCount(0);
+    await expect(componentDialog.getByLabel("Location")).toHaveCount(0);
+    await expect(componentDialog.getByLabel("Equipment type")).toHaveCount(0);
+    await expect(componentDialog.getByLabel("Structure")).toHaveCount(0);
+    await expect(componentDialog.getByLabel("Model")).toHaveCount(0);
+    await expect(
+      componentDialog.getByLabel("Class", { exact: true }),
+    ).toHaveCount(0);
+    await expect(componentDialog.getByLabel("Class code")).toHaveCount(0);
 
     await componentDialog
       .getByRole("button", { name: "Save component" })
@@ -1678,17 +1698,6 @@ test.describe("mocked refactored page smoke coverage", () => {
     await componentDialog
       .getByLabel("Description")
       .fill("  Blueprint component  ");
-    await componentDialog.getByLabel("Serial number").fill("  WB-100  ");
-    await componentDialog.getByLabel("Manufacturer").fill("  Porto Marine  ");
-    await componentDialog
-      .getByLabel("Assigned project")
-      .fill("  South Field  ");
-    await componentDialog.getByLabel("Location").fill("  Deck C  ");
-    await componentDialog.getByLabel("Equipment type").fill("  Wet bell  ");
-    await componentDialog.getByLabel("Structure").fill("  Frame  ");
-    await componentDialog.getByLabel("Model").fill("  WBX  ");
-    await componentDialog.getByLabel("Class", { exact: true }).fill("  B  ");
-    await componentDialog.getByLabel("Class code").fill("  B2  ");
     await selectCloudscapeMultiOption(
       page,
       "template-component-tests",
@@ -1713,17 +1722,17 @@ test.describe("mocked refactored page smoke coverage", () => {
       scope_category_id: "scope-cat-1",
       name: "Wet Bell Frame",
       description: "Blueprint component",
-      serial_number: "WB-100",
-      manufacturer: "Porto Marine",
-      assigned_project: "South Field",
-      location: "Deck C",
-      equipment_type: "Wet bell",
-      structure: "Frame",
-      model: "WBX",
-      class: "B",
-      class_code: "B2",
+      serial_number: "",
+      manufacturer: "",
+      assigned_project: "",
+      location: "",
+      equipment_type: "",
+      structure: "",
+      model: "",
+      class: "",
+      class_code: "",
       safety_critical: "NO",
-      test_ids: ["test-1"],
+      tests: [{ test_id: "test-1", competency_category_ids: [] }],
     });
     expect(
       state.recorded.filter(
@@ -1764,8 +1773,10 @@ test.describe("mocked refactored page smoke coverage", () => {
       name: "Edit template component",
     });
     await expect(editDialog).toBeVisible();
+    await expect(editDialog.getByLabel("Serial number")).toHaveCount(0);
+    await expect(editDialog.getByLabel("Manufacturer")).toHaveCount(0);
+    await expect(editDialog.getByLabel("Equipment type")).toHaveCount(0);
     await editDialog.getByLabel("Component name").fill("  Updated Blueprint  ");
-    await editDialog.getByLabel("Manufacturer").fill("  Updated Maker  ");
     await selectCloudscapeMultiOption(
       page,
       "template-component-tests",
@@ -1787,8 +1798,11 @@ test.describe("mocked refactored page smoke coverage", () => {
     );
     expect(updatedComponent).toMatchObject({
       name: "Updated Blueprint",
-      manufacturer: "Updated Maker",
-      test_ids: ["test-1", "test-2"],
+      manufacturer: "Porto Marine",
+      tests: [
+        { test_id: "test-1", competency_category_ids: [] },
+        { test_id: "test-2", competency_category_ids: [] },
+      ],
     });
     expect(
       state.recorded.filter(
