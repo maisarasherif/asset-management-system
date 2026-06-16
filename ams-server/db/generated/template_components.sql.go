@@ -305,13 +305,14 @@ SELECT
     tc.location,
     tc.assigned_project
 FROM template_components tc
-JOIN categories c ON c.category_id = tc.category_id
-LEFT JOIN main_categories mc ON mc.main_category_id = c.main_category_id
+JOIN catalog_scope_categories csc ON csc.scope_category_id = tc.scope_category_id
+JOIN catalog_scope_main_categories csmc
+  ON csmc.scope_id = csc.scope_id
+ AND csmc.main_category_id = csc.main_category_id
 WHERE tc.template_id = $1
 ORDER BY
-    CASE WHEN mc.sort_order IS NULL THEN 1 ELSE 0 END,
-    mc.sort_order ASC NULLS LAST,
-    c.sort_order ASC,
+    csmc.sort_order ASC,
+    csc.sort_order ASC,
     tc.position ASC,
     tc.created_at ASC
 `

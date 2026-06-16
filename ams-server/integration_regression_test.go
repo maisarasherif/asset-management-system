@@ -141,6 +141,35 @@ func TestTemplateConfigurationAndSpinUpRegression(t *testing.T) {
 	assertField(t, deleteUsedTemplateResponse, "error", "template is in use by existing assets")
 }
 
+func TestTemplateConfigurationUsesCatalogScopeOrdering(t *testing.T) {
+	h := setupIntegrationTest(t)
+
+	legacyFirstMainCategoryID := createMainCategoryWithSortOrder(t, h, "Legacy First Main", 1)
+	legacyFirstCategoryID := createCategory(t, h, legacyFirstMainCategoryID, "Legacy First Category")
+	legacySecondMainCategoryID := createMainCategoryWithSortOrder(t, h, "Catalog First Main", 2)
+	legacySecondCategoryID := createCategory(t, h, legacySecondMainCategoryID, "Catalog First Category")
+	setDefaultCatalogMainCategorySortOrder(t, h.pool, legacyFirstMainCategoryID, 100)
+	setDefaultCatalogMainCategorySortOrder(t, h.pool, legacySecondMainCategoryID, 1)
+	setDefaultCatalogMainCategorySortOrder(t, h.pool, legacyFirstMainCategoryID, 2)
+
+	testID := createTestType(t, h, "Catalog Order Inspection", 12)
+	templateID := createTemplate(t, h, "Catalog Ordered Template")
+
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, fmt.Sprintf("/v1/template/%s/configuration", templateID), map[string]any{
+		"components": []map[string]any{
+			templateComponentPayload(legacyFirstCategoryID, "Legacy First Component", []string{testID}),
+			templateComponentPayload(legacySecondCategoryID, "Catalog First Component", []string{testID}),
+		},
+	}, http.StatusOK)
+
+	configuration := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, fmt.Sprintf("/v1/template/%s/configuration", templateID), nil, http.StatusOK))
+	if len(configuration) != 2 {
+		t.Fatalf("expected 2 template components, got %d", len(configuration))
+	}
+	assertField(t, configuration[0], "name", "Catalog First Component")
+	assertField(t, configuration[1], "name", "Legacy First Component")
+}
+
 func TestCreateAssetWithoutTemplate(t *testing.T) {
 	h := setupIntegrationTest(t)
 
@@ -1765,10 +1794,15 @@ func adminUserID(t *testing.T, pool *pgxpool.Pool) string {
 
 func createMainCategory(t *testing.T, h *integrationHarness, name string) string {
 	t.Helper()
+	return createMainCategoryWithSortOrder(t, h, name, 1)
+}
+
+func createMainCategoryWithSortOrder(t *testing.T, h *integrationHarness, name string, sortOrder int) string {
+	t.Helper()
 	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/main-category", map[string]any{
 		"main_category_name": name,
 		"description":        name + " description",
-		"sort_order":         1,
+		"sort_order":         sortOrder,
 	}, http.StatusCreated))
 	stringField(t, body, "display_id")
 	id := stringField(t, body, "main_category_id")
@@ -1962,6 +1996,35 @@ func assignCategoryToDefaultCatalogScope(t *testing.T, pool *pgxpool.Pool, mainC
 		ON CONFLICT (scope_id, main_category_id, category_id) DO NOTHING
 	`, scope.ScopeID, parsedMainCategoryID, parsedCategoryID, name+" scope category"); err != nil {
 		t.Fatalf("failed to assign category to default catalog scope: %v", err)
+	}
+}
+
+func setDefaultCatalogMainCategorySortOrder(t *testing.T, pool *pgxpool.Pool, mainCategoryID string, sortOrder int) {
+	t.Helper()
+
+	parsedMainCategoryID, err := utils.ParseUUID(mainCategoryID, "main_category_id")
+	if err != nil {
+		t.Fatalf("failed to parse main category id: %v", err)
+	}
+
+	queries := db.New(pool)
+	scope, err := queries.GetDefaultCatalogScope(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get default catalog scope: %v", err)
+	}
+
+	result, err := pool.Exec(context.Background(), `
+		UPDATE catalog_scope_main_categories
+		SET sort_order = $1,
+		    updated_at = NOW()
+		WHERE scope_id = $2
+		  AND main_category_id = $3
+	`, sortOrder, scope.ScopeID, parsedMainCategoryID)
+	if err != nil {
+		t.Fatalf("failed to update default catalog main category sort order: %v", err)
+	}
+	if result.RowsAffected() != 1 {
+		t.Fatalf("expected to update 1 default catalog main category sort order, updated %d", result.RowsAffected())
 	}
 }
 
