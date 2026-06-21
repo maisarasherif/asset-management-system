@@ -132,6 +132,21 @@ type UserManagementAuditLogResponse struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
+// ==================== Platform Product DTOs ====================
+
+type ProductAccessInput struct {
+	UserID      string `json:"user_id" validate:"required,uuid"`
+	ProductKey  string `json:"product_key" validate:"required,oneof=AMS HR_ADMIN"`
+	ProductRole string `json:"product_role" validate:"required,oneof=ADMIN USER VIEWER CLIENT"`
+	Status      string `json:"status" validate:"required,oneof=ACTIVE SUSPENDED"`
+}
+
+type ProductNotificationConfigurationInput struct {
+	EmailRecipients   string `json:"email_recipients"`
+	ClickUpListID     string `json:"clickup_list_id"`
+	ClickUpAssigneeID string `json:"clickup_assignee_ids"`
+}
+
 type CertificateNotificationTaskResponse struct {
 	TaskID               string     `json:"task_id"`
 	DisplayID            string     `json:"display_id"`
@@ -208,6 +223,63 @@ type CompetentPersonInput struct {
 	Organization         string `json:"organization"`
 	CompetencyCategoryID string `json:"competency_category_id" validate:"required,uuid"`
 	Active               bool   `json:"active"`
+}
+
+// ==================== HR/Admin DTOs ====================
+
+type HRAdminPersonInput struct {
+	PersonCode string `json:"person_code"`
+	FullName   string `json:"full_name" validate:"required,min=2,max=160"`
+	Department string `json:"department"`
+	RoleTitle  string `json:"role_title"`
+}
+
+type HRAdminVehicleInput struct {
+	PlateNumber string `json:"plate_number" validate:"required,min=2,max=60"`
+	Make        string `json:"make"`
+	Model       string `json:"model"`
+	VehicleYear *int32 `json:"vehicle_year" validate:"omitempty,min=1900,max=2200"`
+}
+
+type HRAdminCompanyInput struct {
+	CompanyCode string `json:"company_code"`
+	CompanyName string `json:"company_name" validate:"required,min=2,max=200"`
+	CompanyKind string `json:"company_kind" validate:"required,oneof=LEGAL_ENTITY OFFICE STAFF_HOUSING WAREHOUSE YARD OTHER"`
+	Location    string `json:"location"`
+}
+
+type ArchiveInput struct {
+	ArchiveReason string `json:"archive_reason" validate:"required,min=3,max=500"`
+}
+
+type ComplianceRecordTypeInput struct {
+	SubjectType           string  `json:"subject_type" validate:"required,oneof=PERSON VEHICLE COMPANY"`
+	TypeName              string  `json:"type_name" validate:"required,min=2,max=160"`
+	RenewalBehavior       string  `json:"renewal_behavior" validate:"required,oneof=RENEWABLE ONE_TIME"`
+	DefaultValidityMonths *int32  `json:"default_validity_months" validate:"omitempty,min=1,max=1200"`
+	ReminderPolicyDays    []int32 `json:"reminder_policy_days" validate:"omitempty,dive,min=0,max=3650"`
+	RequiresDocument      bool    `json:"requires_document"`
+	Active                bool    `json:"active"`
+	Description           string  `json:"description"`
+}
+
+type ComplianceRecordInput struct {
+	SubjectType      string     `json:"subject_type" validate:"required,oneof=PERSON VEHICLE COMPANY"`
+	SubjectID        string     `json:"subject_id" validate:"required,uuid"`
+	RecordTypeID     string     `json:"record_type_id" validate:"required,uuid"`
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	DocumentFile     string     `json:"document_file"`
+	IssuingAuthority string     `json:"issuing_authority"`
+	Notes            string     `json:"notes"`
+}
+
+type ComplianceRecordVersionInput struct {
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	DocumentFile     string     `json:"document_file"`
+	IssuingAuthority string     `json:"issuing_authority"`
+	Notes            string     `json:"notes"`
 }
 
 // ==================== Category DTOs ====================

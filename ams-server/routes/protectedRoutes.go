@@ -120,8 +120,19 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	account := router.Group("/v1")
 	account.Use(middleware.AuthMiddleware(), middleware.ActiveUserMiddleware(pool))
 	account.GET("/session", controller.GetSession())
+	account.GET("/platform/products", controller.GetPlatformProducts(pool))
 	account.PUT("/account/password", controller.UpdatePassword(pool))
 	account.POST("/logout", controller.LogoutUser(pool))
+
+	platformAdmin := router.Group("/v1/platform")
+	platformAdmin.Use(
+		middleware.AuthMiddleware(),
+		middleware.ActiveUserMiddleware(pool),
+		middleware.SuperAdminMiddleware(),
+	)
+	platformAdmin.GET("/product-access", controller.GetProductAccess(pool))
+	platformAdmin.POST("/product-access", controller.UpsertProductAccess(pool))
+	platformAdmin.DELETE("/product-access/:access_id", controller.DeleteProductAccess(pool))
 
 	// ===================Protected Staff Routes======================================================
 	protected := router.Group("/v1")
@@ -204,6 +215,49 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	scheduler.GET("/scheduler/certificate-notifications", controller.GetCertificateNotificationTasks(pool))
 	scheduler.GET("/scheduler/notification-failures", controller.GetCertificateNotificationFailures(pool))
 	scheduler.POST("/scheduler/run", controller.RunCertificateExpiryScheduler(pool, riverClient))
+
+	hrRead := router.Group("/v1/hr-admin")
+	hrRead.Use(
+		middleware.AuthMiddleware(),
+		middleware.ActiveUserMiddleware(pool),
+		middleware.ProductAccessMiddleware(pool, controller.ProductHRAdmin, "ADMIN", "USER", "VIEWER"),
+	)
+	hrRead.GET("/persons", controller.GetHRAdminPersons(pool))
+	hrRead.GET("/vehicles", controller.GetHRAdminVehicles(pool))
+	hrRead.GET("/companies", controller.GetHRAdminCompanies(pool))
+	hrRead.GET("/compliance-record-types", controller.GetComplianceRecordTypes(pool))
+	hrRead.GET("/compliance-records", controller.GetComplianceRecords(pool))
+	hrRead.GET("/compliance-records/:record_id/versions", controller.GetComplianceRecordVersions(pool))
+	hrRead.GET("/notification-configuration", controller.GetHRAdminNotificationConfiguration(pool))
+
+	hrWrite := router.Group("/v1/hr-admin")
+	hrWrite.Use(
+		middleware.AuthMiddleware(),
+		middleware.ActiveUserMiddleware(pool),
+		middleware.ProductAccessMiddleware(pool, controller.ProductHRAdmin, "ADMIN", "USER"),
+	)
+	hrWrite.POST("/persons", controller.CreateHRAdminPerson(pool))
+	hrWrite.PUT("/persons/:person_id", controller.UpdateHRAdminPerson(pool))
+	hrWrite.POST("/vehicles", controller.CreateHRAdminVehicle(pool))
+	hrWrite.PUT("/vehicles/:vehicle_id", controller.UpdateHRAdminVehicle(pool))
+	hrWrite.POST("/companies", controller.CreateHRAdminCompany(pool))
+	hrWrite.PUT("/companies/:company_id", controller.UpdateHRAdminCompany(pool))
+	hrWrite.POST("/compliance-records", controller.CreateComplianceRecord(pool))
+	hrWrite.POST("/compliance-records/:record_id/versions", controller.RenewComplianceRecord(pool))
+
+	hrAdmin := router.Group("/v1/hr-admin")
+	hrAdmin.Use(
+		middleware.AuthMiddleware(),
+		middleware.ActiveUserMiddleware(pool),
+		middleware.ProductAccessMiddleware(pool, controller.ProductHRAdmin, "ADMIN"),
+	)
+	hrAdmin.PATCH("/persons/:person_id/archive", controller.ArchiveHRAdminPerson(pool))
+	hrAdmin.PATCH("/vehicles/:vehicle_id/archive", controller.ArchiveHRAdminVehicle(pool))
+	hrAdmin.PATCH("/companies/:company_id/archive", controller.ArchiveHRAdminCompany(pool))
+	hrAdmin.POST("/compliance-record-types", controller.CreateComplianceRecordType(pool))
+	hrAdmin.PUT("/compliance-record-types/:record_type_id", controller.UpdateComplianceRecordType(pool))
+	hrAdmin.PATCH("/compliance-records/:record_id/archive", controller.ArchiveComplianceRecord(pool))
+	hrAdmin.PUT("/notification-configuration", controller.UpdateHRAdminNotificationConfiguration(pool))
 
 	if riverUIHandler != nil {
 		jobs := router.Group("/v1/admin/jobs")

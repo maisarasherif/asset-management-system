@@ -154,6 +154,51 @@ type CompetentPerson struct {
 	UpdatedAt            time.Time `json:"updated_at"`
 }
 
+type ComplianceRecord struct {
+	RecordID      uuid.UUID          `json:"record_id"`
+	DisplayID     string             `json:"display_id"`
+	SubjectType   string             `json:"subject_type"`
+	SubjectID     uuid.UUID          `json:"subject_id"`
+	RecordTypeID  uuid.UUID          `json:"record_type_id"`
+	Status        string             `json:"status"`
+	ArchiveReason string             `json:"archive_reason"`
+	ArchivedAt    pgtype.Timestamptz `json:"archived_at"`
+	ArchivedBy    *uuid.UUID         `json:"archived_by"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ComplianceRecordType struct {
+	RecordTypeID          uuid.UUID          `json:"record_type_id"`
+	DisplayID             string             `json:"display_id"`
+	SubjectType           string             `json:"subject_type"`
+	TypeName              string             `json:"type_name"`
+	RenewalBehavior       string             `json:"renewal_behavior"`
+	DefaultValidityMonths pgtype.Int4        `json:"default_validity_months"`
+	ReminderPolicyDays    []int32            `json:"reminder_policy_days"`
+	RequiresDocument      bool               `json:"requires_document"`
+	Active                bool               `json:"active"`
+	Description           string             `json:"description"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ComplianceRecordVersion struct {
+	VersionID        uuid.UUID          `json:"version_id"`
+	DisplayID        string             `json:"display_id"`
+	RecordID         uuid.UUID          `json:"record_id"`
+	VersionNumber    int32              `json:"version_number"`
+	IssueDate        pgtype.Timestamptz `json:"issue_date"`
+	ExpiryDate       pgtype.Timestamptz `json:"expiry_date"`
+	DocumentFile     string             `json:"document_file"`
+	IssuingAuthority string             `json:"issuing_authority"`
+	Notes            string             `json:"notes"`
+	IsCurrent        bool               `json:"is_current"`
+	SupersededAt     pgtype.Timestamptz `json:"superseded_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Component struct {
 	Name                   string     `json:"name"`
 	SerialNumber           string     `json:"serial_number"`
@@ -196,6 +241,51 @@ type ForgotPasswordRateLimit struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type HrAdminCompany struct {
+	CompanyID     uuid.UUID          `json:"company_id"`
+	DisplayID     string             `json:"display_id"`
+	CompanyCode   string             `json:"company_code"`
+	CompanyName   string             `json:"company_name"`
+	CompanyKind   string             `json:"company_kind"`
+	Location      string             `json:"location"`
+	Status        string             `json:"status"`
+	ArchiveReason string             `json:"archive_reason"`
+	ArchivedAt    pgtype.Timestamptz `json:"archived_at"`
+	ArchivedBy    *uuid.UUID         `json:"archived_by"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type HrAdminPerson struct {
+	PersonID      uuid.UUID          `json:"person_id"`
+	DisplayID     string             `json:"display_id"`
+	PersonCode    string             `json:"person_code"`
+	FullName      string             `json:"full_name"`
+	Department    string             `json:"department"`
+	RoleTitle     string             `json:"role_title"`
+	Status        string             `json:"status"`
+	ArchiveReason string             `json:"archive_reason"`
+	ArchivedAt    pgtype.Timestamptz `json:"archived_at"`
+	ArchivedBy    *uuid.UUID         `json:"archived_by"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type HrAdminVehicle struct {
+	VehicleID     uuid.UUID          `json:"vehicle_id"`
+	DisplayID     string             `json:"display_id"`
+	PlateNumber   string             `json:"plate_number"`
+	Make          string             `json:"make"`
+	Model         string             `json:"model"`
+	VehicleYear   pgtype.Int4        `json:"vehicle_year"`
+	Status        string             `json:"status"`
+	ArchiveReason string             `json:"archive_reason"`
+	ArchivedAt    pgtype.Timestamptz `json:"archived_at"`
+	ArchivedBy    *uuid.UUID         `json:"archived_by"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 type MainCategory struct {
 	MainCategoryName string    `json:"main_category_name"`
 	Description      string    `json:"description"`
@@ -230,6 +320,27 @@ type PasswordResetToken struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	UsedAt    pgtype.Timestamptz `json:"used_at"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type ProductAccess struct {
+	AccessID    uuid.UUID          `json:"access_id"`
+	DisplayID   string             `json:"display_id"`
+	UserID      uuid.UUID          `json:"user_id"`
+	ProductKey  string             `json:"product_key"`
+	ProductRole string             `json:"product_role"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ProductNotificationConfiguration struct {
+	ProductKey         string             `json:"product_key"`
+	EmailRecipients    string             `json:"email_recipients"`
+	ClickupListID      string             `json:"clickup_list_id"`
+	ClickupAssigneeIds string             `json:"clickup_assignee_ids"`
+	UpdatedBy          *uuid.UUID         `json:"updated_by"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Project struct {

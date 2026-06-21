@@ -15,6 +15,7 @@ Together they cover auth/session handling, user permissions, catalog/template CR
 
 ```text
 system-api-smoke.postman_collection.json
+hr-admin-product.postman_collection.json
 admin-surface-regression.postman_collection.json
 routine-maintenance.postman_collection.json
 client-asset-certificates.postman_collection.json
