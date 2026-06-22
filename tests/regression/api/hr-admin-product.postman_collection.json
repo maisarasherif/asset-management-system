@@ -2,7 +2,7 @@
   "info": {
     "name": "HR/Admin Product API Regression",
     "_postman_id": "9ec0d5dd-3b5d-4a4a-8d29-6f0f3311a7f5",
-    "description": "Focused Newman-ready regression for HR/Admin product access, compliance subjects, compliance record types, versioned compliance records, and archive behavior.",
+    "description": "Focused Newman-ready regression for HR/Admin product access, product roles, compliance subjects, compliance record types, versioned compliance records, and archive behavior.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -41,11 +41,63 @@
       "value": ""
     },
     {
+      "key": "hr_user_email",
+      "value": "hr-user-{{runSuffix}}@example.com"
+    },
+    {
+      "key": "hr_user_password",
+      "value": "HrUserPassword123!"
+    },
+    {
+      "key": "hr_user_id",
+      "value": ""
+    },
+    {
+      "key": "hr_user_token",
+      "value": ""
+    },
+    {
+      "key": "hr_user_person_id",
+      "value": ""
+    },
+    {
+      "key": "hr_viewer_email",
+      "value": "hr-viewer-{{runSuffix}}@example.com"
+    },
+    {
+      "key": "hr_viewer_password",
+      "value": "HrViewerPassword123!"
+    },
+    {
+      "key": "hr_viewer_id",
+      "value": ""
+    },
+    {
+      "key": "hr_viewer_token",
+      "value": ""
+    },
+    {
       "key": "hr_person_id",
       "value": ""
     },
     {
+      "key": "hr_vehicle_id",
+      "value": ""
+    },
+    {
+      "key": "hr_company_id",
+      "value": ""
+    },
+    {
       "key": "hr_record_type_id",
+      "value": ""
+    },
+    {
+      "key": "hr_vehicle_record_type_id",
+      "value": ""
+    },
+    {
+      "key": "hr_company_record_type_id",
       "value": ""
     },
     {
@@ -95,7 +147,430 @@
       ]
     },
     {
-      "name": "HR/Admin Product Foundation",
+      "name": "01 Product Access Roles",
+      "item": [
+        {
+          "name": "Create HR User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/user",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"HR\",\n  \"last_name\": \"User {{runSuffix}}\",\n  \"email\": \"{{hr_user_email}}\",\n  \"password\": \"{{hr_user_password}}\",\n  \"role\": \"USER\",\n  \"status\": \"ACTIVE\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.user_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "pm.collectionVariables.set('hr_user_id', body.user_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Grant HR User Product Access",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/platform/product-access",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{hr_user_id}}\",\n  \"product_key\": \"HR_ADMIN\",\n  \"product_role\": \"USER\",\n  \"status\": \"ACTIVE\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.product_key).to.eql('HR_ADMIN');",
+                  "pm.expect(body.product_role).to.eql('USER');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login HR User",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{hr_user_email}}\",\n  \"password\": \"{{hr_user_password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "pm.collectionVariables.set('hr_user_token', body.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR User Creates Person",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/persons",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person_code\": \"POSTMAN-HR-USER-{{runSuffix}}\",\n  \"full_name\": \"Postman HR User Person {{runSuffix}}\",\n  \"department\": \"Administration\",\n  \"role_title\": \"Coordinator\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.person_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "pm.collectionVariables.set('hr_user_person_id', body.person_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR User Updates Person",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/persons/{{hr_user_person_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person_code\": \"POSTMAN-HR-USER-{{runSuffix}}\",\n  \"full_name\": \"Postman HR User Person Updated {{runSuffix}}\",\n  \"department\": \"Administration\",\n  \"role_title\": \"Coordinator\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.message).to.eql('HR/Admin person updated successfully');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR User Cannot Archive Person",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/persons/{{hr_user_person_id}}/archive",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archive_reason\": \"USER role cannot archive\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR User Cannot Update Notification Configuration",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/notification-configuration",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email_recipients\": \"hr-user@example.com\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create HR Viewer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/user",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"HR\",\n  \"last_name\": \"Viewer {{runSuffix}}\",\n  \"email\": \"{{hr_viewer_email}}\",\n  \"password\": \"{{hr_viewer_password}}\",\n  \"role\": \"USER\",\n  \"status\": \"ACTIVE\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.user_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "pm.collectionVariables.set('hr_viewer_id', body.user_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Grant HR Viewer Product Access",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/platform/product-access",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{hr_viewer_id}}\",\n  \"product_key\": \"HR_ADMIN\",\n  \"product_role\": \"VIEWER\",\n  \"status\": \"ACTIVE\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.product_key).to.eql('HR_ADMIN');",
+                  "pm.expect(body.product_role).to.eql('VIEWER');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login HR Viewer",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{hr_viewer_email}}\",\n  \"password\": \"{{hr_viewer_password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "pm.collectionVariables.set('hr_viewer_token', body.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR Viewer Can List Persons",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_viewer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/persons?page=1&limit=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.data).to.be.an('array');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR Viewer Cannot Create Vehicle",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_viewer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/vehicles",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate_number\": \"VIEWER-BLOCKED-{{runSuffix}}\",\n  \"make\": \"Blocked\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 HR/Admin Product Foundation",
       "item": [
         {
           "name": "List Platform Products",
@@ -112,7 +587,8 @@
                 "exec": [
                   "pm.response.to.have.status(200);",
                   "const body = pm.response.json();",
-                  "pm.expect(body.products).to.be.an('array');"
+                  "pm.expect(body.products).to.be.an('array');",
+                  "pm.expect(body.products.some((product) => product.product_key === 'HR_ADMIN')).to.eql(true);"
                 ]
               }
             }
@@ -150,7 +626,69 @@
           ]
         },
         {
-          "name": "Create HR/Admin Compliance Record Type",
+          "name": "Create HR/Admin Vehicle",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/vehicles",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate_number\": \"POSTMAN-VEH-{{runSuffix}}\",\n  \"make\": \"Toyota\",\n  \"model\": \"Hiace\",\n  \"vehicle_year\": 2024\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.vehicle_id).to.be.a('string');",
+                  "pm.collectionVariables.set('hr_vehicle_id', body.vehicle_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create HR/Admin Company",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/companies",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_code\": \"POSTMAN-HRC-{{runSuffix}}\",\n  \"company_name\": \"Postman HR Company {{runSuffix}}\",\n  \"company_kind\": \"LEGAL_ENTITY\",\n  \"location\": \"Dubai\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.company_id).to.be.a('string');",
+                  "pm.collectionVariables.set('hr_company_id', body.company_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create HR/Admin Person Compliance Record Type",
           "request": {
             "method": "POST",
             "header": [
@@ -162,7 +700,7 @@
             "url": "{{baseUrl}}/hr-admin/compliance-record-types",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"subject_type\": \"PERSON\",\n  \"type_name\": \"Postman Visa {{runSuffix}}\",\n  \"renewal_behavior\": \"RENEWABLE\",\n  \"default_validity_months\": 24,\n  \"reminder_policy_days\": [\n    90,\n    30,\n    7\n  ],\n  \"requires_document\": true,\n  \"active\": true,\n  \"description\": \"Created by API smoke test\"\n}"
+              "raw": "{\n  \"subject_type\": \"PERSON\",\n  \"type_name\": \"Postman Visa {{runSuffix}}\",\n  \"renewal_behavior\": \"RENEWABLE\",\n  \"default_validity_months\": 24,\n  \"reminder_policy_days\": [90, 30, 7],\n  \"requires_document\": true,\n  \"active\": true,\n  \"description\": \"Created by API regression\"\n}"
             }
           },
           "event": [
@@ -175,6 +713,68 @@
                   "const body = pm.response.json();",
                   "pm.expect(body.record_type_id).to.be.a('string');",
                   "pm.collectionVariables.set('hr_record_type_id', body.record_type_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create HR/Admin Vehicle Compliance Record Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-record-types",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"VEHICLE\",\n  \"type_name\": \"Postman Vehicle Registration {{runSuffix}}\",\n  \"renewal_behavior\": \"RENEWABLE\",\n  \"default_validity_months\": 12,\n  \"reminder_policy_days\": [60, 30, 7],\n  \"requires_document\": false,\n  \"active\": true,\n  \"description\": \"Created by API regression\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.record_type_id).to.be.a('string');",
+                  "pm.collectionVariables.set('hr_vehicle_record_type_id', body.record_type_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create HR/Admin Company One-Time Record Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-record-types",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"COMPANY\",\n  \"type_name\": \"Postman Company File {{runSuffix}}\",\n  \"renewal_behavior\": \"ONE_TIME\",\n  \"requires_document\": false,\n  \"active\": true,\n  \"description\": \"One-time company record\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.record_type_id).to.be.a('string');",
+                  "pm.collectionVariables.set('hr_company_record_type_id', body.record_type_id);"
                 ]
               }
             }
@@ -207,6 +807,67 @@
                   "pm.expect(body.record.record_id).to.be.a('string');",
                   "pm.expect(body.current_version.version_number).to.eql(1);",
                   "pm.collectionVariables.set('hr_record_id', body.record.record_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Duplicate Active HR/Admin Compliance Record Is Rejected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"PERSON\",\n  \"subject_id\": \"{{hr_person_id}}\",\n  \"record_type_id\": \"{{hr_record_type_id}}\",\n  \"issue_date\": \"2026-01-01T00:00:00Z\",\n  \"expiry_date\": \"2028-01-01T00:00:00Z\",\n  \"document_file\": \"postman-visa-duplicate.pdf\",\n  \"issuing_authority\": \"Postman Authority\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(409);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.error).to.eql('active compliance record already exists for this subject and type');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create One-Time Company Compliance Record Without Expiry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"COMPANY\",\n  \"subject_id\": \"{{hr_company_id}}\",\n  \"record_type_id\": \"{{hr_company_record_type_id}}\",\n  \"issue_date\": \"2026-01-01T00:00:00Z\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"One-time company document\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.record.record_id).to.be.a('string');",
+                  "pm.expect(body.current_version.version_number).to.eql(1);"
                 ]
               }
             }
@@ -305,7 +966,7 @@
             "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_record_id}}/archive",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"archive_reason\": \"API smoke cleanup\"\n}"
+              "raw": "{\n  \"archive_reason\": \"API regression cleanup\"\n}"
             }
           },
           "event": [
@@ -315,6 +976,152 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archived HR/Admin Compliance Record Cannot Renew",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_record_id}}/versions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"issue_date\": \"2030-01-01T00:00:00Z\",\n  \"expiry_date\": \"2032-01-01T00:00:00Z\",\n  \"document_file\": \"postman-visa-v3.pdf\",\n  \"issuing_authority\": \"Postman Authority\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(400);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.error).to.eql('archived compliance records cannot be renewed');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archive HR/Admin Vehicle",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/vehicles/{{hr_vehicle_id}}/archive",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archive_reason\": \"Vehicle sold\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archived Vehicle Rejects Compliance Record Creation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"VEHICLE\",\n  \"subject_id\": \"{{hr_vehicle_id}}\",\n  \"record_type_id\": \"{{hr_vehicle_record_type_id}}\",\n  \"issue_date\": \"2026-01-01T00:00:00Z\",\n  \"expiry_date\": \"2027-01-01T00:00:00Z\",\n  \"issuing_authority\": \"Postman Authority\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(400);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.error).to.eql('vehicle is archived');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archive HR/Admin Company",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/companies/{{hr_company_id}}/archive",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archive_reason\": \"Company no longer used\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archived Company Rejects One-Time Compliance Record Creation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"COMPANY\",\n  \"subject_id\": \"{{hr_company_id}}\",\n  \"record_type_id\": \"{{hr_company_record_type_id}}\",\n  \"issue_date\": \"2026-01-01T00:00:00Z\",\n  \"issuing_authority\": \"Postman Authority\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(400);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.error).to.eql('company is archived');"
                 ]
               }
             }

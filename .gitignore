@@ -19,3 +19,5 @@ scripts/
 .DS_Store
 cloudflare/
 pd/
+.vps-test-run/*
+.codegraph/*
