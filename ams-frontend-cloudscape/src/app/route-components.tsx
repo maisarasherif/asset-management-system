@@ -111,6 +111,18 @@ export const SchedulerManagementPage = lazy(() =>
   }))
 );
 
+export const HRAdminOverviewPage = lazy(() =>
+  import("../features/hr-admin/HRAdminOverviewPage").then((module) => ({
+    default: module.HRAdminOverviewPage,
+  }))
+);
+
+export const HRAdminPersonsPage = lazy(() =>
+  import("../features/hr-admin/HRAdminPersonsPage").then((module) => ({
+    default: module.HRAdminPersonsPage,
+  }))
+);
+
 export const ClientAssetsPage = lazy(() =>
   import("../features/client/ClientAssetsPage").then((module) => ({
     default: module.ClientAssetsPage,
@@ -203,6 +215,24 @@ export function RequireSuperAdmin({ children }: { children: ReactNode }) {
   }
 
   if (!isSuperAdmin) {
+    return <Navigate replace to="/dashboard" />;
+  }
+
+  return children;
+}
+
+export function RequireProductAccess({ children }: { children: ReactNode }) {
+  const { hasProductAccess, isAuthenticated, isProductAccessLoading, isSessionLoading } = useAuth();
+
+  if (isSessionLoading || isProductAccessLoading) {
+    return <AuthCheckPage />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate replace to="/login" />;
+  }
+
+  if (!hasProductAccess("HR_ADMIN", ["ADMIN", "USER", "VIEWER"])) {
     return <Navigate replace to="/dashboard" />;
   }
 

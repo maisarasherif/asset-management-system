@@ -19,8 +19,11 @@ import {
   DashboardPage,
   ForgotPasswordPage,
   GuestOnly,
+  HRAdminOverviewPage,
+  HRAdminPersonsPage,
   RequireAdmin,
   RequireAuth,
+  RequireProductAccess,
   RequireSuperAdmin,
   RouteSuspense,
   ResetPasswordPage,
@@ -274,6 +277,36 @@ export const router = createBrowserRouter([
               <SchedulerManagementPage />
             </RouteSuspense>
           </RequireSuperAdmin>
+        ),
+      },
+      {
+        path: "hr-admin",
+        element: (
+          <RequireProductAccess>
+            <RouteSuspense>
+              <HRAdminOverviewPage />
+            </RouteSuspense>
+          </RequireProductAccess>
+        ),
+      },
+      {
+        path: "hr-admin/persons",
+        element: (
+          <RequireProductAccess>
+            <RouteSuspense>
+              <HRAdminPersonsPage />
+            </RouteSuspense>
+          </RequireProductAccess>
+        ),
+      },
+      {
+        path: "hr-admin/:section",
+        element: (
+          <RequireProductAccess>
+            <RouteSuspense>
+              <HRAdminOverviewPage />
+            </RouteSuspense>
+          </RequireProductAccess>
         ),
       },
       {

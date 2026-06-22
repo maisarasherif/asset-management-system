@@ -1,6 +1,7 @@
 import {
   AppLayout,
   Box,
+  ButtonDropdown,
   Flashbar,
   HelpPanel,
   SideNavigation,
@@ -14,7 +15,7 @@ import { Select } from "../shared/OptimizedSelect";
 import { listAllAssets, listAllClientAssets, logoutRequest } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { Role } from "../../types/ams";
+import type { ProductAccess, ProductKey, Role } from "../../types/ams";
 
 const TOP_NAV_I18N = {
   searchDismissIconAriaLabel: "Close search",
@@ -91,6 +92,14 @@ function isDesktopNavigation() {
 }
 
 function getHelpPanelContent(pathname: string) {
+  if (pathname.startsWith("/hr-admin")) {
+    return {
+      title: "HR/Admin",
+      content:
+        "Use this product area for company responsibility records across persons, vehicles, companies, and their compliance renewals.",
+    };
+  }
+
   if (pathname.startsWith("/dashboard")) {
     return {
       title: "Asset dashboard",
@@ -170,28 +179,94 @@ function getHelpPanelContent(pathname: string) {
   };
 }
 
+function productLabel(productKey: ProductKey) {
+  switch (productKey) {
+    case "HR_ADMIN":
+      return "HR/Admin";
+    case "AMS":
+    default:
+      return "Asset Management";
+  }
+}
+
+function productHref(productKey: ProductKey) {
+  return productKey === "HR_ADMIN" ? "/hr-admin" : "/dashboard";
+}
+
+function ProductSwitcher({
+  currentProductKey,
+  isClient,
+  products,
+}: {
+  currentProductKey: ProductKey;
+  isClient: boolean;
+  products: ProductAccess[];
+}) {
+  const navigate = useNavigate();
+
+  if (isClient) {
+    return <span className="product-switcher__label">Client portal</span>;
+  }
+
+  if (products.length <= 1) {
+    return <span className="product-switcher__label">{productLabel(currentProductKey)}</span>;
+  }
+
+  return (
+    <ButtonDropdown
+      ariaLabel="Switch product"
+      items={products.map((product) => ({
+        id: product.product_key,
+        text: product.product_name,
+      }))}
+      onItemClick={({ detail }) => {
+        navigate(productHref(detail.id as ProductKey));
+      }}
+      variant="normal"
+    >
+      {productLabel(currentProductKey)}
+    </ButtonDropdown>
+  );
+}
+
 export function AppShellLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
   const { clearAll, items } = useFlashbar();
-  const { isAdmin, isClient, isSuperAdmin, logout, selectedAssetId, session, setSelectedAssetId } = useAuth();
+  const {
+    getProductRole,
+    isAdmin,
+    isClient,
+    isSuperAdmin,
+    logout,
+    selectedAssetId,
+    session,
+    setSelectedAssetId,
+  } = useAuth();
   const [navigationOpen, setNavigationOpen] = useState(true);
   const [desktopNavigation, setDesktopNavigation] = useState(() => isDesktopNavigation());
   const [toolsOpen, setToolsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
+  const isHRAdminRoute = location.pathname.startsWith("/hr-admin");
+  const hrAdminRole = getProductRole("HR_ADMIN");
+
   const assetsQuery = useQuery({
     queryKey: [isClient ? "client-assets" : "assets", "all"],
     queryFn: isClient ? listAllClientAssets : listAllAssets,
+    enabled: !isHRAdminRoute,
   });
 
   useEffect(() => {
+    if (isHRAdminRoute) {
+      return;
+    }
     if (!selectedAssetId && assetsQuery.data && assetsQuery.data.length > 0) {
       setSelectedAssetId(assetsQuery.data[0].asset_id);
     }
-  }, [assetsQuery.data, selectedAssetId, setSelectedAssetId]);
+  }, [assetsQuery.data, isHRAdminRoute, selectedAssetId, setSelectedAssetId]);
 
   useEffect(() => {
     if (!profileMenuOpen) {
@@ -250,6 +325,36 @@ export function AppShellLayout() {
     assetOptions.find((option) => option.value === selectedAssetId) ?? null;
 
   const navigationGroups = useMemo<NavigationGroup[]>(() => {
+    if (isHRAdminRoute) {
+      const groups: NavigationGroup[] = [
+        {
+          label: "Subjects",
+          items: [
+            { href: "/hr-admin/persons", text: "Persons" },
+            { href: "/hr-admin/vehicles", text: "Vehicles" },
+            { href: "/hr-admin/companies", text: "Companies" },
+          ],
+        },
+        {
+          label: "Compliance",
+          items: [{ href: "/hr-admin/records", text: "Records" }],
+        },
+      ];
+
+      if (hrAdminRole === "ADMIN") {
+        groups[1].items.push({ href: "/hr-admin/record-types", text: "Record types" });
+        groups.push({
+          label: "Operations",
+          items: [
+            { href: "/hr-admin/reminder-policy", text: "Reminder policy" },
+            { href: "/hr-admin/notification-config", text: "Notification config" },
+          ],
+        });
+      }
+
+      return groups;
+    }
+
     if (isClient) {
       return [
         {
@@ -292,10 +397,26 @@ export function AppShellLayout() {
     }
 
     return groups;
-  }, [isAdmin, isClient, isSuperAdmin]);
+  }, [hrAdminRole, isAdmin, isClient, isHRAdminRoute, isSuperAdmin]);
 
   const helpPanel = getHelpPanelContent(location.pathname);
-  const activeHref = location.pathname.startsWith("/assets")
+  const activeHref = location.pathname.startsWith("/hr-admin/persons")
+    ? "/hr-admin/persons"
+    : location.pathname.startsWith("/hr-admin/vehicles")
+      ? "/hr-admin/vehicles"
+      : location.pathname.startsWith("/hr-admin/companies")
+        ? "/hr-admin/companies"
+        : location.pathname.startsWith("/hr-admin/records")
+          ? "/hr-admin/records"
+          : location.pathname.startsWith("/hr-admin/record-types")
+            ? "/hr-admin/record-types"
+            : location.pathname.startsWith("/hr-admin/reminder-policy")
+              ? "/hr-admin/reminder-policy"
+              : location.pathname.startsWith("/hr-admin/notification-config")
+                ? "/hr-admin/notification-config"
+                : location.pathname === "/hr-admin"
+                  ? "/hr-admin"
+                  : location.pathname.startsWith("/assets")
     ? "/assets"
     : location.pathname.startsWith("/client/assets")
       ? "/client/assets"
@@ -333,47 +454,55 @@ export function AppShellLayout() {
       ariaLabels={APP_LAYOUT_ARIA_LABELS}
       content={<div className="app-layout-content"><Outlet /></div>}
       navigation={
-        <div className="brand-sidebar">
+        <div className={isHRAdminRoute ? "brand-sidebar brand-sidebar--hr-admin" : "brand-sidebar"}>
           <SideNavigation
             activeHref={activeHref}
             className="brand-sidebar__side-navigation"
             items={sideNavigationItems}
             itemsControl={
-              <div className="brand-sidebar__asset">
-                <span className="brand-sidebar__asset-label">Current asset</span>
-                <Select
-                  ariaLabel="Select asset"
-                  disabled={assetsQuery.isLoading || assetOptions.length === 0}
-                  loadingText="Loading assets"
-                  options={assetOptions}
-                  placeholder="Select an asset"
-                  selectedOption={selectedAssetOption}
-                  statusType={assetsQuery.isLoading ? "loading" : "finished"}
-                  onChange={({ detail }) => {
-                    const nextAssetId = detail.selectedOption.value ?? null;
-                    setSelectedAssetId(nextAssetId);
+              isHRAdminRoute ? (
+                <div className="brand-sidebar__product">
+                  <span className="brand-sidebar__asset-label">Product</span>
+                  <strong>HR/Admin</strong>
+                  <span>Compliance registry</span>
+                </div>
+              ) : (
+                <div className="brand-sidebar__asset">
+                  <span className="brand-sidebar__asset-label">Current asset</span>
+                  <Select
+                    ariaLabel="Select asset"
+                    disabled={assetsQuery.isLoading || assetOptions.length === 0}
+                    loadingText="Loading assets"
+                    options={assetOptions}
+                    placeholder="Select an asset"
+                    selectedOption={selectedAssetOption}
+                    statusType={assetsQuery.isLoading ? "loading" : "finished"}
+                    onChange={({ detail }) => {
+                      const nextAssetId = detail.selectedOption.value ?? null;
+                      setSelectedAssetId(nextAssetId);
 
-                    if (!nextAssetId) return;
+                      if (!nextAssetId) return;
 
-                    if (isClient) {
-                      navigate(`/client/assets/${nextAssetId}`);
-                      return;
-                    }
+                      if (isClient) {
+                        navigate(`/client/assets/${nextAssetId}`);
+                        return;
+                      }
 
-                    if (location.pathname.includes("/routine-maintenance")) {
-                      navigate(`/assets/${nextAssetId}/routine-maintenance`);
-                      return;
-                    }
+                      if (location.pathname.includes("/routine-maintenance")) {
+                        navigate(`/assets/${nextAssetId}/routine-maintenance`);
+                        return;
+                      }
 
-                    if (location.pathname.startsWith("/assets/") && !location.pathname.endsWith("/new")) {
-                      navigate(`/assets/${nextAssetId}`);
-                      return;
-                    }
+                      if (location.pathname.startsWith("/assets/") && !location.pathname.endsWith("/new")) {
+                        navigate(`/assets/${nextAssetId}`);
+                        return;
+                      }
 
-                    navigate("/dashboard");
-                  }}
-                />
-              </div>
+                      navigate("/dashboard");
+                    }}
+                  />
+                </div>
+              )
             }
             onFollow={(event) => {
               event.preventDefault();
@@ -447,7 +576,9 @@ export function AppShellLayout() {
 
 export function AppChrome() {
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const location = useLocation();
+  const { isClient, products, session } = useAuth();
+  const currentProductKey: ProductKey = location.pathname.startsWith("/hr-admin") ? "HR_ADMIN" : "AMS";
 
   return (
     <>
@@ -466,6 +597,9 @@ export function AppChrome() {
             },
           }}
         />
+        <div className="product-switcher">
+          <ProductSwitcher currentProductKey={currentProductKey} isClient={isClient} products={products} />
+        </div>
       </div>
       <AppShellLayout />
     </>

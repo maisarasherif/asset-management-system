@@ -62,6 +62,27 @@ body {
   object-position: left center;
 }
 
+.product-switcher {
+  position: absolute;
+  top: 22px;
+  left: 332px;
+  z-index: 2;
+}
+
+.product-switcher__label {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 0 14px;
+  border: 1px solid #b8d1db;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #12313d;
+  font-family: Aptos, "Segoe UI", "Amazon Ember", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 [class*="awsui_navigation_"]:has(.brand-sidebar):not(#\9) {
   position: relative;
   z-index: 2;
@@ -195,6 +216,22 @@ body {
   overflow: hidden;
 }
 
+.brand-sidebar--hr-admin {
+  background:
+    linear-gradient(180deg, rgba(24, 124, 116, 0.12), transparent 260px),
+    #eef8f7;
+  color: #193f3c;
+}
+
+.brand-sidebar--hr-admin .brand-sidebar__side-navigation [class*="awsui_link-active_"]:not(#\9) {
+  background: #d8efec;
+  color: #0d3b37;
+}
+
+.brand-sidebar--hr-admin .brand-sidebar__side-navigation [class*="awsui_link_"]:hover:not(#\9) {
+  color: #0d3b37;
+}
+
 .brand-sidebar__side-navigation:not(#\9) {
   flex: 1 1 auto;
   min-height: 0;
@@ -259,6 +296,27 @@ body {
   gap: 8px;
   padding: 2px 0 16px;
   border-bottom: 1px solid #cddfe5;
+}
+
+.brand-sidebar__product {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 2px 0 16px;
+  border-bottom: 1px solid #c7dfdc;
+}
+
+.brand-sidebar__product strong {
+  color: #0d3b37;
+  font-size: 18px;
+  line-height: 24px;
+}
+
+.brand-sidebar__product span:last-child {
+  color: #55736f;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
 }
 
 .brand-sidebar__asset-label {
@@ -398,6 +456,41 @@ body {
 .brand-sidebar__profile-menu-item:disabled {
   cursor: progress;
   opacity: 0.62;
+}
+
+.hr-admin-signal {
+  min-width: 0;
+}
+
+.hr-admin-signal__value {
+  margin: 7px 0 6px;
+  color: #102a2f;
+  font-size: 1.35rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.hr-admin-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(280px, 0.9fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.hr-admin-persons__compact-actions {
+  margin-top: 10px;
+}
+
+@media (max-width: 900px) {
+  .product-switcher {
+    position: static;
+    padding: 0 18px 12px;
+    background: #eef6f8;
+  }
+
+  .hr-admin-workspace {
+    grid-template-columns: 1fr;
+  }
 }
 
 .login-page {

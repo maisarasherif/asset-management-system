@@ -6,11 +6,11 @@ import {
 	useState,
 	type PropsWithChildren,
 } from "react";
-import { getSession, logoutRequest } from "../lib/api/ams";
+import { getSession, listPlatformProducts, logoutRequest } from "../lib/api/ams";
 import { configureApiClient } from "../lib/api/client";
 import { sessionFromLoginResponse } from "./auth-session";
 import { AuthContext, type AuthContextValue } from "./auth-context";
-import type { AuthSession } from "../types/ams";
+import type { AuthSession, ProductAccess, ProductKey, ProductRole } from "../types/ams";
 
 const ASSET_STORAGE_KEY = "ams-cloudscape-selected-asset";
 const LOGOUT_BROADCAST_KEY = "ams-cloudscape-logout";
@@ -23,7 +23,9 @@ function readStoredAsset(): string | null {
 
 export function AuthProvider({ children }: PropsWithChildren) {
 	const [session, setSession] = useState<AuthSession | null>(null);
+	const [products, setProducts] = useState<ProductAccess[]>([]);
 	const [isSessionLoading, setIsSessionLoading] = useState(true);
+	const [isProductAccessLoading, setIsProductAccessLoading] = useState(false);
 	const sessionVersion = useRef(0);
 	const expiryLogoutInFlight = useRef(false);
 	const [selectedAssetId, setSelectedAssetIdState] = useState<string | null>(() =>
@@ -33,6 +35,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 	const clearSession = useCallback(() => {
 		sessionVersion.current += 1;
 		setSession(null);
+		setProducts([]);
 		sessionStorage.removeItem(ASSET_STORAGE_KEY);
 		setSelectedAssetIdState(null);
 	}, []);
@@ -48,6 +51,37 @@ export function AuthProvider({ children }: PropsWithChildren) {
 		},
 		[establishSession]
 	);
+
+	useEffect(() => {
+		if (!session) {
+			setProducts([]);
+			setIsProductAccessLoading(false);
+			return;
+		}
+
+		let cancelled = false;
+		setIsProductAccessLoading(true);
+		listPlatformProducts()
+			.then((response) => {
+				if (!cancelled) {
+					setProducts(response.products.filter((product) => product.status === "ACTIVE"));
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					setProducts([]);
+				}
+			})
+			.finally(() => {
+				if (!cancelled) {
+					setIsProductAccessLoading(false);
+				}
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [session]);
 
 	const logout = useCallback(() => {
 		clearSession();
@@ -175,17 +209,29 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
+      products,
       selectedAssetId,
       isAdmin: session?.role === "ADMIN" || session?.role === "SUPER_ADMIN",
       isSuperAdmin: session?.role === "SUPER_ADMIN",
 			isClient: session?.role === "CLIENT",
 			isAuthenticated: Boolean(session),
 			isSessionLoading,
+			isProductAccessLoading,
+			getProductRole: (productKey: ProductKey) =>
+				products.find((product) => product.product_key === productKey)?.product_role ?? null,
+			hasProductAccess: (productKey: ProductKey, roles?: ProductRole[]) => {
+				const productRole =
+					products.find((product) => product.product_key === productKey)?.product_role ?? null;
+				if (!productRole) {
+					return false;
+				}
+				return !roles || roles.includes(productRole);
+			},
 			login,
 			logout,
 			setSelectedAssetId,
 		}),
-		[isSessionLoading, login, logout, selectedAssetId, session, setSelectedAssetId]
+		[isProductAccessLoading, isSessionLoading, login, logout, products, selectedAssetId, session, setSelectedAssetId]
 	);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -39,10 +39,13 @@ import type {
   MainCategoryInput,
   ComponentRecord,
   ForgotPasswordInput,
+  HRAdminPerson,
+  HRAdminPersonInput,
   LoginResponse,
   MainCategory,
   MessageResponse,
   PaginatedResponse,
+  PlatformProductsResponse,
   TemplateConfigurationComponent,
   TemplateComponent,
   TemplateComponentInput,
@@ -110,6 +113,10 @@ export function logoutRequest() {
 	return apiRequest<MessageResponse>("/v1/logout", { method: "POST" });
 }
 
+export function listPlatformProducts() {
+  return apiRequest<PlatformProductsResponse>("/v1/platform/products");
+}
+
 export function forgotPassword(payload: ForgotPasswordInput) {
   return apiRequest<MessageResponse>(
     "/v1/forgot-password",
@@ -136,6 +143,31 @@ export function updatePassword(payload: UpdatePasswordInput) {
   return apiRequest<MessageResponse>("/v1/account/password", {
     method: "PUT",
     body: JSON.stringify(payload),
+  });
+}
+
+export function listHRAdminPersons(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<HRAdminPerson>>(`/v1/hr-admin/persons?page=${page}&limit=${limit}`);
+}
+
+export function createHRAdminPerson(payload: HRAdminPersonInput) {
+  return apiRequest<HRAdminPerson>("/v1/hr-admin/persons", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateHRAdminPerson(personId: string, payload: HRAdminPersonInput) {
+  return apiRequest<MessageResponse>(`/v1/hr-admin/persons/${personId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function archiveHRAdminPerson(personId: string, archiveReason: string) {
+  return apiRequest<MessageResponse>(`/v1/hr-admin/persons/${personId}/archive`, {
+    method: "PATCH",
+    body: JSON.stringify({ archive_reason: archiveReason }),
   });
 }
 

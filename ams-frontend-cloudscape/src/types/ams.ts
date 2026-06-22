@@ -1,4 +1,6 @@
 export type Role = "SUPER_ADMIN" | "ADMIN" | "USER" | "CLIENT";
+export type ProductKey = "AMS" | "HR_ADMIN";
+export type ProductRole = "ADMIN" | "USER" | "VIEWER" | "CLIENT";
 export type UserStatus = "ACTIVE" | "SUSPENDED";
 export type ProjectStatus = "ACTIVE" | "ARCHIVED";
 export type ProjectAccessStatus = "ACTIVE" | "SUSPENDED";
@@ -18,6 +20,41 @@ export interface AuthSession {
 	status: UserStatus;
 	expiresAt: string;
 	canManageUserPasswords: boolean;
+}
+
+export interface ProductAccess {
+  product_key: ProductKey;
+  product_name: string;
+  product_role: ProductRole;
+  status: "ACTIVE" | "SUSPENDED";
+}
+
+export interface PlatformProductsResponse {
+  products: ProductAccess[];
+}
+
+export type HRAdminSubjectStatus = "ACTIVE" | "ARCHIVED";
+
+export interface HRAdminPerson {
+  person_id: string;
+  display_id: string;
+  person_code: string;
+  full_name: string;
+  department: string;
+  role_title: string;
+  status: HRAdminSubjectStatus;
+  archive_reason: string;
+  archived_at: unknown;
+  archived_by: string | null;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+export interface HRAdminPersonInput {
+  person_code: string;
+  full_name: string;
+  department: string;
+  role_title: string;
 }
 
 export interface LoginResponse {
