@@ -20,24 +20,24 @@ import { useEffect, useMemo, useState } from "react";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
 import {
-  archiveHRAdminPerson,
-  createHRAdminPerson,
-  listHRAdminPersons,
-  updateHRAdminPerson,
+  archiveHRAdminVehicle,
+  createHRAdminVehicle,
+  listHRAdminVehicles,
+  updateHRAdminVehicle,
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { HRAdminPerson, HRAdminPersonInput } from "../../types/ams";
+import type { HRAdminVehicle, HRAdminVehicleInput } from "../../types/ams";
 import { formatDateTime, humanizeEnum } from "../../utils/format";
 
-type PersonEditor =
+type VehicleEditor =
   | {
       mode: "create" | "edit";
       id?: string;
-      person_code: string;
-      full_name: string;
-      department: string;
-      role_title: string;
+      plate_number: string;
+      make: string;
+      model: string;
+      vehicle_year: string;
     }
   | null;
 
@@ -49,16 +49,31 @@ type ArchiveTarget =
     }
   | null;
 
-function statusBadge(status: HRAdminPerson["status"]) {
+function statusBadge(status: HRAdminVehicle["status"]) {
   return <Badge color={status === "ACTIVE" ? "green" : "grey"}>{humanizeEnum(status)}</Badge>;
 }
 
-function toPersonInput(editor: NonNullable<PersonEditor>): HRAdminPersonInput {
+function yearValue(value: HRAdminVehicle["vehicle_year"]) {
+  if (typeof value === "number") {
+    return value;
+  }
+  if (value && typeof value === "object" && value.Valid && typeof value.Int32 === "number") {
+    return value.Int32;
+  }
+  return null;
+}
+
+function yearLabel(value: HRAdminVehicle["vehicle_year"]) {
+  return yearValue(value)?.toString() ?? "-";
+}
+
+function toVehicleInput(editor: NonNullable<VehicleEditor>): HRAdminVehicleInput {
+  const parsedYear = editor.vehicle_year ? Number(editor.vehicle_year) : null;
   return {
-    person_code: editor.person_code.trim(),
-    full_name: editor.full_name.trim(),
-    department: editor.department.trim(),
-    role_title: editor.role_title.trim(),
+    plate_number: editor.plate_number.trim(),
+    make: editor.make.trim(),
+    model: editor.model.trim(),
+    vehicle_year: Number.isFinite(parsedYear) ? parsedYear : null,
   };
 }
 
@@ -66,20 +81,20 @@ function isCompactViewport() {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches;
 }
 
-function PersonEditorModal({
+function VehicleEditorModal({
   editor,
   errorMessage,
   loading,
   onDismiss,
   onSubmit,
 }: {
-  editor: PersonEditor;
+  editor: VehicleEditor;
   errorMessage: string;
   loading: boolean;
   onDismiss: () => void;
-  onSubmit: (editor: NonNullable<PersonEditor>) => void;
+  onSubmit: (editor: NonNullable<VehicleEditor>) => void;
 }) {
-  const [draft, setDraft] = useState<PersonEditor>(editor);
+  const [draft, setDraft] = useState<VehicleEditor>(editor);
 
   useEffect(() => {
     setDraft(editor);
@@ -88,48 +103,49 @@ function PersonEditorModal({
   return (
     <Modal
       visible={Boolean(editor)}
-      header={draft?.mode === "edit" ? "Edit person" : "Create person"}
+      header={draft?.mode === "edit" ? "Edit vehicle" : "Create vehicle"}
       onDismiss={onDismiss}
       footer={
         <SpaceBetween direction="horizontal" size="xs">
           <Button onClick={onDismiss}>Cancel</Button>
           <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
-            {draft?.mode === "edit" ? "Save changes" : "Create person"}
+            {draft?.mode === "edit" ? "Save changes" : "Create vehicle"}
           </Button>
         </SpaceBetween>
       }
     >
       <SpaceBetween size="l">
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
-        <FormField label="Person code" description="Optional internal reference. Leave blank if HR will assign it later.">
+        <FormField label="Plate number" constraintText="Required">
           <Input
-            value={draft?.person_code || ""}
+            value={draft?.plate_number || ""}
             onChange={({ detail }) =>
-              setDraft((current) => current && { ...current, person_code: detail.value })
+              setDraft((current) => current && { ...current, plate_number: detail.value })
             }
           />
         </FormField>
-        <FormField label="Full name" constraintText="Required">
+        <FormField label="Make">
           <Input
-            value={draft?.full_name || ""}
+            value={draft?.make || ""}
             onChange={({ detail }) =>
-              setDraft((current) => current && { ...current, full_name: detail.value })
+              setDraft((current) => current && { ...current, make: detail.value })
             }
           />
         </FormField>
-        <FormField label="Department">
+        <FormField label="Model">
           <Input
-            value={draft?.department || ""}
+            value={draft?.model || ""}
             onChange={({ detail }) =>
-              setDraft((current) => current && { ...current, department: detail.value })
+              setDraft((current) => current && { ...current, model: detail.value })
             }
           />
         </FormField>
-        <FormField label="Role title">
+        <FormField label="Year" description="Optional vehicle model year.">
           <Input
-            value={draft?.role_title || ""}
+            type="number"
+            value={draft?.vehicle_year || ""}
             onChange={({ detail }) =>
-              setDraft((current) => current && { ...current, role_title: detail.value })
+              setDraft((current) => current && { ...current, vehicle_year: detail.value })
             }
           />
         </FormField>
@@ -138,7 +154,7 @@ function PersonEditorModal({
   );
 }
 
-function ArchivePersonModal({
+function ArchiveVehicleModal({
   errorMessage,
   loading,
   onDismiss,
@@ -160,20 +176,20 @@ function ArchivePersonModal({
   return (
     <Modal
       visible={Boolean(target)}
-      header={`Archive ${draft?.label || "person"}?`}
+      header={`Archive ${draft?.label || "vehicle"}?`}
       onDismiss={onDismiss}
       footer={
         <SpaceBetween direction="horizontal" size="xs">
-          <Button onClick={onDismiss}>Keep person</Button>
+          <Button onClick={onDismiss}>Keep vehicle</Button>
           <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
-            Archive person
+            Archive vehicle
           </Button>
         </SpaceBetween>
       }
     >
       <SpaceBetween size="l">
         <Alert type="warning">
-          Archived persons stay visible for history, but HR/Admin renewal work will ignore their records.
+          Archived vehicles stay visible for history, but HR/Admin renewal work will ignore their records.
         </Alert>
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="Archive reason" constraintText="Required">
@@ -189,7 +205,7 @@ function ArchivePersonModal({
   );
 }
 
-export function HRAdminPersonsPage() {
+export function HRAdminVehiclesPage() {
   const queryClient = useQueryClient();
   const { success } = useFlashbar();
   const { getProductRole } = useAuth();
@@ -198,13 +214,13 @@ export function HRAdminPersonsPage() {
   const canArchive = hrRole === "ADMIN";
   const [filterText, setFilterText] = useState("");
   const [compactTable, setCompactTable] = useState(() => isCompactViewport());
-  const [editor, setEditor] = useState<PersonEditor>(null);
+  const [editor, setEditor] = useState<VehicleEditor>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>(null);
   const [modalError, setModalError] = useState("");
 
-  const peopleQuery = useQuery({
-    queryKey: ["hr-admin", "persons"],
-    queryFn: () => listHRAdminPersons(1, 100),
+  const vehiclesQuery = useQuery({
+    queryKey: ["hr-admin", "vehicles"],
+    queryFn: () => listHRAdminVehicles(1, 100),
   });
 
   useEffect(() => {
@@ -219,81 +235,88 @@ export function HRAdminPersonsPage() {
     return () => mediaQuery.removeEventListener("change", syncTableMode);
   }, []);
 
-  const invalidatePersons = () =>
-    queryClient.invalidateQueries({ queryKey: ["hr-admin", "persons"] });
+  const invalidateVehicles = () =>
+    queryClient.invalidateQueries({ queryKey: ["hr-admin", "vehicles"] });
 
-  const savePersonMutation = useMutation<unknown, Error, NonNullable<PersonEditor>>({
-    mutationFn: (draft: NonNullable<PersonEditor>) =>
+  const saveVehicleMutation = useMutation<unknown, Error, NonNullable<VehicleEditor>>({
+    mutationFn: (draft) =>
       draft.mode === "edit" && draft.id
-        ? updateHRAdminPerson(draft.id, toPersonInput(draft))
-        : createHRAdminPerson(toPersonInput(draft)),
+        ? updateHRAdminVehicle(draft.id, toVehicleInput(draft))
+        : createHRAdminVehicle(toVehicleInput(draft)),
     onSuccess: (_response, draft) => {
       setEditor(null);
       setModalError("");
       success(
-        draft.mode === "edit" ? "Person updated" : "Person created",
-        draft.mode === "edit" ? "The person record was saved." : "The person is ready for compliance records."
+        draft.mode === "edit" ? "Vehicle updated" : "Vehicle created",
+        draft.mode === "edit" ? "The vehicle record was saved." : "The vehicle is ready for compliance records."
       );
-      void invalidatePersons();
+      void invalidateVehicles();
     },
     onError: (mutationError: Error) => {
       setModalError(mutationError.message);
     },
   });
 
-  const archivePersonMutation = useMutation({
+  const archiveVehicleMutation = useMutation({
     mutationFn: (target: NonNullable<ArchiveTarget>) =>
-      archiveHRAdminPerson(target.id, target.reason.trim()),
+      archiveHRAdminVehicle(target.id, target.reason.trim()),
     onSuccess: () => {
       setArchiveTarget(null);
       setModalError("");
-      success("Person archived", "Renewal work will ignore this person while retaining history.");
-      void invalidatePersons();
+      success("Vehicle archived", "Renewal work will ignore this vehicle while retaining history.");
+      void invalidateVehicles();
     },
     onError: (mutationError: Error) => {
       setModalError(mutationError.message);
     },
   });
 
-  const people = useMemo(() => peopleQuery.data?.data ?? [], [peopleQuery.data?.data]);
-  const filteredPeople = useMemo(() => {
+  const vehicles = useMemo(() => vehiclesQuery.data?.data ?? [], [vehiclesQuery.data?.data]);
+  const filteredVehicles = useMemo(() => {
     const query = filterText.trim().toLowerCase();
     if (!query) {
-      return people;
+      return vehicles;
     }
-    return people.filter((person) =>
-      [person.display_id, person.person_code, person.full_name, person.department, person.role_title, person.status]
+    return vehicles.filter((vehicle) =>
+      [
+        vehicle.display_id,
+        vehicle.plate_number,
+        vehicle.make,
+        vehicle.model,
+        yearLabel(vehicle.vehicle_year),
+        vehicle.status,
+      ]
         .join(" ")
         .toLowerCase()
         .includes(query)
     );
-  }, [filterText, people]);
+  }, [filterText, vehicles]);
 
-  const columns = useMemo<TableProps.ColumnDefinition<HRAdminPerson>[]>(() => {
-    const editPerson = (item: HRAdminPerson) => {
+  const columns = useMemo<TableProps.ColumnDefinition<HRAdminVehicle>[]>(() => {
+    const editVehicle = (item: HRAdminVehicle) => {
       setModalError("");
       setEditor({
         mode: "edit",
-        id: item.person_id,
-        person_code: item.person_code || "",
-        full_name: item.full_name,
-        department: item.department || "",
-        role_title: item.role_title || "",
+        id: item.vehicle_id,
+        plate_number: item.plate_number,
+        make: item.make || "",
+        model: item.model || "",
+        vehicle_year: yearValue(item.vehicle_year)?.toString() ?? "",
       });
     };
-    const archivePersonRow = (item: HRAdminPerson) => {
+    const archiveVehicleRow = (item: HRAdminVehicle) => {
       setModalError("");
       setArchiveTarget({
-        id: item.person_id,
-        label: item.full_name,
+        id: item.vehicle_id,
+        label: item.plate_number,
         reason: "",
       });
     };
-    const rowActions = (item: HRAdminPerson) => {
+    const rowActions = (item: HRAdminVehicle) => {
       if (canArchive && item.status === "ACTIVE") {
         return (
           <ButtonDropdown
-            ariaLabel={`Actions for ${item.full_name}`}
+            ariaLabel={`Actions for ${item.plate_number}`}
             expandToViewport
             items={[
               { id: "edit", text: "Edit" },
@@ -301,10 +324,10 @@ export function HRAdminPersonsPage() {
             ]}
             onItemClick={({ detail }) => {
               if (detail.id === "edit") {
-                editPerson(item);
+                editVehicle(item);
                 return;
               }
-              archivePersonRow(item);
+              archiveVehicleRow(item);
             }}
           >
             Actions
@@ -313,7 +336,7 @@ export function HRAdminPersonsPage() {
       }
 
       if (canWrite && item.status === "ACTIVE") {
-        return <Button onClick={() => editPerson(item)}>Edit</Button>;
+        return <Button onClick={() => editVehicle(item)}>Edit</Button>;
       }
 
       return <Box color="text-body-secondary">View only</Box>;
@@ -322,14 +345,14 @@ export function HRAdminPersonsPage() {
     if (compactTable) {
       return [
         {
-          id: "person",
-          header: "Person",
+          id: "vehicle",
+          header: "Vehicle",
           minWidth: 190,
           cell: (item) => (
-            <TableCellText title={item.full_name}>
-              <strong>{item.full_name}</strong>
+            <TableCellText title={item.plate_number}>
+              <strong>{item.plate_number}</strong>
               <br />
-              {item.person_code || item.display_id}
+              {[item.make, item.model].filter(Boolean).join(" ") || item.display_id}
               {canWrite && item.status === "ACTIVE" ? (
                 <div className="hr-admin-persons__compact-actions">{rowActions(item)}</div>
               ) : null}
@@ -346,33 +369,37 @@ export function HRAdminPersonsPage() {
       ];
     }
 
-    const baseColumns: TableProps.ColumnDefinition<HRAdminPerson>[] = [
+    return [
       {
-        id: "person",
-        header: "Person",
-        width: "28%",
-        minWidth: 240,
+        id: "vehicle",
+        header: "Vehicle",
+        width: "24%",
+        minWidth: 220,
         cell: (item) => (
-          <TableCellText title={item.full_name}>
-            <strong>{item.full_name}</strong>
+          <TableCellText title={item.plate_number}>
+            <strong>{item.plate_number}</strong>
             <br />
-            {item.person_code || item.display_id}
+            {item.display_id}
           </TableCellText>
         ),
       },
       {
-        id: "department",
-        header: "Department",
-        width: "18%",
-        minWidth: 160,
-        cell: (item) => <TableCellText title={item.department || "-"}>{item.department || "-"}</TableCellText>,
+        id: "makeModel",
+        header: "Make / model",
+        width: "24%",
+        minWidth: 220,
+        cell: (item) => (
+          <TableCellText title={[item.make, item.model].filter(Boolean).join(" ") || "-"}>
+            {[item.make, item.model].filter(Boolean).join(" ") || "-"}
+          </TableCellText>
+        ),
       },
       {
-        id: "role",
-        header: "Role title",
-        width: "18%",
-        minWidth: 160,
-        cell: (item) => <TableCellText title={item.role_title || "-"}>{item.role_title || "-"}</TableCellText>,
+        id: "year",
+        header: "Year",
+        width: 100,
+        minWidth: 90,
+        cell: (item) => yearLabel(item.vehicle_year),
       },
       {
         id: "status",
@@ -396,38 +423,43 @@ export function HRAdminPersonsPage() {
         cell: (item) => <TableCellActions>{rowActions(item)}</TableCellActions>,
       },
     ];
-
-    return baseColumns;
   }, [canArchive, canWrite, compactTable]);
 
-  const savePerson = (draft: NonNullable<PersonEditor>) => {
-    if (!draft.full_name.trim()) {
-      setModalError("Enter the person's full name.");
+  const saveVehicle = (draft: NonNullable<VehicleEditor>) => {
+    if (!draft.plate_number.trim()) {
+      setModalError("Enter the vehicle plate number.");
       return;
     }
+    if (draft.vehicle_year) {
+      const year = Number(draft.vehicle_year);
+      if (!Number.isInteger(year) || year < 1900 || year > 2200) {
+        setModalError("Enter a valid vehicle year between 1900 and 2200.");
+        return;
+      }
+    }
     setModalError("");
-    savePersonMutation.mutate(draft);
+    saveVehicleMutation.mutate(draft);
   };
 
-  const archivePerson = (target: NonNullable<ArchiveTarget>) => {
+  const archiveVehicle = (target: NonNullable<ArchiveTarget>) => {
     if (target.reason.trim().length < 3) {
       setModalError("Enter an archive reason.");
       return;
     }
     setModalError("");
-    archivePersonMutation.mutate(target);
+    archiveVehicleMutation.mutate(target);
   };
 
-  if (peopleQuery.isLoading) {
-    return <PageLoading>{"Loading HR/Admin persons..."}</PageLoading>;
+  if (vehiclesQuery.isLoading) {
+    return <PageLoading>{"Loading HR/Admin vehicles..."}</PageLoading>;
   }
 
-  if (peopleQuery.isError || !peopleQuery.data) {
+  if (vehiclesQuery.isError || !vehiclesQuery.data) {
     return (
       <PageError
-        description="The HR/Admin persons list could not be loaded."
+        description="The HR/Admin vehicles list could not be loaded."
         onRetry={() => {
-          void peopleQuery.refetch();
+          void vehiclesQuery.refetch();
         }}
       />
     );
@@ -445,33 +477,33 @@ export function HRAdminPersonsPage() {
                   setModalError("");
                   setEditor({
                     mode: "create",
-                    person_code: "",
-                    full_name: "",
-                    department: "",
-                    role_title: "",
+                    plate_number: "",
+                    make: "",
+                    model: "",
+                    vehicle_year: "",
                   });
                 }}
               >
-                Create person
+                Create vehicle
               </Button>
             ) : undefined
           }
-          description="People whose compliance records are maintained by the company."
+          description="Vehicles tracked as company responsibility records, separate from AMS assets."
           variant="h1"
         >
-          Persons
+          Vehicles
         </Header>
       }
     >
       <SpaceBetween size="l">
         {hrRole === "VIEWER" ? (
-          <Alert type="info">Viewer access allows you to inspect and download records, but not change person records.</Alert>
+          <Alert type="info">Viewer access allows you to inspect and download records, but not change vehicle records.</Alert>
         ) : null}
         <Container>
           <SpaceBetween size="m">
             <Input
-              ariaLabel="Search persons"
-              placeholder="Search by name, code, department, role, or status"
+              ariaLabel="Search vehicles"
+              placeholder="Search by plate, make, model, year, or status"
               value={filterText}
               onChange={({ detail }) => setFilterText(detail.value)}
             />
@@ -485,53 +517,53 @@ export function HRAdminPersonsPage() {
                         onClick={() =>
                           setEditor({
                             mode: "create",
-                            person_code: "",
-                            full_name: "",
-                            department: "",
-                            role_title: "",
+                            plate_number: "",
+                            make: "",
+                            model: "",
+                            vehicle_year: "",
                           })
                         }
                         variant="primary"
                       >
-                        Create person
+                        Create vehicle
                       </Button>
                     ) : undefined
                   }
                   description={
                     filterText
-                      ? "No person records match the current search."
-                      : "Create the first person before adding employment, certification, or other responsibility records."
+                      ? "No vehicle records match the current search."
+                      : "Create the first vehicle before adding registration, license, or other responsibility records."
                   }
-                  title={filterText ? "No matching persons" : "No persons yet"}
+                  title={filterText ? "No matching vehicles" : "No vehicles yet"}
                 />
               }
-              header={<Header counter={`(${filteredPeople.length})`}>Person records</Header>}
-              items={filteredPeople}
-              trackBy="person_id"
+              header={<Header counter={`(${filteredVehicles.length})`}>Vehicle records</Header>}
+              items={filteredVehicles}
+              trackBy="vehicle_id"
             />
           </SpaceBetween>
         </Container>
       </SpaceBetween>
 
-      <PersonEditorModal
+      <VehicleEditorModal
         editor={editor}
         errorMessage={modalError}
-        loading={savePersonMutation.isPending}
+        loading={saveVehicleMutation.isPending}
         onDismiss={() => {
           setEditor(null);
           setModalError("");
         }}
-        onSubmit={savePerson}
+        onSubmit={saveVehicle}
       />
-      <ArchivePersonModal
+      <ArchiveVehicleModal
         errorMessage={modalError}
-        loading={archivePersonMutation.isPending}
+        loading={archiveVehicleMutation.isPending}
         target={archiveTarget}
         onDismiss={() => {
           setArchiveTarget(null);
           setModalError("");
         }}
-        onSubmit={archivePerson}
+        onSubmit={archiveVehicle}
       />
     </ContentLayout>
   );

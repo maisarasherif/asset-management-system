@@ -16,6 +16,12 @@ const ASSET_STORAGE_KEY = "ams-cloudscape-selected-asset";
 const LOGOUT_BROADCAST_KEY = "ams-cloudscape-logout";
 const SESSION_EXPIRY_GRACE_MS = 5000;
 const GUEST_PATHS = new Set(["/login", "/forgot-password", "/reset-password"]);
+const EMPTY_PRODUCTS: ProductAccess[] = [];
+
+type ProductAccessResult = {
+	userId: string | null;
+	products: ProductAccess[];
+};
 
 function readStoredAsset(): string | null {
 	return sessionStorage.getItem(ASSET_STORAGE_KEY);
@@ -23,9 +29,11 @@ function readStoredAsset(): string | null {
 
 export function AuthProvider({ children }: PropsWithChildren) {
 	const [session, setSession] = useState<AuthSession | null>(null);
-	const [products, setProducts] = useState<ProductAccess[]>([]);
+	const [productAccessResult, setProductAccessResult] = useState<ProductAccessResult>({
+		userId: null,
+		products: EMPTY_PRODUCTS,
+	});
 	const [isSessionLoading, setIsSessionLoading] = useState(true);
-	const [isProductAccessLoading, setIsProductAccessLoading] = useState(false);
 	const sessionVersion = useRef(0);
 	const expiryLogoutInFlight = useRef(false);
 	const [selectedAssetId, setSelectedAssetIdState] = useState<string | null>(() =>
@@ -35,7 +43,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 	const clearSession = useCallback(() => {
 		sessionVersion.current += 1;
 		setSession(null);
-		setProducts([]);
+		setProductAccessResult({ userId: null, products: EMPTY_PRODUCTS });
 		sessionStorage.removeItem(ASSET_STORAGE_KEY);
 		setSelectedAssetIdState(null);
 	}, []);
@@ -54,27 +62,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
 	useEffect(() => {
 		if (!session) {
-			setProducts([]);
-			setIsProductAccessLoading(false);
 			return;
 		}
 
 		let cancelled = false;
-		setIsProductAccessLoading(true);
 		listPlatformProducts()
 			.then((response) => {
 				if (!cancelled) {
-					setProducts(response.products.filter((product) => product.status === "ACTIVE"));
+					setProductAccessResult({
+						userId: session.userId,
+						products: response.products.filter((product) => product.status === "ACTIVE"),
+					});
 				}
 			})
 			.catch(() => {
 				if (!cancelled) {
-					setProducts([]);
-				}
-			})
-			.finally(() => {
-				if (!cancelled) {
-					setIsProductAccessLoading(false);
+					setProductAccessResult({ userId: session.userId, products: EMPTY_PRODUCTS });
 				}
 			});
 
@@ -205,6 +208,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
 		window.addEventListener("storage", handleStorage);
 		return () => window.removeEventListener("storage", handleStorage);
 	}, [clearSession, redirectToLogin]);
+
+	const products =
+		session && productAccessResult.userId === session.userId
+			? productAccessResult.products
+			: EMPTY_PRODUCTS;
+	const isProductAccessLoading = Boolean(session) && productAccessResult.userId !== session?.userId;
 
   const value = useMemo<AuthContextValue>(
     () => ({

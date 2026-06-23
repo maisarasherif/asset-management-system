@@ -57,6 +57,28 @@ export interface HRAdminPersonInput {
   role_title: string;
 }
 
+export interface HRAdminVehicle {
+  vehicle_id: string;
+  display_id: string;
+  plate_number: string;
+  make: string;
+  model: string;
+  vehicle_year: number | { Int32?: number; Valid?: boolean } | null;
+  status: HRAdminSubjectStatus;
+  archive_reason: string;
+  archived_at: unknown;
+  archived_by: string | null;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+export interface HRAdminVehicleInput {
+  plate_number: string;
+  make: string;
+  model: string;
+  vehicle_year: number | null;
+}
+
 export interface LoginResponse {
   user_id: string;
   first_name: string;

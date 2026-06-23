@@ -41,6 +41,8 @@ import type {
   ForgotPasswordInput,
   HRAdminPerson,
   HRAdminPersonInput,
+  HRAdminVehicle,
+  HRAdminVehicleInput,
   LoginResponse,
   MainCategory,
   MessageResponse,
@@ -166,6 +168,31 @@ export function updateHRAdminPerson(personId: string, payload: HRAdminPersonInpu
 
 export function archiveHRAdminPerson(personId: string, archiveReason: string) {
   return apiRequest<MessageResponse>(`/v1/hr-admin/persons/${personId}/archive`, {
+    method: "PATCH",
+    body: JSON.stringify({ archive_reason: archiveReason }),
+  });
+}
+
+export function listHRAdminVehicles(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<HRAdminVehicle>>(`/v1/hr-admin/vehicles?page=${page}&limit=${limit}`);
+}
+
+export function createHRAdminVehicle(payload: HRAdminVehicleInput) {
+  return apiRequest<HRAdminVehicle>("/v1/hr-admin/vehicles", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateHRAdminVehicle(vehicleId: string, payload: HRAdminVehicleInput) {
+  return apiRequest<MessageResponse>(`/v1/hr-admin/vehicles/${vehicleId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function archiveHRAdminVehicle(vehicleId: string, archiveReason: string) {
+  return apiRequest<MessageResponse>(`/v1/hr-admin/vehicles/${vehicleId}/archive`, {
     method: "PATCH",
     body: JSON.stringify({ archive_reason: archiveReason }),
   });
