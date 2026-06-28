@@ -135,6 +135,12 @@ export const HRAdminRecordsPage = lazy(() =>
   }))
 );
 
+export const HRAdminRecordTypesPage = lazy(() =>
+  import("../features/hr-admin/HRAdminRecordTypesPage").then((module) => ({
+    default: module.HRAdminRecordTypesPage,
+  }))
+);
+
 export const ClientAssetsPage = lazy(() =>
   import("../features/client/ClientAssetsPage").then((module) => ({
     default: module.ClientAssetsPage,
@@ -246,6 +252,24 @@ export function RequireProductAccess({ children }: { children: ReactNode }) {
 
   if (!hasProductAccess("HR_ADMIN", ["ADMIN", "USER", "VIEWER"])) {
     return <Navigate replace to="/dashboard" />;
+  }
+
+  return children;
+}
+
+export function RequireHRAdminAdmin({ children }: { children: ReactNode }) {
+  const { hasProductAccess, isAuthenticated, isProductAccessLoading, isSessionLoading } = useAuth();
+
+  if (isSessionLoading || isProductAccessLoading) {
+    return <AuthCheckPage />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate replace to="/login" />;
+  }
+
+  if (!hasProductAccess("HR_ADMIN", ["ADMIN"])) {
+    return <Navigate replace to="/hr-admin" />;
   }
 
   return children;

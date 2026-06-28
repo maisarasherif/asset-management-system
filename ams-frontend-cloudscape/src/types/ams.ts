@@ -125,6 +125,17 @@ export interface ComplianceRecordType {
   updated_at: unknown;
 }
 
+export interface ComplianceRecordTypeInput {
+  subject_type: HRAdminSubjectType;
+  type_name: string;
+  renewal_behavior: ComplianceRenewalBehavior;
+  default_validity_months: number | null;
+  reminder_policy_days: number[];
+  requires_document: boolean;
+  active: boolean;
+  description: string;
+}
+
 export interface ComplianceRecord {
   record_id: string;
   display_id: string;

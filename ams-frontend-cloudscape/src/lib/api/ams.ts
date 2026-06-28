@@ -26,6 +26,7 @@ import type {
   ComplianceRecord,
   ComplianceRecordInput,
   ComplianceRecordType,
+  ComplianceRecordTypeInput,
   ComplianceRecordVersion,
   ComplianceRecordVersionInput,
   CompetencyCategory,
@@ -234,6 +235,20 @@ export function listComplianceRecordTypes(page = 1, limit = 100) {
   return apiRequest<PaginatedResponse<ComplianceRecordType>>(
     `/v1/hr-admin/compliance-record-types?page=${page}&limit=${limit}`
   );
+}
+
+export function createComplianceRecordType(payload: ComplianceRecordTypeInput) {
+  return apiRequest<ComplianceRecordType>("/v1/hr-admin/compliance-record-types", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateComplianceRecordType(recordTypeId: string, payload: ComplianceRecordTypeInput) {
+  return apiRequest<MessageResponse>(`/v1/hr-admin/compliance-record-types/${recordTypeId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listComplianceRecords(page = 1, limit = 100) {
