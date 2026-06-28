@@ -162,11 +162,15 @@ func TestHRAdminProductRolesEnforceWriteArchiveAndConfigurationAccess(t *testing
 		"email_recipients": "hr-user@example.com",
 	}, http.StatusForbidden)
 
+	missingDocument := decodeObject(t, performJSONRequest(t, h.router, hrUserToken, http.MethodPost, "/v1/hr-admin/compliance-record-documents", nil, http.StatusBadRequest))
+	assertField(t, missingDocument, "error", "file is required")
+
 	performJSONRequest(t, h.router, hrViewerToken, http.MethodGet, "/v1/hr-admin/persons?page=1&limit=20", nil, http.StatusOK)
 	performJSONRequest(t, h.router, hrViewerToken, http.MethodPost, "/v1/hr-admin/vehicles", map[string]any{
 		"plate_number": "VIEWER-BLOCKED",
 		"make":         "Blocked",
 	}, http.StatusForbidden)
+	performJSONRequest(t, h.router, hrViewerToken, http.MethodPost, "/v1/hr-admin/compliance-record-documents", nil, http.StatusForbidden)
 }
 
 func TestHRAdminComplianceValidationAndArchiveEdges(t *testing.T) {

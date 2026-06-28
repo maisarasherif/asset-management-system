@@ -23,6 +23,11 @@ import type {
   CertificateUploadAudit,
   CertificateWithContext,
   ClientAssetDetail,
+  ComplianceRecord,
+  ComplianceRecordInput,
+  ComplianceRecordType,
+  ComplianceRecordVersion,
+  ComplianceRecordVersionInput,
   CompetencyCategory,
   CompetencyCategoryInput,
 	  CompetentPerson,
@@ -39,6 +44,8 @@ import type {
   MainCategoryInput,
   ComponentRecord,
   ForgotPasswordInput,
+  HRAdminCompany,
+  HRAdminCompanyInput,
   HRAdminPerson,
   HRAdminPersonInput,
   HRAdminVehicle,
@@ -196,6 +203,88 @@ export function archiveHRAdminVehicle(vehicleId: string, archiveReason: string) 
     method: "PATCH",
     body: JSON.stringify({ archive_reason: archiveReason }),
   });
+}
+
+export function listHRAdminCompanies(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<HRAdminCompany>>(`/v1/hr-admin/companies?page=${page}&limit=${limit}`);
+}
+
+export function createHRAdminCompany(payload: HRAdminCompanyInput) {
+  return apiRequest<HRAdminCompany>("/v1/hr-admin/companies", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateHRAdminCompany(companyId: string, payload: HRAdminCompanyInput) {
+  return apiRequest<MessageResponse>(`/v1/hr-admin/companies/${companyId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function archiveHRAdminCompany(companyId: string, archiveReason: string) {
+  return apiRequest<MessageResponse>(`/v1/hr-admin/companies/${companyId}/archive`, {
+    method: "PATCH",
+    body: JSON.stringify({ archive_reason: archiveReason }),
+  });
+}
+
+export function listComplianceRecordTypes(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<ComplianceRecordType>>(
+    `/v1/hr-admin/compliance-record-types?page=${page}&limit=${limit}`
+  );
+}
+
+export function listComplianceRecords(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<ComplianceRecord>>(
+    `/v1/hr-admin/compliance-records?page=${page}&limit=${limit}`
+  );
+}
+
+export function createComplianceRecord(payload: ComplianceRecordInput) {
+  return apiRequest<{ record: ComplianceRecord; current_version: ComplianceRecordVersion }>(
+    "/v1/hr-admin/compliance-records",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function renewComplianceRecord(recordId: string, payload: ComplianceRecordVersionInput) {
+  return apiRequest<ComplianceRecordVersion>(`/v1/hr-admin/compliance-records/${recordId}/versions`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function archiveComplianceRecord(recordId: string, archiveReason: string) {
+  return apiRequest<MessageResponse>(`/v1/hr-admin/compliance-records/${recordId}/archive`, {
+    method: "PATCH",
+    body: JSON.stringify({ archive_reason: archiveReason }),
+  });
+}
+
+export function uploadComplianceRecordDocument(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return apiRequest<{ document_file: string; file_name: string }>(
+    "/v1/hr-admin/compliance-record-documents",
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+}
+
+export function getComplianceRecordDownloadUrl(recordId: string) {
+  return apiRequest<{ url: string }>(`/v1/hr-admin/compliance-records/${recordId}/file`);
+}
+
+export function listComplianceRecordVersions(recordId: string) {
+  return apiRequest<ComplianceRecordVersion[]>(`/v1/hr-admin/compliance-records/${recordId}/versions`);
 }
 
 export function createUser(payload: CreateUserInput) {

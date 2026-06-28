@@ -227,6 +227,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	hrRead.GET("/companies", controller.GetHRAdminCompanies(pool))
 	hrRead.GET("/compliance-record-types", controller.GetComplianceRecordTypes(pool))
 	hrRead.GET("/compliance-records", controller.GetComplianceRecords(pool))
+	hrRead.GET("/compliance-records/:record_id/file", controller.GetComplianceRecordFile(pool))
 	hrRead.GET("/compliance-records/:record_id/versions", controller.GetComplianceRecordVersions(pool))
 	hrRead.GET("/notification-configuration", controller.GetHRAdminNotificationConfiguration(pool))
 
@@ -242,6 +243,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	hrWrite.PUT("/vehicles/:vehicle_id", controller.UpdateHRAdminVehicle(pool))
 	hrWrite.POST("/companies", controller.CreateHRAdminCompany(pool))
 	hrWrite.PUT("/companies/:company_id", controller.UpdateHRAdminCompany(pool))
+	hrWrite.POST("/compliance-record-documents", controller.UploadComplianceRecordDocument(pool))
 	hrWrite.POST("/compliance-records", controller.CreateComplianceRecord(pool))
 	hrWrite.POST("/compliance-records/:record_id/versions", controller.RenewComplianceRecord(pool))
 

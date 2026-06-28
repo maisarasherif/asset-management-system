@@ -129,6 +129,12 @@ export const HRAdminVehiclesPage = lazy(() =>
   }))
 );
 
+export const HRAdminRecordsPage = lazy(() =>
+  import("../features/hr-admin/HRAdminRecordsPage").then((module) => ({
+    default: module.HRAdminRecordsPage,
+  }))
+);
+
 export const ClientAssetsPage = lazy(() =>
   import("../features/client/ClientAssetsPage").then((module) => ({
     default: module.ClientAssetsPage,

@@ -10,6 +10,15 @@ export type CertificateStatus = "VALID" | "EXPIRING_SOON" | "EXPIRED" | "PENDING
 export type SafetyCritical = "YES" | "NO";
 export type ComponentKind = "NORMAL" | "SELF";
 export type CompetentPersonType = "Internal" | "External";
+export type HRAdminSubjectType = "PERSON" | "VEHICLE" | "COMPANY";
+export type HRAdminCompanyKind =
+  | "LEGAL_ENTITY"
+  | "OFFICE"
+  | "STAFF_HOUSING"
+  | "WAREHOUSE"
+  | "YARD"
+  | "OTHER";
+export type ComplianceRenewalBehavior = "RENEWABLE" | "ONE_TIME";
 
 export interface AuthSession {
   userId: string;
@@ -78,6 +87,101 @@ export interface HRAdminVehicleInput {
   model: string;
   vehicle_year: number | null;
 }
+
+export interface HRAdminCompany {
+  company_id: string;
+  display_id: string;
+  company_code: string;
+  company_name: string;
+  company_kind: HRAdminCompanyKind;
+  location: string;
+  status: HRAdminSubjectStatus;
+  archive_reason: string;
+  archived_at: unknown;
+  archived_by: string | null;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+export interface HRAdminCompanyInput {
+  company_code: string;
+  company_name: string;
+  company_kind: HRAdminCompanyKind;
+  location: string;
+}
+
+export interface ComplianceRecordType {
+  record_type_id: string;
+  display_id: string;
+  subject_type: HRAdminSubjectType;
+  type_name: string;
+  renewal_behavior: ComplianceRenewalBehavior;
+  default_validity_months: number | { Int32?: number; Valid?: boolean } | null;
+  reminder_policy_days: number[] | null;
+  requires_document: boolean;
+  active: boolean;
+  description: string;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+export interface ComplianceRecord {
+  record_id: string;
+  display_id: string;
+  subject_type: HRAdminSubjectType;
+  subject_id: string;
+  subject_name: string;
+  record_type_id: string;
+  record_type_display_id: string;
+  type_name: string;
+  renewal_behavior: ComplianceRenewalBehavior;
+  status: HRAdminSubjectStatus;
+  archive_reason: string;
+  archived_at: unknown;
+  archived_by: string | null;
+  version_id: string | null;
+  version_display_id: string | { String?: string; Valid?: boolean } | null;
+  version_number: number | { Int32?: number; Valid?: boolean } | null;
+  issue_date: unknown;
+  expiry_date: unknown;
+  document_file: string | { String?: string; Valid?: boolean } | null;
+  issuing_authority: string | { String?: string; Valid?: boolean } | null;
+  notes: string | { String?: string; Valid?: boolean } | null;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+export interface ComplianceRecordVersion {
+  version_id: string;
+  display_id: string;
+  record_id: string;
+  version_number: number;
+  issue_date: unknown;
+  expiry_date: unknown;
+  document_file: string;
+  issuing_authority: string;
+  notes: string;
+  is_current: boolean;
+  superseded_at: unknown;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+export interface ComplianceRecordInput {
+  subject_type: HRAdminSubjectType;
+  subject_id: string;
+  record_type_id: string;
+  issue_date: string | null;
+  expiry_date: string | null;
+  document_file: string;
+  issuing_authority: string;
+  notes: string;
+}
+
+export type ComplianceRecordVersionInput = Omit<
+  ComplianceRecordInput,
+  "subject_type" | "subject_id" | "record_type_id"
+>;
 
 export interface LoginResponse {
   user_id: string;

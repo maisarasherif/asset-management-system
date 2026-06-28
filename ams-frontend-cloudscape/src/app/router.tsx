@@ -21,6 +21,7 @@ import {
   GuestOnly,
   HRAdminOverviewPage,
   HRAdminPersonsPage,
+  HRAdminRecordsPage,
   HRAdminVehiclesPage,
   RequireAdmin,
   RequireAuth,
@@ -306,6 +307,16 @@ export const router = createBrowserRouter([
           <RequireProductAccess>
             <RouteSuspense>
               <HRAdminVehiclesPage />
+            </RouteSuspense>
+          </RequireProductAccess>
+        ),
+      },
+      {
+        path: "hr-admin/records",
+        element: (
+          <RequireProductAccess>
+            <RouteSuspense>
+              <HRAdminRecordsPage />
             </RouteSuspense>
           </RequireProductAccess>
         ),

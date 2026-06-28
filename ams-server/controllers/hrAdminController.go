@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
@@ -760,6 +761,110 @@ func RenewComplianceRecord(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusCreated, version)
+	}
+}
+
+func UploadComplianceRecordDocument(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxCertificateUploadRequestSize)
+		file, header, err := c.Request.FormFile("file")
+		if err != nil {
+			var maxBytesError *http.MaxBytesError
+			if errors.As(err, &maxBytesError) {
+				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large, maximum size is 10MB"})
+				return
+			}
+			c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+			return
+		}
+		defer file.Close()
+
+		if header.Size > maxCertificateFileSize {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "file too large, maximum size is 10MB"})
+			return
+		}
+
+		allowedTypes := map[string]bool{
+			"application/pdf": true,
+			"image/jpeg":      true,
+			"image/png":       true,
+			"image/webp":      true,
+		}
+		contentType := header.Header.Get("Content-Type")
+		if !allowedTypes[contentType] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file type, only PDF, JPEG, PNG, and WEBP are allowed"})
+			return
+		}
+
+		key, err := utils.UploadFile(ctx, file, header)
+		if err != nil {
+			logger.Log.Error().Err(err).Msg("failed to upload HR/Admin compliance record document")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload file"})
+			return
+		}
+
+		userID, _ := utils.GetUserIdFromContext(c)
+		logger.Log.Info().
+			Str("file_key", key).
+			Str("uploaded_by", userID).
+			Msg("HR/Admin compliance record document uploaded")
+
+		c.JSON(http.StatusOK, gin.H{
+			"document_file": key,
+			"file_name":     header.Filename,
+		})
+	}
+}
+
+func GetComplianceRecordFile(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		recordID, ok := utils.ParseUUIDParam(c, "record_id")
+		if !ok {
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queries := db.New(pool)
+		record, err := queries.GetComplianceRecordByID(ctx, recordID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "compliance record not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch compliance record"})
+			return
+		}
+
+		versions, err := queries.GetComplianceRecordVersions(ctx, recordID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch compliance record versions"})
+			return
+		}
+
+		documentFile := ""
+		for _, version := range versions {
+			if version.IsCurrent {
+				documentFile = version.DocumentFile
+				break
+			}
+		}
+		if documentFile == "" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "no document uploaded for this compliance record"})
+			return
+		}
+
+		signedURL, err := utils.GenerateSignedURL(ctx, documentFile, record.DisplayID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate download URL"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"url": signedURL})
 	}
 }
 
