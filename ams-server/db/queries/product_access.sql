@@ -90,6 +90,7 @@ SELECT
     email_recipients,
     clickup_list_id,
     clickup_assignee_ids,
+    default_reminder_days,
     updated_by,
     created_at,
     updated_at
@@ -103,6 +104,7 @@ INSERT INTO product_notification_configurations (
     email_recipients,
     clickup_list_id,
     clickup_assignee_ids,
+    default_reminder_days,
     updated_by
 )
 VALUES (
@@ -110,6 +112,7 @@ VALUES (
     sqlc.arg(email_recipients),
     sqlc.arg(clickup_list_id),
     sqlc.arg(clickup_assignee_ids),
+    sqlc.arg(default_reminder_days)::int[],
     sqlc.arg(updated_by)
 )
 ON CONFLICT (product_key)
@@ -117,6 +120,7 @@ DO UPDATE SET
     email_recipients = EXCLUDED.email_recipients,
     clickup_list_id = EXCLUDED.clickup_list_id,
     clickup_assignee_ids = EXCLUDED.clickup_assignee_ids,
+    default_reminder_days = EXCLUDED.default_reminder_days,
     updated_by = EXCLUDED.updated_by,
     updated_at = NOW()
 RETURNING
@@ -124,6 +128,7 @@ RETURNING
     email_recipients,
     clickup_list_id,
     clickup_assignee_ids,
+    default_reminder_days,
     updated_by,
     created_at,
     updated_at;

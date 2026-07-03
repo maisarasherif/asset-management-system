@@ -19,6 +19,7 @@ export type HRAdminCompanyKind =
   | "YARD"
   | "OTHER";
 export type ComplianceRenewalBehavior = "RENEWABLE" | "ONE_TIME";
+export type HRAdminRenewalQueueStatus = "EXPIRED" | "DUE_NOW" | "UPCOMING" | "OK";
 
 export interface AuthSession {
   userId: string;
@@ -40,6 +41,24 @@ export interface ProductAccess {
 
 export interface PlatformProductsResponse {
   products: ProductAccess[];
+}
+
+export interface ProductNotificationConfiguration {
+  product_key: ProductKey;
+  email_recipients: string;
+  clickup_list_id: string;
+  clickup_assignee_ids: string;
+  default_reminder_days: number[];
+  updated_by: string | null;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+export interface ProductNotificationConfigurationInput {
+  email_recipients: string;
+  clickup_list_id: string;
+  clickup_assignee_ids: string;
+  default_reminder_days: number[];
 }
 
 export type HRAdminSubjectStatus = "ACTIVE" | "ARCHIVED";
@@ -160,6 +179,23 @@ export interface ComplianceRecord {
   notes: string | { String?: string; Valid?: boolean } | null;
   created_at: unknown;
   updated_at: unknown;
+}
+
+export interface HRAdminRenewalQueueItem {
+  record_id: string;
+  record_display_id: string;
+  subject_type: HRAdminSubjectType;
+  subject_id: string;
+  subject_name: string;
+  record_type_id: string;
+  type_name: string;
+  version_id: string;
+  expiry_date: unknown;
+  days_until_expiry: number;
+  queue_status: HRAdminRenewalQueueStatus;
+  effective_reminder_days: number[];
+  reminder_policy_source: "RECORD_TYPE" | "PRODUCT_DEFAULT";
+  max_reminder_days: number;
 }
 
 export interface ComplianceRecordVersion {
@@ -340,7 +376,7 @@ export interface CertificateWithContext {
 }
 
 export type NotificationChannel = "EMAIL" | "CLICKUP";
-export type NotificationSourceType = "certificate_expiry" | "routine_maintenance";
+export type NotificationSourceType = "certificate_expiry" | "routine_maintenance" | "hr_admin_compliance_expiry";
 export type NotificationTier = "" | "expired" | "1d" | "7d" | "30d";
 export type NotificationStatus = "PENDING" | "SENT" | "FAILED";
 
@@ -394,6 +430,10 @@ export interface CertificateNotificationFailure {
 
 export interface SchedulerRunResponse extends MessageResponse {
   processed_certificates: number;
+}
+
+export interface HRAdminSchedulerRunResponse extends MessageResponse {
+  processed_records: number;
 }
 
 export interface Category {

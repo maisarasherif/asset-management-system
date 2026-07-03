@@ -334,13 +334,14 @@ type ProductAccess struct {
 }
 
 type ProductNotificationConfiguration struct {
-	ProductKey         string             `json:"product_key"`
-	EmailRecipients    string             `json:"email_recipients"`
-	ClickupListID      string             `json:"clickup_list_id"`
-	ClickupAssigneeIds string             `json:"clickup_assignee_ids"`
-	UpdatedBy          *uuid.UUID         `json:"updated_by"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	ProductKey          string             `json:"product_key"`
+	EmailRecipients     string             `json:"email_recipients"`
+	ClickupListID       string             `json:"clickup_list_id"`
+	ClickupAssigneeIds  string             `json:"clickup_assignee_ids"`
+	UpdatedBy           *uuid.UUID         `json:"updated_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	DefaultReminderDays []int32            `json:"default_reminder_days"`
 }
 
 type Project struct {

@@ -142,9 +142,10 @@ type ProductAccessInput struct {
 }
 
 type ProductNotificationConfigurationInput struct {
-	EmailRecipients   string `json:"email_recipients"`
-	ClickUpListID     string `json:"clickup_list_id"`
-	ClickUpAssigneeID string `json:"clickup_assignee_ids"`
+	EmailRecipients     string  `json:"email_recipients"`
+	ClickUpListID       string  `json:"clickup_list_id"`
+	ClickUpAssigneeID   string  `json:"clickup_assignee_ids"`
+	DefaultReminderDays []int32 `json:"default_reminder_days"`
 }
 
 type CertificateNotificationTaskResponse struct {

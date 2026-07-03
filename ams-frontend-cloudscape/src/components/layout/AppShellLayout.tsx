@@ -348,6 +348,7 @@ export function AppShellLayout() {
           items: [
             { href: "/hr-admin/reminder-policy", text: "Reminder policy" },
             { href: "/hr-admin/notification-config", text: "Notification config" },
+            { href: "/hr-admin/scheduler", text: "Scheduler" },
           ],
         });
       }
@@ -414,9 +415,11 @@ export function AppShellLayout() {
               ? "/hr-admin/reminder-policy"
               : location.pathname.startsWith("/hr-admin/notification-config")
                 ? "/hr-admin/notification-config"
-                : location.pathname === "/hr-admin"
-                  ? "/hr-admin"
-                  : location.pathname.startsWith("/assets")
+                : location.pathname.startsWith("/hr-admin/scheduler")
+                  ? "/hr-admin/scheduler"
+                  : location.pathname === "/hr-admin"
+                    ? "/hr-admin"
+                    : location.pathname.startsWith("/assets")
     ? "/assets"
     : location.pathname.startsWith("/client/assets")
       ? "/client/assets"

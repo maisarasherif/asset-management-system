@@ -215,6 +215,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	scheduler.GET("/scheduler/certificate-notifications", controller.GetCertificateNotificationTasks(pool))
 	scheduler.GET("/scheduler/notification-failures", controller.GetCertificateNotificationFailures(pool))
 	scheduler.POST("/scheduler/run", controller.RunCertificateExpiryScheduler(pool, riverClient))
+	scheduler.POST("/scheduler/hr-admin/run", controller.RunHRAdminReminderScheduler(pool, riverClient))
 
 	hrRead := router.Group("/v1/hr-admin")
 	hrRead.Use(
@@ -226,6 +227,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	hrRead.GET("/vehicles", controller.GetHRAdminVehicles(pool))
 	hrRead.GET("/companies", controller.GetHRAdminCompanies(pool))
 	hrRead.GET("/compliance-record-types", controller.GetComplianceRecordTypes(pool))
+	hrRead.GET("/renewal-queue", controller.GetHRAdminRenewalQueue(pool))
 	hrRead.GET("/compliance-records", controller.GetComplianceRecords(pool))
 	hrRead.GET("/compliance-records/:record_id/file", controller.GetComplianceRecordFile(pool))
 	hrRead.GET("/compliance-records/:record_id/versions", controller.GetComplianceRecordVersions(pool))
@@ -244,8 +246,8 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	hrWrite.POST("/companies", controller.CreateHRAdminCompany(pool))
 	hrWrite.PUT("/companies/:company_id", controller.UpdateHRAdminCompany(pool))
 	hrWrite.POST("/compliance-record-documents", controller.UploadComplianceRecordDocument(pool))
-	hrWrite.POST("/compliance-records", controller.CreateComplianceRecord(pool))
-	hrWrite.POST("/compliance-records/:record_id/versions", controller.RenewComplianceRecord(pool))
+	hrWrite.POST("/compliance-records", controller.CreateComplianceRecord(pool, riverClient))
+	hrWrite.POST("/compliance-records/:record_id/versions", controller.RenewComplianceRecord(pool, riverClient))
 
 	hrAdmin := router.Group("/v1/hr-admin")
 	hrAdmin.Use(
@@ -260,6 +262,9 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	hrAdmin.PUT("/compliance-record-types/:record_type_id", controller.UpdateComplianceRecordType(pool))
 	hrAdmin.PATCH("/compliance-records/:record_id/archive", controller.ArchiveComplianceRecord(pool))
 	hrAdmin.PUT("/notification-configuration", controller.UpdateHRAdminNotificationConfiguration(pool))
+	hrAdmin.GET("/scheduler/notification-tasks", controller.GetHRAdminNotificationTasks(pool))
+	hrAdmin.GET("/scheduler/notification-failures", controller.GetHRAdminNotificationFailures(pool))
+	hrAdmin.POST("/scheduler/run", controller.RunHRAdminReminderScheduler(pool, riverClient))
 
 	if riverUIHandler != nil {
 		jobs := router.Group("/v1/admin/jobs")

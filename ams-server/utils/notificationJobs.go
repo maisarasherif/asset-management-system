@@ -20,6 +20,7 @@ const (
 
 	NotificationSourceCertificateExpiry  = "certificate_expiry"
 	NotificationSourceRoutineMaintenance = "routine_maintenance"
+	NotificationSourceHRAdminCompliance  = "hr_admin_compliance_expiry"
 
 	NotificationChannelEmail   = "EMAIL"
 	NotificationChannelClickUp = "CLICKUP"
@@ -57,6 +58,8 @@ type NotificationClickUpArgs struct {
 	Description    string    `json:"description"`
 	Priority       int       `json:"priority"`
 	DueAt          time.Time `json:"due_at"`
+	ListID         string    `json:"list_id,omitempty"`
+	Assignees      []int64   `json:"assignees,omitempty"`
 }
 
 func (NotificationClickUpArgs) Kind() string {
@@ -109,14 +112,19 @@ type NotificationClickUpWorker struct {
 }
 
 func (w *NotificationClickUpWorker) Work(ctx context.Context, job *river.Job[NotificationClickUpArgs]) error {
-	externalID, err := CreateClickUpTaskFromPayload(clickUpTask{
+	assignees := job.Args.Assignees
+	if assignees == nil {
+		assignees = clickUpAssignees()
+	}
+
+	externalID, err := CreateClickUpTaskFromPayloadForList(clickUpTask{
 		Name:        job.Args.Name,
 		Description: job.Args.Description,
 		Priority:    job.Args.Priority,
 		DueDate:     job.Args.DueAt.UnixMilli(),
 		DueDateTime: false,
-		Assignees:   clickUpAssignees(),
-	})
+		Assignees:   assignees,
+	}, job.Args.ListID)
 	if err != nil {
 		w.recordClickUpDeliveryFailure(ctx, job, err)
 		return fmt.Errorf("notification ClickUp task creation failed: %w", err)

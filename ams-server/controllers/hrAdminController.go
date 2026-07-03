@@ -15,6 +15,7 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
 	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
+	"github.com/riverqueue/river"
 )
 
 func int4Value(value *int32) pgtype.Int4 {
@@ -31,11 +32,27 @@ func timestamptzValue(value *time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: *value, Valid: true}
 }
 
-func reminderPolicyDays(days []int32) []int32 {
+func defaultReminderPolicyDays(days []int32) []int32 {
 	if len(days) == 0 {
 		return []int32{30, 7, 1}
 	}
 	return days
+}
+
+func recordTypeReminderPolicyDays(days []int32) []int32 {
+	if len(days) == 0 {
+		return []int32{}
+	}
+	return days
+}
+
+func validateReminderPolicyDays(days []int32) error {
+	for _, day := range days {
+		if day < 0 || day > 3650 {
+			return errors.New("default reminder days must be between 0 and 3650")
+		}
+	}
+	return nil
 }
 
 func validateComplianceRecordTypeInput(input dto.ComplianceRecordTypeInput) error {
@@ -507,7 +524,7 @@ func CreateComplianceRecordType(pool *pgxpool.Pool) gin.HandlerFunc {
 			TypeName:              input.TypeName,
 			RenewalBehavior:       input.RenewalBehavior,
 			DefaultValidityMonths: int4Value(input.DefaultValidityMonths),
-			ReminderPolicyDays:    reminderPolicyDays(input.ReminderPolicyDays),
+			ReminderPolicyDays:    recordTypeReminderPolicyDays(input.ReminderPolicyDays),
 			RequiresDocument:      input.RequiresDocument,
 			Active:                input.Active,
 			Description:           input.Description,
@@ -551,7 +568,7 @@ func UpdateComplianceRecordType(pool *pgxpool.Pool) gin.HandlerFunc {
 			TypeName:              input.TypeName,
 			RenewalBehavior:       input.RenewalBehavior,
 			DefaultValidityMonths: int4Value(input.DefaultValidityMonths),
-			ReminderPolicyDays:    reminderPolicyDays(input.ReminderPolicyDays),
+			ReminderPolicyDays:    recordTypeReminderPolicyDays(input.ReminderPolicyDays),
 			RequiresDocument:      input.RequiresDocument,
 			Active:                input.Active,
 			Description:           input.Description,
@@ -592,7 +609,22 @@ func GetComplianceRecords(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-func CreateComplianceRecord(pool *pgxpool.Pool) gin.HandlerFunc {
+func GetHRAdminRenewalQueue(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+
+		queue, err := db.New(pool).GetHRAdminRenewalQueue(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch HR/Admin renewal queue"})
+			return
+		}
+
+		c.JSON(http.StatusOK, dto.NormalizeListData(queue))
+	}
+}
+
+func CreateComplianceRecord(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input dto.ComplianceRecordInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -684,11 +716,12 @@ func CreateComplianceRecord(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit compliance record"})
 			return
 		}
+		triggerHRAdminRecordReminderCheck(c.Request.Context(), pool, riverClient, record.RecordID)
 		c.JSON(http.StatusCreated, gin.H{"record": record, "current_version": version})
 	}
 }
 
-func RenewComplianceRecord(pool *pgxpool.Pool) gin.HandlerFunc {
+func RenewComplianceRecord(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		recordID, ok := utils.ParseUUIDParam(c, "record_id")
 		if !ok {
@@ -760,7 +793,14 @@ func RenewComplianceRecord(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit compliance record renewal"})
 			return
 		}
+		triggerHRAdminRecordReminderCheck(c.Request.Context(), pool, riverClient, recordID)
 		c.JSON(http.StatusCreated, version)
+	}
+}
+
+func triggerHRAdminRecordReminderCheck(ctx context.Context, pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx], recordID uuid.UUID) {
+	if _, err := utils.RunHRAdminReminderCheckForRecord(ctx, pool, riverClient, recordID); err != nil {
+		logger.Log.Error().Err(err).Str("record_id", recordID.String()).Msg("failed to run HR/Admin reminder check for compliance record")
 	}
 }
 
@@ -927,10 +967,11 @@ func GetHRAdminNotificationConfiguration(pool *pgxpool.Pool) gin.HandlerFunc {
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				c.JSON(http.StatusOK, gin.H{
-					"product_key":          ProductHRAdmin,
-					"email_recipients":     "",
-					"clickup_list_id":      "",
-					"clickup_assignee_ids": "",
+					"product_key":           ProductHRAdmin,
+					"email_recipients":      "",
+					"clickup_list_id":       "",
+					"clickup_assignee_ids":  "",
+					"default_reminder_days": defaultReminderPolicyDays(nil),
 				})
 				return
 			}
@@ -948,14 +989,20 @@ func UpdateHRAdminNotificationConfiguration(pool *pgxpool.Pool) gin.HandlerFunc 
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 			return
 		}
+		defaultReminderDays := defaultReminderPolicyDays(input.DefaultReminderDays)
+		if err := validateReminderPolicyDays(defaultReminderDays); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 		config, err := db.New(pool).UpsertProductNotificationConfiguration(ctx, db.UpsertProductNotificationConfigurationParams{
-			ProductKey:         ProductHRAdmin,
-			EmailRecipients:    input.EmailRecipients,
-			ClickupListID:      input.ClickUpListID,
-			ClickupAssigneeIds: input.ClickUpAssigneeID,
-			UpdatedBy:          actorUUID(c),
+			ProductKey:          ProductHRAdmin,
+			EmailRecipients:     input.EmailRecipients,
+			ClickupListID:       input.ClickUpListID,
+			ClickupAssigneeIds:  input.ClickUpAssigneeID,
+			DefaultReminderDays: defaultReminderDays,
+			UpdatedBy:           actorUUID(c),
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update HR/Admin notification configuration"})

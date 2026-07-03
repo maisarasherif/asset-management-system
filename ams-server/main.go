@@ -35,6 +35,7 @@ func main() {
 	}()
 
 	utils.StartExpiryScheduler(pool, riverClient)
+	utils.StartHRAdminReminderScheduler(pool, riverClient)
 
 	router := gin.New()
 	router.Use(

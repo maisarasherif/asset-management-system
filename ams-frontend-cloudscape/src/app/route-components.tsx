@@ -129,6 +129,12 @@ export const HRAdminVehiclesPage = lazy(() =>
   }))
 );
 
+export const HRAdminCompaniesPage = lazy(() =>
+  import("../features/hr-admin/HRAdminCompaniesPage").then((module) => ({
+    default: module.HRAdminCompaniesPage,
+  }))
+);
+
 export const HRAdminRecordsPage = lazy(() =>
   import("../features/hr-admin/HRAdminRecordsPage").then((module) => ({
     default: module.HRAdminRecordsPage,
@@ -138,6 +144,24 @@ export const HRAdminRecordsPage = lazy(() =>
 export const HRAdminRecordTypesPage = lazy(() =>
   import("../features/hr-admin/HRAdminRecordTypesPage").then((module) => ({
     default: module.HRAdminRecordTypesPage,
+  }))
+);
+
+export const HRAdminReminderPolicyPage = lazy(() =>
+  import("../features/hr-admin/HRAdminReminderPolicyPage").then((module) => ({
+    default: module.HRAdminReminderPolicyPage,
+  }))
+);
+
+export const HRAdminNotificationConfigPage = lazy(() =>
+  import("../features/hr-admin/HRAdminNotificationConfigPage").then((module) => ({
+    default: module.HRAdminNotificationConfigPage,
+  }))
+);
+
+export const HRAdminSchedulerPage = lazy(() =>
+  import("../features/hr-admin/HRAdminSchedulerPage").then((module) => ({
+    default: module.HRAdminSchedulerPage,
   }))
 );
 

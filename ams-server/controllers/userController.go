@@ -2,12 +2,14 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
@@ -863,39 +865,44 @@ func SeedAdminUser(pool *pgxpool.Pool) {
 
 	queries := db.New(pool)
 
-	count, err := queries.CountUsers(ctx)
-	if err != nil {
-		logger.Log.Fatal().Err(err).Msg("could not check for existing users")
-	}
-
 	email := os.Getenv("SEED_ADMIN_EMAIL")
 	password := os.Getenv("SEED_ADMIN_PASSWORD")
-
-	if count > 0 {
-		if email != "" {
-			if rows, err := queries.UpdateUserRoleByEmail(ctx, db.UpdateUserRoleByEmailParams{
-				Email: email,
-				Role:  "SUPER_ADMIN",
-			}); err != nil {
-				logger.Log.Fatal().Err(err).Msg("failed to promote seeded super admin")
-			} else if rows > 0 {
-				logger.Log.Info().Str("email", email).Msg("seeded admin promoted to SUPER_ADMIN")
-			}
-		}
-		return
-	}
 
 	if email == "" || password == "" {
 		logger.Log.Fatal().Msg("SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be set")
 	}
-
-	logger.Log.Info().Msg("no users found, creating default admin")
 
 	hashedPassword, err := HashPassword(password)
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("failed to hash admin password")
 	}
 
+	existingUser, err := queries.GetUserByEmail(ctx, email)
+	if err == nil {
+		if _, err := queries.UpdateUser(ctx, db.UpdateUserParams{
+			UserID:    existingUser.UserID,
+			FirstName: existingUser.FirstName,
+			LastName:  existingUser.LastName,
+			Email:     existingUser.Email,
+			Role:      "SUPER_ADMIN",
+			Status:    "ACTIVE",
+		}); err != nil {
+			logger.Log.Fatal().Err(err).Msg("failed to update seeded super admin")
+		}
+		if _, err := queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+			UserID:   existingUser.UserID,
+			Password: hashedPassword,
+		}); err != nil {
+			logger.Log.Fatal().Err(err).Msg("failed to reset seeded super admin password")
+		}
+		logger.Log.Info().Str("email", email).Msg("seeded admin ensured as SUPER_ADMIN")
+		return
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		logger.Log.Fatal().Err(err).Msg("failed to fetch seeded super admin")
+	}
+
+	logger.Log.Info().Msg("seeded admin not found, creating default admin")
 	_, err = queries.CreateUser(ctx, db.CreateUserParams{
 		FirstName: "Super",
 		LastName:  "Admin",

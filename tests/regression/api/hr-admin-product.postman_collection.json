@@ -2,7 +2,7 @@
   "info": {
     "name": "HR/Admin Product API Regression",
     "_postman_id": "9ec0d5dd-3b5d-4a4a-8d29-6f0f3311a7f5",
-    "description": "Focused Newman-ready regression for HR/Admin product access, product roles, compliance subjects, compliance record types, versioned compliance records, and archive behavior.",
+    "description": "Focused Newman-ready regression for HR/Admin product access, product roles, compliance subjects, compliance record types, notification configuration, reminder policy, versioned compliance records, and archive behavior.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -102,6 +102,14 @@
     },
     {
       "key": "hr_record_id",
+      "value": ""
+    },
+    {
+      "key": "hr_vehicle_record_id",
+      "value": ""
+    },
+    {
+      "key": "hr_company_record_id",
       "value": ""
     }
   ],
@@ -403,6 +411,44 @@
           ]
         },
         {
+          "name": "HR User Cannot Create Record Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-record-types",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"PERSON\",\n  \"type_name\": \"User Blocked Type {{runSuffix}}\",\n  \"renewal_behavior\": \"ONE_TIME\",\n  \"requires_document\": false,\n  \"active\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create HR Viewer",
           "request": {
             "method": "POST",
@@ -530,6 +576,169 @@
           ]
         },
         {
+          "name": "HR Viewer Can List Vehicles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/vehicles?page=1&limit=20",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_viewer_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.data).to.be.an('array');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR Viewer Can List Companies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/companies?page=1&limit=20",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_viewer_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.data).to.be.an('array');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR Viewer Can List Compliance Records",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-records?page=1&limit=20",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_viewer_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.data).to.be.an('array');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR Viewer Can Read Notification Configuration",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/notification-configuration",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_viewer_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.product_key).to.eql('HR_ADMIN');",
+                  "pm.expect(body.default_reminder_days).to.be.an('array');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR Viewer Cannot Update Notification Configuration",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/notification-configuration",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_viewer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email_recipients\": \"viewer-blocked@example.com\",\n  \"default_reminder_days\": [30, 7, 1]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "HR Viewer Cannot Create Vehicle",
           "request": {
             "auth": {
@@ -566,11 +775,207 @@
               }
             }
           ]
+        },
+        {
+          "name": "HR Viewer Cannot Create Company",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/companies",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_code\": \"VIEWER-BLOCKED-{{runSuffix}}\",\n  \"company_name\": \"Viewer Blocked Company {{runSuffix}}\",\n  \"company_kind\": \"LEGAL_ENTITY\"\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_viewer_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "02 HR/Admin Product Foundation",
+      "name": "02 Notification Configuration",
+      "item": [
+        {
+          "name": "Admin Updates Notification Configuration And Reminder Policy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/notification-configuration",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email_recipients\": \"hr-api@example.com, ops-api@example.com\",\n  \"clickup_list_id\": \"list-api-{{runSuffix}}\",\n  \"clickup_assignee_ids\": \"456,789\",\n  \"default_reminder_days\": [60, 30, 7]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.product_key).to.eql('HR_ADMIN');",
+                  "pm.expect(body.email_recipients).to.eql('hr-api@example.com, ops-api@example.com');",
+                  "pm.expect(body.clickup_list_id).to.eql(pm.variables.replaceIn('list-api-{{runSuffix}}'));",
+                  "pm.expect(body.clickup_assignee_ids).to.eql('456,789');",
+                  "pm.expect(body.default_reminder_days).to.eql([60, 30, 7]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Reads Notification Configuration",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/notification-configuration"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.product_key).to.eql('HR_ADMIN');",
+                  "pm.expect(body.email_recipients).to.eql('hr-api@example.com, ops-api@example.com');",
+                  "pm.expect(body.clickup_list_id).to.eql(pm.variables.replaceIn('list-api-{{runSuffix}}'));",
+                  "pm.expect(body.clickup_assignee_ids).to.eql('456,789');",
+                  "pm.expect(body.default_reminder_days).to.eql([60, 30, 7]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Updates Notification Targets While Preserving Reminder Policy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/notification-configuration",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email_recipients\": \"hr-updated@example.com\",\n  \"clickup_list_id\": \"list-updated-{{runSuffix}}\",\n  \"clickup_assignee_ids\": \"999\",\n  \"default_reminder_days\": [60, 30, 7]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.email_recipients).to.eql('hr-updated@example.com');",
+                  "pm.expect(body.clickup_list_id).to.eql(pm.variables.replaceIn('list-updated-{{runSuffix}}'));",
+                  "pm.expect(body.clickup_assignee_ids).to.eql('999');",
+                  "pm.expect(body.default_reminder_days).to.eql([60, 30, 7]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid Reminder Policy Is Rejected",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/notification-configuration",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email_recipients\": \"hr-invalid@example.com\",\n  \"default_reminder_days\": [30, -1]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(400);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.error).to.eql('default reminder days must be between 0 and 3650');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Empty Reminder Policy Resets To Product Default",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/notification-configuration",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email_recipients\": \"hr-default@example.com\",\n  \"clickup_list_id\": \"list-default-{{runSuffix}}\",\n  \"clickup_assignee_ids\": \"123\",\n  \"default_reminder_days\": []\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.email_recipients).to.eql('hr-default@example.com');",
+                  "pm.expect(body.default_reminder_days).to.eql([30, 7, 1]);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 HR/Admin Product Foundation",
       "item": [
         {
           "name": "List Platform Products",
@@ -626,6 +1031,59 @@
           ]
         },
         {
+          "name": "Update HR/Admin Person",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/persons/{{hr_person_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person_code\": \"POSTMAN-HRP-{{runSuffix}}\",\n  \"full_name\": \"Postman HR Person Updated {{runSuffix}}\",\n  \"department\": \"Administration\",\n  \"role_title\": \"Senior Coordinator\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List HR/Admin Persons Includes Updated Person",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/persons?page=1&limit=100"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "const expectedName = pm.variables.replaceIn('Postman HR Person Updated {{runSuffix}}');",
+                  "const person = body.data.find((item) => item.person_id === pm.collectionVariables.get('hr_person_id'));",
+                  "pm.expect(person).to.exist;",
+                  "pm.expect(person.full_name).to.eql(expectedName);",
+                  "pm.expect(person.role_title).to.eql('Senior Coordinator');"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create HR/Admin Vehicle",
           "request": {
             "method": "POST",
@@ -651,6 +1109,57 @@
                   "const body = pm.response.json();",
                   "pm.expect(body.vehicle_id).to.be.a('string');",
                   "pm.collectionVariables.set('hr_vehicle_id', body.vehicle_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update HR/Admin Vehicle",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/vehicles/{{hr_vehicle_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate_number\": \"POSTMAN-VEH-{{runSuffix}}\",\n  \"make\": \"Toyota\",\n  \"model\": \"Hiace GL\",\n  \"vehicle_year\": 2024\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List HR/Admin Vehicles Includes Updated Vehicle",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/vehicles?page=1&limit=100"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "const vehicle = body.data.find((item) => item.vehicle_id === pm.collectionVariables.get('hr_vehicle_id'));",
+                  "pm.expect(vehicle).to.exist;",
+                  "pm.expect(vehicle.model).to.eql('Hiace GL');"
                 ]
               }
             }
@@ -688,6 +1197,58 @@
           ]
         },
         {
+          "name": "Update HR/Admin Company",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/companies/{{hr_company_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_code\": \"POSTMAN-HRC-{{runSuffix}}\",\n  \"company_name\": \"Postman HR Company Updated {{runSuffix}}\",\n  \"company_kind\": \"OFFICE\",\n  \"location\": \"Abu Dhabi\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List HR/Admin Companies Includes Updated Company",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/companies?page=1&limit=100"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "const company = body.data.find((item) => item.company_id === pm.collectionVariables.get('hr_company_id'));",
+                  "pm.expect(company).to.exist;",
+                  "pm.expect(company.company_kind).to.eql('OFFICE');",
+                  "pm.expect(company.location).to.eql('Abu Dhabi');"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create HR/Admin Person Compliance Record Type",
           "request": {
             "method": "POST",
@@ -713,6 +1274,58 @@
                   "const body = pm.response.json();",
                   "pm.expect(body.record_type_id).to.be.a('string');",
                   "pm.collectionVariables.set('hr_record_type_id', body.record_type_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update HR/Admin Person Compliance Record Type",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-record-types/{{hr_record_type_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"PERSON\",\n  \"type_name\": \"Postman Visa {{runSuffix}}\",\n  \"renewal_behavior\": \"RENEWABLE\",\n  \"default_validity_months\": 24,\n  \"reminder_policy_days\": [\n    120,\n    60,\n    30\n  ],\n  \"requires_document\": true,\n  \"active\": true,\n  \"description\": \"Updated by API regression\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List HR/Admin Record Types Includes Updated Policy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-record-types?page=1&limit=100"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "const recordType = body.data.find((item) => item.record_type_id === pm.collectionVariables.get('hr_record_type_id'));",
+                  "pm.expect(recordType).to.exist;",
+                  "pm.expect(recordType.reminder_policy_days).to.eql([120, 60, 30]);",
+                  "pm.expect(recordType.description).to.eql('Updated by API regression');"
                 ]
               }
             }
@@ -781,6 +1394,36 @@
           ]
         },
         {
+          "name": "One-Time Record Type Rejects Default Validity Months",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-record-types",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"COMPANY\",\n  \"type_name\": \"Postman Invalid One-Time {{runSuffix}}\",\n  \"renewal_behavior\": \"ONE_TIME\",\n  \"default_validity_months\": 12,\n  \"requires_document\": false,\n  \"active\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(400);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.error).to.eql('default validity duration must be omitted for one-time compliance record types');"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create HR/Admin Compliance Record",
           "request": {
             "method": "POST",
@@ -807,6 +1450,106 @@
                   "pm.expect(body.record.record_id).to.be.a('string');",
                   "pm.expect(body.current_version.version_number).to.eql(1);",
                   "pm.collectionVariables.set('hr_record_id', body.record.record_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List HR/Admin Compliance Records Includes Person Record",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-records?page=1&limit=100"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "const record = body.data.find((item) => item.record_id === pm.collectionVariables.get('hr_record_id'));",
+                  "pm.expect(record).to.exist;",
+                  "pm.expect(record.subject_type).to.eql('PERSON');",
+                  "pm.expect(record.type_name).to.eql(pm.variables.replaceIn('Postman Visa {{runSuffix}}'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR User Cannot Archive Compliance Record",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_record_id}}/archive",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archive_reason\": \"User should not archive records\"\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_user_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HR Viewer Cannot Renew Compliance Record",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_record_id}}/versions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"issue_date\": \"2028-01-01T00:00:00Z\",\n  \"expiry_date\": \"2030-01-01T00:00:00Z\",\n  \"document_file\": \"viewer-blocked.pdf\",\n  \"issuing_authority\": \"Viewer Authority\"\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hr_viewer_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(403);"
                 ]
               }
             }
@@ -874,6 +1617,29 @@
           ]
         },
         {
+          "name": "List HR/Admin Compliance Records Includes Company Record",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-records?page=1&limit=100"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const body = pm.response.json();",
+                  "const companyRecord = body.data.find((item) => item.subject_type === 'COMPANY' && item.subject_id === pm.collectionVariables.get('hr_company_id'));",
+                  "pm.expect(companyRecord).to.exist;",
+                  "pm.expect(companyRecord.expiry_date).to.satisfy((value) => value === null || value.Valid === false || value === '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Renew HR/Admin Compliance Record",
           "request": {
             "method": "POST",
@@ -920,6 +1686,37 @@
                   "const body = pm.response.json();",
                   "pm.expect(body).to.be.an('array');",
                   "pm.expect(body.length).to.be.at.least(2);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Vehicle Compliance Record Before Archive",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"VEHICLE\",\n  \"subject_id\": \"{{hr_vehicle_id}}\",\n  \"record_type_id\": \"{{hr_vehicle_record_type_id}}\",\n  \"issue_date\": \"2026-01-01T00:00:00Z\",\n  \"expiry_date\": \"2027-01-01T00:00:00Z\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"Vehicle registration before archive\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.record.record_id).to.be.a('string');",
+                  "pm.collectionVariables.set('hr_vehicle_record_id', body.record.record_id);"
                 ]
               }
             }
@@ -1122,6 +1919,327 @@
                   "pm.response.to.have.status(400);",
                   "const body = pm.response.json();",
                   "pm.expect(body.error).to.eql('company is archived');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 HR/Admin Reminder Scheduler",
+      "item": [
+        {
+          "name": "Reset Notification Targets For Scheduler Failures",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/notification-configuration",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email_recipients\": \"\",\n  \"clickup_list_id\": \"\",\n  \"clickup_assignee_ids\": \"\",\n  \"default_reminder_days\": [\n    30\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('configuration reset for scheduler failure path', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.default_reminder_days).to.eql([30]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create HR/Admin Scheduler Person",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/persons",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person_code\": \"HRS-{{runSuffix}}\",\n  \"full_name\": \"Scheduler Person {{runSuffix}}\",\n  \"department\": \"Administration\",\n  \"role_title\": \"Coordinator\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('scheduler person created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('scheduler_person_id', body.person_id);",
+                  "  pm.collectionVariables.set('scheduler_person_name', body.full_name);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create HR/Admin Scheduler Record Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-record-types",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"PERSON\",\n  \"type_name\": \"Scheduler Visa {{runSuffix}}\",\n  \"renewal_behavior\": \"RENEWABLE\",\n  \"default_validity_months\": 12,\n  \"reminder_policy_days\": [],\n  \"requires_document\": false,\n  \"active\": true,\n  \"description\": \"Scheduler regression type\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('scheduler record type created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('scheduler_record_type_id', body.record_type_id);",
+                  "  pm.collectionVariables.set('scheduler_record_type_name', body.type_name);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create HR/Admin Scheduler Due Record",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_type\": \"PERSON\",\n  \"subject_id\": \"{{scheduler_person_id}}\",\n  \"record_type_id\": \"{{scheduler_record_type_id}}\",\n  \"issue_date\": \"{{scheduler_issue_date}}\",\n  \"expiry_date\": \"{{scheduler_expiry_date}}\",\n  \"document_file\": \"\",\n  \"issuing_authority\": \"Scheduler Authority\",\n  \"notes\": \"Scheduler regression due record\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const now = new Date();",
+                  "const issue = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0));",
+                  "const expiry = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 30, 0, 0, 0));",
+                  "pm.collectionVariables.set('scheduler_issue_date', issue.toISOString());",
+                  "pm.collectionVariables.set('scheduler_expiry_date', expiry.toISOString());",
+                  "pm.collectionVariables.set('scheduler_expiry_prefix', expiry.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('scheduler due record created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const body = pm.response.json();",
+                  "  const record = body.record || body;",
+                  "  pm.collectionVariables.set('scheduler_record_id', record.record_id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Immediate Notification Failures Include HR/Admin Scheduler Record",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/scheduler/notification-failures?page=1&limit=50"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('creating a due HR/Admin record triggers reminder audit immediately', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data || [];",
+                  "  const recordId = pm.collectionVariables.get('scheduler_record_id');",
+                  "  const expiry = pm.collectionVariables.get('scheduler_expiry_prefix');",
+                  "  const emailKey = `hr-admin-compliance-expiry:${recordId}:${expiry}:30d:EMAIL`;",
+                  "  const email = data.find((item) => item.idempotency_key === emailKey);",
+                  "  pm.expect(email, 'email failure').to.exist;",
+                  "  pm.expect(email.source_type).to.eql('hr_admin_compliance_expiry');",
+                  "  pm.expect(email.source_id).to.eql(recordId);",
+                  "  pm.expect(email.channel).to.eql('EMAIL');",
+                  "  pm.expect(email.tier).to.eql('30d');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Renewal Queue Includes Due Scheduler Record",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/renewal-queue"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('renewal queue includes due scheduler record', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json();",
+                  "  const recordId = pm.collectionVariables.get('scheduler_record_id');",
+                  "  const item = data.find((entry) => entry.record_id === recordId);",
+                  "  pm.expect(item, 'queue item').to.exist;",
+                  "  pm.expect(item.queue_status).to.eql('DUE_NOW');",
+                  "  pm.expect(item.days_until_expiry).to.eql(30);",
+                  "  pm.expect(item.reminder_policy_source).to.eql('PRODUCT_DEFAULT');",
+                  "  pm.expect(item.effective_reminder_days).to.eql([30]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Run HR/Admin Reminder Scheduler",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/scheduler/run"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HR/Admin scheduler runs and processes due record', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.message).to.eql('HR/Admin reminder scheduler run completed');",
+                  "  pm.expect(body.processed_records).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Notification Failures Include HR/Admin Scheduler Record",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/scheduler/notification-failures?page=1&limit=50"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HR/Admin scheduler failures are audited with source context', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data || [];",
+                  "  const recordId = pm.collectionVariables.get('scheduler_record_id');",
+                  "  const expiry = pm.collectionVariables.get('scheduler_expiry_prefix');",
+                  "  const emailKey = `hr-admin-compliance-expiry:${recordId}:${expiry}:30d:EMAIL`;",
+                  "  const clickUpKey = `hr-admin-compliance-expiry:${recordId}:${expiry}:30d:CLICKUP`;",
+                  "  const email = data.find((item) => item.idempotency_key === emailKey);",
+                  "  const clickUp = data.find((item) => item.idempotency_key === clickUpKey);",
+                  "  pm.expect(email, 'email failure').to.exist;",
+                  "  pm.expect(email.source_type).to.eql('hr_admin_compliance_expiry');",
+                  "  pm.expect(email.source_id).to.eql(recordId);",
+                  "  pm.expect(email.channel).to.eql('EMAIL');",
+                  "  pm.expect(email.error_message).to.eql('HR/Admin email recipients not configured');",
+                  "  pm.expect(clickUp, 'ClickUp failure').to.exist;",
+                  "  pm.expect(clickUp.channel).to.eql('CLICKUP');",
+                  "});"
                 ]
               }
             }

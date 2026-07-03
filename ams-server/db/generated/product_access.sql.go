@@ -197,6 +197,7 @@ SELECT
     email_recipients,
     clickup_list_id,
     clickup_assignee_ids,
+    default_reminder_days,
     updated_by,
     created_at,
     updated_at
@@ -205,14 +206,26 @@ WHERE product_key = $1
 LIMIT 1
 `
 
-func (q *Queries) GetProductNotificationConfiguration(ctx context.Context, productKey string) (ProductNotificationConfiguration, error) {
+type GetProductNotificationConfigurationRow struct {
+	ProductKey          string             `json:"product_key"`
+	EmailRecipients     string             `json:"email_recipients"`
+	ClickupListID       string             `json:"clickup_list_id"`
+	ClickupAssigneeIds  string             `json:"clickup_assignee_ids"`
+	DefaultReminderDays []int32            `json:"default_reminder_days"`
+	UpdatedBy           *uuid.UUID         `json:"updated_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetProductNotificationConfiguration(ctx context.Context, productKey string) (GetProductNotificationConfigurationRow, error) {
 	row := q.db.QueryRow(ctx, getProductNotificationConfiguration, productKey)
-	var i ProductNotificationConfiguration
+	var i GetProductNotificationConfigurationRow
 	err := row.Scan(
 		&i.ProductKey,
 		&i.EmailRecipients,
 		&i.ClickupListID,
 		&i.ClickupAssigneeIds,
+		&i.DefaultReminderDays,
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -285,6 +298,7 @@ INSERT INTO product_notification_configurations (
     email_recipients,
     clickup_list_id,
     clickup_assignee_ids,
+    default_reminder_days,
     updated_by
 )
 VALUES (
@@ -292,13 +306,15 @@ VALUES (
     $2,
     $3,
     $4,
-    $5
+    $5::int[],
+    $6
 )
 ON CONFLICT (product_key)
 DO UPDATE SET
     email_recipients = EXCLUDED.email_recipients,
     clickup_list_id = EXCLUDED.clickup_list_id,
     clickup_assignee_ids = EXCLUDED.clickup_assignee_ids,
+    default_reminder_days = EXCLUDED.default_reminder_days,
     updated_by = EXCLUDED.updated_by,
     updated_at = NOW()
 RETURNING
@@ -306,33 +322,48 @@ RETURNING
     email_recipients,
     clickup_list_id,
     clickup_assignee_ids,
+    default_reminder_days,
     updated_by,
     created_at,
     updated_at
 `
 
 type UpsertProductNotificationConfigurationParams struct {
-	ProductKey         string     `json:"product_key"`
-	EmailRecipients    string     `json:"email_recipients"`
-	ClickupListID      string     `json:"clickup_list_id"`
-	ClickupAssigneeIds string     `json:"clickup_assignee_ids"`
-	UpdatedBy          *uuid.UUID `json:"updated_by"`
+	ProductKey          string     `json:"product_key"`
+	EmailRecipients     string     `json:"email_recipients"`
+	ClickupListID       string     `json:"clickup_list_id"`
+	ClickupAssigneeIds  string     `json:"clickup_assignee_ids"`
+	DefaultReminderDays []int32    `json:"default_reminder_days"`
+	UpdatedBy           *uuid.UUID `json:"updated_by"`
 }
 
-func (q *Queries) UpsertProductNotificationConfiguration(ctx context.Context, arg UpsertProductNotificationConfigurationParams) (ProductNotificationConfiguration, error) {
+type UpsertProductNotificationConfigurationRow struct {
+	ProductKey          string             `json:"product_key"`
+	EmailRecipients     string             `json:"email_recipients"`
+	ClickupListID       string             `json:"clickup_list_id"`
+	ClickupAssigneeIds  string             `json:"clickup_assignee_ids"`
+	DefaultReminderDays []int32            `json:"default_reminder_days"`
+	UpdatedBy           *uuid.UUID         `json:"updated_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpsertProductNotificationConfiguration(ctx context.Context, arg UpsertProductNotificationConfigurationParams) (UpsertProductNotificationConfigurationRow, error) {
 	row := q.db.QueryRow(ctx, upsertProductNotificationConfiguration,
 		arg.ProductKey,
 		arg.EmailRecipients,
 		arg.ClickupListID,
 		arg.ClickupAssigneeIds,
+		arg.DefaultReminderDays,
 		arg.UpdatedBy,
 	)
-	var i ProductNotificationConfiguration
+	var i UpsertProductNotificationConfigurationRow
 	err := row.Scan(
 		&i.ProductKey,
 		&i.EmailRecipients,
 		&i.ClickupListID,
 		&i.ClickupAssigneeIds,
+		&i.DefaultReminderDays,
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,

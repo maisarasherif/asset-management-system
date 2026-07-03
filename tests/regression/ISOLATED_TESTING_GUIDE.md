@@ -12,8 +12,8 @@ Use this guide whenever you need to test a feature without touching the main dat
 - Optionally runs Go integration regression tests with `AMS_RUN_INTEGRATION=1`.
 - Seeds an isolated admin user.
 - Starts the API on `http://127.0.0.1:18082/v1`.
-- Runs selected Newman/Postman collections.
-- Optionally rebuilds/reseeds, builds the frontend, serves it locally, and runs selected Playwright specs.
+- Runs selected Newman/Postman collections, including the HR/Admin product collection by default.
+- Optionally rebuilds/reseeds, builds the frontend, serves it locally, and runs selected Playwright specs, including the HR/Admin product spec by default.
 - Drops the isolated database unless `KEEP_DB=1` is set.
 
 ## Prerequisites
@@ -45,7 +45,7 @@ If Git Bash resolves the Windows Store `python3` alias instead of a real Python 
 
 ## Run Everything
 
-This runs Newman and the unified Playwright whole-app regression by default. Go regression is off by default unless enabled.
+This runs the maintained Newman collections and Playwright browser regressions by default, including HR/Admin product coverage. Go regression is off by default unless enabled.
 
 ```bash
 bash tests/regression/run-vps-isolated-tests.sh
@@ -98,10 +98,22 @@ Playwright only:
 RUN_NEWMAN=0 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-By default, Playwright runs only the unified main E2E:
+By default, Newman runs:
+
+```text
+tests/regression/api/system-api-smoke.postman_collection.json
+tests/regression/api/admin-surface-regression.postman_collection.json
+tests/regression/api/routine-maintenance.postman_collection.json
+tests/regression/api/client-asset-certificates.postman_collection.json
+tests/regression/api/single-asset-equipment.postman_collection.json
+tests/regression/api/hr-admin-product.postman_collection.json
+```
+
+By default, Playwright runs:
 
 ```text
 ../tests/regression/e2e/whole-app-regression.spec.ts
+../tests/regression/e2e/hr-admin-product.spec.ts
 ```
 
 Older feature-specific or mocked specs are kept for targeted diagnosis and are opt-in through `E2E_SPECS`.

@@ -29,6 +29,7 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/routes"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
@@ -873,10 +874,15 @@ func TestSchedulerRoutesRequireSuperAdminAndAllowManualRun(t *testing.T) {
 
 	performJSONRequest(t, h.router, adminToken, http.MethodGet, "/v1/scheduler/certificate-notifications?page=1&limit=20", nil, http.StatusForbidden)
 	performJSONRequest(t, h.router, adminToken, http.MethodPost, "/v1/scheduler/run", nil, http.StatusForbidden)
+	performJSONRequest(t, h.router, adminToken, http.MethodPost, "/v1/scheduler/hr-admin/run", nil, http.StatusForbidden)
 
 	run := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/scheduler/run", nil, http.StatusOK))
 	assertField(t, run, "message", "certificate expiry scheduler run completed")
 	assertField(t, run, "processed_certificates", 0)
+
+	hrRun := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/scheduler/hr-admin/run", nil, http.StatusOK))
+	assertField(t, hrRun, "message", "HR/Admin reminder scheduler run completed")
+	assertField(t, hrRun, "processed_records", 0)
 }
 
 func TestCertificateNotificationFailureAudit(t *testing.T) {
@@ -1280,6 +1286,29 @@ func TestLoginSuccess(t *testing.T) {
 	}
 }
 
+func TestSeedAdminUserCreatesConfiguredAdminWhenOtherUsersExist(t *testing.T) {
+	h := setupIntegrationTest(t)
+
+	const seedEmail = "restored-seed-admin@example.com"
+	const seedPassword = "restored-password"
+
+	t.Setenv("SEED_ADMIN_EMAIL", seedEmail)
+	t.Setenv("SEED_ADMIN_PASSWORD", seedPassword)
+
+	controllers.SeedAdminUser(h.pool)
+
+	user := mustGetIntegrationUserByEmail(t, h.pool, seedEmail)
+	if user.Role != "SUPER_ADMIN" {
+		t.Fatalf("expected seeded user role SUPER_ADMIN, got %q", user.Role)
+	}
+	if user.Status != "ACTIVE" {
+		t.Fatalf("expected seeded user status ACTIVE, got %q", user.Status)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(seedPassword)); err != nil {
+		t.Fatalf("expected seeded user password to match configured seed password: %v", err)
+	}
+}
+
 func TestLoginSetsAccessTokenCookieAndSessionReadsIt(t *testing.T) {
 	h := setupIntegrationTest(t)
 	createIntegrationUser(t, h.pool, "Cookie", "User", "login-cookie@example.com", "user-password", "USER")
@@ -1675,6 +1704,14 @@ func resetIntegrationDatabase(t *testing.T, pool *pgxpool.Pool) {
 	const truncateSQL = `
 TRUNCATE TABLE
   notification_deliveries,
+  product_notification_configurations,
+  product_access,
+  compliance_record_versions,
+  compliance_records,
+  compliance_record_types,
+  hr_admin_persons,
+  hr_admin_vehicles,
+  hr_admin_companies,
   asset_maintenance_events,
   certificate_upload_audit,
   certificate_competency_categories,

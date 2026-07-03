@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const claimNotificationDelivery = `-- name: ClaimNotificationDelivery :one
@@ -106,6 +107,33 @@ func (q *Queries) CountCertificateNotificationDeliveryFailures(ctx context.Conte
 	return count, err
 }
 
+const countHRAdminNotificationDeliveries = `-- name: CountHRAdminNotificationDeliveries :one
+SELECT COUNT(*)
+FROM notification_deliveries
+WHERE source_type = 'hr_admin_compliance_expiry'
+`
+
+func (q *Queries) CountHRAdminNotificationDeliveries(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countHRAdminNotificationDeliveries)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countHRAdminNotificationDeliveryFailures = `-- name: CountHRAdminNotificationDeliveryFailures :one
+SELECT COUNT(*)
+FROM notification_deliveries
+WHERE source_type = 'hr_admin_compliance_expiry'
+  AND status = 'FAILED'
+`
+
+func (q *Queries) CountHRAdminNotificationDeliveryFailures(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countHRAdminNotificationDeliveryFailures)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countUnresolvedNotificationDeliveryErrors = `-- name: CountUnresolvedNotificationDeliveryErrors :one
 SELECT COUNT(*)
 FROM notification_deliveries
@@ -136,11 +164,21 @@ SELECT
     CASE
         WHEN nd.source_type = 'certificate_expiry' THEN COALESCE(cert.display_id, '')
         WHEN nd.source_type = 'routine_maintenance' THEN COALESCE(ame.display_id, '')
+        WHEN nd.source_type = 'hr_admin_compliance_expiry' THEN COALESCE(hrcr.display_id, '')
         ELSE ''
     END AS source_display_id,
     (CASE
         WHEN nd.source_type = 'certificate_expiry' THEN COALESCE(cert.certificate_name, '')
         WHEN nd.source_type = 'routine_maintenance' THEN 'Routine maintenance'
+        WHEN nd.source_type = 'hr_admin_compliance_expiry' THEN CONCAT_WS(' - ', COALESCE(hrcrt.type_name, ''), NULLIF(
+            CASE
+                WHEN hrcr.subject_type = 'PERSON' THEN COALESCE(hrp.full_name, '')
+                WHEN hrcr.subject_type = 'VEHICLE' THEN COALESCE(hrv.plate_number, '')
+                WHEN hrcr.subject_type = 'COMPANY' THEN COALESCE(hrc.company_name, '')
+                ELSE ''
+            END,
+            ''
+        ))
         ELSE nd.source_type
     END)::text AS source_name,
     COALESCE(cert.certificate_id::text, '')::text AS certificate_id,
@@ -165,6 +203,11 @@ LEFT JOIN components comp ON comp.component_id = cert.component_id
 LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
 LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
 LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
+LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
 ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC
 LIMIT $1 OFFSET $2
 `
@@ -250,11 +293,21 @@ SELECT
     CASE
         WHEN nd.source_type = 'certificate_expiry' THEN COALESCE(cert.display_id, '')
         WHEN nd.source_type = 'routine_maintenance' THEN COALESCE(ame.display_id, '')
+        WHEN nd.source_type = 'hr_admin_compliance_expiry' THEN COALESCE(hrcr.display_id, '')
         ELSE ''
     END AS source_display_id,
     (CASE
         WHEN nd.source_type = 'certificate_expiry' THEN COALESCE(cert.certificate_name, '')
         WHEN nd.source_type = 'routine_maintenance' THEN 'Routine maintenance'
+        WHEN nd.source_type = 'hr_admin_compliance_expiry' THEN CONCAT_WS(' - ', COALESCE(hrcrt.type_name, ''), NULLIF(
+            CASE
+                WHEN hrcr.subject_type = 'PERSON' THEN COALESCE(hrp.full_name, '')
+                WHEN hrcr.subject_type = 'VEHICLE' THEN COALESCE(hrv.plate_number, '')
+                WHEN hrcr.subject_type = 'COMPANY' THEN COALESCE(hrc.company_name, '')
+                ELSE ''
+            END,
+            ''
+        ))
         ELSE nd.source_type
     END)::text AS source_name,
     COALESCE(cert.certificate_id::text, '')::text AS certificate_id,
@@ -278,6 +331,11 @@ LEFT JOIN components comp ON comp.component_id = cert.component_id
 LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
 LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
 LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
+LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
 WHERE nd.status = 'FAILED'
 ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC
 LIMIT $1 OFFSET $2
@@ -320,6 +378,235 @@ func (q *Queries) GetCertificateNotificationDeliveryFailuresPaginated(ctx contex
 	var items []GetCertificateNotificationDeliveryFailuresPaginatedRow
 	for rows.Next() {
 		var i GetCertificateNotificationDeliveryFailuresPaginatedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourceType,
+			&i.SourceID,
+			&i.SourceDisplayID,
+			&i.SourceName,
+			&i.CertificateID,
+			&i.CertificateDisplayID,
+			&i.CertificateName,
+			&i.ExpiryDate,
+			&i.ComponentID,
+			&i.ComponentDisplayID,
+			&i.ComponentName,
+			&i.AssetID,
+			&i.AssetDisplayID,
+			&i.AssetName,
+			&i.IdempotencyKey,
+			&i.Channel,
+			&i.Tier,
+			&i.ErrorMessage,
+			&i.FailedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getHRAdminNotificationDeliveriesPaginated = `-- name: GetHRAdminNotificationDeliveriesPaginated :many
+SELECT
+    nd.delivery_id AS task_id,
+    nd.display_id,
+    nd.source_type,
+    nd.source_id::text AS source_id,
+    COALESCE(hrcr.display_id, '') AS source_display_id,
+    CONCAT_WS(' - ', COALESCE(hrcrt.type_name, ''), NULLIF(
+        CASE
+            WHEN hrcr.subject_type = 'PERSON' THEN COALESCE(hrp.full_name, '')
+            WHEN hrcr.subject_type = 'VEHICLE' THEN COALESCE(hrv.plate_number, '')
+            WHEN hrcr.subject_type = 'COMPANY' THEN COALESCE(hrc.company_name, '')
+            ELSE ''
+        END,
+        ''
+    ))::text AS source_name,
+    ''::text AS certificate_id,
+    ''::text AS certificate_display_id,
+    ''::text AS certificate_name,
+    crv.expiry_date,
+    ''::text AS component_id,
+    ''::text AS component_display_id,
+    ''::text AS component_name,
+    ''::text AS asset_id,
+    ''::text AS asset_display_id,
+    ''::text AS asset_name,
+    nd.channel AS type,
+    nd.tier,
+    nd.status,
+    nd.external_id AS external_task_id,
+    nd.idempotency_key,
+    COALESCE(nd.sent_at, nd.failed_at, nd.created_at) AS sent_at
+FROM notification_deliveries nd
+LEFT JOIN compliance_records hrcr ON hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN compliance_record_versions crv ON crv.record_id = hrcr.record_id AND crv.is_current
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
+WHERE nd.source_type = 'hr_admin_compliance_expiry'
+ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC
+LIMIT $1 OFFSET $2
+`
+
+type GetHRAdminNotificationDeliveriesPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type GetHRAdminNotificationDeliveriesPaginatedRow struct {
+	TaskID               uuid.UUID          `json:"task_id"`
+	DisplayID            string             `json:"display_id"`
+	SourceType           string             `json:"source_type"`
+	SourceID             string             `json:"source_id"`
+	SourceDisplayID      string             `json:"source_display_id"`
+	SourceName           string             `json:"source_name"`
+	CertificateID        string             `json:"certificate_id"`
+	CertificateDisplayID string             `json:"certificate_display_id"`
+	CertificateName      string             `json:"certificate_name"`
+	ExpiryDate           pgtype.Timestamptz `json:"expiry_date"`
+	ComponentID          string             `json:"component_id"`
+	ComponentDisplayID   string             `json:"component_display_id"`
+	ComponentName        string             `json:"component_name"`
+	AssetID              string             `json:"asset_id"`
+	AssetDisplayID       string             `json:"asset_display_id"`
+	AssetName            string             `json:"asset_name"`
+	Type                 string             `json:"type"`
+	Tier                 string             `json:"tier"`
+	Status               string             `json:"status"`
+	ExternalTaskID       string             `json:"external_task_id"`
+	IdempotencyKey       string             `json:"idempotency_key"`
+	SentAt               *time.Time         `json:"sent_at"`
+}
+
+func (q *Queries) GetHRAdminNotificationDeliveriesPaginated(ctx context.Context, arg GetHRAdminNotificationDeliveriesPaginatedParams) ([]GetHRAdminNotificationDeliveriesPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, getHRAdminNotificationDeliveriesPaginated, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetHRAdminNotificationDeliveriesPaginatedRow
+	for rows.Next() {
+		var i GetHRAdminNotificationDeliveriesPaginatedRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.DisplayID,
+			&i.SourceType,
+			&i.SourceID,
+			&i.SourceDisplayID,
+			&i.SourceName,
+			&i.CertificateID,
+			&i.CertificateDisplayID,
+			&i.CertificateName,
+			&i.ExpiryDate,
+			&i.ComponentID,
+			&i.ComponentDisplayID,
+			&i.ComponentName,
+			&i.AssetID,
+			&i.AssetDisplayID,
+			&i.AssetName,
+			&i.Type,
+			&i.Tier,
+			&i.Status,
+			&i.ExternalTaskID,
+			&i.IdempotencyKey,
+			&i.SentAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getHRAdminNotificationDeliveryFailuresPaginated = `-- name: GetHRAdminNotificationDeliveryFailuresPaginated :many
+SELECT
+    nd.delivery_id AS id,
+    nd.source_type,
+    nd.source_id::text AS source_id,
+    COALESCE(hrcr.display_id, '') AS source_display_id,
+    CONCAT_WS(' - ', COALESCE(hrcrt.type_name, ''), NULLIF(
+        CASE
+            WHEN hrcr.subject_type = 'PERSON' THEN COALESCE(hrp.full_name, '')
+            WHEN hrcr.subject_type = 'VEHICLE' THEN COALESCE(hrv.plate_number, '')
+            WHEN hrcr.subject_type = 'COMPANY' THEN COALESCE(hrc.company_name, '')
+            ELSE ''
+        END,
+        ''
+    ))::text AS source_name,
+    ''::text AS certificate_id,
+    ''::text AS certificate_display_id,
+    ''::text AS certificate_name,
+    crv.expiry_date,
+    ''::text AS component_id,
+    ''::text AS component_display_id,
+    ''::text AS component_name,
+    ''::text AS asset_id,
+    ''::text AS asset_display_id,
+    ''::text AS asset_name,
+    nd.idempotency_key,
+    nd.channel,
+    nd.tier,
+    nd.error_message,
+    COALESCE(nd.failed_at, nd.updated_at) AS failed_at
+FROM notification_deliveries nd
+LEFT JOIN compliance_records hrcr ON hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN compliance_record_versions crv ON crv.record_id = hrcr.record_id AND crv.is_current
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
+WHERE nd.source_type = 'hr_admin_compliance_expiry'
+  AND nd.status = 'FAILED'
+ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC
+LIMIT $1 OFFSET $2
+`
+
+type GetHRAdminNotificationDeliveryFailuresPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type GetHRAdminNotificationDeliveryFailuresPaginatedRow struct {
+	ID                   uuid.UUID          `json:"id"`
+	SourceType           string             `json:"source_type"`
+	SourceID             string             `json:"source_id"`
+	SourceDisplayID      string             `json:"source_display_id"`
+	SourceName           string             `json:"source_name"`
+	CertificateID        string             `json:"certificate_id"`
+	CertificateDisplayID string             `json:"certificate_display_id"`
+	CertificateName      string             `json:"certificate_name"`
+	ExpiryDate           pgtype.Timestamptz `json:"expiry_date"`
+	ComponentID          string             `json:"component_id"`
+	ComponentDisplayID   string             `json:"component_display_id"`
+	ComponentName        string             `json:"component_name"`
+	AssetID              string             `json:"asset_id"`
+	AssetDisplayID       string             `json:"asset_display_id"`
+	AssetName            string             `json:"asset_name"`
+	IdempotencyKey       string             `json:"idempotency_key"`
+	Channel              string             `json:"channel"`
+	Tier                 string             `json:"tier"`
+	ErrorMessage         string             `json:"error_message"`
+	FailedAt             *time.Time         `json:"failed_at"`
+}
+
+func (q *Queries) GetHRAdminNotificationDeliveryFailuresPaginated(ctx context.Context, arg GetHRAdminNotificationDeliveryFailuresPaginatedParams) ([]GetHRAdminNotificationDeliveryFailuresPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, getHRAdminNotificationDeliveryFailuresPaginated, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetHRAdminNotificationDeliveryFailuresPaginatedRow
+	for rows.Next() {
+		var i GetHRAdminNotificationDeliveryFailuresPaginatedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SourceType,

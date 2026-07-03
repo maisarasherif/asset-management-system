@@ -49,6 +49,8 @@ import type {
   HRAdminCompanyInput,
   HRAdminPerson,
   HRAdminPersonInput,
+  HRAdminRenewalQueueItem,
+  HRAdminSchedulerRunResponse,
   HRAdminVehicle,
   HRAdminVehicleInput,
   LoginResponse,
@@ -56,6 +58,8 @@ import type {
   MessageResponse,
   PaginatedResponse,
   PlatformProductsResponse,
+  ProductNotificationConfiguration,
+  ProductNotificationConfigurationInput,
   TemplateConfigurationComponent,
   TemplateComponent,
   TemplateComponentInput,
@@ -249,6 +253,21 @@ export function updateComplianceRecordType(recordTypeId: string, payload: Compli
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export function getHRAdminNotificationConfiguration() {
+  return apiRequest<ProductNotificationConfiguration>("/v1/hr-admin/notification-configuration");
+}
+
+export function updateHRAdminNotificationConfiguration(payload: ProductNotificationConfigurationInput) {
+  return apiRequest<ProductNotificationConfiguration>("/v1/hr-admin/notification-configuration", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listHRAdminRenewalQueue() {
+  return apiRequest<HRAdminRenewalQueueItem[]>("/v1/hr-admin/renewal-queue");
 }
 
 export function listComplianceRecords(page = 1, limit = 100) {
@@ -937,8 +956,34 @@ export function listAllCertificateNotificationFailures() {
   return fetchAllPages((page) => listCertificateNotificationFailures(page));
 }
 
+export function listHRAdminNotificationTasks(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<CertificateNotificationTask>>(
+    `/v1/hr-admin/scheduler/notification-tasks?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllHRAdminNotificationTasks() {
+  return fetchAllPages((page) => listHRAdminNotificationTasks(page));
+}
+
+export function listHRAdminNotificationFailures(page = 1, limit = 100) {
+  return apiRequest<PaginatedResponse<CertificateNotificationFailure>>(
+    `/v1/hr-admin/scheduler/notification-failures?page=${page}&limit=${limit}`
+  );
+}
+
+export function listAllHRAdminNotificationFailures() {
+  return fetchAllPages((page) => listHRAdminNotificationFailures(page));
+}
+
 export function runCertificateExpiryScheduler() {
   return apiRequest<SchedulerRunResponse>("/v1/scheduler/run", {
+    method: "POST",
+  });
+}
+
+export function runHRAdminReminderScheduler() {
+  return apiRequest<HRAdminSchedulerRunResponse>("/v1/hr-admin/scheduler/run", {
     method: "POST",
   });
 }

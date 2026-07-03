@@ -1,0 +1,2 @@
+ALTER TABLE product_notification_configurations
+DROP COLUMN IF EXISTS default_reminder_days;

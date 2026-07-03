@@ -19,10 +19,14 @@ import {
   DashboardPage,
   ForgotPasswordPage,
   GuestOnly,
+  HRAdminNotificationConfigPage,
+  HRAdminCompaniesPage,
   HRAdminOverviewPage,
   HRAdminPersonsPage,
   HRAdminRecordTypesPage,
   HRAdminRecordsPage,
+  HRAdminReminderPolicyPage,
+  HRAdminSchedulerPage,
   HRAdminVehiclesPage,
   RequireHRAdminAdmin,
   RequireAdmin,
@@ -314,6 +318,16 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: "hr-admin/companies",
+        element: (
+          <RequireProductAccess>
+            <RouteSuspense>
+              <HRAdminCompaniesPage />
+            </RouteSuspense>
+          </RequireProductAccess>
+        ),
+      },
+      {
         path: "hr-admin/records",
         element: (
           <RequireProductAccess>
@@ -329,6 +343,36 @@ export const router = createBrowserRouter([
           <RequireHRAdminAdmin>
             <RouteSuspense>
               <HRAdminRecordTypesPage />
+            </RouteSuspense>
+          </RequireHRAdminAdmin>
+        ),
+      },
+      {
+        path: "hr-admin/reminder-policy",
+        element: (
+          <RequireHRAdminAdmin>
+            <RouteSuspense>
+              <HRAdminReminderPolicyPage />
+            </RouteSuspense>
+          </RequireHRAdminAdmin>
+        ),
+      },
+      {
+        path: "hr-admin/notification-config",
+        element: (
+          <RequireHRAdminAdmin>
+            <RouteSuspense>
+              <HRAdminNotificationConfigPage />
+            </RouteSuspense>
+          </RequireHRAdminAdmin>
+        ),
+      },
+      {
+        path: "hr-admin/scheduler",
+        element: (
+          <RequireHRAdminAdmin>
+            <RouteSuspense>
+              <HRAdminSchedulerPage />
             </RouteSuspense>
           </RequireHRAdminAdmin>
         ),

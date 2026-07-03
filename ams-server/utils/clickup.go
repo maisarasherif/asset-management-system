@@ -80,8 +80,14 @@ func RoutineMaintenanceClickUpPayload(assetName, assetDisplayID string, workingH
 }
 
 func CreateClickUpTaskFromPayload(task clickUpTask) (string, error) {
+	return CreateClickUpTaskFromPayloadForList(task, "")
+}
+
+func CreateClickUpTaskFromPayloadForList(task clickUpTask, listID string) (string, error) {
 	apiToken := os.Getenv("CLICKUP_API_TOKEN")
-	listID := os.Getenv("CLICKUP_LIST_ID")
+	if listID == "" {
+		listID = os.Getenv("CLICKUP_LIST_ID")
+	}
 
 	if apiToken == "" || listID == "" {
 		return "", fmt.Errorf("CLICKUP_API_TOKEN or CLICKUP_LIST_ID not set")

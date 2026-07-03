@@ -875,6 +875,179 @@ func (q *Queries) GetComplianceRecordsPaginated(ctx context.Context, arg GetComp
 	return items, nil
 }
 
+const getDueHRAdminComplianceReminderCandidateByRecordID = `-- name: GetDueHRAdminComplianceReminderCandidateByRecordID :many
+SELECT
+    cr.record_id,
+    cr.display_id AS record_display_id,
+    cr.subject_type,
+    cr.subject_id,
+    (CASE
+        WHEN cr.subject_type = 'PERSON' THEN COALESCE(p.full_name, '')
+        WHEN cr.subject_type = 'VEHICLE' THEN COALESCE(v.plate_number, '')
+        WHEN cr.subject_type = 'COMPANY' THEN COALESCE(c.company_name, '')
+        ELSE ''
+    END)::text AS subject_name,
+    crt.type_name,
+    crt.reminder_policy_days,
+    COALESCE(pnc.default_reminder_days, ARRAY[30, 7, 1]::int[])::int[] AS default_reminder_days,
+    COALESCE(pnc.email_recipients, '')::text AS email_recipients,
+    COALESCE(pnc.clickup_list_id, '')::text AS clickup_list_id,
+    COALESCE(pnc.clickup_assignee_ids, '')::text AS clickup_assignee_ids,
+    crv.expiry_date
+FROM compliance_records cr
+JOIN compliance_record_types crt ON crt.record_type_id = cr.record_type_id
+JOIN compliance_record_versions crv ON crv.record_id = cr.record_id AND crv.is_current
+LEFT JOIN product_notification_configurations pnc ON pnc.product_key = 'HR_ADMIN'
+LEFT JOIN hr_admin_persons p ON cr.subject_type = 'PERSON' AND p.person_id = cr.subject_id
+LEFT JOIN hr_admin_vehicles v ON cr.subject_type = 'VEHICLE' AND v.vehicle_id = cr.subject_id
+LEFT JOIN hr_admin_companies c ON cr.subject_type = 'COMPANY' AND c.company_id = cr.subject_id
+WHERE cr.record_id = $1
+  AND cr.status = 'ACTIVE'
+  AND crt.active = TRUE
+  AND crt.renewal_behavior = 'RENEWABLE'
+  AND crv.expiry_date IS NOT NULL
+  AND (
+    (cr.subject_type = 'PERSON' AND p.status = 'ACTIVE')
+    OR (cr.subject_type = 'VEHICLE' AND v.status = 'ACTIVE')
+    OR (cr.subject_type = 'COMPANY' AND c.status = 'ACTIVE')
+  )
+ORDER BY crv.expiry_date ASC, cr.created_at ASC
+`
+
+type GetDueHRAdminComplianceReminderCandidateByRecordIDRow struct {
+	RecordID            uuid.UUID          `json:"record_id"`
+	RecordDisplayID     string             `json:"record_display_id"`
+	SubjectType         string             `json:"subject_type"`
+	SubjectID           uuid.UUID          `json:"subject_id"`
+	SubjectName         string             `json:"subject_name"`
+	TypeName            string             `json:"type_name"`
+	ReminderPolicyDays  []int32            `json:"reminder_policy_days"`
+	DefaultReminderDays []int32            `json:"default_reminder_days"`
+	EmailRecipients     string             `json:"email_recipients"`
+	ClickupListID       string             `json:"clickup_list_id"`
+	ClickupAssigneeIds  string             `json:"clickup_assignee_ids"`
+	ExpiryDate          pgtype.Timestamptz `json:"expiry_date"`
+}
+
+func (q *Queries) GetDueHRAdminComplianceReminderCandidateByRecordID(ctx context.Context, recordID uuid.UUID) ([]GetDueHRAdminComplianceReminderCandidateByRecordIDRow, error) {
+	rows, err := q.db.Query(ctx, getDueHRAdminComplianceReminderCandidateByRecordID, recordID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetDueHRAdminComplianceReminderCandidateByRecordIDRow
+	for rows.Next() {
+		var i GetDueHRAdminComplianceReminderCandidateByRecordIDRow
+		if err := rows.Scan(
+			&i.RecordID,
+			&i.RecordDisplayID,
+			&i.SubjectType,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.TypeName,
+			&i.ReminderPolicyDays,
+			&i.DefaultReminderDays,
+			&i.EmailRecipients,
+			&i.ClickupListID,
+			&i.ClickupAssigneeIds,
+			&i.ExpiryDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDueHRAdminComplianceReminderCandidates = `-- name: GetDueHRAdminComplianceReminderCandidates :many
+SELECT
+    cr.record_id,
+    cr.display_id AS record_display_id,
+    cr.subject_type,
+    cr.subject_id,
+    (CASE
+        WHEN cr.subject_type = 'PERSON' THEN COALESCE(p.full_name, '')
+        WHEN cr.subject_type = 'VEHICLE' THEN COALESCE(v.plate_number, '')
+        WHEN cr.subject_type = 'COMPANY' THEN COALESCE(c.company_name, '')
+        ELSE ''
+    END)::text AS subject_name,
+    crt.type_name,
+    crt.reminder_policy_days,
+    COALESCE(pnc.default_reminder_days, ARRAY[30, 7, 1]::int[])::int[] AS default_reminder_days,
+    COALESCE(pnc.email_recipients, '')::text AS email_recipients,
+    COALESCE(pnc.clickup_list_id, '')::text AS clickup_list_id,
+    COALESCE(pnc.clickup_assignee_ids, '')::text AS clickup_assignee_ids,
+    crv.expiry_date
+FROM compliance_records cr
+JOIN compliance_record_types crt ON crt.record_type_id = cr.record_type_id
+JOIN compliance_record_versions crv ON crv.record_id = cr.record_id AND crv.is_current
+LEFT JOIN product_notification_configurations pnc ON pnc.product_key = 'HR_ADMIN'
+LEFT JOIN hr_admin_persons p ON cr.subject_type = 'PERSON' AND p.person_id = cr.subject_id
+LEFT JOIN hr_admin_vehicles v ON cr.subject_type = 'VEHICLE' AND v.vehicle_id = cr.subject_id
+LEFT JOIN hr_admin_companies c ON cr.subject_type = 'COMPANY' AND c.company_id = cr.subject_id
+WHERE cr.status = 'ACTIVE'
+  AND crt.active = TRUE
+  AND crt.renewal_behavior = 'RENEWABLE'
+  AND crv.expiry_date IS NOT NULL
+  AND (
+    (cr.subject_type = 'PERSON' AND p.status = 'ACTIVE')
+    OR (cr.subject_type = 'VEHICLE' AND v.status = 'ACTIVE')
+    OR (cr.subject_type = 'COMPANY' AND c.status = 'ACTIVE')
+  )
+ORDER BY crv.expiry_date ASC, cr.created_at ASC
+`
+
+type GetDueHRAdminComplianceReminderCandidatesRow struct {
+	RecordID            uuid.UUID          `json:"record_id"`
+	RecordDisplayID     string             `json:"record_display_id"`
+	SubjectType         string             `json:"subject_type"`
+	SubjectID           uuid.UUID          `json:"subject_id"`
+	SubjectName         string             `json:"subject_name"`
+	TypeName            string             `json:"type_name"`
+	ReminderPolicyDays  []int32            `json:"reminder_policy_days"`
+	DefaultReminderDays []int32            `json:"default_reminder_days"`
+	EmailRecipients     string             `json:"email_recipients"`
+	ClickupListID       string             `json:"clickup_list_id"`
+	ClickupAssigneeIds  string             `json:"clickup_assignee_ids"`
+	ExpiryDate          pgtype.Timestamptz `json:"expiry_date"`
+}
+
+func (q *Queries) GetDueHRAdminComplianceReminderCandidates(ctx context.Context) ([]GetDueHRAdminComplianceReminderCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, getDueHRAdminComplianceReminderCandidates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetDueHRAdminComplianceReminderCandidatesRow
+	for rows.Next() {
+		var i GetDueHRAdminComplianceReminderCandidatesRow
+		if err := rows.Scan(
+			&i.RecordID,
+			&i.RecordDisplayID,
+			&i.SubjectType,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.TypeName,
+			&i.ReminderPolicyDays,
+			&i.DefaultReminderDays,
+			&i.EmailRecipients,
+			&i.ClickupListID,
+			&i.ClickupAssigneeIds,
+			&i.ExpiryDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getHRAdminCompaniesPaginated = `-- name: GetHRAdminCompaniesPaginated :many
 SELECT
     company_id,
@@ -1056,6 +1229,140 @@ func (q *Queries) GetHRAdminPersonsPaginated(ctx context.Context, arg GetHRAdmin
 			&i.ArchivedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getHRAdminRenewalQueue = `-- name: GetHRAdminRenewalQueue :many
+WITH queue_base AS (
+    SELECT
+        cr.record_id,
+        cr.display_id AS record_display_id,
+        cr.subject_type,
+        cr.subject_id,
+        (CASE
+            WHEN cr.subject_type = 'PERSON' THEN COALESCE(p.full_name, '')
+            WHEN cr.subject_type = 'VEHICLE' THEN COALESCE(v.plate_number, '')
+            WHEN cr.subject_type = 'COMPANY' THEN COALESCE(c.company_name, '')
+            ELSE ''
+        END)::text AS subject_name,
+        crt.record_type_id,
+        crt.type_name,
+        crv.version_id,
+        crv.expiry_date,
+        (CASE
+            WHEN CARDINALITY(crt.reminder_policy_days) > 0 THEN crt.reminder_policy_days
+            ELSE COALESCE(pnc.default_reminder_days, ARRAY[30, 7, 1]::int[])
+        END)::int[] AS effective_reminder_days,
+        (CASE
+            WHEN CARDINALITY(crt.reminder_policy_days) > 0 THEN 'RECORD_TYPE'
+            ELSE 'PRODUCT_DEFAULT'
+        END)::text AS reminder_policy_source,
+        ((crv.expiry_date AT TIME ZONE 'Asia/Dubai')::date - (NOW() AT TIME ZONE 'Asia/Dubai')::date)::int AS days_until_expiry
+    FROM compliance_records cr
+    JOIN compliance_record_types crt ON crt.record_type_id = cr.record_type_id
+    JOIN compliance_record_versions crv ON crv.record_id = cr.record_id AND crv.is_current
+    LEFT JOIN product_notification_configurations pnc ON pnc.product_key = 'HR_ADMIN'
+    LEFT JOIN hr_admin_persons p ON cr.subject_type = 'PERSON' AND p.person_id = cr.subject_id
+    LEFT JOIN hr_admin_vehicles v ON cr.subject_type = 'VEHICLE' AND v.vehicle_id = cr.subject_id
+    LEFT JOIN hr_admin_companies c ON cr.subject_type = 'COMPANY' AND c.company_id = cr.subject_id
+    WHERE cr.status = 'ACTIVE'
+      AND crt.active = TRUE
+      AND crt.renewal_behavior = 'RENEWABLE'
+      AND crv.expiry_date IS NOT NULL
+      AND (
+        (cr.subject_type = 'PERSON' AND p.status = 'ACTIVE')
+        OR (cr.subject_type = 'VEHICLE' AND v.status = 'ACTIVE')
+        OR (cr.subject_type = 'COMPANY' AND c.status = 'ACTIVE')
+      )
+),
+queue_classified AS (
+    SELECT
+        queue_base.record_id, queue_base.record_display_id, queue_base.subject_type, queue_base.subject_id, queue_base.subject_name, queue_base.record_type_id, queue_base.type_name, queue_base.version_id, queue_base.expiry_date, queue_base.effective_reminder_days, queue_base.reminder_policy_source, queue_base.days_until_expiry,
+        COALESCE((SELECT MAX(day) FROM UNNEST(queue_base.effective_reminder_days) AS day), 0)::int AS max_reminder_days,
+        (CASE
+            WHEN queue_base.days_until_expiry < 0 THEN 'EXPIRED'
+            WHEN queue_base.days_until_expiry = ANY(queue_base.effective_reminder_days) THEN 'DUE_NOW'
+            WHEN queue_base.days_until_expiry >= 0
+              AND queue_base.days_until_expiry <= COALESCE((SELECT MAX(day) FROM UNNEST(queue_base.effective_reminder_days) AS day), 0) THEN 'UPCOMING'
+            ELSE 'OK'
+        END)::text AS queue_status
+    FROM queue_base
+)
+SELECT
+    record_id,
+    record_display_id,
+    subject_type,
+    subject_id,
+    subject_name,
+    record_type_id,
+    type_name,
+    version_id,
+    expiry_date,
+    days_until_expiry,
+    queue_status,
+    effective_reminder_days,
+    reminder_policy_source,
+    max_reminder_days
+FROM queue_classified
+ORDER BY
+    CASE queue_status
+        WHEN 'EXPIRED' THEN 0
+        WHEN 'DUE_NOW' THEN 1
+        WHEN 'UPCOMING' THEN 2
+        ELSE 3
+    END,
+    expiry_date ASC
+`
+
+type GetHRAdminRenewalQueueRow struct {
+	RecordID              uuid.UUID          `json:"record_id"`
+	RecordDisplayID       string             `json:"record_display_id"`
+	SubjectType           string             `json:"subject_type"`
+	SubjectID             uuid.UUID          `json:"subject_id"`
+	SubjectName           string             `json:"subject_name"`
+	RecordTypeID          uuid.UUID          `json:"record_type_id"`
+	TypeName              string             `json:"type_name"`
+	VersionID             uuid.UUID          `json:"version_id"`
+	ExpiryDate            pgtype.Timestamptz `json:"expiry_date"`
+	DaysUntilExpiry       int32              `json:"days_until_expiry"`
+	QueueStatus           string             `json:"queue_status"`
+	EffectiveReminderDays []int32            `json:"effective_reminder_days"`
+	ReminderPolicySource  string             `json:"reminder_policy_source"`
+	MaxReminderDays       int32              `json:"max_reminder_days"`
+}
+
+func (q *Queries) GetHRAdminRenewalQueue(ctx context.Context) ([]GetHRAdminRenewalQueueRow, error) {
+	rows, err := q.db.Query(ctx, getHRAdminRenewalQueue)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetHRAdminRenewalQueueRow
+	for rows.Next() {
+		var i GetHRAdminRenewalQueueRow
+		if err := rows.Scan(
+			&i.RecordID,
+			&i.RecordDisplayID,
+			&i.SubjectType,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.RecordTypeID,
+			&i.TypeName,
+			&i.VersionID,
+			&i.ExpiryDate,
+			&i.DaysUntilExpiry,
+			&i.QueueStatus,
+			&i.EffectiveReminderDays,
+			&i.ReminderPolicySource,
+			&i.MaxReminderDays,
 		); err != nil {
 			return nil, err
 		}
