@@ -206,7 +206,7 @@ async function createPersonThroughUi(page: Page, suffix: string) {
   await expect(createDialog).toBeVisible();
   await createDialog.getByLabel("Person code").fill(`PW-HRP-${suffix}`);
   await createDialog.getByLabel("Full name").fill(`PW HR Person ${suffix}`);
-  await createDialog.getByLabel("Department").fill("Administration");
+  await chooseSelectOption(page, "Department", "HR & Administration");
   await createDialog.getByLabel("Role title").fill("Coordinator");
   await createDialog.getByRole("button", { name: "Create person" }).click();
   await expect(page.getByText("Person created")).toBeVisible();
@@ -316,7 +316,7 @@ async function createRecordThroughUi(
   await chooseSelectOption(page, "Record type", recordTypeName);
   await dialog.getByLabel("Issue date").fill(issueDate);
   if (expiryDate) {
-    await dialog.getByLabel("Expiry date").fill(expiryDate);
+    await expect(dialog.getByLabel("Expiry date")).toHaveValue(expiryDate);
   }
   await dialog.getByLabel("Issuing authority").fill(authority);
   await dialog.getByLabel("Notes").fill(`Created for ${subjectName}`);
@@ -349,7 +349,7 @@ test.describe("HR/Admin product E2E", () => {
     const overviewPerson = await postJson<{ person_id: string }>(setupRequest, token, "/hr-admin/persons", {
       person_code: `PW-OV-${suffix}`,
       full_name: overviewPersonName,
-      department: "Administration",
+      department: "HR & Administration",
       role_title: "Coordinator",
     });
     const overviewRecordType = await createRecordType(
@@ -411,8 +411,8 @@ test.describe("HR/Admin product E2E", () => {
         "PERSON",
         personName,
         personRecordType,
-        "2026-01-01",
-        "2028-01-01",
+        "01/01/2026",
+        "01/01/2028",
         "Dubai Authority"
       );
 
@@ -420,8 +420,8 @@ test.describe("HR/Admin product E2E", () => {
       await page.getByText("Add version", { exact: true }).click();
       const versionDialog = page.getByRole("dialog", { name: /Add version for/ });
       await expect(versionDialog).toBeVisible();
-      await versionDialog.getByLabel("Issue date").fill("2028-01-01");
-      await versionDialog.getByLabel("Expiry date").fill("2030-01-01");
+      await versionDialog.getByLabel("Issue date").fill("01/01/2028");
+      await expect(versionDialog.getByLabel("Expiry date")).toHaveValue("01/01/2030");
       await versionDialog.getByLabel("Issuing authority").fill("Dubai Authority Renewal");
       await versionDialog.getByLabel("Notes").fill("Renewed by browser regression");
       await versionDialog.getByRole("button", { name: "Add version" }).click();
@@ -433,8 +433,8 @@ test.describe("HR/Admin product E2E", () => {
         "VEHICLE",
         vehiclePlate,
         vehicleRecordType.type_name,
-        "2026-02-01",
-        "2027-02-01",
+        "01/02/2026",
+        "01/02/2027",
         "RTA"
       );
       await createRecordThroughUi(
@@ -442,7 +442,7 @@ test.describe("HR/Admin product E2E", () => {
         "COMPANY",
         companyName,
         companyRecordType.type_name,
-        "2026-03-01",
+        "01/03/2026",
         "",
         "Company Registrar"
       );
@@ -523,7 +523,7 @@ test.describe("HR/Admin product E2E", () => {
     const person = await postJson<{ person_id: string }>(setupRequest, token, "/hr-admin/persons", {
       person_code: `PW-ROLE-${suffix}`,
       full_name: personName,
-      department: "Administration",
+      department: "HR & Administration",
       role_title: "Coordinator",
     });
     await postJson(setupRequest, token, "/hr-admin/compliance-records", {

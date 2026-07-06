@@ -22,12 +22,14 @@ import { TableCellActions, TableCellText } from "../../components/shared/TableCe
 import {
   archiveHRAdminPerson,
   createHRAdminPerson,
+  listHRAdminDepartments,
   listHRAdminPersons,
   updateHRAdminPerson,
 } from "../../lib/api/ams";
+import { Select } from "../../components/shared/OptimizedSelect";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { HRAdminPerson, HRAdminPersonInput } from "../../types/ams";
+import type { HRAdminDepartment, HRAdminPerson, HRAdminPersonInput } from "../../types/ams";
 import { formatDateTime, humanizeEnum } from "../../utils/format";
 
 type PersonEditor =
@@ -67,12 +69,14 @@ function isCompactViewport() {
 }
 
 function PersonEditorModal({
+  departments,
   editor,
   errorMessage,
   loading,
   onDismiss,
   onSubmit,
 }: {
+  departments: HRAdminDepartment[];
   editor: PersonEditor;
   errorMessage: string;
   loading: boolean;
@@ -84,6 +88,13 @@ function PersonEditorModal({
   useEffect(() => {
     setDraft(editor);
   }, [editor]);
+
+  const departmentOptions = departments.map((department) => ({
+    label: department.department_name,
+    value: department.department_name,
+  }));
+  const selectedDepartment =
+    departmentOptions.find((option) => option.value === draft?.department) ?? null;
 
   return (
     <Modal
@@ -117,11 +128,15 @@ function PersonEditorModal({
             }
           />
         </FormField>
-        <FormField label="Department">
-          <Input
-            value={draft?.department || ""}
+        <FormField label="Department" constraintText="Required">
+          <Select
+            ariaLabel="Department"
+            empty="No HR/Admin departments are configured"
+            options={departmentOptions}
+            placeholder="Choose department"
+            selectedOption={selectedDepartment}
             onChange={({ detail }) =>
-              setDraft((current) => current && { ...current, department: detail.value })
+              setDraft((current) => current && { ...current, department: detail.selectedOption.value || "" })
             }
           />
         </FormField>
@@ -206,6 +221,10 @@ export function HRAdminPersonsPage() {
     queryKey: ["hr-admin", "persons"],
     queryFn: () => listHRAdminPersons(1, 100),
   });
+  const departmentsQuery = useQuery({
+    queryKey: ["hr-admin", "departments"],
+    queryFn: listHRAdminDepartments,
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -256,6 +275,7 @@ export function HRAdminPersonsPage() {
   });
 
   const people = useMemo(() => peopleQuery.data?.data ?? [], [peopleQuery.data?.data]);
+  const departments = useMemo(() => departmentsQuery.data ?? [], [departmentsQuery.data]);
   const filteredPeople = useMemo(() => {
     const query = filterText.trim().toLowerCase();
     if (!query) {
@@ -405,6 +425,10 @@ export function HRAdminPersonsPage() {
       setModalError("Enter the person's full name.");
       return;
     }
+    if (!draft.department.trim()) {
+      setModalError("Choose the person's department.");
+      return;
+    }
     setModalError("");
     savePersonMutation.mutate(draft);
   };
@@ -418,16 +442,17 @@ export function HRAdminPersonsPage() {
     archivePersonMutation.mutate(target);
   };
 
-  if (peopleQuery.isLoading) {
+  if (peopleQuery.isLoading || departmentsQuery.isLoading) {
     return <PageLoading>{"Loading HR/Admin persons..."}</PageLoading>;
   }
 
-  if (peopleQuery.isError || !peopleQuery.data) {
+  if (peopleQuery.isError || departmentsQuery.isError || !peopleQuery.data || !departmentsQuery.data) {
     return (
       <PageError
         description="The HR/Admin persons list could not be loaded."
         onRetry={() => {
           void peopleQuery.refetch();
+          void departmentsQuery.refetch();
         }}
       />
     );
@@ -514,6 +539,7 @@ export function HRAdminPersonsPage() {
       </SpaceBetween>
 
       <PersonEditorModal
+        departments={departments}
         editor={editor}
         errorMessage={modalError}
         loading={savePersonMutation.isPending}

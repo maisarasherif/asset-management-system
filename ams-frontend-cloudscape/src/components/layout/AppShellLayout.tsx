@@ -328,6 +328,10 @@ export function AppShellLayout() {
     if (isHRAdminRoute) {
       const groups: NavigationGroup[] = [
         {
+          label: "Overview",
+          items: [{ href: "/hr-admin", text: "HR/Admin overview" }],
+        },
+        {
           label: "Subjects",
           items: [
             { href: "/hr-admin/persons", text: "Persons" },
@@ -342,7 +346,7 @@ export function AppShellLayout() {
       ];
 
       if (hrAdminRole === "ADMIN") {
-        groups[1].items.push({ href: "/hr-admin/record-types", text: "Record types" });
+        groups[2].items.push({ href: "/hr-admin/record-types", text: "Record types" });
         groups.push({
           label: "Operations",
           items: [
@@ -582,6 +586,11 @@ export function AppChrome() {
   const location = useLocation();
   const { isClient, products, session } = useAuth();
   const currentProductKey: ProductKey = location.pathname.startsWith("/hr-admin") ? "HR_ADMIN" : "AMS";
+  const productHomeHref = location.pathname.startsWith("/hr-admin")
+    ? "/hr-admin"
+    : session?.role === "CLIENT"
+      ? "/client/assets"
+      : "/dashboard";
 
   return (
     <>
@@ -589,14 +598,14 @@ export function AppChrome() {
         <TopNavigation
           i18nStrings={TOP_NAV_I18N}
           identity={{
-            href: session?.role === "CLIENT" ? "/client/assets" : "/dashboard",
+            href: productHomeHref,
             logo: {
               alt: "Porto Marine Services",
               src: "/porto-marine-logo.svg",
             },
             onFollow: (event) => {
               event.preventDefault();
-              navigate(session?.role === "CLIENT" ? "/client/assets" : "/dashboard");
+              navigate(productHomeHref);
             },
           }}
         />

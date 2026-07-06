@@ -15,13 +15,16 @@ import {
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import {
   getHRAdminNotificationConfiguration,
+  listComplianceRecordTypes,
   updateHRAdminNotificationConfiguration,
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { ProductNotificationConfiguration } from "../../types/ams";
+import type { ComplianceRecordType, ProductNotificationConfiguration } from "../../types/ams";
+import { humanizeEnum } from "../../utils/format";
 
 type PolicyPreviewRow = {
   checkpoint: string;
@@ -41,6 +44,33 @@ function parseReminderDays(value: string) {
 function formatReminderDays(days: number[] | null | undefined) {
   const values = days && days.length > 0 ? days : DEFAULT_REMINDER_DAYS;
   return values.join(", ");
+}
+
+function intValue(value: ComplianceRecordType["default_validity_months"]) {
+  if (typeof value === "number") {
+    return value;
+  }
+  if (value && typeof value === "object" && value.Valid && typeof value.Int32 === "number") {
+    return value.Int32;
+  }
+  return null;
+}
+
+function validityCopy(recordType: ComplianceRecordType) {
+  const months = intValue(recordType.default_validity_months);
+  if (recordType.renewal_behavior === "ONE_TIME") {
+    return "One time";
+  }
+  if (!months) {
+    return "No default expiry";
+  }
+  return `${months} ${months === 1 ? "month" : "months"}`;
+}
+
+function policySourceCopy(recordType: ComplianceRecordType) {
+  return recordType.reminder_policy_days && recordType.reminder_policy_days.length > 0
+    ? "Record type override"
+    : "Default policy";
 }
 
 function validateReminderDays(value: string) {
@@ -71,8 +101,15 @@ function buildPayload(config: ProductNotificationConfiguration, defaultReminderD
   };
 }
 
-function ReminderPolicyForm({ config }: { config: ProductNotificationConfiguration }) {
+function ReminderPolicyForm({
+  config,
+  recordTypes,
+}: {
+  config: ProductNotificationConfiguration;
+  recordTypes: ComplianceRecordType[];
+}) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { success } = useFlashbar();
   const [reminderDaysText, setReminderDaysText] = useState(() =>
     formatReminderDays(config.default_reminder_days)
@@ -92,6 +129,38 @@ function ReminderPolicyForm({ config }: { config: ProductNotificationConfigurati
         id: "timing",
         header: "Timing",
         cell: (item) => item.timing,
+      },
+    ],
+    []
+  );
+  const recordTypeColumns = useMemo<TableProps.ColumnDefinition<ComplianceRecordType>[]>(
+    () => [
+      {
+        id: "type",
+        header: "Record type",
+        cell: (item) => (
+          <div>
+            <strong>{item.type_name}</strong>
+            <br />
+            <Box color="text-body-secondary">{humanizeEnum(item.subject_type)}</Box>
+          </div>
+        ),
+      },
+      {
+        id: "validity",
+        header: "Default expiry",
+        cell: (item) => validityCopy(item),
+      },
+      {
+        id: "policy",
+        header: "Reminder policy",
+        cell: (item) => (
+          <div>
+            {formatReminderDays(item.reminder_policy_days)}
+            <br />
+            <Box color="text-body-secondary">{policySourceCopy(item)}</Box>
+          </div>
+        ),
       },
     ],
     []
@@ -203,6 +272,30 @@ function ReminderPolicyForm({ config }: { config: ProductNotificationConfigurati
             />
           </SpaceBetween>
         </Container>
+
+        <Container
+          header={
+            <Header
+              actions={<Button onClick={() => navigate("/hr-admin/record-types")}>Manage record types</Button>}
+              description="Record types can override the default schedule with their own 1, 2, or 3 month reminder timing."
+              variant="h2"
+            >
+              Record type policies
+            </Header>
+          }
+        >
+          <Table
+            columnDefinitions={recordTypeColumns}
+            empty={
+              <Box color="text-body-secondary" textAlign="center">
+                No record types have been configured yet.
+              </Box>
+            }
+            items={recordTypes}
+            trackBy="record_type_id"
+            variant="embedded"
+          />
+        </Container>
       </SpaceBetween>
     </ContentLayout>
   );
@@ -213,17 +306,22 @@ export function HRAdminReminderPolicyPage() {
     queryKey: ["hr-admin", "notification-configuration"],
     queryFn: getHRAdminNotificationConfiguration,
   });
+  const recordTypesQuery = useQuery({
+    queryKey: ["hr-admin", "compliance-record-types"],
+    queryFn: () => listComplianceRecordTypes(1, 100),
+  });
 
-  if (configQuery.isLoading) {
+  if (configQuery.isLoading || recordTypesQuery.isLoading) {
     return <PageLoading>{"Loading HR/Admin reminder policy..."}</PageLoading>;
   }
 
-  if (configQuery.isError || !configQuery.data) {
+  if (configQuery.isError || recordTypesQuery.isError || !configQuery.data || !recordTypesQuery.data) {
     return (
       <PageError
         description="The HR/Admin reminder policy could not be loaded."
         onRetry={() => {
           void configQuery.refetch();
+          void recordTypesQuery.refetch();
         }}
       />
     );
@@ -233,6 +331,7 @@ export function HRAdminReminderPolicyPage() {
     <ReminderPolicyForm
       config={configQuery.data}
       key={`${configQuery.data.updated_at}-${formatReminderDays(configQuery.data.default_reminder_days)}`}
+      recordTypes={recordTypesQuery.data.data}
     />
   );
 }

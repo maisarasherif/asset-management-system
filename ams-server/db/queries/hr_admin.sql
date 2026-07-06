@@ -1,3 +1,28 @@
+-- name: GetHRAdminDepartments :many
+SELECT
+    department_id,
+    department_name,
+    sort_order,
+    active,
+    created_at,
+    updated_at
+FROM hr_admin_departments
+WHERE active = TRUE
+ORDER BY sort_order ASC, department_name ASC;
+
+-- name: GetActiveHRAdminDepartmentByName :one
+SELECT
+    department_id,
+    department_name,
+    sort_order,
+    active,
+    created_at,
+    updated_at
+FROM hr_admin_departments
+WHERE department_name = $1
+  AND active = TRUE
+LIMIT 1;
+
 -- name: GetHRAdminPersonsPaginated :many
 SELECT
     person_id,

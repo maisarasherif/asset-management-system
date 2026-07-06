@@ -214,7 +214,7 @@ func GetUserManagementAuditLogs(pool *pgxpool.Pool) gin.HandlerFunc {
 				TargetRoleAfter:  log.TargetRoleAfter,
 				Details:          log.Details,
 				IPAddress:        log.IpAddress,
-				CreatedAt:        log.CreatedAt.Time,
+				CreatedAt:        log.CreatedAt,
 			}
 		}
 

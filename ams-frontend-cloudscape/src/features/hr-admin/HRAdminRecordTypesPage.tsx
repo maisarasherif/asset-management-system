@@ -59,6 +59,12 @@ const RENEWAL_BEHAVIOR_OPTIONS = [
   { label: "One time", value: "ONE_TIME", description: "No renewal duration is stored." },
 ];
 
+const REMINDER_PRESETS = [
+  { label: "1 month", value: "30" },
+  { label: "2 months", value: "60" },
+  { label: "3 months", value: "90" },
+];
+
 function isCompactViewport() {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
 }
@@ -215,14 +221,31 @@ function RecordTypeEditorModal({
             />
           </FormField>
         ) : null}
-        <FormField label="Reminder days" description="Comma-separated days before expiry. Blank uses the default policy.">
-          <Input
-            ariaLabel="Reminder days"
-            value={draft?.reminder_policy_days || ""}
-            onChange={({ detail }) =>
-              setDraft((current) => current && { ...current, reminder_policy_days: detail.value })
-            }
-          />
+        <FormField
+          label="Reminder days"
+          description="Days before expiry for this record type. Blank uses the default reminder policy."
+        >
+          <SpaceBetween size="xs">
+            <Input
+              ariaLabel="Reminder days"
+              value={draft?.reminder_policy_days || ""}
+              onChange={({ detail }) =>
+                setDraft((current) => current && { ...current, reminder_policy_days: detail.value })
+              }
+            />
+            <SpaceBetween direction="horizontal" size="xs">
+              {REMINDER_PRESETS.map((preset) => (
+                <Button
+                  key={preset.value}
+                  onClick={() =>
+                    setDraft((current) => current && { ...current, reminder_policy_days: preset.value })
+                  }
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </SpaceBetween>
+          </SpaceBetween>
         </FormField>
         <Checkbox
           ariaLabel="Requires document"

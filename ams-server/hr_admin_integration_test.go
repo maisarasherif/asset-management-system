@@ -73,6 +73,18 @@ func TestHRAdminProductAccessAndComplianceRecordVersionFlow(t *testing.T) {
 	}, http.StatusBadRequest))
 	assertField(t, invalidConfig, "error", "default reminder days must be between 0 and 3650")
 
+	departments := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/hr-admin/departments", nil, http.StatusOK))
+	findByStringField(t, departments, "department_name", "HR & Administration")
+	findByStringField(t, departments, "department_name", "Operations")
+
+	invalidDepartment := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/hr-admin/persons", map[string]any{
+		"person_code": "HRP-INVALID-DEPT",
+		"full_name":   "Invalid Department Person",
+		"department":  "Administration",
+		"role_title":  "Technician",
+	}, http.StatusBadRequest))
+	assertField(t, invalidDepartment, "error", "department must be selected from HR/Admin departments")
+
 	person := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/hr-admin/persons", map[string]any{
 		"person_code": "HRP-001",
 		"full_name":   "Company Responsibility Person",
@@ -163,7 +175,7 @@ func TestHRAdminProductRolesEnforceWriteArchiveAndConfigurationAccess(t *testing
 	person := decodeObject(t, performJSONRequest(t, h.router, hrUserToken, http.MethodPost, "/v1/hr-admin/persons", map[string]any{
 		"person_code": "HRP-ROLE-USER",
 		"full_name":   "HR Product User",
-		"department":  "Administration",
+		"department":  "HR & Administration",
 		"role_title":  "Coordinator",
 	}, http.StatusCreated))
 	personID := stringField(t, person, "person_id")
@@ -172,7 +184,7 @@ func TestHRAdminProductRolesEnforceWriteArchiveAndConfigurationAccess(t *testing
 	updatedPerson := decodeObject(t, performJSONRequest(t, h.router, hrUserToken, http.MethodPut, "/v1/hr-admin/persons/"+personID, map[string]any{
 		"person_code": "HRP-ROLE-USER",
 		"full_name":   "HR Product User Updated",
-		"department":  "Administration",
+		"department":  "HR & Administration",
 		"role_title":  "Coordinator",
 	}, http.StatusOK))
 	assertField(t, updatedPerson, "message", "HR/Admin person updated successfully")
@@ -593,7 +605,7 @@ func createHRAdminPerson(t *testing.T, h *integrationHarness, personCode, fullNa
 	person := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/hr-admin/persons", map[string]any{
 		"person_code": personCode,
 		"full_name":   fullName,
-		"department":  "Administration",
+		"department":  "HR & Administration",
 		"role_title":  "Coordinator",
 	}, http.StatusCreated))
 	personID := stringField(t, person, "person_id")

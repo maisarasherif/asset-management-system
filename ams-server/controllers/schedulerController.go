@@ -7,20 +7,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 	"github.com/riverqueue/river"
 )
-
-func timestamptzTimePtr(value pgtype.Timestamptz) *time.Time {
-	if !value.Valid {
-		return nil
-	}
-	return &value.Time
-}
 
 func GetCertificateNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -123,7 +115,7 @@ func GetHRAdminNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
 				CertificateID:        task.CertificateID,
 				CertificateDisplayID: task.CertificateDisplayID,
 				CertificateName:      task.CertificateName,
-				ExpiryDate:           timestamptzTimePtr(task.ExpiryDate),
+				ExpiryDate:           task.ExpiryDate,
 				ComponentID:          task.ComponentID,
 				ComponentDisplayID:   task.ComponentDisplayID,
 				ComponentName:        task.ComponentName,
@@ -244,7 +236,7 @@ func GetHRAdminNotificationFailures(pool *pgxpool.Pool) gin.HandlerFunc {
 				CertificateID:        failure.CertificateID,
 				CertificateDisplayID: failure.CertificateDisplayID,
 				CertificateName:      failure.CertificateName,
-				ExpiryDate:           timestamptzTimePtr(failure.ExpiryDate),
+				ExpiryDate:           failure.ExpiryDate,
 				ComponentID:          failure.ComponentID,
 				ComponentDisplayID:   failure.ComponentDisplayID,
 				ComponentName:        failure.ComponentName,

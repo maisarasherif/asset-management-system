@@ -148,6 +148,26 @@ body {
   white-space: nowrap;
 }
 
+.app-date-picker {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.app-date-picker__native {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .app-table-cell-actions [class*="awsui_button_"]:not(#\9),
 .catalog-table__actions [class*="awsui_button_"]:not(#\9),
 .upload-history-view-action [class*="awsui_button_"]:not(#\9) {

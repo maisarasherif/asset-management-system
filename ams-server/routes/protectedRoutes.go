@@ -224,6 +224,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 		middleware.ProductAccessMiddleware(pool, controller.ProductHRAdmin, "ADMIN", "USER", "VIEWER"),
 	)
 	hrRead.GET("/persons", controller.GetHRAdminPersons(pool))
+	hrRead.GET("/departments", controller.GetHRAdminDepartments(pool))
 	hrRead.GET("/vehicles", controller.GetHRAdminVehicles(pool))
 	hrRead.GET("/companies", controller.GetHRAdminCompanies(pool))
 	hrRead.GET("/compliance-record-types", controller.GetComplianceRecordTypes(pool))

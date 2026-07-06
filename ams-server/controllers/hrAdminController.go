@@ -18,18 +18,16 @@ import (
 	"github.com/riverqueue/river"
 )
 
+var (
+	errHRAdminDepartmentRequired = errors.New("department is required")
+	errHRAdminDepartmentInvalid  = errors.New("department must be selected from HR/Admin departments")
+)
+
 func int4Value(value *int32) pgtype.Int4 {
 	if value == nil {
 		return pgtype.Int4{}
 	}
 	return pgtype.Int4{Int32: *value, Valid: true}
-}
-
-func timestamptzValue(value *time.Time) pgtype.Timestamptz {
-	if value == nil {
-		return pgtype.Timestamptz{}
-	}
-	return pgtype.Timestamptz{Time: *value, Valid: true}
 }
 
 func defaultReminderPolicyDays(days []int32) []int32 {
@@ -49,8 +47,21 @@ func recordTypeReminderPolicyDays(days []int32) []int32 {
 func validateReminderPolicyDays(days []int32) error {
 	for _, day := range days {
 		if day < 0 || day > 3650 {
-			return errors.New("default reminder days must be between 0 and 3650")
+			return errors.New("reminder days must be between 0 and 3650")
 		}
+	}
+	return nil
+}
+
+func validateHRAdminDepartment(ctx context.Context, queries *db.Queries, department string) error {
+	if department == "" {
+		return errHRAdminDepartmentRequired
+	}
+	if _, err := queries.GetActiveHRAdminDepartmentByName(ctx, department); err != nil {
+		if err == pgx.ErrNoRows {
+			return errHRAdminDepartmentInvalid
+		}
+		return err
 	}
 	return nil
 }
@@ -127,6 +138,19 @@ func GetHRAdminPersons(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
+func GetHRAdminDepartments(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		departments, err := db.New(pool).GetHRAdminDepartments(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch HR/Admin departments"})
+			return
+		}
+		c.JSON(http.StatusOK, dto.NormalizeListData(departments))
+	}
+}
+
 func CreateHRAdminPerson(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input dto.HRAdminPersonInput
@@ -140,7 +164,16 @@ func CreateHRAdminPerson(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
-		person, err := db.New(pool).CreateHRAdminPerson(ctx, db.CreateHRAdminPersonParams{
+		queries := db.New(pool)
+		if err := validateHRAdminDepartment(ctx, queries, input.Department); err != nil {
+			if errors.Is(err, errHRAdminDepartmentRequired) || errors.Is(err, errHRAdminDepartmentInvalid) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate HR/Admin department"})
+			return
+		}
+		person, err := queries.CreateHRAdminPerson(ctx, db.CreateHRAdminPersonParams{
 			PersonCode: input.PersonCode,
 			FullName:   input.FullName,
 			Department: input.Department,
@@ -175,7 +208,16 @@ func UpdateHRAdminPerson(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
-		rows, err := db.New(pool).UpdateHRAdminPerson(ctx, db.UpdateHRAdminPersonParams{
+		queries := db.New(pool)
+		if err := validateHRAdminDepartment(ctx, queries, input.Department); err != nil {
+			if errors.Is(err, errHRAdminDepartmentRequired) || errors.Is(err, errHRAdminDepartmentInvalid) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate HR/Admin department"})
+			return
+		}
+		rows, err := queries.UpdateHRAdminPerson(ctx, db.UpdateHRAdminPersonParams{
 			PersonCode: input.PersonCode,
 			FullName:   input.FullName,
 			Department: input.Department,
@@ -702,8 +744,8 @@ func CreateComplianceRecord(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx
 
 		version, err := queries.CreateComplianceRecordVersion(ctx, db.CreateComplianceRecordVersionParams{
 			RecordID:         record.RecordID,
-			IssueDate:        timestamptzValue(input.IssueDate),
-			ExpiryDate:       timestamptzValue(input.ExpiryDate),
+			IssueDate:        input.IssueDate,
+			ExpiryDate:       input.ExpiryDate,
 			DocumentFile:     input.DocumentFile,
 			IssuingAuthority: input.IssuingAuthority,
 			Notes:            input.Notes,
@@ -779,8 +821,8 @@ func RenewComplianceRecord(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]
 		}
 		version, err := queries.CreateComplianceRecordVersion(ctx, db.CreateComplianceRecordVersionParams{
 			RecordID:         recordID,
-			IssueDate:        timestamptzValue(input.IssueDate),
-			ExpiryDate:       timestamptzValue(input.ExpiryDate),
+			IssueDate:        input.IssueDate,
+			ExpiryDate:       input.ExpiryDate,
 			DocumentFile:     input.DocumentFile,
 			IssuingAuthority: input.IssuingAuthority,
 			Notes:            input.Notes,
@@ -991,7 +1033,7 @@ func UpdateHRAdminNotificationConfiguration(pool *pgxpool.Pool) gin.HandlerFunc 
 		}
 		defaultReminderDays := defaultReminderPolicyDays(input.DefaultReminderDays)
 		if err := validateReminderPolicyDays(defaultReminderDays); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "default " + err.Error()})
 			return
 		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)

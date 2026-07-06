@@ -20,6 +20,20 @@ sql:
             import: "github.com/google/uuid"
             type: "UUID"
             pointer: true
+        - db_type: "pg_catalog.timestamptz"
+          go_type: "time.Time"
+        - db_type: "pg_catalog.timestamptz"
+          nullable: true
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - db_type: "timestamptz"
+          go_type: "time.Time"
+        - db_type: "timestamptz"
+          nullable: true
+          go_type:
+            type: "time.Time"
+            pointer: true
         - column: "certificates.issue_date"
           go_type:
             type: "time.Time"
@@ -117,4 +131,64 @@ sql:
         - column: "competent_persons.created_at"
           go_type: "time.Time"
         - column: "competent_persons.updated_at"
+          go_type: "time.Time"
+        - column: "product_notification_configurations.created_at"
+          go_type: "time.Time"
+        - column: "product_notification_configurations.updated_at"
+          go_type: "time.Time"
+        - column: "hr_admin_departments.created_at"
+          go_type: "time.Time"
+        - column: "hr_admin_departments.updated_at"
+          go_type: "time.Time"
+        - column: "hr_admin_persons.archived_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "hr_admin_persons.created_at"
+          go_type: "time.Time"
+        - column: "hr_admin_persons.updated_at"
+          go_type: "time.Time"
+        - column: "hr_admin_vehicles.archived_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "hr_admin_vehicles.created_at"
+          go_type: "time.Time"
+        - column: "hr_admin_vehicles.updated_at"
+          go_type: "time.Time"
+        - column: "hr_admin_companies.archived_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "hr_admin_companies.created_at"
+          go_type: "time.Time"
+        - column: "hr_admin_companies.updated_at"
+          go_type: "time.Time"
+        - column: "compliance_record_types.created_at"
+          go_type: "time.Time"
+        - column: "compliance_record_types.updated_at"
+          go_type: "time.Time"
+        - column: "compliance_records.archived_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "compliance_records.created_at"
+          go_type: "time.Time"
+        - column: "compliance_records.updated_at"
+          go_type: "time.Time"
+        - column: "compliance_record_versions.issue_date"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "compliance_record_versions.expiry_date"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "compliance_record_versions.superseded_at"
+          go_type:
+            type: "time.Time"
+            pointer: true
+        - column: "compliance_record_versions.created_at"
+          go_type: "time.Time"
+        - column: "compliance_record_versions.updated_at"
           go_type: "time.Time"

@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/logger"
@@ -32,7 +31,7 @@ type hrAdminReminderCandidate struct {
 	EmailRecipients     string
 	ClickupListID       string
 	ClickupAssigneeIds  string
-	ExpiryDate          pgtype.Timestamptz
+	ExpiryDate          *time.Time
 }
 
 func HRAdminComplianceReminderEmailMessage(subjectName, recordTypeName, expiryDate, tier string) (string, string) {
@@ -149,11 +148,11 @@ func processHRAdminReminderCandidates(ctx context.Context, pool *pgxpool.Pool, r
 	processed := 0
 	now := time.Now()
 	for _, candidate := range candidates {
-		if !candidate.ExpiryDate.Valid {
+		if candidate.ExpiryDate == nil {
 			continue
 		}
 
-		expiry := candidate.ExpiryDate.Time
+		expiry := *candidate.ExpiryDate
 		daysUntilExpiry := daysUntilCertificateExpiry(expiry, now)
 
 		policy := hrAdminReminderPolicy(candidate.ReminderPolicyDays, candidate.DefaultReminderDays)

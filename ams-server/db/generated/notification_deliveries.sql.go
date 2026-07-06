@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const claimNotificationDelivery = `-- name: ClaimNotificationDelivery :one
@@ -460,28 +459,28 @@ type GetHRAdminNotificationDeliveriesPaginatedParams struct {
 }
 
 type GetHRAdminNotificationDeliveriesPaginatedRow struct {
-	TaskID               uuid.UUID          `json:"task_id"`
-	DisplayID            string             `json:"display_id"`
-	SourceType           string             `json:"source_type"`
-	SourceID             string             `json:"source_id"`
-	SourceDisplayID      string             `json:"source_display_id"`
-	SourceName           string             `json:"source_name"`
-	CertificateID        string             `json:"certificate_id"`
-	CertificateDisplayID string             `json:"certificate_display_id"`
-	CertificateName      string             `json:"certificate_name"`
-	ExpiryDate           pgtype.Timestamptz `json:"expiry_date"`
-	ComponentID          string             `json:"component_id"`
-	ComponentDisplayID   string             `json:"component_display_id"`
-	ComponentName        string             `json:"component_name"`
-	AssetID              string             `json:"asset_id"`
-	AssetDisplayID       string             `json:"asset_display_id"`
-	AssetName            string             `json:"asset_name"`
-	Type                 string             `json:"type"`
-	Tier                 string             `json:"tier"`
-	Status               string             `json:"status"`
-	ExternalTaskID       string             `json:"external_task_id"`
-	IdempotencyKey       string             `json:"idempotency_key"`
-	SentAt               *time.Time         `json:"sent_at"`
+	TaskID               uuid.UUID  `json:"task_id"`
+	DisplayID            string     `json:"display_id"`
+	SourceType           string     `json:"source_type"`
+	SourceID             string     `json:"source_id"`
+	SourceDisplayID      string     `json:"source_display_id"`
+	SourceName           string     `json:"source_name"`
+	CertificateID        string     `json:"certificate_id"`
+	CertificateDisplayID string     `json:"certificate_display_id"`
+	CertificateName      string     `json:"certificate_name"`
+	ExpiryDate           *time.Time `json:"expiry_date"`
+	ComponentID          string     `json:"component_id"`
+	ComponentDisplayID   string     `json:"component_display_id"`
+	ComponentName        string     `json:"component_name"`
+	AssetID              string     `json:"asset_id"`
+	AssetDisplayID       string     `json:"asset_display_id"`
+	AssetName            string     `json:"asset_name"`
+	Type                 string     `json:"type"`
+	Tier                 string     `json:"tier"`
+	Status               string     `json:"status"`
+	ExternalTaskID       string     `json:"external_task_id"`
+	IdempotencyKey       string     `json:"idempotency_key"`
+	SentAt               *time.Time `json:"sent_at"`
 }
 
 func (q *Queries) GetHRAdminNotificationDeliveriesPaginated(ctx context.Context, arg GetHRAdminNotificationDeliveriesPaginatedParams) ([]GetHRAdminNotificationDeliveriesPaginatedRow, error) {
@@ -576,26 +575,26 @@ type GetHRAdminNotificationDeliveryFailuresPaginatedParams struct {
 }
 
 type GetHRAdminNotificationDeliveryFailuresPaginatedRow struct {
-	ID                   uuid.UUID          `json:"id"`
-	SourceType           string             `json:"source_type"`
-	SourceID             string             `json:"source_id"`
-	SourceDisplayID      string             `json:"source_display_id"`
-	SourceName           string             `json:"source_name"`
-	CertificateID        string             `json:"certificate_id"`
-	CertificateDisplayID string             `json:"certificate_display_id"`
-	CertificateName      string             `json:"certificate_name"`
-	ExpiryDate           pgtype.Timestamptz `json:"expiry_date"`
-	ComponentID          string             `json:"component_id"`
-	ComponentDisplayID   string             `json:"component_display_id"`
-	ComponentName        string             `json:"component_name"`
-	AssetID              string             `json:"asset_id"`
-	AssetDisplayID       string             `json:"asset_display_id"`
-	AssetName            string             `json:"asset_name"`
-	IdempotencyKey       string             `json:"idempotency_key"`
-	Channel              string             `json:"channel"`
-	Tier                 string             `json:"tier"`
-	ErrorMessage         string             `json:"error_message"`
-	FailedAt             *time.Time         `json:"failed_at"`
+	ID                   uuid.UUID  `json:"id"`
+	SourceType           string     `json:"source_type"`
+	SourceID             string     `json:"source_id"`
+	SourceDisplayID      string     `json:"source_display_id"`
+	SourceName           string     `json:"source_name"`
+	CertificateID        string     `json:"certificate_id"`
+	CertificateDisplayID string     `json:"certificate_display_id"`
+	CertificateName      string     `json:"certificate_name"`
+	ExpiryDate           *time.Time `json:"expiry_date"`
+	ComponentID          string     `json:"component_id"`
+	ComponentDisplayID   string     `json:"component_display_id"`
+	ComponentName        string     `json:"component_name"`
+	AssetID              string     `json:"asset_id"`
+	AssetDisplayID       string     `json:"asset_display_id"`
+	AssetName            string     `json:"asset_name"`
+	IdempotencyKey       string     `json:"idempotency_key"`
+	Channel              string     `json:"channel"`
+	Tier                 string     `json:"tier"`
+	ErrorMessage         string     `json:"error_message"`
+	FailedAt             *time.Time `json:"failed_at"`
 }
 
 func (q *Queries) GetHRAdminNotificationDeliveryFailuresPaginated(ctx context.Context, arg GetHRAdminNotificationDeliveryFailuresPaginatedParams) ([]GetHRAdminNotificationDeliveryFailuresPaginatedRow, error) {

@@ -276,7 +276,7 @@
             "url": "{{baseUrl}}/hr-admin/persons",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"person_code\": \"POSTMAN-HR-USER-{{runSuffix}}\",\n  \"full_name\": \"Postman HR User Person {{runSuffix}}\",\n  \"department\": \"Administration\",\n  \"role_title\": \"Coordinator\"\n}"
+              "raw": "{\n  \"person_code\": \"POSTMAN-HR-USER-{{runSuffix}}\",\n  \"full_name\": \"Postman HR User Person {{runSuffix}}\",\n  \"department\": \"HR & Administration\",\n  \"role_title\": \"Coordinator\"\n}"
             }
           },
           "event": [
@@ -317,7 +317,7 @@
             "url": "{{baseUrl}}/hr-admin/persons/{{hr_user_person_id}}",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"person_code\": \"POSTMAN-HR-USER-{{runSuffix}}\",\n  \"full_name\": \"Postman HR User Person Updated {{runSuffix}}\",\n  \"department\": \"Administration\",\n  \"role_title\": \"Coordinator\"\n}"
+              "raw": "{\n  \"person_code\": \"POSTMAN-HR-USER-{{runSuffix}}\",\n  \"full_name\": \"Postman HR User Person Updated {{runSuffix}}\",\n  \"department\": \"HR & Administration\",\n  \"role_title\": \"Coordinator\"\n}"
             }
           },
           "event": [
@@ -1000,6 +1000,47 @@
           ]
         },
         {
+          "name": "List HR/Admin Departments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HR/Admin departments include seeded dropdown values', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  const names = body.map((item) => item.department_name);",
+                  "  pm.expect(names).to.include.members(['HR & Administration', 'Finance', 'Top Management', 'Commercial', 'Planning', 'Operations', 'Diving', 'QHSE']);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/hr-admin/departments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "hr-admin",
+                "departments"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Create HR/Admin Person",
           "request": {
             "method": "POST",
@@ -1012,7 +1053,7 @@
             "url": "{{baseUrl}}/hr-admin/persons",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"person_code\": \"POSTMAN-HRP-{{runSuffix}}\",\n  \"full_name\": \"Postman HR Person {{runSuffix}}\",\n  \"department\": \"Administration\",\n  \"role_title\": \"Coordinator\"\n}"
+              "raw": "{\n  \"person_code\": \"POSTMAN-HRP-{{runSuffix}}\",\n  \"full_name\": \"Postman HR Person {{runSuffix}}\",\n  \"department\": \"HR & Administration\",\n  \"role_title\": \"Coordinator\"\n}"
             }
           },
           "event": [
@@ -1043,7 +1084,7 @@
             "url": "{{baseUrl}}/hr-admin/persons/{{hr_person_id}}",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"person_code\": \"POSTMAN-HRP-{{runSuffix}}\",\n  \"full_name\": \"Postman HR Person Updated {{runSuffix}}\",\n  \"department\": \"Administration\",\n  \"role_title\": \"Senior Coordinator\"\n}"
+              "raw": "{\n  \"person_code\": \"POSTMAN-HRP-{{runSuffix}}\",\n  \"full_name\": \"Postman HR Person Updated {{runSuffix}}\",\n  \"department\": \"HR & Administration\",\n  \"role_title\": \"Senior Coordinator\"\n}"
             }
           },
           "event": [
@@ -1982,7 +2023,7 @@
             "url": "{{baseUrl}}/hr-admin/persons",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"person_code\": \"HRS-{{runSuffix}}\",\n  \"full_name\": \"Scheduler Person {{runSuffix}}\",\n  \"department\": \"Administration\",\n  \"role_title\": \"Coordinator\"\n}"
+              "raw": "{\n  \"person_code\": \"HRS-{{runSuffix}}\",\n  \"full_name\": \"Scheduler Person {{runSuffix}}\",\n  \"department\": \"HR & Administration\",\n  \"role_title\": \"Coordinator\"\n}"
             }
           },
           "event": [

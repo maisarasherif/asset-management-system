@@ -18,6 +18,7 @@ import {
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { AppDatePicker } from "../../components/shared/AppDatePicker";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { Select } from "../../components/shared/OptimizedSelect";
 import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
@@ -102,6 +103,32 @@ function pgIntValue(value: ComplianceRecord["version_number"]) {
     return value.Int32;
   }
   return null;
+}
+
+function recordTypeIntValue(value: ComplianceRecordType["default_validity_months"]) {
+  if (typeof value === "number") {
+    return value;
+  }
+  if (value && typeof value === "object" && value.Valid && typeof value.Int32 === "number") {
+    return value.Int32;
+  }
+  return null;
+}
+
+function calculatedExpiryDate(issueDate: string, recordType: ComplianceRecordType | undefined) {
+  const validityMonths = recordTypeIntValue(recordType?.default_validity_months ?? null);
+  if (!issueDate || recordType?.renewal_behavior !== "RENEWABLE" || !validityMonths) {
+    return "";
+  }
+
+  const [year, month, day] = issueDate.split("-").map(Number);
+  if (!year || !month || !day) {
+    return "";
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCMonth(date.getUTCMonth() + validityMonths);
+  return date.toISOString().slice(0, 10);
 }
 
 function dateInputValue(value: unknown): string {
@@ -246,9 +273,13 @@ function RecordEditorModal({
   onSubmit: (editor: NonNullable<RecordEditor>) => void;
 }) {
   const [draft, setDraft] = useState<RecordEditor>(editor);
+  const [issueDateError, setIssueDateError] = useState("");
+  const [expiryDateError, setExpiryDateError] = useState("");
 
   useEffect(() => {
     setDraft(editor);
+    setIssueDateError("");
+    setExpiryDateError("");
   }, [editor]);
 
   const subjectType = draft?.subject_type ?? "PERSON";
@@ -258,6 +289,22 @@ function RecordEditorModal({
     availableSubjects.find((option) => option.value === draft?.subject_id) ?? null;
   const selectedRecordType =
     availableRecordTypes.find((option) => option.value === draft?.record_type_id) ?? null;
+  const currentRecordType = recordTypes.find((recordType) => recordType.record_type_id === draft?.record_type_id);
+
+  const updateIssueDate = (issueDate: string) => {
+    setDraft((current) => {
+      if (!current) {
+        return current;
+      }
+      const recordType = recordTypes.find((item) => item.record_type_id === current.record_type_id);
+      const nextExpiry = calculatedExpiryDate(issueDate, recordType);
+      return {
+        ...current,
+        issue_date: issueDate,
+        expiry_date: nextExpiry || current.expiry_date,
+      };
+    });
+  };
 
   return (
     <Modal
@@ -267,7 +314,12 @@ function RecordEditorModal({
       footer={
         <SpaceBetween direction="horizontal" size="xs">
           <Button onClick={onDismiss}>Cancel</Button>
-          <Button loading={loading} variant="primary" onClick={() => draft && onSubmit(draft)}>
+          <Button
+            disabled={Boolean(issueDateError || expiryDateError)}
+            loading={loading}
+            variant="primary"
+            onClick={() => draft && onSubmit(draft)}
+          >
             {draft?.mode === "renew" ? "Add version" : "Create record"}
           </Button>
         </SpaceBetween>
@@ -290,6 +342,7 @@ function RecordEditorModal({
                         subject_type: (detail.selectedOption.value as HRAdminSubjectType) || "PERSON",
                         subject_id: "",
                         record_type_id: "",
+                        expiry_date: "",
                       }
                   )
                 }
@@ -312,33 +365,54 @@ function RecordEditorModal({
                 empty="No active record types for this subject type"
                 options={availableRecordTypes}
                 selectedOption={selectedRecordType}
-                onChange={({ detail }) =>
-                  setDraft((current) => current && { ...current, record_type_id: detail.selectedOption.value || "" })
-                }
+                onChange={({ detail }) => {
+                  const recordTypeId = detail.selectedOption.value || "";
+                  const recordType = recordTypes.find((item) => item.record_type_id === recordTypeId);
+                  setDraft((current) => {
+                    if (!current) {
+                      return current;
+                    }
+                    const nextExpiry = calculatedExpiryDate(current.issue_date, recordType);
+                    return {
+                      ...current,
+                      record_type_id: recordTypeId,
+                      expiry_date:
+                        nextExpiry || (recordType?.renewal_behavior === "ONE_TIME" ? "" : current.expiry_date),
+                    };
+                  });
+                }}
               />
             </FormField>
           </>
         ) : null}
-        <FormField label="Issue date">
-          <input
-            aria-label="Issue date"
-            className="native-date-input"
-            type="date"
+        <FormField
+          label="Issue date"
+          errorText={issueDateError || undefined}
+          description={
+            currentRecordType?.renewal_behavior === "RENEWABLE" && recordTypeIntValue(currentRecordType.default_validity_months)
+              ? "Expiry auto-fills from the selected record type's default validity."
+              : undefined
+          }
+        >
+          <AppDatePicker
+            ariaLabel="Issue date"
+            invalid={Boolean(issueDateError)}
             value={draft?.issue_date || ""}
-            onChange={(event) =>
-              setDraft((current) => current && { ...current, issue_date: event.target.value })
-            }
+            onChange={updateIssueDate}
+            onValidityChange={setIssueDateError}
           />
         </FormField>
-        <FormField label="Expiry date" description="Required for renewable record types.">
-          <input
-            aria-label="Expiry date"
-            className="native-date-input"
-            type="date"
+        <FormField
+          label="Expiry date"
+          errorText={expiryDateError || undefined}
+          description="Required for renewable record types."
+        >
+          <AppDatePicker
+            ariaLabel="Expiry date"
+            invalid={Boolean(expiryDateError)}
             value={draft?.expiry_date || ""}
-            onChange={(event) =>
-              setDraft((current) => current && { ...current, expiry_date: event.target.value })
-            }
+            onChange={(expiryDate) => setDraft((current) => current && { ...current, expiry_date: expiryDate })}
+            onValidityChange={setExpiryDateError}
           />
         </FormField>
         <FormField

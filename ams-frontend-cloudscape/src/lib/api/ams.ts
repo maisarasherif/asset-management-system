@@ -47,6 +47,7 @@ import type {
   ForgotPasswordInput,
   HRAdminCompany,
   HRAdminCompanyInput,
+  HRAdminDepartment,
   HRAdminPerson,
   HRAdminPersonInput,
   HRAdminRenewalQueueItem,
@@ -162,6 +163,10 @@ export function updatePassword(payload: UpdatePasswordInput) {
 
 export function listHRAdminPersons(page = 1, limit = 100) {
   return apiRequest<PaginatedResponse<HRAdminPerson>>(`/v1/hr-admin/persons?page=${page}&limit=${limit}`);
+}
+
+export function listHRAdminDepartments() {
+  return apiRequest<HRAdminDepartment[]>("/v1/hr-admin/departments");
 }
 
 export function createHRAdminPerson(payload: HRAdminPersonInput) {

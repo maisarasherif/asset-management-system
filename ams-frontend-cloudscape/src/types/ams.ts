@@ -63,6 +63,15 @@ export interface ProductNotificationConfigurationInput {
 
 export type HRAdminSubjectStatus = "ACTIVE" | "ARCHIVED";
 
+export interface HRAdminDepartment {
+  department_id: string;
+  department_name: string;
+  sort_order: number;
+  active: boolean;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
 export interface HRAdminPerson {
   person_id: string;
   display_id: string;

@@ -7,9 +7,9 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createProject = `-- name: CreateProject :one
@@ -183,18 +183,18 @@ ORDER BY p.project_name ASC, user_name ASC
 `
 
 type ListAllUserProjectAccessRow struct {
-	AccessID      uuid.UUID          `json:"access_id"`
-	UserID        uuid.UUID          `json:"user_id"`
-	UserName      string             `json:"user_name"`
-	UserEmail     string             `json:"user_email"`
-	UserRole      string             `json:"user_role"`
-	UserStatus    string             `json:"user_status"`
-	ProjectID     uuid.UUID          `json:"project_id"`
-	ProjectName   string             `json:"project_name"`
-	ProjectStatus string             `json:"project_status"`
-	Status        string             `json:"status"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	AccessID      uuid.UUID `json:"access_id"`
+	UserID        uuid.UUID `json:"user_id"`
+	UserName      string    `json:"user_name"`
+	UserEmail     string    `json:"user_email"`
+	UserRole      string    `json:"user_role"`
+	UserStatus    string    `json:"user_status"`
+	ProjectID     uuid.UUID `json:"project_id"`
+	ProjectName   string    `json:"project_name"`
+	ProjectStatus string    `json:"project_status"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func (q *Queries) ListAllUserProjectAccess(ctx context.Context) ([]ListAllUserProjectAccessRow, error) {
@@ -247,14 +247,14 @@ ORDER BY p.project_name ASC
 `
 
 type ListUserProjectAccessByUserRow struct {
-	AccessID      uuid.UUID          `json:"access_id"`
-	UserID        uuid.UUID          `json:"user_id"`
-	ProjectID     uuid.UUID          `json:"project_id"`
-	ProjectName   string             `json:"project_name"`
-	ProjectStatus string             `json:"project_status"`
-	Status        string             `json:"status"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	AccessID      uuid.UUID `json:"access_id"`
+	UserID        uuid.UUID `json:"user_id"`
+	ProjectID     uuid.UUID `json:"project_id"`
+	ProjectName   string    `json:"project_name"`
+	ProjectStatus string    `json:"project_status"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func (q *Queries) ListUserProjectAccessByUser(ctx context.Context, userID uuid.UUID) ([]ListUserProjectAccessByUserRow, error) {

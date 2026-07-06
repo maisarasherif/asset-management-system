@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countAllCertificatesWithContext = `-- name: CountAllCertificatesWithContext :one
@@ -710,19 +709,19 @@ type GetCertificateUploadAuditByCertificateIDPaginatedParams struct {
 }
 
 type GetCertificateUploadAuditByCertificateIDPaginatedRow struct {
-	Uuid                          uuid.UUID          `json:"uuid"`
-	CertificateID                 uuid.UUID          `json:"certificate_id"`
-	FileKey                       string             `json:"file_key"`
-	FileName                      string             `json:"file_name"`
-	UploadedByName                string             `json:"uploaded_by_name"`
-	UploadedAt                    pgtype.Timestamptz `json:"uploaded_at"`
-	CompetentPersonID             *uuid.UUID         `json:"competent_person_id"`
-	CompetentPersonName           string             `json:"competent_person_name"`
-	CompetentPersonType           string             `json:"competent_person_type"`
-	CompetencyCategoryID          *uuid.UUID         `json:"competency_category_id"`
-	CompetencyCategoryCode        string             `json:"competency_category_code"`
-	CompetencyCategoryName        string             `json:"competency_category_name"`
-	CompetencyCategoryDescription string             `json:"competency_category_description"`
+	Uuid                          uuid.UUID  `json:"uuid"`
+	CertificateID                 uuid.UUID  `json:"certificate_id"`
+	FileKey                       string     `json:"file_key"`
+	FileName                      string     `json:"file_name"`
+	UploadedByName                string     `json:"uploaded_by_name"`
+	UploadedAt                    time.Time  `json:"uploaded_at"`
+	CompetentPersonID             *uuid.UUID `json:"competent_person_id"`
+	CompetentPersonName           string     `json:"competent_person_name"`
+	CompetentPersonType           string     `json:"competent_person_type"`
+	CompetencyCategoryID          *uuid.UUID `json:"competency_category_id"`
+	CompetencyCategoryCode        string     `json:"competency_category_code"`
+	CompetencyCategoryName        string     `json:"competency_category_name"`
+	CompetencyCategoryDescription string     `json:"competency_category_description"`
 }
 
 func (q *Queries) GetCertificateUploadAuditByCertificateIDPaginated(ctx context.Context, arg GetCertificateUploadAuditByCertificateIDPaginatedParams) ([]GetCertificateUploadAuditByCertificateIDPaginatedRow, error) {

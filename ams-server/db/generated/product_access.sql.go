@@ -7,9 +7,9 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countProductAccess = `-- name: CountProductAccess :one
@@ -144,18 +144,18 @@ type GetProductAccessPaginatedParams struct {
 }
 
 type GetProductAccessPaginatedRow struct {
-	AccessID      uuid.UUID          `json:"access_id"`
-	DisplayID     string             `json:"display_id"`
-	UserID        uuid.UUID          `json:"user_id"`
-	UserDisplayID string             `json:"user_display_id"`
-	FirstName     string             `json:"first_name"`
-	LastName      string             `json:"last_name"`
-	Email         string             `json:"email"`
-	ProductKey    string             `json:"product_key"`
-	ProductRole   string             `json:"product_role"`
-	Status        string             `json:"status"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	AccessID      uuid.UUID `json:"access_id"`
+	DisplayID     string    `json:"display_id"`
+	UserID        uuid.UUID `json:"user_id"`
+	UserDisplayID string    `json:"user_display_id"`
+	FirstName     string    `json:"first_name"`
+	LastName      string    `json:"last_name"`
+	Email         string    `json:"email"`
+	ProductKey    string    `json:"product_key"`
+	ProductRole   string    `json:"product_role"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func (q *Queries) GetProductAccessPaginated(ctx context.Context, arg GetProductAccessPaginatedParams) ([]GetProductAccessPaginatedRow, error) {
@@ -207,14 +207,14 @@ LIMIT 1
 `
 
 type GetProductNotificationConfigurationRow struct {
-	ProductKey          string             `json:"product_key"`
-	EmailRecipients     string             `json:"email_recipients"`
-	ClickupListID       string             `json:"clickup_list_id"`
-	ClickupAssigneeIds  string             `json:"clickup_assignee_ids"`
-	DefaultReminderDays []int32            `json:"default_reminder_days"`
-	UpdatedBy           *uuid.UUID         `json:"updated_by"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ProductKey          string     `json:"product_key"`
+	EmailRecipients     string     `json:"email_recipients"`
+	ClickupListID       string     `json:"clickup_list_id"`
+	ClickupAssigneeIds  string     `json:"clickup_assignee_ids"`
+	DefaultReminderDays []int32    `json:"default_reminder_days"`
+	UpdatedBy           *uuid.UUID `json:"updated_by"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetProductNotificationConfiguration(ctx context.Context, productKey string) (GetProductNotificationConfigurationRow, error) {
@@ -338,14 +338,14 @@ type UpsertProductNotificationConfigurationParams struct {
 }
 
 type UpsertProductNotificationConfigurationRow struct {
-	ProductKey          string             `json:"product_key"`
-	EmailRecipients     string             `json:"email_recipients"`
-	ClickupListID       string             `json:"clickup_list_id"`
-	ClickupAssigneeIds  string             `json:"clickup_assignee_ids"`
-	DefaultReminderDays []int32            `json:"default_reminder_days"`
-	UpdatedBy           *uuid.UUID         `json:"updated_by"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ProductKey          string     `json:"product_key"`
+	EmailRecipients     string     `json:"email_recipients"`
+	ClickupListID       string     `json:"clickup_list_id"`
+	ClickupAssigneeIds  string     `json:"clickup_assignee_ids"`
+	DefaultReminderDays []int32    `json:"default_reminder_days"`
+	UpdatedBy           *uuid.UUID `json:"updated_by"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) UpsertProductNotificationConfiguration(ctx context.Context, arg UpsertProductNotificationConfigurationParams) (UpsertProductNotificationConfigurationRow, error) {

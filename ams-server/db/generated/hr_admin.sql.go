@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -339,12 +340,12 @@ RETURNING
 `
 
 type CreateComplianceRecordVersionParams struct {
-	RecordID         uuid.UUID          `json:"record_id"`
-	IssueDate        pgtype.Timestamptz `json:"issue_date"`
-	ExpiryDate       pgtype.Timestamptz `json:"expiry_date"`
-	DocumentFile     string             `json:"document_file"`
-	IssuingAuthority string             `json:"issuing_authority"`
-	Notes            string             `json:"notes"`
+	RecordID         uuid.UUID  `json:"record_id"`
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	DocumentFile     string     `json:"document_file"`
+	IssuingAuthority string     `json:"issuing_authority"`
+	Notes            string     `json:"notes"`
 }
 
 func (q *Queries) CreateComplianceRecordVersion(ctx context.Context, arg CreateComplianceRecordVersionParams) (ComplianceRecordVersion, error) {
@@ -552,6 +553,34 @@ func (q *Queries) CreateHRAdminVehicle(ctx context.Context, arg CreateHRAdminVeh
 	return i, err
 }
 
+const getActiveHRAdminDepartmentByName = `-- name: GetActiveHRAdminDepartmentByName :one
+SELECT
+    department_id,
+    department_name,
+    sort_order,
+    active,
+    created_at,
+    updated_at
+FROM hr_admin_departments
+WHERE department_name = $1
+  AND active = TRUE
+LIMIT 1
+`
+
+func (q *Queries) GetActiveHRAdminDepartmentByName(ctx context.Context, departmentName string) (HrAdminDepartment, error) {
+	row := q.db.QueryRow(ctx, getActiveHRAdminDepartmentByName, departmentName)
+	var i HrAdminDepartment
+	err := row.Scan(
+		&i.DepartmentID,
+		&i.DepartmentName,
+		&i.SortOrder,
+		&i.Active,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getComplianceRecordByID = `-- name: GetComplianceRecordByID :one
 SELECT
     cr.record_id,
@@ -574,19 +603,19 @@ LIMIT 1
 `
 
 type GetComplianceRecordByIDRow struct {
-	RecordID        uuid.UUID          `json:"record_id"`
-	DisplayID       string             `json:"display_id"`
-	SubjectType     string             `json:"subject_type"`
-	SubjectID       uuid.UUID          `json:"subject_id"`
-	RecordTypeID    uuid.UUID          `json:"record_type_id"`
-	TypeName        string             `json:"type_name"`
-	RenewalBehavior string             `json:"renewal_behavior"`
-	Status          string             `json:"status"`
-	ArchiveReason   string             `json:"archive_reason"`
-	ArchivedAt      pgtype.Timestamptz `json:"archived_at"`
-	ArchivedBy      *uuid.UUID         `json:"archived_by"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	RecordID        uuid.UUID  `json:"record_id"`
+	DisplayID       string     `json:"display_id"`
+	SubjectType     string     `json:"subject_type"`
+	SubjectID       uuid.UUID  `json:"subject_id"`
+	RecordTypeID    uuid.UUID  `json:"record_type_id"`
+	TypeName        string     `json:"type_name"`
+	RenewalBehavior string     `json:"renewal_behavior"`
+	Status          string     `json:"status"`
+	ArchiveReason   string     `json:"archive_reason"`
+	ArchivedAt      *time.Time `json:"archived_at"`
+	ArchivedBy      *uuid.UUID `json:"archived_by"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetComplianceRecordByID(ctx context.Context, recordID uuid.UUID) (GetComplianceRecordByIDRow, error) {
@@ -806,29 +835,29 @@ type GetComplianceRecordsPaginatedParams struct {
 }
 
 type GetComplianceRecordsPaginatedRow struct {
-	RecordID            uuid.UUID          `json:"record_id"`
-	DisplayID           string             `json:"display_id"`
-	SubjectType         string             `json:"subject_type"`
-	SubjectID           uuid.UUID          `json:"subject_id"`
-	SubjectName         string             `json:"subject_name"`
-	RecordTypeID        uuid.UUID          `json:"record_type_id"`
-	RecordTypeDisplayID string             `json:"record_type_display_id"`
-	TypeName            string             `json:"type_name"`
-	RenewalBehavior     string             `json:"renewal_behavior"`
-	Status              string             `json:"status"`
-	ArchiveReason       string             `json:"archive_reason"`
-	ArchivedAt          pgtype.Timestamptz `json:"archived_at"`
-	ArchivedBy          *uuid.UUID         `json:"archived_by"`
-	VersionID           *uuid.UUID         `json:"version_id"`
-	VersionDisplayID    pgtype.Text        `json:"version_display_id"`
-	VersionNumber       pgtype.Int4        `json:"version_number"`
-	IssueDate           pgtype.Timestamptz `json:"issue_date"`
-	ExpiryDate          pgtype.Timestamptz `json:"expiry_date"`
-	DocumentFile        pgtype.Text        `json:"document_file"`
-	IssuingAuthority    pgtype.Text        `json:"issuing_authority"`
-	Notes               pgtype.Text        `json:"notes"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	RecordID            uuid.UUID   `json:"record_id"`
+	DisplayID           string      `json:"display_id"`
+	SubjectType         string      `json:"subject_type"`
+	SubjectID           uuid.UUID   `json:"subject_id"`
+	SubjectName         string      `json:"subject_name"`
+	RecordTypeID        uuid.UUID   `json:"record_type_id"`
+	RecordTypeDisplayID string      `json:"record_type_display_id"`
+	TypeName            string      `json:"type_name"`
+	RenewalBehavior     string      `json:"renewal_behavior"`
+	Status              string      `json:"status"`
+	ArchiveReason       string      `json:"archive_reason"`
+	ArchivedAt          *time.Time  `json:"archived_at"`
+	ArchivedBy          *uuid.UUID  `json:"archived_by"`
+	VersionID           *uuid.UUID  `json:"version_id"`
+	VersionDisplayID    pgtype.Text `json:"version_display_id"`
+	VersionNumber       pgtype.Int4 `json:"version_number"`
+	IssueDate           *time.Time  `json:"issue_date"`
+	ExpiryDate          *time.Time  `json:"expiry_date"`
+	DocumentFile        pgtype.Text `json:"document_file"`
+	IssuingAuthority    pgtype.Text `json:"issuing_authority"`
+	Notes               pgtype.Text `json:"notes"`
+	CreatedAt           time.Time   `json:"created_at"`
+	UpdatedAt           time.Time   `json:"updated_at"`
 }
 
 func (q *Queries) GetComplianceRecordsPaginated(ctx context.Context, arg GetComplianceRecordsPaginatedParams) ([]GetComplianceRecordsPaginatedRow, error) {
@@ -915,18 +944,18 @@ ORDER BY crv.expiry_date ASC, cr.created_at ASC
 `
 
 type GetDueHRAdminComplianceReminderCandidateByRecordIDRow struct {
-	RecordID            uuid.UUID          `json:"record_id"`
-	RecordDisplayID     string             `json:"record_display_id"`
-	SubjectType         string             `json:"subject_type"`
-	SubjectID           uuid.UUID          `json:"subject_id"`
-	SubjectName         string             `json:"subject_name"`
-	TypeName            string             `json:"type_name"`
-	ReminderPolicyDays  []int32            `json:"reminder_policy_days"`
-	DefaultReminderDays []int32            `json:"default_reminder_days"`
-	EmailRecipients     string             `json:"email_recipients"`
-	ClickupListID       string             `json:"clickup_list_id"`
-	ClickupAssigneeIds  string             `json:"clickup_assignee_ids"`
-	ExpiryDate          pgtype.Timestamptz `json:"expiry_date"`
+	RecordID            uuid.UUID  `json:"record_id"`
+	RecordDisplayID     string     `json:"record_display_id"`
+	SubjectType         string     `json:"subject_type"`
+	SubjectID           uuid.UUID  `json:"subject_id"`
+	SubjectName         string     `json:"subject_name"`
+	TypeName            string     `json:"type_name"`
+	ReminderPolicyDays  []int32    `json:"reminder_policy_days"`
+	DefaultReminderDays []int32    `json:"default_reminder_days"`
+	EmailRecipients     string     `json:"email_recipients"`
+	ClickupListID       string     `json:"clickup_list_id"`
+	ClickupAssigneeIds  string     `json:"clickup_assignee_ids"`
+	ExpiryDate          *time.Time `json:"expiry_date"`
 }
 
 func (q *Queries) GetDueHRAdminComplianceReminderCandidateByRecordID(ctx context.Context, recordID uuid.UUID) ([]GetDueHRAdminComplianceReminderCandidateByRecordIDRow, error) {
@@ -1001,18 +1030,18 @@ ORDER BY crv.expiry_date ASC, cr.created_at ASC
 `
 
 type GetDueHRAdminComplianceReminderCandidatesRow struct {
-	RecordID            uuid.UUID          `json:"record_id"`
-	RecordDisplayID     string             `json:"record_display_id"`
-	SubjectType         string             `json:"subject_type"`
-	SubjectID           uuid.UUID          `json:"subject_id"`
-	SubjectName         string             `json:"subject_name"`
-	TypeName            string             `json:"type_name"`
-	ReminderPolicyDays  []int32            `json:"reminder_policy_days"`
-	DefaultReminderDays []int32            `json:"default_reminder_days"`
-	EmailRecipients     string             `json:"email_recipients"`
-	ClickupListID       string             `json:"clickup_list_id"`
-	ClickupAssigneeIds  string             `json:"clickup_assignee_ids"`
-	ExpiryDate          pgtype.Timestamptz `json:"expiry_date"`
+	RecordID            uuid.UUID  `json:"record_id"`
+	RecordDisplayID     string     `json:"record_display_id"`
+	SubjectType         string     `json:"subject_type"`
+	SubjectID           uuid.UUID  `json:"subject_id"`
+	SubjectName         string     `json:"subject_name"`
+	TypeName            string     `json:"type_name"`
+	ReminderPolicyDays  []int32    `json:"reminder_policy_days"`
+	DefaultReminderDays []int32    `json:"default_reminder_days"`
+	EmailRecipients     string     `json:"email_recipients"`
+	ClickupListID       string     `json:"clickup_list_id"`
+	ClickupAssigneeIds  string     `json:"clickup_assignee_ids"`
+	ExpiryDate          *time.Time `json:"expiry_date"`
 }
 
 func (q *Queries) GetDueHRAdminComplianceReminderCandidates(ctx context.Context) ([]GetDueHRAdminComplianceReminderCandidatesRow, error) {
@@ -1142,6 +1171,46 @@ func (q *Queries) GetHRAdminCompanyByID(ctx context.Context, companyID uuid.UUID
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getHRAdminDepartments = `-- name: GetHRAdminDepartments :many
+SELECT
+    department_id,
+    department_name,
+    sort_order,
+    active,
+    created_at,
+    updated_at
+FROM hr_admin_departments
+WHERE active = TRUE
+ORDER BY sort_order ASC, department_name ASC
+`
+
+func (q *Queries) GetHRAdminDepartments(ctx context.Context) ([]HrAdminDepartment, error) {
+	rows, err := q.db.Query(ctx, getHRAdminDepartments)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []HrAdminDepartment
+	for rows.Next() {
+		var i HrAdminDepartment
+		if err := rows.Scan(
+			&i.DepartmentID,
+			&i.DepartmentName,
+			&i.SortOrder,
+			&i.Active,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getHRAdminPersonByID = `-- name: GetHRAdminPersonByID :one
@@ -1323,20 +1392,20 @@ ORDER BY
 `
 
 type GetHRAdminRenewalQueueRow struct {
-	RecordID              uuid.UUID          `json:"record_id"`
-	RecordDisplayID       string             `json:"record_display_id"`
-	SubjectType           string             `json:"subject_type"`
-	SubjectID             uuid.UUID          `json:"subject_id"`
-	SubjectName           string             `json:"subject_name"`
-	RecordTypeID          uuid.UUID          `json:"record_type_id"`
-	TypeName              string             `json:"type_name"`
-	VersionID             uuid.UUID          `json:"version_id"`
-	ExpiryDate            pgtype.Timestamptz `json:"expiry_date"`
-	DaysUntilExpiry       int32              `json:"days_until_expiry"`
-	QueueStatus           string             `json:"queue_status"`
-	EffectiveReminderDays []int32            `json:"effective_reminder_days"`
-	ReminderPolicySource  string             `json:"reminder_policy_source"`
-	MaxReminderDays       int32              `json:"max_reminder_days"`
+	RecordID              uuid.UUID  `json:"record_id"`
+	RecordDisplayID       string     `json:"record_display_id"`
+	SubjectType           string     `json:"subject_type"`
+	SubjectID             uuid.UUID  `json:"subject_id"`
+	SubjectName           string     `json:"subject_name"`
+	RecordTypeID          uuid.UUID  `json:"record_type_id"`
+	TypeName              string     `json:"type_name"`
+	VersionID             uuid.UUID  `json:"version_id"`
+	ExpiryDate            *time.Time `json:"expiry_date"`
+	DaysUntilExpiry       int32      `json:"days_until_expiry"`
+	QueueStatus           string     `json:"queue_status"`
+	EffectiveReminderDays []int32    `json:"effective_reminder_days"`
+	ReminderPolicySource  string     `json:"reminder_policy_source"`
+	MaxReminderDays       int32      `json:"max_reminder_days"`
 }
 
 func (q *Queries) GetHRAdminRenewalQueue(ctx context.Context) ([]GetHRAdminRenewalQueueRow, error) {
