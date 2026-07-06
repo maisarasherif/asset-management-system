@@ -1,0 +1,1 @@
+-- No-op: display-id sequence resynchronization is safe and should not be reversed.
