@@ -1248,6 +1248,32 @@ func TestReconfigureTemplateReplacesComponents(t *testing.T) {
 	assertField(t, components[0], "name", "Replacement Component")
 }
 
+func TestAddTemplateComponentTestAssignsTest(t *testing.T) {
+	h := setupIntegrationTest(t)
+	mainCategoryID := createMainCategory(t, h, "Mechanical")
+	categoryID := createCategory(t, h, mainCategoryID, "Hooks")
+	testID := createTestType(t, h, "Standalone Assignment Inspection", 12)
+	templateID := createTemplate(t, h, "Standalone Assignment Template")
+
+	component := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/template/"+templateID+"/component", templateComponentPayload(categoryID, "Hook Assembly", nil), http.StatusCreated))
+	templateComponentID := stringField(t, component, "template_component_id")
+	assertUUID(t, templateComponentID)
+
+	assigned := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/template-component/"+templateComponentID+"/test", map[string]any{
+		"test_id": testID,
+	}, http.StatusCreated))
+	assertField(t, assigned, "template_component_id", templateComponentID)
+	assertField(t, assigned, "test_id", testID)
+	stringField(t, assigned, "display_id")
+
+	templateTests := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/template-component/"+templateComponentID+"/tests", nil, http.StatusOK))
+	if len(templateTests) != 1 {
+		t.Fatalf("expected 1 assigned template component test, got %d", len(templateTests))
+	}
+	assertField(t, templateTests[0], "test_id", testID)
+	assertField(t, templateTests[0], "test_name", "Standalone Assignment Inspection")
+}
+
 func TestDeleteTemplateBlockedWhenAssetsExist(t *testing.T) {
 	h := setupIntegrationTest(t)
 	mainCategoryID := createMainCategory(t, h, "Mechanical")

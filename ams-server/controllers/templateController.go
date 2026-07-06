@@ -13,8 +13,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
+	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
+
+func requestIDForLog(c *gin.Context) string {
+	requestID, _ := c.Get("requestID")
+	if value, ok := requestID.(string); ok {
+		return value
+	}
+	return ""
+}
 
 // ==================== Asset Templates ====================
 
@@ -345,10 +354,25 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 					TestID:              testID,
 				})
 				if err != nil {
+					logger.Log.Error().
+						Err(err).
+						Str("request_id", requestIDForLog(c)).
+						Str("template_id", templateID.String()).
+						Str("template_component_id", templateComponentID.String()).
+						Str("test_id", testID.String()).
+						Msg("failed to assign test to template component")
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign test to template component"})
 					return
 				}
 				if err := setTemplateComponentTestCompetencyCategories(ctx, queries, tct.TemplateComponentTestID, testCompetencyCategoryIDs); err != nil {
+					logger.Log.Error().
+						Err(err).
+						Str("request_id", requestIDForLog(c)).
+						Str("template_id", templateID.String()).
+						Str("template_component_test_id", tct.TemplateComponentTestID.String()).
+						Str("template_component_id", templateComponentID.String()).
+						Str("test_id", testID.String()).
+						Msg("failed to set template test competency categories")
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set template test competency categories"})
 					return
 				}
@@ -881,14 +905,34 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 			TestID:              testID,
 		})
 		if err != nil {
+			logger.Log.Error().
+				Err(err).
+				Str("request_id", requestIDForLog(c)).
+				Str("template_component_id", templateComponentID.String()).
+				Str("test_id", testID.String()).
+				Msg("failed to add test to template component")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add test to template component"})
 			return
 		}
 		if err := setTemplateComponentTestCompetencyCategories(ctx, queries, tct.TemplateComponentTestID, categoryIDs); err != nil {
+			logger.Log.Error().
+				Err(err).
+				Str("request_id", requestIDForLog(c)).
+				Str("template_component_test_id", tct.TemplateComponentTestID.String()).
+				Str("template_component_id", templateComponentID.String()).
+				Str("test_id", testID.String()).
+				Msg("failed to set template test competency categories")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set template test competency categories"})
 			return
 		}
 		if err := tx.Commit(ctx); err != nil {
+			logger.Log.Error().
+				Err(err).
+				Str("request_id", requestIDForLog(c)).
+				Str("template_component_test_id", tct.TemplateComponentTestID.String()).
+				Str("template_component_id", templateComponentID.String()).
+				Str("test_id", testID.String()).
+				Msg("failed to commit template component test")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit template component test"})
 			return
 		}
