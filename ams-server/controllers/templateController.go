@@ -371,6 +371,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 					logger.Log.Error().
 						Err(err).
 						Str("request_id", requestIDForLog(c)).
+						Str("display_id_allocator", "table_max_with_advisory_lock_v2").
 						Str("template_id", templateID.String()).
 						Str("template_component_id", templateComponentID.String()).
 						Str("test_id", testID.String()).
@@ -931,6 +932,7 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 			logger.Log.Error().
 				Err(err).
 				Str("request_id", requestIDForLog(c)).
+				Str("display_id_allocator", "table_max_with_advisory_lock_v2").
 				Str("template_component_id", templateComponentID.String()).
 				Str("test_id", testID.String()).
 				Msg("failed to add test to template component")
