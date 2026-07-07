@@ -31,7 +31,11 @@ INSERT INTO template_component_tests (
     template_component_id, test_id, position, created_at
 )
 VALUES (
-    next_display_id('template_component_test_display_id_seq'),
+    (
+        SELECT LPAD((COALESCE(MAX(substring(display_id from '([0-9]+)$')::BIGINT), 0) + 1)::TEXT, 3, '0')
+        FROM template_component_tests
+        WHERE display_id ~ '([0-9]+)$'
+    ),
     $1,
     $2,
     COALESCE((SELECT MAX(position) + 1 FROM template_component_tests WHERE template_component_id = $1), 1),

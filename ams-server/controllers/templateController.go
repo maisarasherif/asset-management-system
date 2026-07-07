@@ -25,24 +25,8 @@ func requestIDForLog(c *gin.Context) string {
 	return ""
 }
 
-func resyncTemplateComponentTestDisplayIDSequence(ctx context.Context, tx pgx.Tx) error {
-	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('template_component_test_display_id_seq'))"); err != nil {
-		return err
-	}
-
-	_, err := tx.Exec(ctx, `
-		WITH max_id AS (
-			SELECT COALESCE(MAX(substring(display_id from '([0-9]+)$')::BIGINT), 0) AS max_value
-			FROM template_component_tests
-			WHERE display_id ~ '([0-9]+)$'
-		)
-		SELECT setval(
-			'template_component_test_display_id_seq',
-			GREATEST(max_value, 1),
-			max_value > 0
-		)
-		FROM max_id
-	`)
+func lockTemplateComponentTestDisplayIDAllocation(ctx context.Context, tx pgx.Tx) error {
+	_, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('template_component_test_display_id'))")
 	return err
 }
 
@@ -262,12 +246,12 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch existing template components"})
 			return
 		}
-		if err := resyncTemplateComponentTestDisplayIDSequence(ctx, tx); err != nil {
+		if err := lockTemplateComponentTestDisplayIDAllocation(ctx, tx); err != nil {
 			logger.Log.Error().
 				Err(err).
 				Str("request_id", requestIDForLog(c)).
 				Str("template_id", templateID.String()).
-				Msg("failed to resync template component test display id sequence")
+				Msg("failed to lock template component test display id allocation")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare template component test assignment"})
 			return
 		}
@@ -909,12 +893,12 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch template component"})
 			return
 		}
-		if err := resyncTemplateComponentTestDisplayIDSequence(ctx, tx); err != nil {
+		if err := lockTemplateComponentTestDisplayIDAllocation(ctx, tx); err != nil {
 			logger.Log.Error().
 				Err(err).
 				Str("request_id", requestIDForLog(c)).
 				Str("template_component_id", templateComponentID.String()).
-				Msg("failed to resync template component test display id sequence")
+				Msg("failed to lock template component test display id allocation")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare template component test assignment"})
 			return
 		}
