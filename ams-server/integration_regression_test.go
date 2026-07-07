@@ -1274,6 +1274,41 @@ func TestAddTemplateComponentTestAssignsTest(t *testing.T) {
 	assertField(t, templateTests[0], "test_name", "Standalone Assignment Inspection")
 }
 
+func TestConfigureTemplateRepairsDriftedTemplateComponentTestDisplayIDSequence(t *testing.T) {
+	h := setupIntegrationTest(t)
+	mainCategoryID := createMainCategory(t, h, "Mechanical")
+	categoryID := createCategory(t, h, mainCategoryID, "Hooks")
+	testOneID := createTestType(t, h, "Sequence Drift Inspection", 12)
+	testTwoID := createTestType(t, h, "Sequence Drift Load Test", 6)
+	templateID := createTemplate(t, h, "Sequence Drift Template")
+
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/template/"+templateID+"/configuration", map[string]any{
+		"components": []map[string]any{
+			templateComponentPayload(categoryID, "Hook Assembly", []string{testOneID}),
+		},
+	}, http.StatusOK)
+
+	if _, err := h.pool.Exec(context.Background(), "SELECT setval('template_component_test_display_id_seq', 1, false)"); err != nil {
+		t.Fatalf("failed to drift template component test display id sequence: %v", err)
+	}
+
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/template/"+templateID+"/configuration", map[string]any{
+		"components": []map[string]any{
+			templateComponentPayload(categoryID, "Hook Assembly", []string{testOneID, testTwoID}),
+		},
+	}, http.StatusOK)
+
+	components := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/template/"+templateID+"/components", nil, http.StatusOK))
+	if len(components) != 1 {
+		t.Fatalf("expected 1 template component after sequence-drift repair, got %d", len(components))
+	}
+	templateComponentID := stringField(t, components[0], "template_component_id")
+	templateTests := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/template-component/"+templateComponentID+"/tests", nil, http.StatusOK))
+	if len(templateTests) != 2 {
+		t.Fatalf("expected 2 assigned template component tests after sequence-drift repair, got %d", len(templateTests))
+	}
+}
+
 func TestDeleteTemplateBlockedWhenAssetsExist(t *testing.T) {
 	h := setupIntegrationTest(t)
 	mainCategoryID := createMainCategory(t, h, "Mechanical")
