@@ -314,9 +314,9 @@ async function createRecordThroughUi(
   await chooseSelectOption(page, "Subject type", subjectType === "PERSON" ? "Person" : subjectType === "VEHICLE" ? "Vehicle" : "Company");
   await chooseSelectOption(page, "Subject", subjectName);
   await chooseSelectOption(page, "Record type", recordTypeName);
-  await dialog.getByLabel("Issue date").fill(issueDate);
+  await dialog.getByRole("textbox", { name: "Issue date" }).fill(issueDate);
   if (expiryDate) {
-    await expect(dialog.getByLabel("Expiry date")).toHaveValue(expiryDate);
+    await expect(dialog.getByRole("textbox", { name: "Expiry date" })).toHaveValue(expiryDate);
   }
   await dialog.getByLabel("Issuing authority").fill(authority);
   await dialog.getByLabel("Notes").fill(`Created for ${subjectName}`);
