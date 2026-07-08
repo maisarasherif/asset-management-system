@@ -30,7 +30,7 @@ func logTemplateComponentTestInsertError(err error, requestID, templateID, templ
 	event := logger.Log.Error().
 		Err(err).
 		Str("request_id", requestID).
-		Str("display_id_allocator", "allocator_row_v6").
+		Str("display_id_allocator", "allocator_row_v7_no_lpad_truncation").
 		Str("template_component_id", templateComponentID).
 		Str("test_id", testID)
 
