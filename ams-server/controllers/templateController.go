@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/dto"
@@ -28,6 +29,30 @@ func requestIDForLog(c *gin.Context) string {
 func lockTemplateComponentTestDisplayIDAllocation(ctx context.Context, tx pgx.Tx) error {
 	_, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('template_component_test_display_id'))")
 	return err
+}
+
+func logTemplateComponentTestInsertError(err error, requestID, templateID, templateComponentID, testID string) {
+	event := logger.Log.Error().
+		Err(err).
+		Str("request_id", requestID).
+		Str("display_id_allocator", "sequence_retry_function_v4").
+		Str("template_component_id", templateComponentID).
+		Str("test_id", testID)
+
+	if templateID != "" {
+		event = event.Str("template_id", templateID)
+	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		event = event.
+			Str("pg_code", pgErr.Code).
+			Str("pg_constraint", pgErr.ConstraintName).
+			Str("pg_table", pgErr.TableName).
+			Str("pg_detail", pgErr.Detail)
+	}
+
+	event.Msg("failed to assign test to template component")
 }
 
 // ==================== Asset Templates ====================
@@ -368,14 +393,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 					TestID:              testID,
 				})
 				if err != nil {
-					logger.Log.Error().
-						Err(err).
-						Str("request_id", requestIDForLog(c)).
-						Str("display_id_allocator", "table_max_with_advisory_lock_v2").
-						Str("template_id", templateID.String()).
-						Str("template_component_id", templateComponentID.String()).
-						Str("test_id", testID.String()).
-						Msg("failed to assign test to template component")
+					logTemplateComponentTestInsertError(err, requestIDForLog(c), templateID.String(), templateComponentID.String(), testID.String())
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign test to template component"})
 					return
 				}
@@ -929,13 +947,7 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 			TestID:              testID,
 		})
 		if err != nil {
-			logger.Log.Error().
-				Err(err).
-				Str("request_id", requestIDForLog(c)).
-				Str("display_id_allocator", "table_max_with_advisory_lock_v2").
-				Str("template_component_id", templateComponentID.String()).
-				Str("test_id", testID.String()).
-				Msg("failed to add test to template component")
+			logTemplateComponentTestInsertError(err, requestIDForLog(c), "", templateComponentID.String(), testID.String())
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add test to template component"})
 			return
 		}

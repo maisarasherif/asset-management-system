@@ -26,28 +26,24 @@ func (q *Queries) CountTemplateComponentTestsByTestID(ctx context.Context, testI
 }
 
 const createTemplateComponentTest = `-- name: CreateTemplateComponentTest :one
-INSERT INTO template_component_tests (
-    display_id,
-    template_component_id, test_id, position, created_at
-)
-VALUES (
-    (
-        SELECT LPAD((COALESCE(MAX(substring(display_id from '([0-9]+)$')::BIGINT), 0) + 1)::TEXT, 3, '0')
-        FROM template_component_tests
-        WHERE display_id ~ '([0-9]+)$'
-    ),
+SELECT
+    created.template_component_test_id::uuid AS template_component_test_id,
+    created.display_id::text AS display_id,
+    created.template_component_id::uuid AS template_component_id,
+    created.test_id::uuid AS test_id,
+    created.position::integer AS position,
+    created.created_at::timestamptz AS created_at
+FROM create_template_component_test(
     $1,
-    $2,
-    COALESCE((SELECT MAX(position) + 1 FROM template_component_tests WHERE template_component_id = $1), 1),
-    NOW()
-)
-RETURNING
+    $2
+) AS created (
     template_component_test_id,
     display_id,
     template_component_id,
     test_id,
     position,
     created_at
+)
 `
 
 type CreateTemplateComponentTestParams struct {

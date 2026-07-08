@@ -1,0 +1,4 @@
+DROP TRIGGER IF EXISTS trg_template_component_tests_assign_display_id ON template_component_tests;
+DROP TRIGGER IF EXISTS trg_template_component_tests_sync_display_id ON template_component_tests;
+DROP TRIGGER IF EXISTS trg_template_component_tests_assign_business_id ON template_component_tests;
+DROP TRIGGER IF EXISTS trg_template_component_tests_sync_shadow_uuids ON template_component_tests;

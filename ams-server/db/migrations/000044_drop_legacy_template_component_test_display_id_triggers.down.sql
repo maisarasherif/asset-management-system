@@ -1,0 +1,1 @@
+-- No-op: legacy template-component-test ID triggers are intentionally removed.
