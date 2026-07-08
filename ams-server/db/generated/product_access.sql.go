@@ -242,7 +242,7 @@ INSERT INTO product_access (
     status
 )
 VALUES (
-    next_display_id('product_access_display_id_seq'),
+    allocate_display_id('product_access.display_id', 'product_access'::REGCLASS),
     $1,
     $2,
     $3,

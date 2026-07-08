@@ -1,6 +1,6 @@
 -- name: CreateAssetTemplate :one
 INSERT INTO asset_templates (display_id, template_name, description, created_at, updated_at)
-VALUES (next_display_id('template_display_id_seq'), $1, $2, NOW(), NOW())
+VALUES (allocate_display_id('asset_templates.display_id', 'asset_templates'::REGCLASS), $1, $2, NOW(), NOW())
 RETURNING
     template_id,
     display_id,

@@ -224,6 +224,12 @@ type Component struct {
 	ScopeCategoryID        *uuid.UUID `json:"scope_category_id"`
 }
 
+type DisplayIDAllocator struct {
+	AllocatorName string    `json:"allocator_name"`
+	NextValue     int64     `json:"next_value"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 type EquipmentType struct {
 	EquipmentTypeID   uuid.UUID `json:"equipment_type_id"`
 	DisplayID         string    `json:"display_id"`

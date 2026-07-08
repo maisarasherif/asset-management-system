@@ -29,7 +29,7 @@ ORDER BY test_id ASC;
 
 -- name: CreateTestType :one
 INSERT INTO test_types (display_id, test_name, validity_duration, requires_renewal, description)
-VALUES (next_display_id('test_type_display_id_seq'), $1, $2, $3, $4)
+VALUES (allocate_display_id('test_types.display_id', 'test_types'::REGCLASS), $1, $2, $3, $4)
 RETURNING
     test_id,
     display_id,

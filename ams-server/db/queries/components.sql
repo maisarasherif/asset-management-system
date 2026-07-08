@@ -106,7 +106,7 @@ INSERT INTO components (
     class, class_code, safety_critical, created_at, updated_at
 )
 VALUES (
-    next_display_id('component_display_id_seq'),
+    allocate_display_id('components.display_id', 'components'::REGCLASS),
     sqlc.arg(asset_id),
     sqlc.arg(category_id),
     sqlc.arg(scope_category_id),
@@ -172,7 +172,7 @@ INSERT INTO components (
     updated_at
 )
 VALUES (
-    next_display_id('component_display_id_seq'),
+    allocate_display_id('components.display_id', 'components'::REGCLASS),
     sqlc.arg(asset_id),
     NULL,
     NULL,

@@ -6,6 +6,7 @@
 /themes
 /postman/*
 /docs/*
+/temp/*
 
 
 /design-pocs
@@ -21,3 +22,4 @@ cloudflare/
 pd/
 .vps-test-run/*
 .codegraph/*
+.codegraph/daemon.pid

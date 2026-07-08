@@ -36,7 +36,7 @@ LIMIT 1;
 -- name: CreateCatalogScope :one
 INSERT INTO catalog_scopes (display_id, scope_name, description, created_at, updated_at)
 VALUES (
-    next_display_id('catalog_scope_display_id_seq'),
+    allocate_display_id('catalog_scopes.display_id', 'catalog_scopes'::REGCLASS),
     sqlc.arg(scope_name),
     sqlc.arg(description),
     NOW(),
@@ -100,7 +100,7 @@ INSERT INTO main_categories (
     updated_at
 )
 VALUES (
-    next_display_id('main_category_display_id_seq'),
+    allocate_display_id('main_categories.display_id', 'main_categories'::REGCLASS),
     COALESCE((SELECT MAX(sort_order) + 1 FROM main_categories), 1),
     sqlc.arg(main_category_name),
     sqlc.arg(description),
@@ -149,7 +149,7 @@ INSERT INTO categories (
     updated_at
 )
 VALUES (
-    next_display_id('category_display_id_seq'),
+    allocate_display_id('categories.display_id', 'categories'::REGCLASS),
     sqlc.arg(main_category_id),
     COALESCE(
         (
@@ -231,7 +231,7 @@ INSERT INTO catalog_scope_main_categories (
     updated_at
 )
 VALUES (
-    next_display_id('catalog_scope_main_category_display_id_seq'),
+    allocate_display_id('catalog_scope_main_categories.display_id', 'catalog_scope_main_categories'::REGCLASS),
     sqlc.arg(scope_id),
     sqlc.arg(main_category_id),
     sqlc.arg(sort_order),
@@ -274,7 +274,7 @@ INSERT INTO catalog_scope_main_categories (
     updated_at
 )
 SELECT
-    next_display_id('catalog_scope_main_category_display_id_seq'),
+    allocate_display_id('catalog_scope_main_categories.display_id', 'catalog_scope_main_categories'::REGCLASS),
     sqlc.arg(target_scope_id),
     main_category_id,
     sort_order,
@@ -375,7 +375,7 @@ INSERT INTO catalog_scope_categories (
     updated_at
 )
 VALUES (
-    next_display_id('catalog_scope_category_display_id_seq'),
+    allocate_display_id('catalog_scope_categories.display_id', 'catalog_scope_categories'::REGCLASS),
     sqlc.arg(scope_id),
     sqlc.arg(main_category_id),
     sqlc.arg(category_id),
@@ -433,7 +433,7 @@ INSERT INTO catalog_scope_categories (
     updated_at
 )
 SELECT
-    next_display_id('catalog_scope_category_display_id_seq'),
+    allocate_display_id('catalog_scope_categories.display_id', 'catalog_scope_categories'::REGCLASS),
     sqlc.arg(target_scope_id),
     main_category_id,
     category_id,

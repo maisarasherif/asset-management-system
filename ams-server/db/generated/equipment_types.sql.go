@@ -45,7 +45,7 @@ INSERT INTO equipment_types (
     updated_at
 )
 VALUES (
-    next_display_id('equipment_type_display_id_seq'),
+    allocate_display_id('equipment_types.display_id', 'equipment_types'::REGCLASS),
     $1,
     $2,
     $3,

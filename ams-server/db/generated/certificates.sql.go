@@ -80,7 +80,7 @@ INSERT INTO certificates (
     issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at
 )
 VALUES (
-    next_display_id('certificate_display_id_seq'),
+    allocate_display_id('certificates.display_id', 'certificates'::REGCLASS),
     $1,
     $2,
     $3,
@@ -229,7 +229,7 @@ INSERT INTO certificates (
     maintenance_notes, created_at, updated_at
 )
 VALUES (
-    next_display_id('certificate_display_id_seq'),
+    allocate_display_id('certificates.display_id', 'certificates'::REGCLASS),
     $1,
     $2,
     '',

@@ -29,7 +29,7 @@ LIMIT 1;
 
 -- name: CreateMainCategory :one
 INSERT INTO main_categories (display_id, sort_order, main_category_name, description, created_at, updated_at)
-VALUES (next_display_id('main_category_display_id_seq'), $1, $2, $3, NOW(), NOW())
+VALUES (allocate_display_id('main_categories.display_id', 'main_categories'::REGCLASS), $1, $2, $3, NOW(), NOW())
 RETURNING
     main_category_id,
     display_id,

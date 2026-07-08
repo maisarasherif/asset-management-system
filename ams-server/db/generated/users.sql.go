@@ -63,7 +63,7 @@ func (q *Queries) CountUsersByEmailExcluding(ctx context.Context, arg CountUsers
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (display_id, first_name, last_name, email, password, role, status, created_at, updated_at)
-VALUES (next_display_id('user_display_id_seq'), $1, $2, $3, $4, $5, $6, NOW(), NOW())
+VALUES (allocate_display_id('users.display_id', 'users'::REGCLASS), $1, $2, $3, $4, $5, $6, NOW(), NOW())
 RETURNING
     user_id,
     display_id,

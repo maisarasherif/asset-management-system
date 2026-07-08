@@ -39,7 +39,7 @@ func (q *Queries) CountCategoriesByMainCategoryIDPaginated(ctx context.Context, 
 const createCategory = `-- name: CreateCategory :one
 INSERT INTO categories (display_id, main_category_id, sort_order, category_name, description, created_at, updated_at)
 VALUES (
-    next_display_id('category_display_id_seq'),
+    allocate_display_id('categories.display_id', 'categories'::REGCLASS),
     $1,
     $2,
     $3,

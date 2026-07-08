@@ -82,7 +82,7 @@ INSERT INTO certificates (
     issuing_authority, status, test_id, imca_ref, imca_d018, maintenance_notes, created_at, updated_at
 )
 VALUES (
-    next_display_id('certificate_display_id_seq'),
+    allocate_display_id('certificates.display_id', 'certificates'::REGCLASS),
     sqlc.arg(component_id),
     sqlc.arg(certificate_name),
     sqlc.arg(issue_date),
@@ -286,7 +286,7 @@ INSERT INTO certificates (
     maintenance_notes, created_at, updated_at
 )
 VALUES (
-    next_display_id('certificate_display_id_seq'),
+    allocate_display_id('certificates.display_id', 'certificates'::REGCLASS),
     sqlc.arg(component_id),
     sqlc.arg(certificate_name),
     '',

@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1288,8 +1289,12 @@ func TestConfigureTemplateRepairsDriftedTemplateComponentTestDisplayIDSequence(t
 		},
 	}, http.StatusOK)
 
-	if _, err := h.pool.Exec(context.Background(), "SELECT setval('template_component_test_display_id_seq', 1, false)"); err != nil {
-		t.Fatalf("failed to drift template component test display id sequence: %v", err)
+	if _, err := h.pool.Exec(context.Background(), `
+		UPDATE display_id_allocators
+		SET next_value = 1
+		WHERE allocator_name = 'template_component_tests.display_id'
+	`); err != nil {
+		t.Fatalf("failed to drift template component test display id allocator: %v", err)
 	}
 
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/template/"+templateID+"/configuration", map[string]any{
@@ -1306,6 +1311,136 @@ func TestConfigureTemplateRepairsDriftedTemplateComponentTestDisplayIDSequence(t
 	templateTests := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/template-component/"+templateComponentID+"/tests", nil, http.StatusOK))
 	if len(templateTests) != 2 {
 		t.Fatalf("expected 2 assigned template component tests after sequence-drift repair, got %d", len(templateTests))
+	}
+}
+
+func TestDisplayIDFormattingUsesMinimumThreeDigits(t *testing.T) {
+	h := setupIntegrationTest(t)
+
+	cases := map[int64]string{
+		1:    "001",
+		99:   "099",
+		999:  "999",
+		1000: "1000",
+		1101: "1101",
+	}
+
+	for input, expected := range cases {
+		var actual string
+		if err := h.pool.QueryRow(context.Background(), "SELECT format_display_id($1)", input).Scan(&actual); err != nil {
+			t.Fatalf("failed to format display id %d: %v", input, err)
+		}
+		if actual != expected {
+			t.Fatalf("format_display_id(%d) = %q, want %q", input, actual, expected)
+		}
+	}
+}
+
+func TestDisplayIDAllocatorRepairsDriftAboveThreeDigits(t *testing.T) {
+	h := setupIntegrationTest(t)
+	const allocatorName = "display_id_allocator_drift_regression.display_id"
+	const tableName = "display_id_allocator_drift_regression"
+
+	if _, err := h.pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+tableName); err != nil {
+		t.Fatalf("failed to drop display id allocator drift table: %v", err)
+	}
+	if _, err := h.pool.Exec(context.Background(), "DELETE FROM display_id_allocators WHERE allocator_name = $1", allocatorName); err != nil {
+		t.Fatalf("failed to reset display id allocator drift row: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = h.pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+tableName)
+		_, _ = h.pool.Exec(context.Background(), "DELETE FROM display_id_allocators WHERE allocator_name = $1", allocatorName)
+	})
+
+	if _, err := h.pool.Exec(context.Background(), "CREATE TABLE "+tableName+" (display_id TEXT PRIMARY KEY)"); err != nil {
+		t.Fatalf("failed to create display id allocator drift table: %v", err)
+	}
+	if _, err := h.pool.Exec(context.Background(), "INSERT INTO "+tableName+" (display_id) VALUES ('001'), ('1101')"); err != nil {
+		t.Fatalf("failed to seed display id allocator drift table: %v", err)
+	}
+	if _, err := h.pool.Exec(context.Background(), `
+		INSERT INTO display_id_allocators (allocator_name, next_value)
+		VALUES ($1, 1)
+	`, allocatorName); err != nil {
+		t.Fatalf("failed to seed drifted display id allocator row: %v", err)
+	}
+
+	var displayID string
+	if err := h.pool.QueryRow(context.Background(), `
+		INSERT INTO display_id_allocator_drift_regression (display_id)
+		VALUES (allocate_display_id('display_id_allocator_drift_regression.display_id', 'display_id_allocator_drift_regression'::REGCLASS))
+		RETURNING display_id
+	`).Scan(&displayID); err != nil {
+		t.Fatalf("failed to allocate repaired display id: %v", err)
+	}
+	if displayID != "1102" {
+		t.Fatalf("expected repaired display id 1102, got %q", displayID)
+	}
+}
+
+func TestDisplayIDAllocatorSerializesConcurrentInserts(t *testing.T) {
+	h := setupIntegrationTest(t)
+	const allocatorName = "display_id_allocator_concurrency_regression.display_id"
+	const tableName = "display_id_allocator_concurrency_regression"
+
+	if _, err := h.pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+tableName); err != nil {
+		t.Fatalf("failed to drop display id allocator concurrency table: %v", err)
+	}
+	if _, err := h.pool.Exec(context.Background(), "DELETE FROM display_id_allocators WHERE allocator_name = $1", allocatorName); err != nil {
+		t.Fatalf("failed to reset display id allocator concurrency row: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = h.pool.Exec(context.Background(), "DROP TABLE IF EXISTS "+tableName)
+		_, _ = h.pool.Exec(context.Background(), "DELETE FROM display_id_allocators WHERE allocator_name = $1", allocatorName)
+	})
+
+	if _, err := h.pool.Exec(context.Background(), "CREATE TABLE "+tableName+" (display_id TEXT PRIMARY KEY)"); err != nil {
+		t.Fatalf("failed to create display id allocator concurrency table: %v", err)
+	}
+
+	const insertCount = 25
+	var wg sync.WaitGroup
+	errs := make(chan error, insertCount)
+	displayIDs := make(chan string, insertCount)
+
+	for i := 0; i < insertCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			var displayID string
+			err := h.pool.QueryRow(context.Background(), `
+				INSERT INTO display_id_allocator_concurrency_regression (display_id)
+				VALUES (allocate_display_id('display_id_allocator_concurrency_regression.display_id', 'display_id_allocator_concurrency_regression'::REGCLASS))
+				RETURNING display_id
+			`).Scan(&displayID)
+			if err != nil {
+				errs <- err
+				return
+			}
+			displayIDs <- displayID
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+	close(displayIDs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("failed concurrent display id allocation: %v", err)
+		}
+	}
+
+	seen := map[string]bool{}
+	for displayID := range displayIDs {
+		if seen[displayID] {
+			t.Fatalf("display id %q allocated more than once", displayID)
+		}
+		seen[displayID] = true
+	}
+	if len(seen) != insertCount {
+		t.Fatalf("expected %d unique display ids, got %d", insertCount, len(seen))
 	}
 }
 
@@ -1764,6 +1899,7 @@ func resetIntegrationDatabase(t *testing.T, pool *pgxpool.Pool) {
 
 	const truncateSQL = `
 TRUNCATE TABLE
+  display_id_allocators,
   notification_deliveries,
   product_notification_configurations,
   product_access,
@@ -2061,7 +2197,7 @@ func assignCategoryToDefaultCatalogScope(t *testing.T, pool *pgxpool.Pool, mainC
 			sort_order
 		)
 		SELECT
-			next_display_id('catalog_scope_main_category_display_id_seq'),
+			allocate_display_id('catalog_scope_main_categories.display_id', 'catalog_scope_main_categories'::REGCLASS),
 			$1,
 			$2,
 			COALESCE(MAX(sort_order), 0) + 1
@@ -2082,7 +2218,7 @@ func assignCategoryToDefaultCatalogScope(t *testing.T, pool *pgxpool.Pool, mainC
 			description
 		)
 		SELECT
-			next_display_id('catalog_scope_category_display_id_seq'),
+			allocate_display_id('catalog_scope_categories.display_id', 'catalog_scope_categories'::REGCLASS),
 			$1,
 			$2,
 			$3,

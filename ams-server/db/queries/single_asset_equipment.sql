@@ -7,7 +7,7 @@ INSERT INTO single_asset_equipment (
     updated_at
 )
 VALUES (
-    next_display_id('single_asset_equipment_display_id_seq'),
+    allocate_display_id('single_asset_equipment.display_id', 'single_asset_equipment'::REGCLASS),
     sqlc.arg(asset_id),
     sqlc.arg(equipment_type_id),
     NOW(),

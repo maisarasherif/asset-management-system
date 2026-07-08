@@ -104,7 +104,7 @@ func (q *Queries) CountCatalogScopeReferences(ctx context.Context, scopeID uuid.
 const createCatalogScope = `-- name: CreateCatalogScope :one
 INSERT INTO catalog_scopes (display_id, scope_name, description, created_at, updated_at)
 VALUES (
-    next_display_id('catalog_scope_display_id_seq'),
+    allocate_display_id('catalog_scopes.display_id', 'catalog_scopes'::REGCLASS),
     $1,
     $2,
     NOW(),
@@ -150,7 +150,7 @@ INSERT INTO catalog_scope_categories (
     updated_at
 )
 VALUES (
-    next_display_id('catalog_scope_category_display_id_seq'),
+    allocate_display_id('catalog_scope_categories.display_id', 'catalog_scope_categories'::REGCLASS),
     $1,
     $2,
     $3,
@@ -212,7 +212,7 @@ INSERT INTO catalog_scope_main_categories (
     updated_at
 )
 VALUES (
-    next_display_id('catalog_scope_main_category_display_id_seq'),
+    allocate_display_id('catalog_scope_main_categories.display_id', 'catalog_scope_main_categories'::REGCLASS),
     $1,
     $2,
     $3,
@@ -261,7 +261,7 @@ INSERT INTO categories (
     updated_at
 )
 VALUES (
-    next_display_id('category_display_id_seq'),
+    allocate_display_id('categories.display_id', 'categories'::REGCLASS),
     $1,
     COALESCE(
         (
@@ -330,7 +330,7 @@ INSERT INTO main_categories (
     updated_at
 )
 VALUES (
-    next_display_id('main_category_display_id_seq'),
+    allocate_display_id('main_categories.display_id', 'main_categories'::REGCLASS),
     COALESCE((SELECT MAX(sort_order) + 1 FROM main_categories), 1),
     $1,
     $2,
@@ -428,7 +428,7 @@ INSERT INTO catalog_scope_categories (
     updated_at
 )
 SELECT
-    next_display_id('catalog_scope_category_display_id_seq'),
+    allocate_display_id('catalog_scope_categories.display_id', 'catalog_scope_categories'::REGCLASS),
     $1,
     main_category_id,
     category_id,
@@ -464,7 +464,7 @@ INSERT INTO catalog_scope_main_categories (
     updated_at
 )
 SELECT
-    next_display_id('catalog_scope_main_category_display_id_seq'),
+    allocate_display_id('catalog_scope_main_categories.display_id', 'catalog_scope_main_categories'::REGCLASS),
     $1,
     main_category_id,
     sort_order,

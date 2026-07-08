@@ -77,7 +77,7 @@ INSERT INTO asset_maintenance_events (
     status
 )
 VALUES (
-    next_display_id('asset_maintenance_event_display_id_seq'),
+    allocate_display_id('asset_maintenance_events.display_id', 'asset_maintenance_events'::REGCLASS),
     sqlc.arg(asset_id),
     sqlc.arg(due_at_hours),
     sqlc.arg(triggered_at_hours),

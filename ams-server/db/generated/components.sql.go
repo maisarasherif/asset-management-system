@@ -70,7 +70,7 @@ INSERT INTO components (
     class, class_code, safety_critical, created_at, updated_at
 )
 VALUES (
-    next_display_id('component_display_id_seq'),
+    allocate_display_id('components.display_id', 'components'::REGCLASS),
     $1,
     $2,
     $3,
@@ -224,7 +224,7 @@ INSERT INTO components (
     updated_at
 )
 VALUES (
-    next_display_id('component_display_id_seq'),
+    allocate_display_id('components.display_id', 'components'::REGCLASS),
     $1,
     NULL,
     NULL,

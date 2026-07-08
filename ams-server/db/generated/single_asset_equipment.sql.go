@@ -21,7 +21,7 @@ INSERT INTO single_asset_equipment (
     updated_at
 )
 VALUES (
-    next_display_id('single_asset_equipment_display_id_seq'),
+    allocate_display_id('single_asset_equipment.display_id', 'single_asset_equipment'::REGCLASS),
     $1,
     $2,
     NOW(),

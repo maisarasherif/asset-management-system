@@ -71,7 +71,7 @@ INSERT INTO hr_admin_persons (
     role_title
 )
 VALUES (
-    next_display_id('hr_admin_person_display_id_seq'),
+    allocate_display_id('hr_admin_persons.display_id', 'hr_admin_persons'::REGCLASS),
     $1, $2, $3, $4
 )
 RETURNING
@@ -157,7 +157,7 @@ INSERT INTO hr_admin_vehicles (
     vehicle_year
 )
 VALUES (
-    next_display_id('hr_admin_vehicle_display_id_seq'),
+    allocate_display_id('hr_admin_vehicles.display_id', 'hr_admin_vehicles'::REGCLASS),
     $1, $2, $3, $4
 )
 RETURNING
@@ -243,7 +243,7 @@ INSERT INTO hr_admin_companies (
     location
 )
 VALUES (
-    next_display_id('hr_admin_company_display_id_seq'),
+    allocate_display_id('hr_admin_companies.display_id', 'hr_admin_companies'::REGCLASS),
     $1, $2, $3, $4
 )
 RETURNING
@@ -333,7 +333,7 @@ INSERT INTO compliance_record_types (
     description
 )
 VALUES (
-    next_display_id('compliance_record_type_display_id_seq'),
+    allocate_display_id('compliance_record_types.display_id', 'compliance_record_types'::REGCLASS),
     sqlc.arg(subject_type),
     sqlc.arg(type_name),
     sqlc.arg(renewal_behavior),
@@ -441,7 +441,7 @@ INSERT INTO compliance_records (
     record_type_id
 )
 VALUES (
-    next_display_id('compliance_record_display_id_seq'),
+    allocate_display_id('compliance_records.display_id', 'compliance_records'::REGCLASS),
     sqlc.arg(subject_type),
     sqlc.arg(subject_id),
     sqlc.arg(record_type_id)
@@ -491,7 +491,7 @@ INSERT INTO compliance_record_versions (
     notes
 )
 VALUES (
-    next_display_id('compliance_record_version_display_id_seq'),
+    allocate_display_id('compliance_record_versions.display_id', 'compliance_record_versions'::REGCLASS),
     sqlc.arg(record_id),
     COALESCE((SELECT MAX(version_number) + 1 FROM compliance_record_versions WHERE record_id = sqlc.arg(record_id)), 1),
     sqlc.arg(issue_date),

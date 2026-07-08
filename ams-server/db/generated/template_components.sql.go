@@ -59,7 +59,7 @@ INSERT INTO template_components (
     structure, model, class, class_code, safety_critical, created_at
 )
 VALUES (
-    next_display_id('template_component_display_id_seq'),
+    allocate_display_id('template_components.display_id', 'template_components'::REGCLASS),
     $1,
     $2,
     $3,

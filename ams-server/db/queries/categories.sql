@@ -63,7 +63,7 @@ ORDER BY category_id ASC;
 -- name: CreateCategory :one
 INSERT INTO categories (display_id, main_category_id, sort_order, category_name, description, created_at, updated_at)
 VALUES (
-    next_display_id('category_display_id_seq'),
+    allocate_display_id('categories.display_id', 'categories'::REGCLASS),
     sqlc.arg(main_category_id),
     sqlc.arg(sort_order),
     sqlc.arg(category_name),

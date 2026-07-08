@@ -40,7 +40,7 @@ INSERT INTO assets (
     updated_at
 )
 VALUES (
-    next_display_id('asset_display_id_seq'),
+    allocate_display_id('assets.display_id', 'assets'::REGCLASS),
     $1,
     $2,
     $3,
@@ -168,7 +168,7 @@ INSERT INTO assets (
     updated_at
 )
 VALUES (
-    next_display_id('asset_display_id_seq'),
+    allocate_display_id('assets.display_id', 'assets'::REGCLASS),
     $1,
     $2,
     $3,
