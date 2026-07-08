@@ -26,11 +26,6 @@ func requestIDForLog(c *gin.Context) string {
 	return ""
 }
 
-func lockTemplateComponentTestDisplayIDAllocation(ctx context.Context, tx pgx.Tx) error {
-	_, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('template_component_test_display_id'))")
-	return err
-}
-
 func logTemplateComponentTestInsertError(err error, requestID, templateID, templateComponentID, testID string) {
 	event := logger.Log.Error().
 		Err(err).
@@ -219,7 +214,11 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin template configuration transaction"})
 			return
 		}
-		defer tx.Rollback(ctx)
+		defer func() {
+			rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer rollbackCancel()
+			_ = tx.Rollback(rollbackCtx)
+		}()
 
 		queries := db.New(tx)
 
@@ -269,15 +268,6 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 		existingComponents, err := queries.GetTemplateComponentsByTemplateID(ctx, templateID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch existing template components"})
-			return
-		}
-		if err := lockTemplateComponentTestDisplayIDAllocation(ctx, tx); err != nil {
-			logger.Log.Error().
-				Err(err).
-				Str("request_id", requestIDForLog(c)).
-				Str("template_id", templateID.String()).
-				Msg("failed to lock template component test display id allocation")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare template component test assignment"})
 			return
 		}
 
@@ -899,7 +889,11 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin template component test transaction"})
 			return
 		}
-		defer tx.Rollback(ctx)
+		defer func() {
+			rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer rollbackCancel()
+			_ = tx.Rollback(rollbackCtx)
+		}()
 
 		queries := db.New(tx)
 
@@ -910,15 +904,6 @@ func AddTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch template component"})
-			return
-		}
-		if err := lockTemplateComponentTestDisplayIDAllocation(ctx, tx); err != nil {
-			logger.Log.Error().
-				Err(err).
-				Str("request_id", requestIDForLog(c)).
-				Str("template_component_id", templateComponentID.String()).
-				Msg("failed to lock template component test display id allocation")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare template component test assignment"})
 			return
 		}
 
