@@ -420,8 +420,12 @@ test.describe("HR/Admin product E2E", () => {
       await page.getByText("Add version", { exact: true }).click();
       const versionDialog = page.getByRole("dialog", { name: /Add version for/ });
       await expect(versionDialog).toBeVisible();
-      await versionDialog.getByLabel("Issue date").fill("01/01/2028");
-      await expect(versionDialog.getByLabel("Expiry date")).toHaveValue("01/01/2030");
+      await versionDialog
+        .getByRole("textbox", { name: "Issue date" })
+        .fill("01/01/2028");
+      await expect(
+        versionDialog.getByRole("textbox", { name: "Expiry date" }),
+      ).toHaveValue("01/01/2030");
       await versionDialog.getByLabel("Issuing authority").fill("Dubai Authority Renewal");
       await versionDialog.getByLabel("Notes").fill("Renewed by browser regression");
       await versionDialog.getByRole("button", { name: "Add version" }).click();
