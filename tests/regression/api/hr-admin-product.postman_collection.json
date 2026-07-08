@@ -1027,12 +1027,11 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/v1/hr-admin/departments",
+              "raw": "{{baseUrl}}/hr-admin/departments",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "v1",
                 "hr-admin",
                 "departments"
               ]
