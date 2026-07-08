@@ -8,6 +8,7 @@ SERVER_DIR="$REPO_ROOT/ams-server"
 SERVER_ENV="$SERVER_DIR/.env"
 RUN_DIR="$REPO_ROOT/.vps-test-run"
 API_BINARY="$RUN_DIR/ams-server-e2e"
+FRONTEND_DIST_DIR=""
 
 DATABASE_NAME="${DATABASE_NAME:-ams_e2e_$(date +%Y%m%d%H%M%S)}"
 API_PORT="${API_PORT:-18082}"
@@ -338,6 +339,9 @@ cleanup() {
   elif [[ "${KEEP_DB}" == "1" ]]; then
     echo "Keeping isolated database for inspection: $DATABASE_NAME"
   fi
+  if [[ -n "$FRONTEND_DIST_DIR" && "$FRONTEND_DIST_DIR" == "$RUN_DIR"/frontend-dist.* ]]; then
+    rm -rf "$FRONTEND_DIST_DIR"
+  fi
 }
 trap cleanup EXIT
 
@@ -428,18 +432,19 @@ if [[ "$RUN_NEWMAN" == "1" ]]; then
 fi
 
 if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
+  FRONTEND_DIST_DIR="$(mktemp -d "$RUN_DIR/frontend-dist.XXXXXX")"
   echo "Building frontend for isolated API"
   (
     cd "$FRONTEND_DIR"
     npx tsc -p tsconfig.app.json --noEmit --incremental false
     npx tsc vite.config.ts --noEmit --skipLibCheck --module ESNext --moduleResolution Bundler --allowSyntheticDefaultImports --strict --ignoreConfig
-    VITE_API_BASE_URL="$API_ORIGIN" npx vite build
+    VITE_API_BASE_URL="$API_ORIGIN" npx vite build --outDir "$FRONTEND_DIST_DIR" --emptyOutDir
   )
 
   echo "Starting isolated frontend on $FRONTEND_BASE_URL"
   (
     cd "$FRONTEND_DIR"
-    exec env PORT="$FRONTEND_PORT" node ../tests/regression/support/static-server.cjs >"$RUN_DIR/frontend.out.log" 2>"$RUN_DIR/frontend.err.log"
+    exec env PORT="$FRONTEND_PORT" STATIC_ROOT="$FRONTEND_DIST_DIR" node ../tests/regression/support/static-server.cjs >"$RUN_DIR/frontend.out.log" 2>"$RUN_DIR/frontend.err.log"
   ) &
   FRONTEND_PID="$!"
   FRONTEND_STARTED=1
