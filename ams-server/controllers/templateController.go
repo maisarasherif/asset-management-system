@@ -50,6 +50,29 @@ func logTemplateComponentTestInsertError(err error, requestID, templateID, templ
 	event.Msg("failed to assign test to template component")
 }
 
+func logTemplateConfigurationError(err error, requestID, templateID, stage string, fields map[string]string) {
+	event := logger.Log.Error().
+		Err(err).
+		Str("request_id", requestID).
+		Str("template_id", templateID).
+		Str("stage", stage)
+
+	for key, value := range fields {
+		event = event.Str(key, value)
+	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		event = event.
+			Str("pg_code", pgErr.Code).
+			Str("pg_constraint", pgErr.ConstraintName).
+			Str("pg_table", pgErr.TableName).
+			Str("pg_detail", pgErr.Detail)
+	}
+
+	event.Msg("failed to configure template")
+}
+
 // ==================== Asset Templates ====================
 
 func AddTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
@@ -211,6 +234,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		tx, err := pool.Begin(ctx)
 		if err != nil {
+			logTemplateConfigurationError(err, requestIDForLog(c), templateID.String(), "begin_transaction", nil)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin template configuration transaction"})
 			return
 		}
@@ -228,12 +252,14 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "template not found"})
 				return
 			}
+			logTemplateConfigurationError(err, requestIDForLog(c), templateID.String(), "fetch_template", nil)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch template"})
 			return
 		}
 
 		existingCategoryIDs, err := queries.GetExistingCategoryIDs(ctx, categoryUUIDs)
 		if err != nil {
+			logTemplateConfigurationError(err, requestIDForLog(c), templateID.String(), "validate_categories", nil)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate categories"})
 			return
 		}
@@ -248,6 +274,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		existingTestIDs, err := queries.GetExistingTestTypeIDs(ctx, testUUIDs)
 		if err != nil {
+			logTemplateConfigurationError(err, requestIDForLog(c), templateID.String(), "validate_test_types", nil)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate test types"})
 			return
 		}
@@ -267,6 +294,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		existingComponents, err := queries.GetTemplateComponentsByTemplateID(ctx, templateID)
 		if err != nil {
+			logTemplateConfigurationError(err, requestIDForLog(c), templateID.String(), "fetch_existing_components", nil)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch existing template components"})
 			return
 		}
@@ -323,6 +351,9 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 					SafetyCritical:      componentInput.SafetyCritical,
 				})
 				if err != nil {
+					logTemplateConfigurationError(err, requestIDForLog(c), templateID.String(), "update_template_component", map[string]string{
+						"template_component_id": templateComponentID.String(),
+					})
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update template component"})
 					return
 				}
@@ -332,6 +363,9 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 				}
 
 				if _, err := queries.DeleteTemplateComponentTestsByComponentID(ctx, templateComponentID); err != nil {
+					logTemplateConfigurationError(err, requestIDForLog(c), templateID.String(), "delete_template_component_tests", map[string]string{
+						"template_component_id": templateComponentID.String(),
+					})
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to replace template component tests"})
 					return
 				}
@@ -354,6 +388,7 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 					SafetyCritical:  componentInput.SafetyCritical,
 				})
 				if err != nil {
+					logTemplateConfigurationError(err, requestIDForLog(c), templateID.String(), "create_template_component", nil)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create template component"})
 					return
 				}
@@ -408,12 +443,16 @@ func ConfigureTemplate(pool *pgxpool.Pool) gin.HandlerFunc {
 				continue
 			}
 			if _, err := queries.DeleteTemplateComponent(ctx, existingComponent.TemplateComponentID); err != nil {
+				logTemplateConfigurationError(err, requestIDForLog(c), templateID.String(), "delete_template_component", map[string]string{
+					"template_component_id": existingComponent.TemplateComponentID.String(),
+				})
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove template component"})
 				return
 			}
 		}
 
 		if err := tx.Commit(ctx); err != nil {
+			logTemplateConfigurationError(err, requestIDForLog(c), templateID.String(), "commit_transaction", nil)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit template configuration"})
 			return
 		}
