@@ -136,6 +136,10 @@ func UploadFile(ctx context.Context, file multipart.File, header *multipart.File
 	client := newS3Client(config)
 	contentType := header.Header.Get("Content-Type")
 	key := certificateObjectKey(contentType)
+	key, err = journalTestStorageObject(key)
+	if err != nil {
+		return "", err
+	}
 
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(config.bucket),

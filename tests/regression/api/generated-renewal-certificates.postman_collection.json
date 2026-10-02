@@ -1,0 +1,689 @@
+{
+  "info": {
+    "name": "Generated renewal certificates \u2014 existing workflow baseline",
+    "description": "Step 1 real upload/read/date/history baseline. Grow this collection as generated issuance lands; no future endpoint placeholders. Each run creates its own prerequisites. R2 deletion is owned by the runner journal.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('runSuffix')) pm.collectionVariables.set('runSuffix', 'renewal-' + Date.now());"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login Admin",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);",
+              "const body = pm.response.json();",
+              "pm.expect(body.token).to.be.a('string').and.not.empty;",
+              "pm.collectionVariables.set('adminToken', body.token);",
+              "pm.collectionVariables.set('token', body.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Main Category",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"main_category_name\": \"Main {{runSuffix}}\",\n  \"description\": \"Main category for smoke test\",\n  \"sort_order\": 100\n}"
+        },
+        "url": "{{baseUrl}}/main-category"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(201);",
+              "const body = pm.response.json();",
+              "pm.expect(body.main_category_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "pm.collectionVariables.set('main_category_id', body.main_category_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Category",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"main_category_id\": \"{{main_category_id}}\",\n  \"category_name\": \"Category {{runSuffix}}\",\n  \"description\": \"Category for smoke test\",\n  \"sort_order\": 100\n}"
+        },
+        "url": "{{baseUrl}}/category"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(201);",
+              "const body = pm.response.json();",
+              "pm.expect(body.category_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "pm.collectionVariables.set('category_id', body.category_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Default Catalog Scope",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/catalog-scopes/default"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);",
+              "const body = pm.response.json();",
+              "pm.expect(body.scope_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "pm.collectionVariables.set('catalog_scope_id', body.scope_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attach Main Category To Catalog Scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"main_category_name\": \"Main {{runSuffix}}\",\n  \"description\": \"Scoped main category for smoke test\",\n  \"sort_order\": 901\n}"
+        },
+        "url": "{{baseUrl}}/catalog-scope/{{catalog_scope_id}}/main-category"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(201);",
+              "const body = pm.response.json();",
+              "pm.expect(body.scope_main_category_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "pm.expect(body.main_category_id).to.eql(pm.collectionVariables.get('main_category_id'));",
+              "pm.collectionVariables.set('scope_main_category_id', body.scope_main_category_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attach Category To Catalog Scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"main_category_id\": \"{{main_category_id}}\",\n  \"category_name\": \"Category {{runSuffix}}\",\n  \"description\": \"Scoped category for smoke test\",\n  \"sort_order\": 901\n}"
+        },
+        "url": "{{baseUrl}}/catalog-scope/{{catalog_scope_id}}/category"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(201);",
+              "const body = pm.response.json();",
+              "pm.expect(body.scope_category_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "pm.expect(body.category_id).to.eql(pm.collectionVariables.get('category_id'));",
+              "pm.collectionVariables.set('scope_category_id', body.scope_category_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Test Type",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"test_name\": \"Test {{runSuffix}}\",\n  \"validity_duration\": 12,\n  \"description\": \"Test type for smoke test\"\n}"
+        },
+        "url": "{{baseUrl}}/test-type"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(201);",
+              "const body = pm.response.json();",
+              "pm.expect(body.test_id).to.match(/^[0-9a-f-]{36}$/i);",
+              "pm.expect(body.requires_renewal).to.eql(true);",
+              "pm.collectionVariables.set('test_id', body.test_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Manual Asset",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Manual Asset {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Manual asset for CRUD\",\n  \"status\": \"ACTIVE\",\n  \"location\": \"Warehouse A\",\n  \"assigned_project\": \"\"\n}"
+        },
+        "url": "{{baseUrl}}/asset"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(201);",
+              "const envelope = pm.response.json();",
+              "const body = envelope.asset || envelope;",
+              "pm.collectionVariables.set('asset_id', body.asset_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Component",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"scope_category_id\": \"{{scope_category_id}}\",\n  \"name\": \"Component {{runSuffix}}\",\n  \"serial_number\": \"CMP-{{runSuffix}}\",\n  \"manufacturer\": \"Newman\",\n  \"description\": \"Component for smoke test\",\n  \"location\": \"Deck A\",\n  \"assigned_project\": \"\",\n  \"equipment_type\": \"Equipment\",\n  \"structure\": \"Fixed\",\n  \"model\": \"CMP-1\",\n  \"class\": \"A\",\n  \"class_code\": \"CMP-A\",\n  \"safety_critical\": \"YES\"\n}"
+        },
+        "url": "{{baseUrl}}/component"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(201);",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('component_id', body.component_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Certificate",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Certificate {{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"expiry_date\": \"2027-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Bureau Veritas\",\n  \"test_id\": \"{{test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Generated-renewal implementation baseline\",\n  \"competency_category_ids\": []\n}"
+        },
+        "url": "{{baseUrl}}/certificate"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(201);",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('certificate_id', body.certificate_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Competency Category",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category_code\": \"CERT-{{runSuffix}}\",\n  \"category_name\": \"Certificate Upload Competency {{runSuffix}}\",\n  \"description\": \"Competency category for certificate upload smoke test\",\n  \"active\": true\n}"
+        },
+        "url": "{{baseUrl}}/competency-category"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(201);",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('competency_category_id', body.competency_category_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Competent Person",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"full_name\": \"Certificate Reviewer {{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"Newman\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": true\n}"
+        },
+        "url": "{{baseUrl}}/competent-person"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(201);",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('competent_person_id', body.competent_person_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Upload Certificate File",
+      "request": {
+        "method": "POST",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "contentType": "application/pdf",
+              "src": "tests/regression/fixtures/sample-certificate.pdf"
+            },
+            {
+              "key": "competent_person_id",
+              "value": "{{competent_person_id}}",
+              "type": "text"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/certificate/{{certificate_id}}/file"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inspect upload evidence and run scope",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/certificate/{{certificate_id}}/uploads?page=1&limit=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);",
+              "const rows = pm.response.json().data;",
+              "pm.expect(rows).to.have.length(1);",
+              "pm.expect(pm.environment.get('testStoragePrefix')).to.be.a('string').and.not.empty;",
+              "pm.expect(rows[0].file_key.startsWith(pm.environment.get('testStoragePrefix'))).to.eql(true);",
+              "pm.expect(rows[0].competent_person_id).to.eql(pm.collectionVariables.get('competent_person_id'));",
+              "pm.collectionVariables.set('upload_id', rows[0].uuid);",
+              "pm.collectionVariables.set('object_key', rows[0].file_key);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Publish existing renewal dates",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"issue_date\": \"2026-10-02T00:00:00Z\",\n  \"expiry_date\": \"2027-10-02T00:00:00Z\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Verify published dates and document",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/certificate/{{certificate_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);",
+              "const body = pm.response.json();",
+              "pm.expect(body.certificate_file).to.eql(pm.collectionVariables.get('object_key'));",
+              "pm.expect(body.issue_date).to.eql('2026-10-02T00:00:00Z');",
+              "pm.expect(body.expiry_date).to.eql('2027-10-02T00:00:00Z');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Resolve recorded historical document",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/certificate/{{certificate_id}}/uploads/{{upload_id}}/file"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);",
+              "pm.collectionVariables.set('document_url', pm.response.json().url);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Download real R2 document",
+      "request": {
+        "method": "GET",
+        "url": "{{document_url}}",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);",
+              "pm.expect(pm.response.text().startsWith('%PDF-1.4')).to.eql(true);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Certificate",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/certificate/{{certificate_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Component",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/component/{{component_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Manual Asset",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/asset/{{asset_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Catalog Scope Category",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/catalog-scope-category/{{scope_category_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Category",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/category/{{category_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Catalog Scope Main Category",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/catalog-scope-main-category/{{scope_main_category_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Main Category",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/main-category/{{main_category_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Test Type",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/test-type/{{test_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.response.to.have.status(200);"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

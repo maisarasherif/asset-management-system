@@ -6,6 +6,9 @@
 /themes
 /postman/*
 /docs/*
+!/docs/architecture/
+!/docs/architecture/app-architecture-map.html
+!/docs/architecture/app-architecture-map.json
 /temp/*
 
 

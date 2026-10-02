@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Source-backed architecture map of the Asset Management Platform.">
+  <title>Asset Management Platform — Architecture Map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #edf3f6;
+      --bg-grid: rgba(30, 58, 95, 0.075);
+      --surface: #f8fbfc;
+      --surface-strong: #ffffff;
+      --surface-recessed: #e6eef2;
+      --border: rgba(19, 42, 66, 0.16);
+      --border-strong: rgba(19, 42, 66, 0.3);
+      --text: #152b3e;
+      --text-dim: #536b7c;
+      --blueprint: #1e3a5f;
+      --blueprint-dim: #dbe7f0;
+      --gold: #b07b13;
+      --gold-dim: #f6e9c5;
+      --teal: #087f8c;
+      --teal-dim: #d5eef0;
+      --sage: #587b3e;
+      --sage-dim: #e2ecd9;
+      --cranberry: #9f2447;
+      --cranberry-dim: #f4dde4;
+      --orange: #b45309;
+      --orange-dim: #f7e4ce;
+      --shadow: 0 18px 48px rgba(24, 49, 73, 0.1);
+      --shadow-soft: 0 6px 20px rgba(24, 49, 73, 0.07);
+      --radius: 14px;
+      --font-body: "IBM Plex Sans", Segoe UI, sans-serif;
+      --font-mono: "IBM Plex Mono", Consolas, monospace;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0c1720;
+        --bg-grid: rgba(151, 186, 207, 0.055);
+        --surface: #111f29;
+        --surface-strong: #162630;
+        --surface-recessed: #0a141c;
+        --border: rgba(220, 236, 244, 0.12);
+        --border-strong: rgba(220, 236, 244, 0.23);
+        --text: #e3edf2;
+        --text-dim: #9db0bb;
+        --blueprint: #8fb8d7;
+        --blueprint-dim: #173247;
+        --gold: #e1bd62;
+        --gold-dim: #423617;
+        --teal: #66c6cb;
+        --teal-dim: #153b3e;
+        --sage: #a3c97f;
+        --sage-dim: #273b22;
+        --cranberry: #e78ba4;
+        --cranberry-dim: #46202c;
+        --orange: #e6a258;
+        --orange-dim: #402b17;
+        --shadow: 0 18px 48px rgba(0, 0, 0, 0.25);
+        --shadow-soft: 0 6px 20px rgba(0, 0, 0, 0.18);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--text);
+      font-family: var(--font-body);
+      line-height: 1.55;
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(var(--bg-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px),
+        linear-gradient(135deg, color-mix(in srgb, var(--blueprint-dim) 42%, transparent), transparent 44%);
+      background-size: 28px 28px, 28px 28px, 100% 720px;
+    }
+
+    a { color: var(--blueprint); }
+    code, .mono { font-family: var(--font-mono); }
+    code {
+      padding: 0.1rem 0.34rem;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--surface-recessed);
+      font-size: 0.86em;
+      overflow-wrap: anywhere;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 100;
+      transform: translateY(-150%);
+      padding: 0.65rem 0.9rem;
+      color: var(--surface-strong);
+      background: var(--blueprint);
+      border-radius: 8px;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .page-shell {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      width: min(1580px, 100%);
+      margin: 0 auto;
+    }
+
+    .toc {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 28px 20px 24px;
+      border-right: 1px solid var(--border);
+      background: color-mix(in srgb, var(--bg) 86%, transparent);
+      backdrop-filter: blur(12px);
+      overflow-y: auto;
+      z-index: 20;
+    }
+    .toc__mark {
+      display: inline-grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--border-strong);
+      color: var(--gold);
+      background: var(--surface);
+      font: 600 0.78rem var(--font-mono);
+      letter-spacing: 0.08em;
+      box-shadow: inset 0 0 0 4px var(--gold-dim);
+    }
+    .toc__title { margin: 0.85rem 0 0.15rem; font-weight: 700; }
+    .toc__subtitle { margin: 0; color: var(--text-dim); font: 0.72rem var(--font-mono); }
+    .toc nav { margin-top: 1.5rem; }
+    .toc nav a {
+      display: block;
+      position: relative;
+      padding: 0.48rem 0 0.48rem 1.05rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.82rem;
+      border-left: 1px solid var(--border);
+    }
+    .toc nav a::before {
+      content: "";
+      position: absolute;
+      left: -3px;
+      top: 0.85rem;
+      width: 5px;
+      height: 5px;
+      background: var(--blueprint);
+      border-radius: 50%;
+    }
+    .toc nav a:hover, .toc nav a:focus-visible { color: var(--text); background: var(--blueprint-dim); }
+    .toc__download {
+      display: block;
+      margin-top: 1.5rem;
+      padding: 0.7rem;
+      color: var(--text);
+      text-decoration: none;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      font: 500 0.73rem var(--font-mono);
+    }
+
+    main { min-width: 0; padding: 24px 34px 80px; }
+    section { scroll-margin-top: 24px; margin-top: 58px; min-width: 0; }
+
+    .hero {
+      position: relative;
+      min-height: 520px;
+      margin-top: 0;
+      padding: clamp(32px, 6vw, 76px);
+      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      background:
+        linear-gradient(110deg, color-mix(in srgb, var(--surface-strong) 95%, transparent) 0 64%, transparent 64%),
+        repeating-linear-gradient(-45deg, transparent 0 9px, var(--blueprint-dim) 9px 10px);
+      box-shadow: var(--shadow);
+      animation: fadeUp 0.55s ease-out both;
+    }
+    .hero::after {
+      content: "AMS / SYSTEM MAP / REV 2026.07";
+      position: absolute;
+      right: -42px;
+      bottom: 88px;
+      transform: rotate(-90deg);
+      color: var(--text-dim);
+      font: 0.66rem var(--font-mono);
+      letter-spacing: 0.16em;
+    }
+    .eyebrow, .section-label {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: var(--blueprint);
+      font: 600 0.72rem var(--font-mono);
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before, .section-label::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border: 2px solid var(--blueprint);
+      transform: rotate(45deg);
+    }
+    h1 {
+      max-width: 820px;
+      margin: 1.2rem 0 1rem;
+      font-size: clamp(2.7rem, 6.8vw, 6.2rem);
+      line-height: 0.96;
+      letter-spacing: -0.055em;
+    }
+    .hero__lead {
+      max-width: 720px;
+      margin: 0;
+      color: var(--text-dim);
+      font-size: clamp(1rem, 1.7vw, 1.3rem);
+    }
+    .hero__stamp {
+      display: inline-block;
+      margin-top: 1.5rem;
+      padding: 0.55rem 0.75rem;
+      color: var(--cranberry);
+      border: 1px solid var(--cranberry);
+      background: var(--cranberry-dim);
+      font: 600 0.71rem var(--font-mono);
+      text-transform: uppercase;
+      transform: rotate(-1deg);
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 1px;
+      max-width: 960px;
+      margin-top: 3rem;
+      border: 1px solid var(--border-strong);
+      background: var(--border);
+    }
+    .metric { min-width: 0; padding: 1rem; background: var(--surface-strong); }
+    .metric strong { display: block; font: 600 clamp(1.6rem, 3vw, 2.5rem) var(--font-mono); color: var(--blueprint); }
+    .metric span { color: var(--text-dim); font-size: 0.76rem; }
+
+    .section-heading {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(240px, 0.6fr);
+      gap: 2rem;
+      align-items: end;
+      padding-bottom: 1.2rem;
+      border-bottom: 1px solid var(--border-strong);
+    }
+    h2 { margin: 0.45rem 0 0; font-size: clamp(1.9rem, 4vw, 3.4rem); line-height: 1.05; letter-spacing: -0.04em; }
+    .section-heading p { margin: 0; color: var(--text-dim); }
+
+    .ve-card {
+      min-width: 0;
+      padding: 1.2rem;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+      animation: fadeUp 0.48s ease-out both;
+    }
+    .ve-card--flat { box-shadow: none; }
+    .ve-card--recessed { background: var(--surface-recessed); box-shadow: inset 0 1px 0 var(--border); }
+    .ve-card h3 { margin: 0 0 0.45rem; font-size: 1.03rem; }
+    .ve-card p { margin: 0; color: var(--text-dim); font-size: 0.9rem; }
+    .ve-card__tag { color: var(--text-dim); font: 0.67rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
+    .accent-blue { border-top: 3px solid var(--blueprint); }
+    .accent-gold { border-top: 3px solid var(--gold); }
+    .accent-teal { border-top: 3px solid var(--teal); }
+    .accent-sage { border-top: 3px solid var(--sage); }
+    .accent-cranberry { border-top: 3px solid var(--cranberry); }
+
+    .topology {
+      position: relative;
+      min-height: 620px;
+      margin-top: 1.6rem;
+      padding: 2rem;
+      border: 1px solid var(--border-strong);
+      background-color: var(--surface-recessed);
+      background-image: radial-gradient(var(--border-strong) 0.7px, transparent 0.7px);
+      background-size: 12px 12px;
+      overflow: hidden;
+    }
+    .topology svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .topology line, .topology path { stroke: var(--blueprint); stroke-width: 1.4; fill: none; opacity: 0.7; stroke-dasharray: 6 5; animation: drawIn 1.1s ease-out both; }
+    .topology polygon { fill: var(--blueprint); }
+    .topology-node {
+      position: absolute;
+      width: clamp(150px, 18%, 240px);
+      min-width: 0;
+      padding: 0.9rem;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-strong);
+      box-shadow: var(--shadow-soft);
+    }
+    .topology-node strong { display: block; margin-bottom: 0.3rem; }
+    .topology-node span { display: block; color: var(--text-dim); font: 0.68rem var(--font-mono); }
+    .n-browser { left: 4%; top: 8%; }
+    .n-spa { left: 30%; top: 8%; border-left: 4px solid var(--teal); }
+    .n-api { left: 58%; top: 8%; border-left: 4px solid var(--blueprint); }
+    .n-db { left: 58%; top: 42%; border-left: 4px solid var(--gold); }
+    .n-river { left: 30%; top: 42%; border-left: 4px solid var(--orange); }
+    .n-r2 { right: 3%; top: 67%; border-left: 4px solid var(--sage); }
+    .n-smtp { left: 30%; top: 75%; border-left: 4px solid var(--cranberry); }
+    .n-clickup { left: 4%; top: 75%; border-left: 4px solid var(--cranberry); }
+    .n-prom { right: 3%; top: 8%; border-left: 4px solid var(--teal); }
+    .topology__legend {
+      position: absolute;
+      right: 3%;
+      top: 43%;
+      width: 20%;
+      padding: 0.8rem;
+      color: var(--text-dim);
+      background: color-mix(in srgb, var(--surface) 90%, transparent);
+      border: 1px dashed var(--border-strong);
+      font: 0.67rem var(--font-mono);
+    }
+
+    .boundary-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.4rem;
+    }
+    .boundary-grid .platform { grid-row: span 2; padding: 1.7rem; }
+    .boundary-grid ul, .compact-list { margin: 0.7rem 0 0; padding: 0; list-style: none; }
+    .boundary-grid li, .compact-list li { position: relative; padding: 0.3rem 0 0.3rem 1rem; color: var(--text-dim); font-size: 0.84rem; }
+    .boundary-grid li::before, .compact-list li::before { content: ""; position: absolute; left: 0; top: 0.82rem; width: 5px; height: 1px; background: currentColor; }
+
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 1.6rem;
+      margin-top: 1.4rem;
+    }
+    .flow-step { position: relative; min-width: 0; padding: 1rem 0.8rem; border-top: 2px solid var(--blueprint); background: var(--surface); }
+    .flow-step:not(:last-child)::after { content: "→"; position: absolute; right: -1.25rem; top: 1.15rem; color: var(--gold); font: 1.2rem var(--font-mono); }
+    .flow-step b { display: block; font: 600 0.72rem var(--font-mono); color: var(--blueprint); }
+    .flow-step span { display: block; margin-top: 0.35rem; color: var(--text-dim); font-size: 0.78rem; overflow-wrap: break-word; }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      gap: 1.1rem;
+      margin-top: 1.4rem;
+    }
+    .stack { display: grid; gap: 1rem; }
+    .layer-stack { display: grid; gap: 8px; }
+    .layer {
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+      min-width: 0;
+      padding: 0.9rem 1rem;
+      border-left: 3px solid var(--blueprint);
+      background: var(--surface-recessed);
+    }
+    .layer b { font: 600 0.72rem var(--font-mono); color: var(--blueprint); text-transform: uppercase; }
+    .layer span { color: var(--text-dim); font-size: 0.84rem; overflow-wrap: break-word; }
+
+    .table-wrap { margin-top: 1.2rem; overflow-x: auto; border: 1px solid var(--border-strong); background: var(--surface); }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
+    th, td { padding: 0.72rem 0.8rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; z-index: 2; color: var(--text-dim); background: var(--surface-recessed); font: 600 0.68rem var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
+    td { font-size: 0.82rem; }
+    tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-recessed) 44%, transparent); }
+    tbody tr:hover { background: var(--blueprint-dim); }
+    td:first-child { font-family: var(--font-mono); color: var(--blueprint); }
+    .num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .badge {
+      display: inline-block;
+      padding: 0.17rem 0.45rem;
+      border-radius: 999px;
+      color: var(--text);
+      background: var(--blueprint-dim);
+      font: 500 0.66rem var(--font-mono);
+      white-space: nowrap;
+    }
+    .badge--admin { background: var(--gold-dim); }
+    .badge--product { background: var(--teal-dim); }
+    .badge--client { background: var(--sage-dim); }
+
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.8rem;
+      margin-top: 1.2rem;
+    }
+    .module-grid .ve-card { padding: 1rem; }
+
+    .entity-grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 0.9rem;
+      margin-top: 1.4rem;
+    }
+    .entity-cluster { min-width: 0; padding: 1.2rem; border: 1px solid var(--border); background: var(--surface); }
+    .entity-cluster:nth-child(1) { grid-column: span 5; border-top: 3px solid var(--blueprint); }
+    .entity-cluster:nth-child(2) { grid-column: span 7; border-top: 3px solid var(--gold); }
+    .entity-cluster:nth-child(3) { grid-column: span 7; border-top: 3px solid var(--teal); }
+    .entity-cluster:nth-child(4) { grid-column: span 5; border-top: 3px solid var(--sage); }
+    .entity-cluster:nth-child(5) { grid-column: span 12; border-top: 3px solid var(--cranberry); }
+    .entity-cluster h3 { margin: 0; }
+    .entity-cluster p { margin: 0.2rem 0 0.75rem; color: var(--text-dim); font-size: 0.78rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .chip { padding: 0.28rem 0.46rem; border: 1px solid var(--border); background: var(--surface-recessed); font: 0.67rem var(--font-mono); overflow-wrap: anywhere; }
+
+    .workflow-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.4rem; }
+    .workflow { counter-increment: workflow; }
+    .workflow h3 { display: flex; align-items: center; gap: 0.6rem; }
+    .workflow h3::before { content: counter(workflow, decimal-leading-zero); color: var(--gold); font: 600 0.75rem var(--font-mono); }
+    .workflow ol { margin: 0.8rem 0 0; padding-left: 1.25rem; }
+    .workflow li { margin: 0.35rem 0; color: var(--text-dim); font-size: 0.82rem; }
+
+    .security-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1.4rem; }
+    .callout {
+      margin-top: 1rem;
+      padding: 1rem 1.1rem;
+      border-left: 4px solid var(--cranberry);
+      background: var(--cranberry-dim);
+      color: var(--text);
+    }
+    .callout strong { color: var(--cranberry); }
+
+    details { border: 1px solid var(--border); background: var(--surface); }
+    details + details { margin-top: 0.6rem; }
+    summary { cursor: pointer; padding: 0.9rem 1rem; font-weight: 600; }
+    details[open] summary { border-bottom: 1px solid var(--border); }
+    .details-body { padding: 1rem; }
+
+    .repo-tree { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; }
+    .repo-row { display: grid; grid-template-columns: minmax(190px, 0.85fr) minmax(0, 1.15fr); gap: 0.8rem; padding: 0.65rem; border-bottom: 1px solid var(--border); }
+    .repo-row b { font: 500 0.7rem var(--font-mono); color: var(--blueprint); overflow-wrap: anywhere; }
+    .repo-row span { color: var(--text-dim); font-size: 0.78rem; }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: 58px;
+      padding-top: 1.2rem;
+      border-top: 1px solid var(--border-strong);
+      color: var(--text-dim);
+      font: 0.7rem var(--font-mono);
+    }
+
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes drawIn { from { stroke-dashoffset: 70; opacity: 0; } to { stroke-dashoffset: 0; opacity: 0.7; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
+
+    @media (max-width: 1180px) {
+      .page-shell { grid-template-columns: 1fr; }
+      .toc {
+        position: sticky;
+        height: auto;
+        padding: 0.55rem 1rem;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .toc__mark, .toc__title, .toc__subtitle, .toc__download { display: none; }
+      .toc nav { display: flex; gap: 0.25rem; margin: 0; }
+      .toc nav a { display: inline-block; padding: 0.45rem 0.7rem; border: 0; }
+      .toc nav a::before { display: none; }
+      main { padding-top: 18px; }
+      .module-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .flow-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .flow-step::after { display: none; }
+    }
+
+    @media (max-width: 840px) {
+      main { padding: 12px 14px 50px; }
+      .hero { min-height: auto; padding: 34px 24px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metric:last-child { grid-column: span 2; }
+      .section-heading, .split { grid-template-columns: 1fr; }
+      .boundary-grid { grid-template-columns: 1fr 1fr; }
+      .boundary-grid .platform { grid-column: span 2; grid-row: auto; }
+      .module-grid, .security-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .workflow-grid, .repo-tree { grid-template-columns: 1fr; }
+      .entity-cluster:nth-child(n) { grid-column: span 12; }
+      .topology { min-height: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+      .topology svg, .topology__legend { display: none; }
+      .topology-node { position: static; width: auto; }
+    }
+
+    @media (max-width: 560px) {
+      .boundary-grid, .module-grid, .security-grid, .flow-grid, .topology { grid-template-columns: 1fr; }
+      .boundary-grid .platform, .metric:last-child { grid-column: auto; }
+      .layer { grid-template-columns: 1fr; gap: 0.3rem; }
+      .repo-row { grid-template-columns: 1fr; gap: 0.3rem; }
+      .footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to architecture map</a>
+  <div class="page-shell">
+    <aside class="toc" aria-label="Architecture sections">
+      <div class="toc__mark">AMS</div>
+      <p class="toc__title">Architecture map</p>
+      <p class="toc__subtitle">SOURCE SNAPSHOT / 2026-07-24</p>
+      <nav>
+        <a href="#overview">01 Overview</a>
+        <a href="#topology">02 Topology</a>
+        <a href="#boundaries">03 Boundaries</a>
+        <a href="#frontend">04 Frontend</a>
+        <a href="#backend">05 Backend</a>
+        <a href="#data">06 Data</a>
+        <a href="#workflows">07 Workflows</a>
+        <a href="#security">08 Security</a>
+        <a href="#operations">09 Operations</a>
+        <a href="#repository">10 Repository</a>
+      </nav>
+      <a class="toc__download" href="app-architecture-map.json" download>Download machine map →</a>
+    </aside>
+
+    <main id="main">
+      <section class="hero" id="overview">
+        <div class="eyebrow">Source-backed system drawing</div>
+        <h1>Asset Management Platform</h1>
+        <p class="hero__lead">One React SPA and one Go modular monolith serve two product surfaces—AMS and HR/Admin—over a shared PostgreSQL platform, durable River jobs, R2 document storage, SMTP, and ClickUp.</p>
+        <div class="hero__stamp">Live code supersedes legacy architecture notes</div>
+        <div class="metrics" aria-label="Repository metrics">
+          <div class="metric"><strong>36</strong><span>frontend paths</span></div>
+          <div class="metric"><strong>157</strong><span>API route registrations</span></div>
+          <div class="metric"><strong>37</strong><span>database models</span></div>
+          <div class="metric"><strong>246</strong><span>named sqlc queries</span></div>
+          <div class="metric"><strong>49</strong><span>forward migrations</span></div>
+        </div>
+      </section>
+
+      <section id="topology">
+        <div class="section-heading">
+          <div><div class="section-label">02 / Runtime topology</div><h2>The whole deployed shape</h2></div>
+          <p>The Go process is the composition root: HTTP API, cron triggers, River workers, River UI, integration clients, and database access live together.</p>
+        </div>
+        <div class="topology" role="img" aria-label="Browser runs the React SPA, which calls the Gin API. The API uses PostgreSQL, River, R2, SMTP, ClickUp, and exposes Prometheus metrics.">
+          <svg viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">
+            <defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7"></polygon></marker></defs>
+            <line x1="180" y1="95" x2="305" y2="95" marker-end="url(#arrow)"></line>
+            <line x1="465" y1="95" x2="585" y2="95" marker-end="url(#arrow)"></line>
+            <line x1="670" y1="155" x2="670" y2="280" marker-end="url(#arrow)"></line>
+            <path d="M 600 160 C 560 225, 505 255, 425 285" marker-end="url(#arrow)"></path>
+            <line x1="460" y1="330" x2="585" y2="330" marker-end="url(#arrow)"></line>
+            <path d="M 420 385 C 390 440, 380 470, 380 505" marker-end="url(#arrow)"></path>
+            <path d="M 330 385 C 280 445, 195 480, 135 505" marker-end="url(#arrow)"></path>
+            <path d="M 730 365 C 790 410, 830 455, 875 490" marker-end="url(#arrow)"></path>
+            <line x1="895" y1="155" x2="755" y2="120" marker-end="url(#arrow)"></line>
+          </svg>
+          <div class="topology-node n-browser"><strong>Browser</strong><span>session cookie · responsive UI</span></div>
+          <div class="topology-node n-spa"><strong>Cloudscape React SPA</strong><span>React Router · Query cache · typed API facade</span></div>
+          <div class="topology-node n-api"><strong>Gin HTTP API</strong><span>middleware · controllers · pgx/sqlc</span></div>
+          <div class="topology-node n-db"><strong>PostgreSQL</strong><span>37 app models · transactions · River tables</span></div>
+          <div class="topology-node n-river"><strong>River workers</strong><span>reset email · notification email · ClickUp</span></div>
+          <div class="topology-node n-r2"><strong>Cloudflare R2</strong><span>S3 upload · 5-minute signed GET</span></div>
+          <div class="topology-node n-smtp"><strong>SMTP</strong><span>HTML operational email</span></div>
+          <div class="topology-node n-clickup"><strong>ClickUp</strong><span>expiry and maintenance tasks</span></div>
+          <div class="topology-node n-prom"><strong>Prometheus</strong><span>token-protected scrape</span></div>
+          <div class="topology__legend">Solid runtime boundary: one frontend build, one Go process, one primary database. External services remain independently operated.</div>
+        </div>
+      </section>
+
+      <section id="boundaries">
+        <div class="section-heading">
+          <div><div class="section-label">03 / Product boundaries</div><h2>Shared platform, separate ownership</h2></div>
+          <p>These are namespaces and authorization/data boundaries inside a modular monolith—not independently deployed microservices.</p>
+        </div>
+        <div class="boundary-grid">
+          <article class="ve-card platform accent-blue">
+            <span class="ve-card__tag">Shared foundation</span><h3>Platform</h3>
+            <p>Cross-product capabilities used by every surface.</p>
+            <ul><li>Identity and current-token sessions</li><li>Global roles and Product Access</li><li>Notification deliveries and durable jobs</li><li>Scheduler execution and job UI</li><li>R2 storage, audit, metrics, logging</li></ul>
+          </article>
+          <article class="ve-card accent-gold"><span class="ve-card__tag">Operational product</span><h3>AMS</h3><p>Assets → components → certificates, plus templates, catalog, competency, projects, maintenance, and certificate scheduler audit.</p></article>
+          <article class="ve-card accent-cranberry"><span class="ve-card__tag">Compliance product</span><h3>HR/Admin</h3><p>Persons, vehicles, companies, compliance records and versions, reminder policy, notification config, and product-scoped audit.</p></article>
+          <article class="ve-card accent-sage"><span class="ve-card__tag">Restricted surface</span><h3>Client portal</h3><p>Read-only assets and certificates scoped through active user-project access; downloads are re-authorized server-side.</p></article>
+          <article class="ve-card accent-teal"><span class="ve-card__tag">Control plane</span><h3>Platform administration</h3><p>Users, global role/status, Product Access, shared operations, and SUPER_ADMIN-only scheduler/job surfaces.</p></article>
+        </div>
+
+        <div class="flow-grid" aria-label="Authenticated request flow">
+          <div class="flow-step"><b>01 Browser</b><span>credentials included</span></div>
+          <div class="flow-step"><b>02 JWT</b><span>signature + expiry</span></div>
+          <div class="flow-step"><b>03 Session</b><span>active user + token match</span></div>
+          <div class="flow-step"><b>04 Access</b><span>global / product / client role</span></div>
+          <div class="flow-step"><b>05 Controller</b><span>bind + validate + orchestrate</span></div>
+          <div class="flow-step"><b>06 sqlc</b><span>typed query or transaction</span></div>
+          <div class="flow-step"><b>07 Response</b><span>JSON · blob · signed URL</span></div>
+        </div>
+      </section>
+
+      <section id="frontend">
+        <div class="section-heading">
+          <div><div class="section-label">04 / Frontend</div><h2>Route-driven feature slices</h2></div>
+          <p>The SPA is lazy-loaded by page, holds session/product state in providers, and treats TanStack Query as the server-state boundary.</p>
+        </div>
+        <div class="split">
+          <div class="ve-card accent-teal">
+            <span class="ve-card__tag">Composition</span>
+            <div class="layer-stack">
+              <div class="layer"><b>Entry</b><span><code>main.tsx</code> mounts the router inside <code>AppProviders</code>.</span></div>
+              <div class="layer"><b>Providers</b><span>QueryClient → AuthProvider → FlashbarProvider.</span></div>
+              <div class="layer"><b>Router</b><span>Lazy pages, Suspense, guest/session/global-role/product-role guards.</span></div>
+              <div class="layer"><b>Shell</b><span>Cloudscape top nav, product switcher, asset selector, side nav, help, notifications.</span></div>
+              <div class="layer"><b>Features</b><span>Auth, account, dashboard, assets, templates, catalog, admin, client, HR/Admin.</span></div>
+              <div class="layer"><b>HTTP</b><span><code>apiRequest</code> + <code>ams.ts</code>: cookie credentials, JSON/multipart/blob modes, centralized 401 expiry.</span></div>
+            </div>
+          </div>
+          <div class="stack">
+            <article class="ve-card accent-blue"><span class="ve-card__tag">Server state</span><h3>TanStack Query</h3><p>30-second stale time, one retry, focus refetch disabled. Mutations invalidate domain keys such as assets, dashboard, certificates, templates, and HR/Admin records.</p></article>
+            <article class="ve-card accent-gold"><span class="ve-card__tag">Session state</span><h3>AuthProvider</h3><p>Bootstraps from <code>/v1/session</code>, loads product assignments, schedules expiry logout, and synchronizes logout across tabs.</p></article>
+            <article class="ve-card accent-sage"><span class="ve-card__tag">Navigation state</span><h3>Asset context</h3><p>The current asset is retained in <code>sessionStorage</code> and drives dashboard/workspace navigation without becoming authoritative domain state.</p></article>
+          </div>
+        </div>
+
+        <details open>
+          <summary>Frontend route inventory — 36 named paths</summary>
+          <div class="details-body table-wrap">
+            <table>
+              <thead><tr><th>Surface</th><th>Paths</th><th>Guard</th></tr></thead>
+              <tbody>
+                <tr><td>Public auth</td><td><code>/login</code> · <code>/forgot-password</code> · <code>/reset-password</code></td><td><span class="badge">GuestOnly</span></td></tr>
+                <tr><td>Authenticated shell</td><td><code>/</code> · <code>/account</code></td><td><span class="badge">RequireAuth</span></td></tr>
+                <tr><td>AMS overview</td><td><code>/dashboard</code> · <code>/assets</code> · <code>/assets/:assetId</code> · <code>/assets/:assetId/routine-maintenance</code></td><td><span class="badge">RequireAuth</span></td></tr>
+                <tr><td>AMS write flows</td><td><code>/assets/new</code> · <code>/assets/:assetId/edit</code> · component new/edit · certificate new/edit</td><td><span class="badge badge--admin">RequireAdmin</span></td></tr>
+                <tr><td>AMS certificate read</td><td><code>/assets/:assetId/components/:componentId/certificates/:certificateId</code></td><td><span class="badge">RequireAuth</span></td></tr>
+                <tr><td>Templates + catalog</td><td><code>/templates</code> · <code>/templates/new</code> · <code>/templates/:templateId</code> · <code>/templates/:templateId/configure</code> · <code>/catalog</code></td><td><span class="badge badge--admin">RequireAdmin</span></td></tr>
+                <tr><td>AMS administration</td><td><code>/administration</code> · <code>/client-access</code></td><td><span class="badge badge--admin">RequireAdmin</span></td></tr>
+                <tr><td>Platform scheduler</td><td><code>/scheduler</code></td><td><span class="badge badge--admin">RequireSuperAdmin</span></td></tr>
+                <tr><td>Client portal</td><td><code>/client/assets</code> · <code>/client/assets/:assetId</code></td><td><span class="badge badge--client">CLIENT redirect</span></td></tr>
+                <tr><td>HR/Admin work</td><td><code>/hr-admin</code> · persons · vehicles · companies · records · <code>/:section</code></td><td><span class="badge badge--product">Product Access</span></td></tr>
+                <tr><td>HR/Admin config</td><td>record-types · reminder-policy · notification-config · scheduler</td><td><span class="badge badge--product">Product ADMIN</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+
+      <section id="backend">
+        <div class="section-heading">
+          <div><div class="section-label">05 / Backend</div><h2>One process, layered access lanes</h2></div>
+          <p>Routes compose authentication and authorization middleware before controllers. Controllers own HTTP orchestration; SQL remains explicit in sqlc query files.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Route lane</th><th>Prefix</th><th class="num">Count</th><th>Authoritative access</th></tr></thead>
+            <tbody>
+              <tr><td>system</td><td><code>/v1</code></td><td class="num">2</td><td>Health public; metrics uses a separate static bearer token.</td></tr>
+              <tr><td>public_auth</td><td><code>/v1</code></td><td class="num">3</td><td>Public; login and forgot-password are rate limited.</td></tr>
+              <tr><td>account</td><td><code>/v1</code></td><td class="num">4</td><td>Valid JWT + active user + current stored token.</td></tr>
+              <tr><td>admin</td><td><code>/v1</code></td><td class="num">69</td><td>Global <span class="badge badge--admin">ADMIN / SUPER_ADMIN</span></td></tr>
+              <tr><td>staff_read</td><td><code>/v1</code></td><td class="num">38</td><td>Any non-CLIENT global role.</td></tr>
+              <tr><td>client</td><td><code>/v1/client</code></td><td class="num">3</td><td>Global <span class="badge badge--client">CLIENT</span> plus project-scoped SQL.</td></tr>
+              <tr><td>platform_admin</td><td><code>/v1/platform</code></td><td class="num">3</td><td>Global <span class="badge badge--admin">SUPER_ADMIN</span></td></tr>
+              <tr><td>scheduler</td><td><code>/v1</code></td><td class="num">4</td><td>Global <span class="badge badge--admin">SUPER_ADMIN</span></td></tr>
+              <tr><td>hr_admin_read</td><td><code>/v1/hr-admin</code></td><td class="num">10</td><td>Product ADMIN, USER, VIEWER; SUPER_ADMIN bypass.</td></tr>
+              <tr><td>hr_admin_write</td><td><code>/v1/hr-admin</code></td><td class="num">9</td><td>Product ADMIN or USER; SUPER_ADMIN bypass.</td></tr>
+              <tr><td>hr_admin_admin</td><td><code>/v1/hr-admin</code></td><td class="num">10</td><td>Product ADMIN; SUPER_ADMIN bypass.</td></tr>
+              <tr><td>river_job_ui</td><td><code>/v1/admin/jobs</code></td><td class="num">2</td><td>Global <span class="badge badge--admin">SUPER_ADMIN</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="module-grid">
+          <article class="ve-card accent-blue"><h3>Identity + platform</h3><p>Users, login/session/logout, passwords, reset, audit, Product Access.</p></article>
+          <article class="ve-card accent-gold"><h3>Asset operations</h3><p>Assets, components, certificates, uploads, PDFs, maintenance.</p></article>
+          <article class="ve-card accent-teal"><h3>Configuration</h3><p>Catalog scopes, categories, test/equipment types, competency.</p></article>
+          <article class="ve-card accent-sage"><h3>Templates</h3><p>Template configuration, component/test blueprint, asset spin-up.</p></article>
+          <article class="ve-card accent-cranberry"><h3>HR/Admin</h3><p>Subjects, record types, records, versions, documents, config.</p></article>
+          <article class="ve-card accent-blue"><h3>Client access</h3><p>Projects, assignments, read-only asset and certificate queries.</p></article>
+          <article class="ve-card accent-gold"><h3>Scheduling</h3><p>Manual scans, durable task/failure views, River job UI.</p></article>
+          <article class="ve-card accent-teal"><h3>Cross-cutting</h3><p>CORS, request IDs, metrics, logging, recovery, validation, pagination.</p></article>
+        </div>
+      </section>
+
+      <section id="data">
+        <div class="section-heading">
+          <div><div class="section-label">06 / Data architecture</div><h2>Five ownership clusters, one PostgreSQL</h2></div>
+          <p>Handwritten SQL is generated into typed Go methods. UUIDs are primary IDs; display IDs are centrally allocated for human-facing records.</p>
+        </div>
+        <div class="entity-grid">
+          <article class="entity-cluster"><h3>Platform identity + operations</h3><p>8 models</p><div class="chips"><span class="chip">User</span><span class="chip">PasswordResetToken</span><span class="chip">ForgotPasswordRateLimit</span><span class="chip">UserManagementAuditLog</span><span class="chip">ProductAccess</span><span class="chip">ProductNotificationConfiguration</span><span class="chip">NotificationDelivery</span><span class="chip">DisplayIDAllocator</span></div></article>
+          <article class="entity-cluster"><h3>AMS operations</h3><p>9 models · Asset → Component → Certificate is the operational spine.</p><div class="chips"><span class="chip">Asset</span><span class="chip">Component</span><span class="chip">Certificate</span><span class="chip">CertificateUploadAudit</span><span class="chip">AssetMaintenanceEvent</span><span class="chip">SingleAssetEquipment</span><span class="chip">EquipmentType</span><span class="chip">Project</span><span class="chip">UserProjectAccess</span></div></article>
+          <article class="entity-cluster"><h3>Catalog + templates</h3><p>9 models · reusable dictionaries become materialized asset structures.</p><div class="chips"><span class="chip">MainCategory</span><span class="chip">Category</span><span class="chip">CatalogScope</span><span class="chip">CatalogScopeMainCategory</span><span class="chip">CatalogScopeCategory</span><span class="chip">TestType</span><span class="chip">AssetTemplate</span><span class="chip">TemplateComponent</span><span class="chip">TemplateComponentTest</span></div></article>
+          <article class="entity-cluster"><h3>Competency</h3><p>4 models · qualification rules and upload attribution.</p><div class="chips"><span class="chip">CompetencyCategory</span><span class="chip">CompetentPerson</span><span class="chip">TemplateComponentTestCompetencyCategory</span><span class="chip">CertificateCompetencyCategory</span></div></article>
+          <article class="entity-cluster"><h3>HR/Admin compliance</h3><p>7 models · subjects stay separate from platform users and AMS assets.</p><div class="chips"><span class="chip">HrAdminDepartment</span><span class="chip">HrAdminPerson</span><span class="chip">HrAdminVehicle</span><span class="chip">HrAdminCompany</span><span class="chip">ComplianceRecordType</span><span class="chip">ComplianceRecord</span><span class="chip">ComplianceRecordVersion</span></div></article>
+        </div>
+        <div class="split">
+          <article class="ve-card accent-gold"><span class="ve-card__tag">Primary relationship chain</span><h3>Template → live operations</h3><p><code>AssetTemplate</code> → <code>TemplateComponent</code> → <code>TemplateComponentTest</code> materializes into <code>Asset</code> → <code>Component</code> → pending <code>Certificate</code>. Competency join tables preserve required qualification context.</p></article>
+          <article class="ve-card accent-cranberry"><span class="ve-card__tag">Versioned relationship chain</span><h3>Subject → compliance history</h3><p><code>ComplianceRecord</code> points polymorphically to a person, vehicle, or company and owns append-only <code>ComplianceRecordVersion</code> cycles; one version is current.</p></article>
+        </div>
+      </section>
+
+      <section id="workflows">
+        <div class="section-heading">
+          <div><div class="section-label">07 / Critical workflows</div><h2>Where architecture becomes behavior</h2></div>
+          <p>These flows cross enough boundaries to define the system more accurately than a directory list.</p>
+        </div>
+        <div class="workflow-grid">
+          <article class="ve-card workflow accent-blue"><h3>Session-authenticated request</h3><ol><li>Cookie or bearer token reaches Gin.</li><li>JWT is validated.</li><li>User must be active and the token must match the stored current session.</li><li>Global/product/client access middleware authorizes.</li><li>Controller runs typed SQL and returns JSON, blob, or URL.</li></ol></article>
+          <article class="ve-card workflow accent-gold"><h3>Asset spin-up from template</h3><ol><li>Admin submits asset + optional template.</li><li>PostgreSQL transaction creates the asset.</li><li>UUID spin-up function materializes components and pending certificates.</li><li>Commit publishes one coherent live structure.</li><li>Frontend invalidates asset/template query keys.</li></ol></article>
+          <article class="ve-card workflow accent-sage"><h3>Certificate document lifecycle</h3><ol><li>Multipart upload is validated.</li><li>File streams to an opaque, date-partitioned R2 key.</li><li>Certificate reference and upload audit are persisted.</li><li>Competent-person attribution is retained.</li><li>Authorized reads receive a five-minute signed URL.</li></ol></article>
+          <article class="ve-card workflow accent-cranberry"><h3>Durable notification delivery</h3><ol><li>Startup, cron, manual run, or maintenance threshold finds a candidate.</li><li>A per-tier/channel idempotency key claims a delivery row.</li><li>River job insert shares the database transaction.</li><li>Worker calls SMTP or ClickUp.</li><li>Delivery becomes SENT, retriable failure, or final FAILED.</li></ol></article>
+          <article class="ve-card workflow accent-teal"><h3>HR/Admin renewal</h3><ol><li>User creates or renews a compliance record.</li><li>A new version is appended; the former current version is superseded.</li><li>Type policy or product default supplies reminder days.</li><li>Renewable active records enter expiry scans.</li><li>Archived subjects/records and one-time types are excluded.</li></ol></article>
+          <article class="ve-card workflow accent-blue"><h3>Password reset</h3><ol><li>Rate-limited request creates a hashed single-use token.</li><li>Reset payload is AES-GCM encrypted before job insertion.</li><li>River sends the email.</li><li>Reset endpoint consumes the token and updates the password.</li><li>Stored sessions are revoked.</li></ol></article>
+        </div>
+      </section>
+
+      <section id="security">
+        <div class="section-heading">
+          <div><div class="section-label">08 / Security model</div><h2>Defense is layered by boundary</h2></div>
+          <p>Frontend route guards are navigation policy. Backend middleware and scoped SQL are the actual enforcement boundary.</p>
+        </div>
+        <div class="security-grid">
+          <article class="ve-card accent-blue"><span class="ve-card__tag">Authentication</span><h3>Revocable JWT session</h3><ul class="compact-list"><li>6-hour signed JWT</li><li>HTTP-only SameSite=Lax cookie</li><li>Secure outside development</li><li>Bearer fallback</li><li>Current token stored on user row</li></ul></article>
+          <article class="ve-card accent-gold"><span class="ve-card__tag">Authorization</span><h3>Four checks</h3><ul class="compact-list"><li>Active user status</li><li>Global role</li><li>Product Access + role</li><li>Project/resource-scoped query</li></ul></article>
+          <article class="ve-card accent-sage"><span class="ve-card__tag">Files + public APIs</span><h3>Short-lived exposure</h3><ul class="compact-list"><li>Opaque object keys</li><li>Safe download filenames</li><li>5-minute signed URLs</li><li>Login/reset rate limits</li><li>Metrics closed when unconfigured</li></ul></article>
+        </div>
+        <div class="callout"><strong>Architecture drift:</strong> the root <code>ARCHITECTURE.md</code> still states MongoDB and bearer-token-only authentication. The current code uses PostgreSQL/sqlc and an HTTP-only cookie-first session with bearer fallback.</div>
+      </section>
+
+      <section id="operations">
+        <div class="section-heading">
+          <div><div class="section-label">09 / Operations + quality</div><h2>Durability, observability, regression</h2></div>
+          <p>The process starts both scans immediately, then schedules them daily at 08:00 by default. River and delivery tables retain operational evidence.</p>
+        </div>
+        <div class="split">
+          <div class="stack">
+            <article class="ve-card accent-cranberry"><span class="ve-card__tag">Background engine</span><h3>River on PostgreSQL</h3><p>Three worker kinds: password reset email, notification email, and notification ClickUp. Jobs retry up to five attempts; River UI is SUPER_ADMIN-only.</p></article>
+            <article class="ve-card accent-teal"><span class="ve-card__tag">Observability</span><h3>Request and delivery visibility</h3><p>Zerolog + request IDs; Prometheus request total, latency, and in-flight metrics; health endpoint; product-scoped task/failure pages; River UI.</p></article>
+            <article class="ve-card accent-gold"><span class="ve-card__tag">Deployment gap</span><h3>Runtime packaging is not declared</h3><p>No production container or orchestrator manifest was found. Reverse proxy, secrets delivery, backups, process supervision, and horizontal scaling remain outside this repository.</p></article>
+          </div>
+          <div class="ve-card accent-blue">
+            <span class="ve-card__tag">31 test artifacts</span><h3>Regression stack</h3>
+            <div class="layer-stack">
+              <div class="layer"><b>Go unit</b><span>Tokens, storage, notification contracts/idempotency, DTOs, certificate and template helpers.</span></div>
+              <div class="layer"><b>Go integration</b><span>Database-backed API, permissions, product access, and HR/Admin scenarios.</span></div>
+              <div class="layer"><b>Playwright</b><span>Whole app, cookie auth, roles, templates, equipment, maintenance, schedulers, reset, client, HR/Admin.</span></div>
+              <div class="layer"><b>Postman</b><span>System smoke and product-specific API collections.</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="repository">
+        <div class="section-heading">
+          <div><div class="section-label">10 / Repository map</div><h2>Where each concern lives</h2></div>
+          <p>The companion JSON contains the full route list, entity relationships, environment groups, workflow steps, and primary source references.</p>
+        </div>
+        <div class="ve-card ve-card--flat repo-tree">
+          <div class="repo-row"><b>ams-frontend-cloudscape/src/app</b><span>Router, lazy registry, access guards</span></div>
+          <div class="repo-row"><b>ams-frontend-cloudscape/src/features</b><span>Product and workflow pages</span></div>
+          <div class="repo-row"><b>ams-frontend-cloudscape/src/components</b><span>App shell and shared UI</span></div>
+          <div class="repo-row"><b>ams-frontend-cloudscape/src/providers</b><span>Query, auth, flashbar state</span></div>
+          <div class="repo-row"><b>ams-frontend-cloudscape/src/lib/api</b><span>HTTP client and typed endpoint facade</span></div>
+          <div class="repo-row"><b>ams-frontend-cloudscape/src/types</b><span>Domain and DTO contracts</span></div>
+          <div class="repo-row"><b>ams-server/main.go</b><span>Process composition root</span></div>
+          <div class="repo-row"><b>ams-server/routes</b><span>157 route registrations and access lanes</span></div>
+          <div class="repo-row"><b>ams-server/middleware</b><span>Cross-cutting request controls</span></div>
+          <div class="repo-row"><b>ams-server/controllers</b><span>HTTP orchestration and domain rules</span></div>
+          <div class="repo-row"><b>ams-server/utils</b><span>Jobs, schedulers, integrations, storage, PDFs</span></div>
+          <div class="repo-row"><b>ams-server/db/queries</b><span>246 named SQL queries in 20 files</span></div>
+          <div class="repo-row"><b>ams-server/db/generated</b><span>sqlc models and typed methods</span></div>
+          <div class="repo-row"><b>ams-server/db/migrations</b><span>49 forward schema revisions with downs</span></div>
+          <div class="repo-row"><b>tests/regression</b><span>Playwright and Postman system coverage</span></div>
+          <div class="repo-row"><b>docs/adr + CONTEXT.md</b><span>Current domain boundaries and decisions</span></div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>Generated from live source on 2026-07-24</span>
+        <span><a href="app-architecture-map.json">Machine-readable architecture JSON</a></span>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

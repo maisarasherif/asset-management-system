@@ -12,12 +12,19 @@
 ## Regression File Updates
 
 - After every feature update, automatically update the relevant regression test files to reflect the new or changed feature behavior.
+- Every new feature and every change to an existing feature must create or update dedicated feature-specific test files for all three layers: Go regression, Newman/Postman, and Playwright. Deliver these tests with the feature, not as later follow-up work.
+- Use a feature-specific Go `_test.go` file in the appropriate backend package, `tests/regression/api/<feature>.postman_collection.json`, and `tests/regression/e2e/<feature>.spec.ts`. Reuse and extend the existing dedicated files when changing that feature. Shared smoke or whole-app tests supplement these files; they do not replace them.
+- Review `tests/regression/run-vps-isolated-tests.sh` after every feature update. Update it when needed to register new collections/specs, supply feature fixtures or isolated services, pass test gates/configuration, or handle cleanup. Applicable maintained feature suites must be included in the broader run; any intentionally opt-in selection must have a documented reason and runnable command.
+- Go tests within the backend module are already discovered by `go test ./...`; script changes are needed only when execution/setup requirements change. Keep the authoritative `tests/regression/TESTING_GUIDE.md` and regression README aligned with any changed runner defaults or feature-specific commands.
+- Final feature reports must identify the three dedicated test files, execution results, and whether the runner changed. If no script change was needed, state why. Do not add empty test files or claim skipped paths as verified coverage.
 - At minimum, consider whether each of the following regression files needs coverage updates:
   1. `C:\Users\maisa\Desktop\asset-management-system\ams-server\integration_regression_test.go`
   2. `C:\Users\maisa\Desktop\asset-management-system\tests\regression\api\system-api-smoke.postman_collection.json`
   3. `C:\Users\maisa\Desktop\asset-management-system\tests\regression\e2e\whole-app-regression.spec.ts`
 - If a listed regression file does not need a change for the feature, state that clearly in the final response.
 - Do not run the regression suites after updating test files unless explicitly requested.
+- Follow the user's latest instruction about who executes tests. For generated renewal certificates, the user runs Go/Newman/Playwright on their VPS after each completed step. Codex prepares dedicated tests, runner updates, and exact commands; it does not start servers or run live suites for this feature. Record returned results and fix failures before advancing.
+- For generated renewal certificates, use the configured R2 bucket as the user authorized. Create unique test-owned objects and clean up only those objects; do not request a replacement bucket, alter shared configuration, or delete unrelated files.
 - Lightweight file-validity checks are allowed, such as formatting a touched Go test file or parsing a touched JSON collection.
 - Keep test updates focused on the feature behavior and the edge cases introduced by the feature.
 - When a feature introduces multiple valid states or branches, cover all relevant states in the affected focused regression file; do not skip a state only because another suite covers it.
@@ -36,7 +43,7 @@
 
 ## Manual Regression Testing
 
-After every feature update, the user will manually run the following regression tests later and report the results back.
+When automated execution has not been requested, the user will manually run the maintained regression tests and dedicated feature suites later and report the results back. When execution is already authorized for the ongoing workflow, run the agreed checks during implementation. Use [the authoritative testing guide](tests/regression/TESTING_GUIDE.md) for the isolated local/remote Fedora workflow.
 
 1. Go regression test:
    `C:\Users\maisa\Desktop\asset-management-system\ams-server\integration_regression_test.go`

@@ -148,6 +148,50 @@ _Avoid_: Car, automobile, fleet item
 An operational item tracked in the AMS Product for asset, component, certificate, maintenance, and client-access workflows.
 _Avoid_: Vehicle, compliance subject
 
+**Certificate**:
+An AMS Product record of a test or certification for an Asset's component, with issue and expiry dates where applicable and an associated certificate document.
+_Avoid_: Compliance Record, Compliance Document
+
+**Generated Certificate**:
+A certificate document produced by the AMS Product upon renewal, containing the competent person's details and signature or stamp together with the equipment, component, test details, and applicable IMCA references. The issued document and its source details remain as they were at issuance, independently of later profile changes.
+_Avoid_: Uploaded certificate, Compliance Document
+
+**Issued Certificate Number**:
+The identifier printed on an individual Generated Certificate. It is distinct from the system certificate ID that tracks the certificate and its issuance history.
+_Avoid_: System certificate ID, revision number
+
+**Certificate Issuance**:
+An approved generated or uploaded renewal of a Certificate, with an acting issuer and preserved source snapshot. A completed Certificate Issuance preserves its document, dates, and signer details in the Certificate's issuance history; an incomplete approval remains identifiable for retry or explicit abandonment.
+_Avoid_: Upload event, revision, certificate record
+
+**Renewal Preview**:
+A temporary view of a Generated Certificate awaiting approval, with a placeholder in place of its final sequence. A Renewal Preview is not an issued document and consumes no certificate number.
+_Avoid_: Issued certificate, permanent draft
+
+**Legacy Upload**:
+A certificate document recorded before complete Certificate Issuance snapshots were introduced. Its file and recorded upload evidence remain available without implying a complete historical snapshot.
+_Avoid_: Issuance snapshot, reconstructed certificate
+
+**Competent Person**:
+An individual recognized within the AMS Product for a competency category and identified on a certificate. Their profile contains their name, organization, category, and an admin-managed signature/stamp for use on Generated Certificates.
+_Avoid_: Platform User, HR/Admin Person, uploader
+
+**Certificate Issuer**:
+An admin who issues a Generated Certificate. A super admin may issue using any eligible Competent Person, while an ordinary admin may issue using only their own signing details and signature.
+_Avoid_: Uploader, non-admin signer
+
+**Signing Profile**:
+The reusable personal details, competency category, and signature/stamp used to identify the signer on a Generated Certificate. An ordinary admin's Signing Profile belongs to their user account; a selectable Competent Person's Signing Profile belongs to their competent-person record.
+_Avoid_: User-to-competent-person link, login credentials
+
+**Signature Version**:
+A saved signature/stamp image that remains unchanged after it is created. A Signing Profile identifies its current Signature Version, while each Generated Certificate preserves the version used at issuance.
+_Avoid_: Current signature URL, replacement image
+
+**Test Details**:
+The test description and optional free-text remarks and measurements documented for a certificate renewal. Renewal signifies that the competent person found the test successful or satisfactory.
+_Avoid_: Pass/fail workflow, certificate status, maintenance notes
+
 **Company**:
 The organization, legal branch, office, staff housing, warehouse, yard, or company-used location that may require Compliance Records.
 _Avoid_: Premises, tenant, property, facility, account, client

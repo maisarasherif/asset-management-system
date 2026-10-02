@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -9,17 +10,24 @@ SERVER_ENV="$SERVER_DIR/.env"
 RUN_DIR="$REPO_ROOT/.vps-test-run"
 API_BINARY="$RUN_DIR/ams-server-e2e"
 FRONTEND_DIST_DIR=""
+RUN_INITIALIZED=0
+STORAGE_CLEANUP_BINARY=""
+HASH_HELPER_PATH=""
+DATABASE_CREATED=0
+GO_STATUS=not-run
+NEWMAN_STATUS=not-run
+PLAYWRIGHT_STATUS=not-run
 
 DATABASE_NAME="${DATABASE_NAME:-ams_e2e_$(date +%Y%m%d%H%M%S)}"
 API_PORT="${API_PORT:-18082}"
 FRONTEND_PORT="${FRONTEND_PORT:-14175}"
 KEEP_DB="${KEEP_DB:-0}"
-RECLAIM_TEST_PORTS="${RECLAIM_TEST_PORTS:-1}"
+RECLAIM_TEST_PORTS="${RECLAIM_TEST_PORTS:-0}"
 RUN_GO_REGRESSION="${RUN_GO_REGRESSION:-${RUN_REGRESSION:-0}}"
 RUN_NEWMAN="${RUN_NEWMAN:-1}"
-NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json tests/regression/api/hr-admin-product.postman_collection.json}"
+NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json tests/regression/api/hr-admin-product.postman_collection.json tests/regression/api/generated-renewal-certificates.postman_collection.json}"
 RUN_PLAYWRIGHT="${RUN_PLAYWRIGHT:-1}"
-E2E_SPECS="${E2E_SPECS:-../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/hr-admin-product.spec.ts}"
+E2E_SPECS="${E2E_SPECS:-../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/hr-admin-product.spec.ts ../tests/regression/e2e/generated-renewal-certificates.spec.ts}"
 
 API_PID=""
 FRONTEND_PID=""
@@ -52,12 +60,13 @@ database_url_for_name() {
   local database_name="$2"
   python3 - "$database_url" "$database_name" <<'PY'
 import sys
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 url = sys.argv[1]
 name = sys.argv[2]
 parts = urlsplit(url)
-rebuilt = urlunsplit((parts.scheme, parts.netloc, "/" + name, parts.query, parts.fragment))
+query = [(key, name if key in {"dbname", "database"} else value) for key, value in parse_qsl(parts.query, keep_blank_values=True)]
+rebuilt = urlunsplit((parts.scheme, parts.netloc, "/" + name, urlencode(query), parts.fragment))
 if parts.scheme in {"postgres", "postgresql"} and not parts.netloc and rebuilt.startswith(f"{parts.scheme}:/"):
     rebuilt = rebuilt.replace(f"{parts.scheme}:/", f"{parts.scheme}:///", 1)
 print(rebuilt)
@@ -96,6 +105,7 @@ seed_e2e_admin() {
   local password_hash
 
   helper_path="$(mktemp "$SERVER_DIR/hash-password-XXXXXX.go")"
+  HASH_HELPER_PATH="$helper_path"
   cat >"$helper_path" <<'GO'
 package main
 
@@ -119,6 +129,7 @@ func main() {
 GO
   password_hash="$(cd "$SERVER_DIR" && go run "$helper_path" "$ADMIN_PASSWORD")"
   rm -f "$helper_path"
+  HASH_HELPER_PATH=""
 
   psql "$TEST_DATABASE_URL" \
     -v ON_ERROR_STOP=1 \
@@ -127,7 +138,7 @@ GO
     -q <<'SQL'
 INSERT INTO users (display_id, first_name, last_name, email, password, role, status, created_at, updated_at)
 VALUES (
-  next_display_id('user_display_id_seq'),
+  allocate_display_id('users.display_id', 'users'::REGCLASS),
   'E2E',
   'Admin',
   :'admin_email',
@@ -168,6 +179,7 @@ prepare_database() {
   run_sql "$MAINTENANCE_DATABASE_URL" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DATABASE_NAME';"
   run_sql "$MAINTENANCE_DATABASE_URL" "DROP DATABASE IF EXISTS $QUOTED_DATABASE_NAME;"
   run_sql "$MAINTENANCE_DATABASE_URL" "CREATE DATABASE $QUOTED_DATABASE_NAME;"
+  DATABASE_CREATED=1
 
   echo "Applying migrations to isolated database"
   (cd "$SERVER_DIR" && migrate -path db/migrations -database "$TEST_DATABASE_URL" up)
@@ -271,7 +283,6 @@ start_api() {
   echo "Starting isolated API on $API_BASE_URL"
   (
     cd "$SERVER_DIR"
-    go build -buildvcs=false -o "$API_BINARY" .
 	    export APP_ENV=test
 	    export DATABASE_URL="$TEST_DATABASE_URL"
 	    export PORT="$API_PORT"
@@ -316,9 +327,13 @@ PY
     tail -n 50 "$RUN_DIR/api.err.log" | sed -E 's/(password=)[^ ]+/\1[redacted]/g' || true
     fail "Isolated API did not accept SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD from $SERVER_ENV"
   fi
+  rm -f "$RUN_DIR/login-check.json"
 }
 
 cleanup() {
+  local exit_status=$?
+  local storage_status=not-run
+  local database_status=not-created
   set +e
   if [[ -n "$FRONTEND_PID" ]]; then
     kill "$FRONTEND_PID" >/dev/null 2>&1
@@ -326,24 +341,53 @@ cleanup() {
     FRONTEND_PID=""
   fi
   stop_api
-  if [[ "$FRONTEND_STARTED" == "1" ]]; then
-    kill_port_listeners "$FRONTEND_PORT"
+  if [[ -n "$STORAGE_CLEANUP_BINARY" && -x "$STORAGE_CLEANUP_BINARY" ]]; then
+    if (cd "$SERVER_DIR" && "$STORAGE_CLEANUP_BINARY") >"$RUN_DIR/storage-cleanup.log" 2>&1; then
+      storage_status=passed
+    else
+      storage_status=failed
+      exit_status=1
+    fi
+    cat "$RUN_DIR/storage-cleanup.log"
   fi
-  if [[ "$API_STARTED" == "1" ]]; then
-    kill_port_listeners "$API_PORT"
-  fi
-  if [[ "${KEEP_DB}" != "1" && -n "${MAINTENANCE_DATABASE_URL:-}" && -n "${QUOTED_DATABASE_NAME:-}" ]]; then
+  if [[ "${KEEP_DB}" != "1" && "$DATABASE_CREATED" == "1" ]]; then
     echo "Dropping isolated database: $DATABASE_NAME"
-    run_sql "$MAINTENANCE_DATABASE_URL" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DATABASE_NAME';" || true
-    run_sql "$MAINTENANCE_DATABASE_URL" "DROP DATABASE IF EXISTS $QUOTED_DATABASE_NAME;" || true
-  elif [[ "${KEEP_DB}" == "1" ]]; then
+    if run_sql "$MAINTENANCE_DATABASE_URL" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DATABASE_NAME';" &&
+      run_sql "$MAINTENANCE_DATABASE_URL" "DROP DATABASE IF EXISTS $QUOTED_DATABASE_NAME;"; then
+      database_status=dropped
+    else
+      database_status=failed
+      exit_status=1
+    fi
+  elif [[ "${KEEP_DB}" == "1" && "$DATABASE_CREATED" == "1" ]]; then
     echo "Keeping isolated database for inspection: $DATABASE_NAME"
+    database_status=kept
   fi
   if [[ -n "$FRONTEND_DIST_DIR" && "$FRONTEND_DIST_DIR" == "$RUN_DIR"/frontend-dist.* ]]; then
     rm -rf "$FRONTEND_DIST_DIR"
   fi
+  if [[ -n "$HASH_HELPER_PATH" ]]; then
+    rm -f "$HASH_HELPER_PATH"
+  fi
+  if [[ "$RUN_INITIALIZED" == "1" ]]; then
+    rm -f "$RUN_DIR/login-check.json"
+    if [[ -f "$RUN_DIR/go-results.jsonl" ]]; then
+      python3 "$SCRIPT_DIR/support/summarize-go-results.py" "$RUN_DIR/go-results.jsonl" | tee "$RUN_DIR/go-summary.txt"
+    fi
+    printf 'Go: %s\nNewman: %s\nPlaywright: %s\nStorage cleanup: %s\nDatabase cleanup: %s\nExit status: %s\n' \
+      "$GO_STATUS" "$NEWMAN_STATUS" "$PLAYWRIGHT_STATUS" "$storage_status" "$database_status" "$exit_status" \
+      | tee "$RUN_DIR/summary.txt"
+    echo "Run evidence: $RUN_DIR"
+  fi
+  if [[ "$exit_status" == "0" ]]; then
+    echo "All selected isolated VPS tests and cleanup passed."
+  fi
+  trap - EXIT
+  exit "$exit_status"
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 [[ -f "$SERVER_ENV" ]] || fail "Expected server env file at $SERVER_ENV"
 [[ "$DATABASE_NAME" =~ ^ams_e2e_[A-Za-z0-9_]+$ ]] || fail "Refusing database name '$DATABASE_NAME'. It must start with ams_e2e_"
@@ -367,6 +411,13 @@ ADMIN_PASSWORD="$(dotenv_value SEED_ADMIN_PASSWORD)"
 
 [[ -n "$SOURCE_DATABASE_URL" ]] || fail "DATABASE_URL is missing from $SERVER_ENV"
 [[ -n "$ADMIN_EMAIL" && -n "$ADMIN_PASSWORD" ]] || fail "SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD are required in $SERVER_ENV"
+for storage_setting in R2_S3_ENDPOINT R2_S3_REGION R2_S3_ACCESS_KEY_ID R2_S3_SECRET_ACCESS_KEY R2_S3_BUCKET; do
+  storage_value="${!storage_setting:-}"
+  [[ -n "$storage_value" ]] || storage_value="$(dotenv_value "$storage_setting")"
+  [[ -n "$storage_value" ]] || fail "$storage_setting is required for the certificate storage baseline"
+  export "$storage_setting=$storage_value"
+done
+unset storage_value
 
 MAINTENANCE_DATABASE_URL="$(database_url_for_name "$SOURCE_DATABASE_URL" postgres)"
 TEST_DATABASE_URL="$(database_url_for_name "$SOURCE_DATABASE_URL" "$DATABASE_NAME")"
@@ -378,11 +429,28 @@ export NO_PROXY="127.0.0.1,localhost,::1${NO_PROXY:+,$NO_PROXY}"
 export no_proxy="127.0.0.1,localhost,::1${no_proxy:+,$no_proxy}"
 
 mkdir -p "$RUN_DIR"
+RUN_DIR="$(mktemp -d "$RUN_DIR/run.XXXXXX")"
+RUN_INITIALIZED=1
+API_BINARY="$RUN_DIR/ams-server-e2e"
+STORAGE_CLEANUP_BINARY="$RUN_DIR/test-storage-cleanup"
+export APP_ENV=test
+export DATABASE_URL="$TEST_DATABASE_URL"
+export AMS_TEST_STORAGE_PREFIX="ams-e2e/$(python3 -c 'import uuid; print(uuid.uuid4())')/"
+export AMS_TEST_STORAGE_MANIFEST="$RUN_DIR/storage-objects.txt"
+: >"$AMS_TEST_STORAGE_MANIFEST"
+printf 'APP_ENV=test\nDATABASE_URL=%q\nAMS_TEST_STORAGE_PREFIX=%q\nAMS_TEST_STORAGE_MANIFEST=%q\n' \
+  "$TEST_DATABASE_URL" "$AMS_TEST_STORAGE_PREFIX" "$AMS_TEST_STORAGE_MANIFEST" >"$RUN_DIR/cleanup.env"
+# Build before backgrounding so traps own the service process, not a build shell.
+(cd "$SERVER_DIR" && go build -buildvcs=false -o "$API_BINARY" .)
+(cd "$SERVER_DIR" && go build -buildvcs=false -o "$STORAGE_CLEANUP_BINARY" ./cmd/test-storage-cleanup)
+echo "Run evidence: $RUN_DIR"
+echo "Test storage prefix: $AMS_TEST_STORAGE_PREFIX"
 
 prepare_database
 
 if [[ "$RUN_GO_REGRESSION" == "1" ]]; then
   echo "Running Go regression tests against isolated database"
+  GO_STATUS=failed
   (
     cd "$SERVER_DIR"
     APP_ENV=test \
@@ -391,8 +459,9 @@ if [[ "$RUN_GO_REGRESSION" == "1" ]]; then
       ALERT_RECIPIENT_EMAIL="" \
       CLICKUP_API_TOKEN="" \
       CLICKUP_LIST_ID="" \
-      go test ./...
-  )
+      go test -count=1 -json ./...
+  ) | tee "$RUN_DIR/go-results.jsonl"
+  GO_STATUS=passed
   echo "Recreating isolated database for browser E2E"
   prepare_database
 fi
@@ -408,17 +477,21 @@ verify_admin_login
 if [[ "$RUN_NEWMAN" == "1" ]]; then
   prepare_newman_fixtures
   echo "Running Newman API regression collections"
+  NEWMAN_STATUS=failed
   for collection in $NEWMAN_COLLECTIONS; do
     echo "Running Newman collection: $collection"
     (
       cd "$REPO_ROOT"
       newman run "$collection" \
+        --bail failure \
         --working-dir "$REPO_ROOT" \
         --env-var "baseUrl=$API_BASE_URL" \
         --env-var "adminEmail=$ADMIN_EMAIL" \
-      --env-var "adminPassword=$ADMIN_PASSWORD"
-    )
+        --env-var "adminPassword=$ADMIN_PASSWORD" \
+        --env-var "testStoragePrefix=$AMS_TEST_STORAGE_PREFIX"
+    ) | tee "$RUN_DIR/$(basename "$collection").log"
   done
+  NEWMAN_STATUS=passed
 
   if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
     echo "Recreating isolated database for Playwright E2E"
@@ -451,6 +524,7 @@ if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
   wait_for_http "$FRONTEND_BASE_URL" "frontend" "$RUN_DIR/frontend.err.log"
 
   echo "Running Playwright E2E specs against isolated stack"
+  PLAYWRIGHT_STATUS=failed
   (
     cd "$FRONTEND_DIR"
     PLAYWRIGHT_BASE_URL="$FRONTEND_BASE_URL" \
@@ -459,10 +533,13 @@ if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
       PLAYWRIGHT_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
       PLAYWRIGHT_RUN_ROUTINE_MAINTENANCE_TRIGGER=1 \
       PLAYWRIGHT_RUN_CLIENT_PORTAL_TRIGGER=1 \
-      npx playwright test $E2E_SPECS
-  )
+      PLAYWRIGHT_HTML_OUTPUT_DIR="$RUN_DIR/playwright-report" \
+      PLAYWRIGHT_JSON_OUTPUT_NAME="$RUN_DIR/playwright-results.json" \
+      npx playwright test $E2E_SPECS --reporter=list,html,json
+  ) | tee "$RUN_DIR/playwright.log"
+  PLAYWRIGHT_STATUS=passed
 else
   echo "Skipping Playwright E2E specs"
 fi
 
-echo "All isolated VPS tests passed."
+# The EXIT trap reports success only after object/database cleanup succeeds.

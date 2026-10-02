@@ -1,0 +1,456 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-24",
+  "title": "Asset Management Platform — Complete Architecture Map",
+  "repository": {
+    "name": "asset-management-system",
+    "root": "C:\\Users\\maisa\\Desktop\\asset-management-system",
+    "architecture_style": "modular monolith with a React single-page application, a Go HTTP API, PostgreSQL persistence, and PostgreSQL-backed background jobs",
+    "source_of_truth": "live source code, database migrations, generated sqlc models, routes, and tests",
+    "documentation_caveat": "ARCHITECTURE.md is stale: it describes MongoDB and bearer-token-only authentication, while the live implementation uses PostgreSQL/sqlc and an HTTP-only cookie-first session with bearer fallback."
+  },
+  "metrics": {
+    "frontend_named_paths": 36,
+    "frontend_feature_tsx_files": 32,
+    "frontend_ts_tsx_files": 60,
+    "backend_route_registrations": 157,
+    "backend_go_files": 74,
+    "backend_controller_files": 18,
+    "backend_middleware_files": 8,
+    "backend_utility_files": 11,
+    "database_generated_models": 37,
+    "database_sqlc_query_files": 20,
+    "database_named_queries": 246,
+    "database_forward_migrations": 49,
+    "test_artifacts": 31
+  },
+  "system_topology": {
+    "nodes": [
+      {"id": "browser", "label": "Browser", "kind": "client", "technology": ["HTML", "CSS", "JavaScript"]},
+      {"id": "spa", "label": "Cloudscape React SPA", "kind": "frontend", "technology": ["React 19", "TypeScript 6", "Vite 8", "React Router 7", "TanStack Query 5", "Cloudscape"]},
+      {"id": "api", "label": "Gin HTTP API", "kind": "backend", "technology": ["Go 1.25", "Gin 1.11", "pgx 5", "sqlc"]},
+      {"id": "postgres", "label": "PostgreSQL", "kind": "database", "technology": ["application tables", "River job tables", "transactions"]},
+      {"id": "river", "label": "River workers + UI", "kind": "background", "technology": ["River 0.38", "River UI 0.16"]},
+      {"id": "r2", "label": "Cloudflare R2", "kind": "external", "technology": ["S3-compatible API", "5-minute signed downloads"]},
+      {"id": "smtp", "label": "SMTP", "kind": "external", "technology": ["gomail", "HTML email"]},
+      {"id": "clickup", "label": "ClickUp", "kind": "external", "technology": ["REST API", "tasks"]},
+      {"id": "prometheus", "label": "Prometheus scraper", "kind": "observability", "technology": ["token-protected /v1/metrics"]}
+    ],
+    "edges": [
+      {"from": "browser", "to": "spa", "label": "loads and runs"},
+      {"from": "spa", "to": "api", "label": "JSON, multipart, blobs; credentials included"},
+      {"from": "api", "to": "postgres", "label": "pgx pool + generated sqlc queries"},
+      {"from": "api", "to": "river", "label": "transactional job inserts and admin UI"},
+      {"from": "river", "to": "postgres", "label": "job state and delivery audit"},
+      {"from": "api", "to": "r2", "label": "uploads and presigned downloads"},
+      {"from": "river", "to": "smtp", "label": "email delivery"},
+      {"from": "river", "to": "clickup", "label": "task creation"},
+      {"from": "prometheus", "to": "api", "label": "scrapes HTTP metrics"}
+    ]
+  },
+  "product_boundaries": [
+    {
+      "id": "platform",
+      "name": "Platform",
+      "owns": ["identity", "session enforcement", "product access", "notification delivery", "scheduler execution", "storage", "audit", "metrics"],
+      "primary_surfaces": ["account", "platform administration", "job UI"]
+    },
+    {
+      "id": "ams",
+      "name": "AMS Product",
+      "owns": ["assets", "components", "certificates", "routine maintenance", "catalog", "asset templates", "competency", "projects and client access", "certificate notification audit"],
+      "roles": ["SUPER_ADMIN", "ADMIN", "USER", "CLIENT"]
+    },
+    {
+      "id": "hr_admin",
+      "name": "HR/Admin Product",
+      "owns": ["persons", "vehicles", "companies", "compliance record types", "compliance records and versions", "reminder policy", "product notification configuration", "HR/Admin notification audit"],
+      "product_roles": ["ADMIN", "USER", "VIEWER"],
+      "access_rule": "SUPER_ADMIN bypasses Product Access and is treated as product ADMIN."
+    },
+    {
+      "id": "client_portal",
+      "name": "Client Portal",
+      "owns": ["read-only project-scoped asset view", "read-only component and certificate view", "authorized certificate downloads"],
+      "role": "CLIENT"
+    }
+  ],
+  "frontend": {
+    "root": "ams-frontend-cloudscape",
+    "entry": "src/main.tsx",
+    "stack": [
+      "React 19.2",
+      "TypeScript 6.0",
+      "Vite 8.0",
+      "React Router DOM 7.14",
+      "TanStack React Query 5.99",
+      "AWS Cloudscape components",
+      "Tabler icons"
+    ],
+    "composition": [
+      "main.tsx mounts RouterProvider inside AppProviders",
+      "AppProviders supplies QueryClient, AuthProvider, and FlashbarProvider",
+      "RequireAuth and role/product guards protect lazy route components",
+      "AppChrome combines TopNavigation, product switcher, responsive SideNavigation, help panel, flashbar, and Outlet",
+      "feature pages use query/mutation hooks and the typed API facade",
+      "apiRequest centralizes credentials, content handling, blob responses, and 401 logout"
+    ],
+    "state": {
+      "server_state": "TanStack Query; default 30-second stale time, one retry, no focus refetch",
+      "session_state": "AuthProvider; bootstrapped from GET /v1/session",
+      "selected_asset": "sessionStorage key ams-cloudscape-selected-asset",
+      "cross_tab_logout": "localStorage broadcast key ams-cloudscape-logout",
+      "notifications": "FlashbarProvider"
+    },
+    "route_guards": [
+      {"name": "GuestOnly", "allows": "unauthenticated users", "redirect": "/dashboard"},
+      {"name": "RequireAuth", "allows": "active session", "redirect": "/login; CLIENT is redirected to /client/assets"},
+      {"name": "RequireAdmin", "allows": "ADMIN or SUPER_ADMIN", "redirect": "/dashboard"},
+      {"name": "RequireSuperAdmin", "allows": "SUPER_ADMIN", "redirect": "/dashboard"},
+      {"name": "RequireProductAccess", "allows": "HR_ADMIN ADMIN, USER, or VIEWER", "redirect": "/dashboard"},
+      {"name": "RequireHRAdminAdmin", "allows": "HR_ADMIN ADMIN", "redirect": "/hr-admin"}
+    ],
+    "routes": [
+      {"path": "/login", "page": "LoginPage", "guard": "GuestOnly", "area": "auth"},
+      {"path": "/forgot-password", "page": "ForgotPasswordPage", "guard": "GuestOnly", "area": "auth"},
+      {"path": "/reset-password", "page": "ResetPasswordPage", "guard": "GuestOnly", "area": "auth"},
+      {"path": "/", "page": "AppChrome", "guard": "RequireAuth", "area": "shell"},
+      {"path": "/client/assets", "page": "ClientAssetsPage", "guard": "RequireAuth client redirect", "area": "client"},
+      {"path": "/client/assets/:assetId", "page": "ClientAssetViewPage", "guard": "RequireAuth client redirect", "area": "client"},
+      {"path": "/dashboard", "page": "DashboardPage", "guard": "RequireAuth", "area": "ams"},
+      {"path": "/assets", "page": "AssetsDirectoryPage", "guard": "RequireAuth", "area": "ams"},
+      {"path": "/assets/new", "page": "AssetFormPage", "guard": "RequireAdmin", "area": "ams"},
+      {"path": "/assets/:assetId", "page": "AssetWorkspacePage", "guard": "RequireAuth", "area": "ams"},
+      {"path": "/assets/:assetId/routine-maintenance", "page": "AssetRoutineMaintenancePage", "guard": "RequireAuth", "area": "ams"},
+      {"path": "/assets/:assetId/edit", "page": "AssetFormPage", "guard": "RequireAdmin", "area": "ams"},
+      {"path": "/assets/:assetId/components/new", "page": "ComponentFormPage", "guard": "RequireAdmin", "area": "ams"},
+      {"path": "/assets/:assetId/components/:componentId/edit", "page": "ComponentFormPage", "guard": "RequireAdmin", "area": "ams"},
+      {"path": "/assets/:assetId/components/:componentId/certificates/new", "page": "CertificateFormPage", "guard": "RequireAdmin", "area": "ams"},
+      {"path": "/assets/:assetId/components/:componentId/certificates/:certificateId", "page": "CertificateDetailPage", "guard": "RequireAuth", "area": "ams"},
+      {"path": "/assets/:assetId/components/:componentId/certificates/:certificateId/edit", "page": "CertificateFormPage", "guard": "RequireAdmin", "area": "ams"},
+      {"path": "/templates", "page": "TemplatesPage", "guard": "RequireAdmin", "area": "ams-configuration"},
+      {"path": "/templates/new", "page": "TemplateCreatePage", "guard": "RequireAdmin", "area": "ams-configuration"},
+      {"path": "/templates/:templateId", "page": "TemplateDetailPage", "guard": "RequireAdmin", "area": "ams-configuration"},
+      {"path": "/templates/:templateId/configure", "page": "TemplateConfigurePage", "guard": "RequireAdmin", "area": "ams-configuration"},
+      {"path": "/catalog", "page": "CatalogPage", "guard": "RequireAdmin", "area": "ams-configuration"},
+      {"path": "/administration", "page": "AdministrationPage", "guard": "RequireAdmin", "area": "platform-admin"},
+      {"path": "/client-access", "page": "ClientAccessPage", "guard": "RequireAdmin", "area": "ams-admin"},
+      {"path": "/scheduler", "page": "SchedulerManagementPage", "guard": "RequireSuperAdmin", "area": "platform-operations"},
+      {"path": "/hr-admin", "page": "HRAdminOverviewPage", "guard": "RequireProductAccess", "area": "hr-admin"},
+      {"path": "/hr-admin/persons", "page": "HRAdminPersonsPage", "guard": "RequireProductAccess", "area": "hr-admin"},
+      {"path": "/hr-admin/vehicles", "page": "HRAdminVehiclesPage", "guard": "RequireProductAccess", "area": "hr-admin"},
+      {"path": "/hr-admin/companies", "page": "HRAdminCompaniesPage", "guard": "RequireProductAccess", "area": "hr-admin"},
+      {"path": "/hr-admin/records", "page": "HRAdminRecordsPage", "guard": "RequireProductAccess", "area": "hr-admin"},
+      {"path": "/hr-admin/record-types", "page": "HRAdminRecordTypesPage", "guard": "RequireHRAdminAdmin", "area": "hr-admin-config"},
+      {"path": "/hr-admin/reminder-policy", "page": "HRAdminReminderPolicyPage", "guard": "RequireHRAdminAdmin", "area": "hr-admin-config"},
+      {"path": "/hr-admin/notification-config", "page": "HRAdminNotificationConfigPage", "guard": "RequireHRAdminAdmin", "area": "hr-admin-config"},
+      {"path": "/hr-admin/scheduler", "page": "HRAdminSchedulerPage", "guard": "RequireHRAdminAdmin", "area": "hr-admin-operations"},
+      {"path": "/hr-admin/:section", "page": "HRAdminOverviewPage", "guard": "RequireProductAccess", "area": "hr-admin-fallback"},
+      {"path": "/account", "page": "AccountPage", "guard": "RequireAuth", "area": "account"}
+    ],
+    "feature_modules": [
+      {"name": "auth", "files": ["LoginPage", "ForgotPasswordPage", "ResetPasswordPage"]},
+      {"name": "account", "files": ["AccountPage"]},
+      {"name": "dashboard", "files": ["DashboardPage", "CertificateDonut"]},
+      {"name": "assets", "files": ["AssetsDirectoryPage", "AssetFormPage", "AssetWorkspacePage", "AssetRoutineMaintenancePage", "ComponentFormPage", "CertificateFormPage", "CertificateDetailPage"]},
+      {"name": "templates", "files": ["TemplatesPage", "TemplateCreatePage", "TemplateDetailPage", "TemplateConfigurePage"]},
+      {"name": "catalog", "files": ["CatalogPage"]},
+      {"name": "admin", "files": ["AdministrationPage", "ClientAccessPage", "SchedulerManagementPage"]},
+      {"name": "client", "files": ["ClientAssetsPage", "ClientAssetViewPage"]},
+      {"name": "hr-admin", "files": ["HRAdminOverviewPage", "HRAdminPersonsPage", "HRAdminVehiclesPage", "HRAdminCompaniesPage", "HRAdminRecordsPage", "HRAdminRecordTypesPage", "HRAdminReminderPolicyPage", "HRAdminNotificationConfigPage", "HRAdminSchedulerPage"]}
+    ]
+  },
+  "backend": {
+    "root": "ams-server",
+    "entry": "main.go",
+    "runtime": "Go 1.25 modular monolith on Gin, default port 8080",
+    "startup_sequence": [
+      "initialize zerolog logger",
+      "load .env and open pgx PostgreSQL pool",
+      "run River migrations, register three worker kinds, start River and River UI",
+      "run both expiry scans once, then start cron schedules",
+      "create Gin engine and install CORS, request ID, Prometheus, structured logger, and recovery middleware",
+      "register metrics and health endpoints",
+      "seed configured administrator",
+      "register public and protected routes",
+      "listen on PORT or 8080"
+    ],
+    "global_middleware_order": ["CORSMiddleware", "RequestIDMiddleware", "PrometheusMiddleware", "LoggerMiddleware", "gin.Recovery"],
+    "route_groups": [
+      {"name": "system", "prefix": "/v1", "count": 2, "access": "health is public; metrics requires METRICS_TOKEN bearer token", "middleware": ["MetricsAuthMiddleware for metrics"]},
+      {"name": "public_auth", "prefix": "/v1", "count": 3, "access": "public", "middleware": ["login and forgot-password rate limiting"]},
+      {"name": "account", "prefix": "/v1", "count": 4, "access": "any active authenticated user", "middleware": ["AuthMiddleware", "ActiveUserMiddleware"]},
+      {"name": "admin", "prefix": "/v1", "count": 69, "access": "global ADMIN or SUPER_ADMIN", "middleware": ["AuthMiddleware", "ActiveUserMiddleware", "AdminMiddleware"]},
+      {"name": "staff_read", "prefix": "/v1", "count": 38, "access": "global SUPER_ADMIN, ADMIN, or USER; excludes CLIENT", "middleware": ["AuthMiddleware", "ActiveUserMiddleware", "StaffMiddleware"]},
+      {"name": "client", "prefix": "/v1/client", "count": 3, "access": "global CLIENT", "middleware": ["AuthMiddleware", "ActiveUserMiddleware", "ClientMiddleware"]},
+      {"name": "platform_admin", "prefix": "/v1/platform", "count": 3, "access": "global SUPER_ADMIN", "middleware": ["AuthMiddleware", "ActiveUserMiddleware", "SuperAdminMiddleware"]},
+      {"name": "scheduler", "prefix": "/v1", "count": 4, "access": "global SUPER_ADMIN", "middleware": ["AuthMiddleware", "ActiveUserMiddleware", "SuperAdminMiddleware"]},
+      {"name": "hr_admin_read", "prefix": "/v1/hr-admin", "count": 10, "access": "HR_ADMIN product ADMIN, USER, or VIEWER; SUPER_ADMIN bypass", "middleware": ["AuthMiddleware", "ActiveUserMiddleware", "ProductAccessMiddleware"]},
+      {"name": "hr_admin_write", "prefix": "/v1/hr-admin", "count": 9, "access": "HR_ADMIN product ADMIN or USER; SUPER_ADMIN bypass", "middleware": ["AuthMiddleware", "ActiveUserMiddleware", "ProductAccessMiddleware"]},
+      {"name": "hr_admin_admin", "prefix": "/v1/hr-admin", "count": 10, "access": "HR_ADMIN product ADMIN; SUPER_ADMIN bypass", "middleware": ["AuthMiddleware", "ActiveUserMiddleware", "ProductAccessMiddleware"]},
+      {"name": "river_job_ui", "prefix": "/v1/admin/jobs", "count": 2, "access": "global SUPER_ADMIN", "middleware": ["AuthMiddleware", "ActiveUserMiddleware", "SuperAdminMiddleware"]}
+    ],
+    "route_families": [
+      "authentication and account",
+      "platform product access",
+      "users and audit logs",
+      "projects and client access",
+      "assets and routine maintenance",
+      "components and single-asset equipment",
+      "certificates, uploads, dashboards, and PDF reports",
+      "catalog scopes, main categories, categories, test types, and equipment types",
+      "competency categories and competent persons",
+      "asset templates, template components, and template tests",
+      "client portal asset and certificate reads",
+      "certificate and HR/Admin scheduler operations",
+      "HR/Admin subjects, records, versions, policy, configuration, and notification audit"
+    ],
+    "controller_modules": [
+      {"file": "userController.go", "responsibility": "login, session, logout, user lifecycle, passwords, user audit, admin seeding"},
+      {"file": "passwordResetController.go", "responsibility": "forgot-password and reset-token lifecycle"},
+      {"file": "platformController.go", "responsibility": "product list and Product Access administration"},
+      {"file": "projectController.go", "responsibility": "projects and user-project access"},
+      {"file": "assetController.go", "responsibility": "asset CRUD, dashboards, working hours, routine maintenance, PDF sheet"},
+      {"file": "componentController.go", "responsibility": "component CRUD and asset component lists"},
+      {"file": "certificateController.go", "responsibility": "certificate CRUD, status, uploads, audits, downloads, PDFs"},
+      {"file": "mainCategoryController.go", "responsibility": "main category CRUD"},
+      {"file": "categoryController.go", "responsibility": "category CRUD"},
+      {"file": "catalogScopeController.go", "responsibility": "catalog scopes and scoped category membership"},
+      {"file": "testTypeController.go", "responsibility": "test type CRUD"},
+      {"file": "equipmentTypeController.go", "responsibility": "equipment types and single-asset equipment read"},
+      {"file": "competencyController.go", "responsibility": "competency categories and competent persons"},
+      {"file": "competencyRules.go", "responsibility": "shared competency validation rules"},
+      {"file": "templateController.go", "responsibility": "templates, staged configuration, components, tests"},
+      {"file": "clientController.go", "responsibility": "project-scoped client reads and certificate access"},
+      {"file": "schedulerController.go", "responsibility": "manual scans and notification delivery/failure views"},
+      {"file": "hrAdminController.go", "responsibility": "HR/Admin subjects, compliance records, versioning, documents, configuration"}
+    ],
+    "utility_modules": [
+      {"file": "tokenUtil.go", "responsibility": "JWT generation/validation, six-hour cookie, bearer fallback"},
+      {"file": "pagination.go", "responsibility": "uniform page/limit parsing and metadata"},
+      {"file": "uuid.go", "responsibility": "UUID parsing helpers"},
+      {"file": "storage.go", "responsibility": "R2 S3 upload and five-minute signed download"},
+      {"file": "report_pdf.go", "responsibility": "in-process certificate PDF rendering"},
+      {"file": "spinup.go", "responsibility": "transactional asset creation from a template"},
+      {"file": "passwordResetJobs.go", "responsibility": "River bootstrap, encrypted reset payload, reset email worker, River UI"},
+      {"file": "notificationJobs.go", "responsibility": "idempotent delivery claims and email/ClickUp workers"},
+      {"file": "emailService.go", "responsibility": "SMTP, certificate expiry scan, certificate cron"},
+      {"file": "hrAdminReminderService.go", "responsibility": "HR/Admin due-record scan and cron"},
+      {"file": "clickup.go", "responsibility": "ClickUp payloads and task API"}
+    ]
+  },
+  "data": {
+    "engine": "PostgreSQL",
+    "access": "pgx pool plus sqlc-generated typed query methods",
+    "schema_management": "49 ordered up/down migration pairs in ams-server/db/migrations",
+    "query_generation": "sqlc v2 config; 20 handwritten SQL files produce 246 named queries and 37 model structs",
+    "clusters": [
+      {
+        "name": "Platform identity and operations",
+        "entities": ["User", "PasswordResetToken", "ForgotPasswordRateLimit", "UserManagementAuditLog", "ProductAccess", "ProductNotificationConfiguration", "NotificationDelivery", "DisplayIDAllocator"]
+      },
+      {
+        "name": "AMS operations",
+        "entities": ["Asset", "Component", "Certificate", "CertificateUploadAudit", "AssetMaintenanceEvent", "SingleAssetEquipment", "EquipmentType", "Project", "UserProjectAccess"]
+      },
+      {
+        "name": "Catalog and templates",
+        "entities": ["MainCategory", "Category", "CatalogScope", "CatalogScopeMainCategory", "CatalogScopeCategory", "TestType", "AssetTemplate", "TemplateComponent", "TemplateComponentTest"]
+      },
+      {
+        "name": "Competency",
+        "entities": ["CompetencyCategory", "CompetentPerson", "TemplateComponentTestCompetencyCategory", "CertificateCompetencyCategory"]
+      },
+      {
+        "name": "HR/Admin compliance",
+        "entities": ["HrAdminDepartment", "HrAdminPerson", "HrAdminVehicle", "HrAdminCompany", "ComplianceRecordType", "ComplianceRecord", "ComplianceRecordVersion"]
+      }
+    ],
+    "relationships": [
+      {"from": "ProductAccess", "to": "User", "cardinality": "many-to-one", "meaning": "per-product role and status"},
+      {"from": "PasswordResetToken", "to": "User", "cardinality": "many-to-one", "meaning": "single-use reset token hashes"},
+      {"from": "UserProjectAccess", "to": "User", "cardinality": "many-to-one", "meaning": "client identity"},
+      {"from": "UserProjectAccess", "to": "Project", "cardinality": "many-to-one", "meaning": "client project scope"},
+      {"from": "Asset", "to": "AssetTemplate", "cardinality": "many-to-zero-or-one", "meaning": "optional template provenance"},
+      {"from": "Component", "to": "Asset", "cardinality": "many-to-one", "meaning": "asset structure"},
+      {"from": "Certificate", "to": "Component", "cardinality": "many-to-one", "meaning": "component compliance"},
+      {"from": "Certificate", "to": "TestType", "cardinality": "many-to-one", "meaning": "certificate/test semantics"},
+      {"from": "CertificateUploadAudit", "to": "Certificate", "cardinality": "many-to-one", "meaning": "immutable upload history"},
+      {"from": "CertificateUploadAudit", "to": "CompetentPerson", "cardinality": "many-to-zero-or-one", "meaning": "uploader competency attribution"},
+      {"from": "AssetMaintenanceEvent", "to": "Asset", "cardinality": "many-to-one", "meaning": "routine maintenance history"},
+      {"from": "SingleAssetEquipment", "to": "Asset", "cardinality": "one-to-one", "meaning": "non-componentized asset specialization"},
+      {"from": "SingleAssetEquipment", "to": "EquipmentType", "cardinality": "many-to-one", "meaning": "equipment classification"},
+      {"from": "Category", "to": "MainCategory", "cardinality": "many-to-zero-or-one", "meaning": "catalog hierarchy"},
+      {"from": "CatalogScopeMainCategory", "to": "CatalogScope", "cardinality": "many-to-one", "meaning": "scope membership"},
+      {"from": "CatalogScopeCategory", "to": "CatalogScope", "cardinality": "many-to-one", "meaning": "scope membership"},
+      {"from": "CatalogScopeCategory", "to": "Category", "cardinality": "many-to-one", "meaning": "scoped dictionary item"},
+      {"from": "TemplateComponent", "to": "AssetTemplate", "cardinality": "many-to-one", "meaning": "component blueprint"},
+      {"from": "TemplateComponentTest", "to": "TemplateComponent", "cardinality": "many-to-one", "meaning": "required certificate blueprint"},
+      {"from": "TemplateComponentTest", "to": "TestType", "cardinality": "many-to-one", "meaning": "test definition"},
+      {"from": "TemplateComponentTestCompetencyCategory", "to": "TemplateComponentTest", "cardinality": "many-to-one", "meaning": "required competency"},
+      {"from": "CertificateCompetencyCategory", "to": "Certificate", "cardinality": "many-to-one", "meaning": "certificate competency snapshot"},
+      {"from": "CompetentPerson", "to": "CompetencyCategory", "cardinality": "many-to-one", "meaning": "person qualification"},
+      {"from": "ComplianceRecord", "to": "ComplianceRecordType", "cardinality": "many-to-one", "meaning": "record definition"},
+      {"from": "ComplianceRecord", "to": "HrAdminPerson|HrAdminVehicle|HrAdminCompany", "cardinality": "many-to-one polymorphic", "meaning": "compliance subject"},
+      {"from": "ComplianceRecordVersion", "to": "ComplianceRecord", "cardinality": "many-to-one", "meaning": "renewal history with one current version"},
+      {"from": "NotificationDelivery", "to": "Certificate|AssetMaintenanceEvent|ComplianceRecord", "cardinality": "many-to-one polymorphic", "meaning": "idempotent per-channel delivery audit"}
+    ],
+    "important_invariants": [
+      "UUIDs are primary public identifiers; display IDs are allocated centrally.",
+      "Certificate status includes VALID, EXPIRING_SOON, EXPIRED, and PENDING.",
+      "Asset kind separates COMPONENTIZED and SINGLE_EQUIPMENT workflows.",
+      "HR/Admin subjects and records are archived with a reason rather than deleted.",
+      "Compliance renewals append versions and supersede the previous current version.",
+      "Notification deliveries are claimed with idempotency keys before jobs are inserted.",
+      "Product roles are independent from global roles, except SUPER_ADMIN bypass."
+    ]
+  },
+  "workflows": [
+    {
+      "name": "Session-authenticated request",
+      "steps": ["browser sends ams_access_token cookie with credentials include", "AuthMiddleware validates JWT", "ActiveUserMiddleware loads user session and compares the presented token to the stored token", "role or Product Access middleware authorizes the route", "controller validates input and calls generated sqlc queries", "JSON, blob, redirect URL, or empty response returns", "Prometheus and structured logging record the request"]
+    },
+    {
+      "name": "Asset creation from template",
+      "steps": ["administrator submits asset and template", "controller opens a PostgreSQL transaction", "asset row is created", "SpinUpAssetFromTemplate invokes the UUID-based database spin-up function", "template components and template tests materialize as components and pending certificates", "transaction commits", "frontend invalidates asset/template queries"]
+    },
+    {
+      "name": "Certificate file upload",
+      "steps": ["administrator selects an allowed file", "multipart request reaches certificate controller", "file streams to an opaque date-partitioned R2 object key", "certificate row references the key", "upload audit records filename, uploader, competent person, and time", "downloads return a five-minute signed URL"]
+    },
+    {
+      "name": "Certificate and routine-maintenance notifications",
+      "steps": ["startup run, daily cron, manual scheduler call, or working-hour threshold triggers a scan", "candidate and tier are calculated", "transaction claims a NotificationDelivery idempotency key", "River email and/or ClickUp job is inserted in the same transaction", "worker calls SMTP or ClickUp", "delivery is marked SENT or attempt/final failure is recorded", "scheduler pages read the audit and failures"]
+    },
+    {
+      "name": "HR/Admin compliance renewal",
+      "steps": ["user creates or renews a record", "new ComplianceRecordVersion is appended", "previous current version is superseded", "renewable records enter the reminder queue based on type policy or product fallback", "daily/manual expiry scan enqueues idempotent channel deliveries", "archived subjects and records are excluded"]
+    },
+    {
+      "name": "Password reset",
+      "steps": ["rate-limited public request creates a hashed single-use token", "reset URL and recipient payload are AES-GCM encrypted for the job", "River sends the reset email", "public reset endpoint validates and consumes the token", "password is replaced and stored sessions are revoked"]
+    },
+    {
+      "name": "Client portal read",
+      "steps": ["CLIENT session enters /client routes", "backend ClientMiddleware enforces the global role", "queries join user-project access to authorized project assets", "client receives read-only asset/component/certificate data", "certificate download query rechecks authorization before issuing a signed URL"]
+    }
+  ],
+  "security": {
+    "authentication": [
+      "signed JWT access token with six-hour TTL",
+      "HTTP-only SameSite=Lax cookie named ams_access_token",
+      "Secure cookie outside development",
+      "Authorization bearer token supported as fallback",
+      "server stores the current token on the user row so logout/password changes/session replacement can revoke it"
+    ],
+    "authorization_layers": ["active-user status", "global role", "product access and product role", "project-scoped client queries", "resource ownership checks before signed downloads"],
+    "public_endpoint_controls": ["login rate limit configurable through LOGIN_RATE_LIMIT", "forgot-password fixed rate limit plus database-backed rate limit", "metrics disabled unless METRICS_TOKEN is configured"],
+    "file_controls": ["opaque R2 object keys", "content-type-derived extension", "safe response filename", "five-minute presigned GET"],
+    "cross_origin": "explicit ALLOWED_ORIGIN list; local origins allowed only when APP_ENV=dev; credentials enabled",
+    "notable_boundary": "Frontend guards improve navigation UX; backend middleware and scoped SQL queries are authoritative."
+  },
+  "background_processing": {
+    "engine": "River on PostgreSQL",
+    "worker_kinds": ["password_reset_email", "notification_email", "notification_clickup"],
+    "max_attempts": 5,
+    "workers_on_password_reset_queue": 2,
+    "schedules": [
+      {"name": "certificate expiry", "environment": "ALERT_CRON_SCHEDULE", "default": "0 8 * * *", "also_runs_at_startup": true},
+      {"name": "HR/Admin reminder", "environment": "HR_ADMIN_REMINDER_CRON_SCHEDULE", "default": "0 8 * * *", "also_runs_at_startup": true}
+    ],
+    "delivery_channels": ["EMAIL", "CLICKUP"],
+    "delivery_source_types": ["certificate_expiry", "routine_maintenance", "hr_admin_compliance_expiry"],
+    "admin_ui": "/v1/admin/jobs, SUPER_ADMIN only"
+  },
+  "integrations": [
+    {"name": "PostgreSQL", "purpose": "primary data store, transactions, River jobs", "configuration": ["DATABASE_URL"]},
+    {"name": "Cloudflare R2", "purpose": "certificate and compliance documents", "configuration": ["R2_S3_ENDPOINT", "R2_S3_REGION", "R2_S3_ACCESS_KEY_ID", "R2_S3_SECRET_ACCESS_KEY", "R2_S3_BUCKET"]},
+    {"name": "SMTP", "purpose": "password reset and notification email", "configuration": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "FROM_EMAIL"]},
+    {"name": "ClickUp", "purpose": "expiry and maintenance tasks", "configuration": ["CLICKUP_API_TOKEN", "CLICKUP_LIST_ID", "CLICKUP_ASSIGNEE_ID"]},
+    {"name": "Prometheus", "purpose": "request count, latency, in-flight gauge", "configuration": ["METRICS_TOKEN"]}
+  ],
+  "observability": {
+    "logging": "zerolog structured request and application logs with request IDs",
+    "metrics": ["ams_http_requests_total", "ams_http_request_duration_seconds", "ams_http_requests_in_flight"],
+    "health": "GET /v1/health returns status ok",
+    "metrics_endpoint": "GET /v1/metrics, static bearer token, unavailable when unconfigured",
+    "job_visibility": "River UI plus product-scoped notification task and failure APIs"
+  },
+  "testing": {
+    "layers": [
+      {"name": "Go unit tests", "coverage": ["tokens", "storage keys", "notification contracts", "email idempotency", "DTO serialization", "certificate/template helpers"]},
+      {"name": "Go integration regression", "coverage": ["full API surface", "authorization", "database behavior", "HR/Admin product"]},
+      {"name": "Playwright E2E", "coverage": ["whole app", "cookie sessions", "permissions", "templates/catalog", "single equipment", "routine maintenance", "scheduler", "forgot password", "client certificates", "HR/Admin"]},
+      {"name": "Postman regression", "coverage": ["system smoke", "admin surface", "client certificates", "routine maintenance", "single equipment", "HR/Admin"]}
+    ],
+    "playwright_defaults": {"workers": 1, "fully_parallel": false, "timeout_ms": 120000, "screenshots": "only on failure", "traces": "retain on failure"},
+    "integration_gate": "AMS_RUN_INTEGRATION=1 plus DATABASE_URL and SECRET_KEY"
+  },
+  "configuration": {
+    "frontend": ["VITE_API_BASE_URL", "PLAYWRIGHT_BASE_URL", "PLAYWRIGHT_BROWSER_CHANNEL"],
+    "backend_core": ["PORT", "APP_ENV", "DATABASE_URL", "SECRET_KEY", "ALLOWED_ORIGIN", "SEED_ADMIN_EMAIL", "SEED_ADMIN_PASSWORD"],
+    "authentication": ["LOGIN_RATE_LIMIT", "FRONTEND_BASE_URL", "RESET_EMAIL_JOB_ENCRYPTION_KEY"],
+    "notifications": ["ALERT_RECIPIENT_EMAIL", "ALERT_RECIPIENT_NAME", "EXPIRY_ALERT_DAYS", "ALERT_CRON_SCHEDULE", "HR_ADMIN_REMINDER_CRON_SCHEDULE"],
+    "smtp": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "FROM_EMAIL"],
+    "clickup": ["CLICKUP_API_TOKEN", "CLICKUP_LIST_ID", "CLICKUP_ASSIGNEE_ID"],
+    "storage": ["R2_S3_ENDPOINT", "R2_S3_REGION", "R2_S3_ACCESS_KEY_ID", "R2_S3_SECRET_ACCESS_KEY", "R2_S3_BUCKET"],
+    "observability": ["METRICS_TOKEN"]
+  },
+  "deployment_shape": {
+    "frontend_development": "Vite on 127.0.0.1:5175 proxies /v1 to http://localhost:8080",
+    "frontend_production": "static Vite build; API is same-origin unless VITE_API_BASE_URL is set",
+    "backend": "single Go process serving API, cron triggers, River workers, and River UI",
+    "database": "external PostgreSQL required",
+    "object_storage": "external S3-compatible R2 required for document operations",
+    "deployment_manifests_in_repository": "none discovered; TLS certificate material exists under cloudflare but no container/orchestrator manifest is present"
+  },
+  "repository_map": [
+    {"path": "ams-frontend-cloudscape/src/app", "purpose": "router, lazy route registry, access guards"},
+    {"path": "ams-frontend-cloudscape/src/features", "purpose": "product and workflow pages"},
+    {"path": "ams-frontend-cloudscape/src/components", "purpose": "app shell and shared UI"},
+    {"path": "ams-frontend-cloudscape/src/providers", "purpose": "query, auth, flashbar state"},
+    {"path": "ams-frontend-cloudscape/src/lib/api", "purpose": "HTTP client and typed endpoint facade"},
+    {"path": "ams-frontend-cloudscape/src/types", "purpose": "frontend domain and DTO contracts"},
+    {"path": "ams-server/main.go", "purpose": "composition root and process lifecycle"},
+    {"path": "ams-server/routes", "purpose": "HTTP surface and access-lane composition"},
+    {"path": "ams-server/middleware", "purpose": "cross-cutting request controls"},
+    {"path": "ams-server/controllers", "purpose": "HTTP orchestration and business rules"},
+    {"path": "ams-server/utils", "purpose": "jobs, schedulers, integrations, storage, PDF, auth helpers"},
+    {"path": "ams-server/db/queries", "purpose": "handwritten SQL command/query definitions"},
+    {"path": "ams-server/db/generated", "purpose": "sqlc-generated typed data layer"},
+    {"path": "ams-server/db/migrations", "purpose": "ordered PostgreSQL schema history"},
+    {"path": "tests/regression/e2e", "purpose": "Playwright system regression"},
+    {"path": "tests/regression/api", "purpose": "Postman API regression"},
+    {"path": "docs/adr", "purpose": "domain and architecture decisions for HR/Admin"},
+    {"path": "CONTEXT.md", "purpose": "current ubiquitous language and product boundaries"}
+  ],
+  "architecture_findings": [
+    {"severity": "important", "finding": "The live system is a modular monolith, not separate product services. AMS and HR/Admin are namespaces and authorization/data boundaries within one SPA, one Go process, and one database."},
+    {"severity": "important", "finding": "Authorization is deliberately layered: global identity role, active session/token match, Product Access, then query-level project/resource scope."},
+    {"severity": "important", "finding": "Background notification reliability is built around PostgreSQL transactions, River jobs, idempotency keys, and a durable NotificationDelivery audit."},
+    {"severity": "drift", "finding": "ARCHITECTURE.md describes an earlier MongoDB/bearer-token design and should not be used as the current implementation reference."},
+    {"severity": "constraint", "finding": "No production deployment manifest was found, so process placement, reverse proxy, secrets delivery, backups, and horizontal scaling are operationally unspecified in this repository."}
+  ],
+  "primary_sources": [
+    "CONTEXT.md",
+    "PRODUCT.md",
+    "ams-frontend-cloudscape/src/main.tsx",
+    "ams-frontend-cloudscape/src/app/router.tsx",
+    "ams-frontend-cloudscape/src/app/route-components.tsx",
+    "ams-frontend-cloudscape/src/providers/AuthProvider.tsx",
+    "ams-frontend-cloudscape/src/lib/api/client.ts",
+    "ams-frontend-cloudscape/src/lib/api/ams.ts",
+    "ams-server/main.go",
+    "ams-server/routes/protectedRoutes.go",
+    "ams-server/routes/unprotectedRoutes.go",
+    "ams-server/middleware/authMiddleware.go",
+    "ams-server/middleware/productAccessMiddleware.go",
+    "ams-server/utils/notificationJobs.go",
+    "ams-server/utils/passwordResetJobs.go",
+    "ams-server/utils/storage.go",
+    "ams-server/db/generated/models.go",
+    "ams-server/db/queries",
+    "ams-server/db/migrations",
+    "tests/regression"
+  ]
+}
