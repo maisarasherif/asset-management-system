@@ -2569,46 +2569,6 @@
           ]
         },
         {
-          "name": "Management fixture: Create Certificate",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Certificate management-{{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"expiry_date\": \"2027-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Bureau Veritas\",\n  \"test_id\": \"{{test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Generated-renewal implementation baseline\",\n  \"competency_category_ids\": []\n}"
-            },
-            "url": "{{baseUrl}}/certificate",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{adminToken}}",
-                  "type": "string"
-                }
-              ]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.response.to.have.status(201);",
-                  "const body = pm.response.json();",
-                  "pm.collectionVariables.set('certificate_id', body.certificate_id);"
-                ]
-              }
-            }
-          ]
-        },
-        {
           "name": "Management fixture: Create Competency Category",
           "request": {
             "method": "POST",
@@ -2689,9 +2649,50 @@
           ]
         },
         {
-          "name": "Restrict generated certificate to category A",
+          "name": "Management fixture: Create Certificate",
           "request": {
-            "method": "PATCH",
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Certificate management-{{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"expiry_date\": \"2027-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Bureau Veritas\",\n  \"test_id\": \"{{test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Generated-renewal implementation baseline\",\n  \"competency_category_ids\": [\n    \"{{competency_category_id}}\"\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/certificate",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('certificate_id', body.certificate_id);",
+                  "pm.expect(body.competency_category_ids).to.eql([pm.collectionVariables.get('competency_category_id')]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify stored certificate category A",
+          "request": {
+            "method": "GET",
             "url": "{{baseUrl}}/certificate/{{certificate_id}}",
             "auth": {
               "type": "bearer",
@@ -2702,16 +2703,6 @@
                   "type": "string"
                 }
               ]
-            },
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"competency_category_ids\": [\n    \"{{competency_category_id}}\"\n  ]\n}"
             }
           },
           "event": [
@@ -2720,7 +2711,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Restrict generated certificate to category A: status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"Verify stored certificate category A: status 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.expect(pm.response.json().competency_category_ids).to.eql([pm.collectionVariables.get('competency_category_id')]);",
+                  "}"
                 ]
               }
             }
@@ -5569,10 +5563,10 @@
           ]
         },
         {
-          "name": "Remove certificate category restriction",
+          "name": "Create separate unrestricted certificate",
           "request": {
-            "method": "PATCH",
-            "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+            "method": "POST",
+            "url": "{{baseUrl}}/certificate",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -5591,7 +5585,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"competency_category_ids\": []\n}"
+              "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Unrestricted management-{{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"expiry_date\": \"2027-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Bureau Veritas\",\n  \"test_id\": \"{{test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Generated-renewal implementation baseline\",\n  \"competency_category_ids\": []\n}"
             }
           },
           "event": [
@@ -5600,7 +5594,41 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Remove certificate category restriction: status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"Create separate unrestricted certificate: status 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const body=pm.response.json(); pm.expect(body.certificate_id).to.match(/^[0-9a-f-]{36}$/i); pm.expect(body.competency_category_ids).to.eql([]); pm.collectionVariables.set('mgUnrestrictedCertificateId',body.certificate_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify stored unrestricted certificate rules",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Verify stored unrestricted certificate rules: status 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.expect(pm.response.json().competency_category_ids).to.eql([]);",
+                  "}"
                 ]
               }
             }
@@ -5610,7 +5638,7 @@
           "name": "Unrestricted certificate includes both active competent signers",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-signers",
+            "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/generated-signers",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -5641,7 +5669,7 @@
           "name": "Unrestricted certificate permits own admin category B",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-signers",
+            "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/generated-signers",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -5669,10 +5697,10 @@
           ]
         },
         {
-          "name": "Restore certificate category restriction",
+          "name": "COMPETENT_PERSON resolves signer on unrestricted certificate",
           "request": {
-            "method": "PATCH",
-            "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+            "method": "POST",
+            "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/generated-signer",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -5691,7 +5719,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"competency_category_ids\": [\n    \"{{competency_category_id}}\"\n  ]\n}"
+              "raw": "{\n  \"signer_id\": \"{{mgWrong}}\"\n}"
             }
           },
           "event": [
@@ -5700,7 +5728,162 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Restore certificate category restriction: status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"COMPETENT_PERSON resolves signer on unrestricted certificate: status 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const body=pm.response.json(); pm.expect(body.owner_kind).to.eql(\"COMPETENT_PERSON\"); pm.expect(body.signer_id).to.eql(pm.collectionVariables.get(\"mgWrong\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "COMPETENT_PERSON unrestricted selection cannot bypass restricted certificate",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-signer",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signer_id\": \"{{mgWrong}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"COMPETENT_PERSON unrestricted selection cannot bypass restricted certificate: status 400\", () => pm.response.to.have.status(400));",
+                  "if (pm.response.code === 400) {",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ACCOUNT resolves signer on unrestricted certificate",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/generated-signer",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signer_id\": \"{{signerUserId}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"ACCOUNT resolves signer on unrestricted certificate: status 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const body=pm.response.json(); pm.expect(body.owner_kind).to.eql(\"ACCOUNT\"); pm.expect(body.signer_id).to.eql(pm.collectionVariables.get(\"signerUserId\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ACCOUNT unrestricted selection cannot bypass restricted certificate",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-signer",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signer_id\": \"{{signerUserId}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"ACCOUNT unrestricted selection cannot bypass restricted certificate: status 400\", () => pm.response.to.have.status(400));",
+                  "if (pm.response.code === 400) {",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Restricted certificate keeps category A",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Restricted certificate keeps category A: status 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.expect(pm.response.json().competency_category_ids).to.eql([pm.collectionVariables.get('competency_category_id')]);",
+                  "}"
                 ]
               }
             }
@@ -6053,6 +6236,34 @@
                   "if (pm.response.code === 200) {",
                   "const body=pm.response.json(); pm.expect(body.active).to.eql(false); pm.expect(body.signature.signature_id).to.eql(pm.collectionVariables.get('mgSignatureCurrent'));",
                   "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Management cleanup: Delete unrestricted Certificate",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
                 ]
               }
             }

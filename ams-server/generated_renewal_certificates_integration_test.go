@@ -474,13 +474,14 @@ func TestGeneratedRenewalSignerEligibilityRevalidatesCategoryStatusAndOwnership(
 	payload["competency_category_ids"] = []string{a.String()}
 	cert := uuid.MustParse(stringField(t, createCertificate(t, h, payload), "certificate_id"))
 	path := "/v1/certificate/" + cert.String()
+	assertField(t, decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, path, nil, http.StatusOK)), "competency_category_ids", []any{a.String()})
 	adminToken := createIntegrationUserToken(t, h.pool, "Own", "Examiner", "eligible-admin@example.com", "signing-password", "ADMIN")
 	p := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodGet, "/v1/account/signing-profile", nil, http.StatusOK))
 	admin := uuid.MustParse(stringField(t, p, "user_id"))
-	assertChoices := func(token string, expected ...uuid.UUID) {
+	assertChoicesFor := func(certificatePath, token string, expected ...uuid.UUID) {
 		t.Helper()
 		var rows []issuance.EligibleSigner
-		raw := performJSONRequest(t, h.router, token, http.MethodGet, path+"/generated-signers", nil, http.StatusOK)
+		raw := performJSONRequest(t, h.router, token, http.MethodGet, certificatePath+"/generated-signers", nil, http.StatusOK)
 		if err := json.Unmarshal(raw, &rows); err != nil {
 			t.Fatal(err)
 		}
@@ -501,6 +502,10 @@ func TestGeneratedRenewalSignerEligibilityRevalidatesCategoryStatusAndOwnership(
 				t.Fatalf("expected signer %s missing: %s", id, raw)
 			}
 		}
+	}
+	assertChoices := func(token string, expected ...uuid.UUID) {
+		t.Helper()
+		assertChoicesFor(path, token, expected...)
 	}
 	assertChoices(h.adminToken, allowed)
 	assertChoices(adminToken)
@@ -553,14 +558,28 @@ func TestGeneratedRenewalSignerEligibilityRevalidatesCategoryStatusAndOwnership(
 		t.Fatal(err)
 	}
 	assertChoices(adminToken)
-	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, path, map[string]any{"competency_category_ids": []string{}}, http.StatusOK)
-	assertChoices(h.adminToken, allowed, wrong)
-	assertChoices(adminToken, admin) // No allowed-category rows means unrestricted.
+	// Category rules are configured on creation; PATCH does not accept them.
+	// Use a separate unrestricted certificate to exercise the real API contract.
+	unrestrictedPayload := certificatePayload(component, testID, 91)
+	unrestrictedPayload["competency_category_ids"] = []string{}
+	unrestrictedID := stringField(t, createCertificate(t, h, unrestrictedPayload), "certificate_id")
+	unrestrictedPath := "/v1/certificate/" + unrestrictedID
+	assertField(t, decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, unrestrictedPath, nil, http.StatusOK)), "competency_category_ids", []any{})
+	assertChoicesFor(unrestrictedPath, h.adminToken, allowed, wrong)
+	assertChoicesFor(unrestrictedPath, adminToken, admin)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, unrestrictedPath+"/generated-signer", map[string]any{"signer_id": wrong}, http.StatusOK)
+	performJSONRequest(t, h.router, adminToken, http.MethodPost, unrestrictedPath+"/generated-signer", map[string]any{}, http.StatusOK)
+	// A selection permitted by the unrestricted record grants no authority on A.
+	assertChoices(h.adminToken, allowed)
+	assertChoices(adminToken)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-signer", map[string]any{"signer_id": wrong}, http.StatusBadRequest)
+	performJSONRequest(t, h.router, adminToken, http.MethodPost, path+"/generated-signer", map[string]any{}, http.StatusBadRequest)
 	cleared, err := manager.AssignCategory(ctx, actor, admin, nil)
 	if err != nil || cleared.Signature.ID != ownProfile.Signature.ID {
 		t.Fatal("category clear changed saved signature")
 	}
 	assertChoices(adminToken)
+	assertChoicesFor(unrestrictedPath, adminToken)
 	if _, err := manager.AssignCategory(ctx, actor, admin, &a); err != nil {
 		t.Fatal(err)
 	}

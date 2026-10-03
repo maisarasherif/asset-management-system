@@ -165,10 +165,17 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     cleanup.push(`/asset/${asset.asset_id}`);
     const component = await post("/component", { asset_id: asset.asset_id, category_id: category.category_id, scope_category_id: scopedCategory.scope_category_id, name: suffix, serial_number: suffix, manufacturer: "PMS", model: "Signer", location: "Warehouse", assigned_project: "", equipment_type: "Equipment", structure: "Fixed", class: "A", class_code: "A1", safety_critical: "YES", description: "Signer selection" }, "component_id");
     cleanup.push(`/component/${component.component_id}`);
-    const certificate = await post("/certificate", { component_id: component.component_id, certificate_name: suffix, test_id: type.test_id, issue_date: "2026-01-02T00:00:00Z", expiry_date: "2027-01-02T00:00:00Z", certificate_file: "", issuing_authority: "PMS", imca_ref: "D018", imca_d018: "Signer selection", maintenance_notes: "", competency_category_ids: [allowedCategory.competency_category_id] }, "certificate_id");
+    const certificateInput = { component_id: component.component_id, certificate_name: suffix, test_id: type.test_id, issue_date: "2026-01-02T00:00:00Z", expiry_date: "2027-01-02T00:00:00Z", certificate_file: "", issuing_authority: "PMS", imca_ref: "D018", imca_d018: "Signer selection", maintenance_notes: "", competency_category_ids: [allowedCategory.competency_category_id] };
+    const certificate = await post("/certificate", certificateInput, "certificate_id");
     cleanup.push(`/certificate/${certificate.certificate_id}`);
+    expect(certificate.competency_category_ids).toEqual([allowedCategory.competency_category_id]);
+    const unrestricted = await post("/certificate", { ...certificateInput, certificate_name: `Unrestricted ${suffix}`, competency_category_ids: [] }, "certificate_id");
+    cleanup.push(`/certificate/${unrestricted.certificate_id}`);
+    expect(unrestricted.competency_category_ids).toEqual([]);
     const certificateURL = `/assets/${asset.asset_id}/components/${component.component_id}/certificates/${certificate.certificate_id}`;
     const certificateAPI = `${api}/certificate/${certificate.certificate_id}`;
+    const unrestrictedURL = `/assets/${asset.asset_id}/components/${component.component_id}/certificates/${unrestricted.certificate_id}`;
+    const unrestrictedAPI = `${api}/certificate/${unrestricted.certificate_id}`;
     const personAPI = `${api}/competent-person/${eligible.competent_person_id}/signing-profile`;
     const adminAPI = `${api}/user/${admin.user_id}/signing-profile`;
     // Populate excluded people too: inactivity/category, rather than a missing
@@ -234,6 +241,11 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     const eligibleResponse = await page.request.get(`${certificateAPI}/generated-signers`);
     expect(eligibleResponse.status()).toBe(200);
     expect((await eligibleResponse.json()).map((row: { signer_id: string }) => row.signer_id)).toEqual([eligible.competent_person_id]);
+    const unrestrictedChoices = await page.request.get(`${unrestrictedAPI}/generated-signers`);
+    expect(unrestrictedChoices.status()).toBe(200);
+    expect((await unrestrictedChoices.json()).map((row: { signer_id: string }) => row.signer_id).sort()).toEqual([eligible.competent_person_id, wrongCategory.competent_person_id].sort());
+    expect((await page.request.post(`${unrestrictedAPI}/generated-signer`, { data: { signer_id: wrongCategory.competent_person_id } })).status()).toBe(200);
+    expect((await page.request.post(`${certificateAPI}/generated-signer`, { data: { signer_id: wrongCategory.competent_person_id } })).status()).toBe(400);
 
     // Changing the person after selection must invalidate the server resolver.
     const deactivate = await page.request.put(`${api}/competent-person/${eligible.competent_person_id}`, { data: { ...personInput, active: false } });
@@ -268,6 +280,21 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     expect((await page.request.get(personAPI)).status()).toBe(403);
     expect((await page.request.put(adminAPI, { data: { competency_category_id: otherCategory.competency_category_id } })).status()).toBe(403);
     expect((await page.request.post(`${certificateAPI}/generated-signer`, { data: { signer_id: eligible.competent_person_id } })).status()).toBe(403);
+    // Category rules are creation-time configuration. Compare two real records
+    // instead of trying to alter them through an unsupported PATCH field.
+    const categoryB = await request.put(adminAPI, { headers: cleanupHeaders, data: { competency_category_id: otherCategory.competency_category_id } });
+    expect(categoryB.status()).toBe(200);
+    await page.reload();
+    await expect(signing.getByText(/Your signing profile is not eligible/)).toBeVisible();
+    expect((await page.request.post(`${certificateAPI}/generated-signer`, { data: {} })).status()).toBe(400);
+    await page.goto(unrestrictedURL);
+    await expect(signing.getByText("Managed Examiner", { exact: true })).toBeVisible();
+    await expect(signing.getByLabel("Generated certificate competent person", { exact: true })).toHaveCount(0);
+    await expect(signing.getByRole("img", { name: "Saved signature or stamp", exact: true })).toHaveJSProperty("naturalWidth", 120);
+    expect((await page.request.post(`${unrestrictedAPI}/generated-signer`, { data: {} })).status()).toBe(200);
+    const categoryA = await request.put(adminAPI, { headers: cleanupHeaders, data: { competency_category_id: allowedCategory.competency_category_id } });
+    expect(categoryA.status()).toBe(200);
+    await page.goto(certificateURL);
     for (const width of [320, 768, 1024, 1440]) {
       await narrow(width);
       await expect(signing.getByText("Managed Examiner", { exact: true })).toBeVisible();
