@@ -533,6 +533,7 @@ if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
       PLAYWRIGHT_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
       PLAYWRIGHT_RUN_ROUTINE_MAINTENANCE_TRIGGER=1 \
       PLAYWRIGHT_RUN_CLIENT_PORTAL_TRIGGER=1 \
+      PLAYWRIGHT_HTML_OPEN=never \
       PLAYWRIGHT_HTML_OUTPUT_DIR="$RUN_DIR/playwright-report" \
       PLAYWRIGHT_JSON_OUTPUT_NAME="$RUN_DIR/playwright-results.json" \
       npx playwright test $E2E_SPECS --reporter=list,html,json

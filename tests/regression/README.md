@@ -80,4 +80,4 @@ E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-The runner needs no Step 2 change: the collection/spec are already registered, Go discovers the new tests, static image fixtures are committed, the existing oversize fixture is reused, and signature writes use the same scoped object journal. Run logs and cleanup evidence are retained in the printed `.vps-test-run/run.<suffix>/` directory. See the guide for journal cleanup retry and reporting.
+The collection/spec are already registered, Go discovers the new tests, static image fixtures are committed, the existing oversize fixture is reused, and signature writes use the same scoped object journal. The first Step 2 VPS run passed all 120 Go tests and Newman; Playwright needs a rerun after its narrow-viewport check was corrected to close navigation. The runner now disables automatic HTML report serving so failure exits and cleanup require no Ctrl+C. Run logs and cleanup evidence are retained in the printed `.vps-test-run/run.<suffix>/` directory. See the guide for journal cleanup retry and reporting.

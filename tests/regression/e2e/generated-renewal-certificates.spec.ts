@@ -196,6 +196,13 @@ test("ADMIN saves and replaces their own private signing image through Account w
     expect((await ownProfile()).competency_category_id).toBeNull();
     for (const width of [320, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      // Desktop navigation becomes a mobile drawer when the viewport narrows.
+      // Cloudscape hides the main content while that drawer is open.
+      const closeNavigation = page.getByRole("button", { name: "Close primary navigation", exact: true });
+      if (width < 1101 && await closeNavigation.isVisible()) {
+        await closeNavigation.click();
+        await expect(page.getByRole("button", { name: "Open primary navigation", exact: true })).toBeVisible();
+      }
       await expect(organization).toBeVisible();
       await expect(preview).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
