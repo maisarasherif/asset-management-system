@@ -1,9 +1,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
 import { expect, test, type APIRequestContext } from "@playwright/test";
 
 const api = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:18082/v1";
 const pdf = readFileSync(resolve(__dirname, "../fixtures/sample-certificate.pdf"));
+const signaturePNG = readFileSync(resolve(__dirname, "../fixtures/signature-sample.png"));
+const signatureJPEG = readFileSync(resolve(__dirname, "../fixtures/signature-replacement.jpg"));
 
 // Exercise today's real workflow before extending it with generated issuance.
 // Prerequisites belong to this spec, independent of whole-app fixtures.
@@ -95,6 +98,134 @@ test("certificate renewal baseline uploads through UI and reads the historical R
       // Before browser login, fall back to the initial API token.
       const status = response.status() === 401 ? (await request.delete(`${api}${path}`, { headers })).status() : response.status();
       expect([200, 404], `cleanup ${path}`).toContain(status);
+    }
+  }
+});
+
+test("ADMIN saves and replaces their own private signing image through Account while other roles cannot use it", async ({ page, request }) => {
+  const rootEmail = process.env.PLAYWRIGHT_ADMIN_EMAIL;
+  const rootPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD;
+  expect(rootEmail, "runner super admin email").toBeTruthy();
+  expect(rootPassword, "runner super admin password").toBeTruthy();
+  expect(process.env.AMS_TEST_STORAGE_PREFIX, "runner storage scope").toBeTruthy();
+  const rootLogin = await request.post(`${api}/login`, { data: { email: rootEmail, password: rootPassword } });
+  expect(rootLogin.status()).toBe(200);
+  const headers = { Authorization: `Bearer ${(await rootLogin.json()).token}` };
+  const suffix = `signing-${Date.now()}`;
+  const password = "Signing-profile-test-123!";
+  const accounts: Array<{ user_id: string; email: string }> = [];
+  const accountPath = "/account/signing-profile";
+  const loginUI = async (email: string, accountPassword: string) => {
+    await page.goto("/login");
+    await page.getByLabel("Email", { exact: true }).fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(accountPassword);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await page.goto("/account");
+    await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
+  };
+  const ownProfile = async () => {
+    const response = await page.request.get(`${api}${accountPath}`);
+    expect(response.status(), await response.text()).toBe(200);
+    return response.json();
+  };
+  try {
+    for (const [role, firstName] of [["ADMIN", "Own"], ["ADMIN", "Other"], ["USER", "Restricted"]]) {
+      const email = `${firstName.toLowerCase()}-${suffix}@example.com`;
+      const response = await request.post(`${api}/user`, { headers, data: { first_name: firstName, last_name: "Examiner", email, password, role, status: "ACTIVE" } });
+      expect(response.status(), await response.text()).toBe(201);
+      accounts.push({ user_id: (await response.json()).user_id, email });
+    }
+    await loginUI(accounts[0].email, password);
+    await expect(page.getByRole("heading", { name: "Certificate signing profile", exact: true })).toBeVisible();
+    await expect(page.getByText("No signature saved. Upload your signature or stamp below.", { exact: true })).toBeVisible();
+    const initial = await ownProfile();
+    expect(initial.full_name).toBe("Own Examiner");
+    expect(initial.competency_category_id).toBeNull();
+    expect(initial.signature).toBeNull();
+
+    const organization = page.getByLabel("Signing organization", { exact: true });
+    await expect(organization).toHaveValue("Porto Marine Services L.L.C.");
+    await organization.fill(" ");
+    await expect(page.getByText("Enter an organization between 1 and 200 characters.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save signing details", exact: true })).toBeDisabled();
+    await organization.fill("Porto Marine — Inspection");
+    await page.getByRole("button", { name: "Save signing details", exact: true }).click();
+    await expect(page.getByText("Signing details saved", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(organization).toHaveValue("Porto Marine — Inspection");
+
+    const file = page.locator('input[type="file"]');
+    await file.setInputFiles({ name: "signature.png", mimeType: "image/png", buffer: signaturePNG });
+    await page.getByRole("button", { name: "Save signature", exact: true }).click();
+    const preview = page.getByRole("img", { name: "Saved signature or stamp", exact: true });
+    await expect(preview).toBeVisible();
+    await expect(preview).toHaveJSProperty("naturalWidth", 120);
+    await expect(preview).toHaveJSProperty("naturalHeight", 48);
+    const first = (await ownProfile()).signature;
+    const originalResponse = await page.request.get(`${api}${accountPath}/signatures/${first.signature_id}/file`);
+    expect(originalResponse.status()).toBe(200);
+    expect(originalResponse.headers()["cache-control"]).toBe("no-store");
+    const originalBytes = await originalResponse.body();
+    expect(createHash("sha256").update(originalBytes).digest("hex")).toBe(first.sha256);
+
+    await file.setInputFiles({ name: "signature.jpg", mimeType: "image/jpeg", buffer: signatureJPEG });
+    await page.getByRole("button", { name: "Save signature", exact: true }).click();
+    await expect(preview).toHaveJSProperty("naturalWidth", 160);
+    await expect(preview).toHaveJSProperty("naturalHeight", 64);
+    const second = (await ownProfile()).signature;
+    expect(second.signature_id).not.toBe(first.signature_id);
+    const retainedResponse = await page.request.get(`${api}${accountPath}/signatures/${first.signature_id}/file`);
+    expect(retainedResponse.status()).toBe(200);
+    expect(await retainedResponse.body()).toEqual(originalBytes);
+    await page.reload();
+    await expect(preview).toHaveJSProperty("naturalWidth", 160);
+    expect((await ownProfile()).signature.signature_id).toBe(second.signature_id);
+
+    await file.setInputFiles({ name: "fake-signature.png", mimeType: "image/png", buffer: pdf });
+    await page.getByRole("button", { name: "Save signature", exact: true }).click();
+    await expect(page.getByText("choose a valid PNG or JPEG signature image", { exact: true })).toBeVisible();
+    expect((await ownProfile()).signature.signature_id).toBe(second.signature_id);
+    await file.setInputFiles({ name: "too-large.png", mimeType: "image/png", buffer: Buffer.alloc(2 * 1024 * 1024 + 1) });
+    await expect(page.getByText("Choose a signature image of 2 MB or smaller.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save signature", exact: true })).toBeDisabled();
+    await file.setInputFiles([]);
+
+    const spoof = await page.request.put(`${api}${accountPath}`, { data: { organization: "Changed", competency_category_id: "00000000-0000-0000-0000-000000000001" } });
+    expect(spoof.status()).toBe(400);
+    expect((await ownProfile()).competency_category_id).toBeNull();
+    for (const width of [320, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(organization).toBeVisible();
+      await expect(preview).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+    }
+
+    const otherLogin = await request.post(`${api}/login`, { data: { email: accounts[1].email, password } });
+    expect(otherLogin.status()).toBe(200);
+    const otherHeaders = { Authorization: `Bearer ${(await otherLogin.json()).token}` };
+    const forbiddenRead = await request.get(`${api}${accountPath}/signatures/${first.signature_id}/file`, { headers: otherHeaders });
+    expect(forbiddenRead.status()).toBe(404);
+    const otherProfile = await request.get(`${api}${accountPath}?user_id=${accounts[0].user_id}`, { headers: otherHeaders });
+    expect(otherProfile.status()).toBe(200);
+    expect((await otherProfile.json()).user_id).toBe(accounts[1].user_id);
+    expect((await otherProfile.json()).signature).toBeNull();
+
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await loginUI(accounts[2].email, password);
+    await expect(page.getByRole("heading", { name: "Certificate signing profile", exact: true })).toHaveCount(0);
+    const restrictedProfile = await page.request.get(`${api}${accountPath}`);
+    expect(restrictedProfile.status()).toBe(403);
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    // Use the already-authenticated root API context to check its role gate.
+    const superAdminProfile = await request.get(`${api}${accountPath}`, { headers });
+    expect(superAdminProfile.status()).toBe(403);
+  } finally {
+    for (const account of accounts.reverse()) {
+      const response = await request.delete(`${api}/user/${account.user_id}`, { headers });
+      expect([200, 404], `cleanup signing account ${account.user_id}`).toContain(response.status());
     }
   }
 });

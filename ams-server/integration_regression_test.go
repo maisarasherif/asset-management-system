@@ -1911,6 +1911,8 @@ TRUNCATE TABLE
   hr_admin_companies,
   asset_maintenance_events,
   certificate_upload_audit,
+  certificate_signing_profiles,
+  certificate_signature_versions,
   certificate_competency_categories,
   certificates,
   components,

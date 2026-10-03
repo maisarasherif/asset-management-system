@@ -55,7 +55,7 @@ NEWMAN_COLLECTIONS="tests/regression/api/system-api-smoke.postman_collection.jso
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-By default, the isolated runner includes the HR/Admin and generated-renewal baseline collections/specs. Override `NEWMAN_COLLECTIONS` or `E2E_SPECS` only for targeted diagnosis.
+By default, the isolated runner includes the HR/Admin and generated-renewal collections/specs. The latter now cover both the external renewal baseline and own ADMIN signing profiles. Override `NEWMAN_COLLECTIONS` or `E2E_SPECS` for focused feature-step verification or diagnosis.
 
 Go regression is off unless enabled; the full command above enables it explicitly. The runner isolates PostgreSQL and journals uniquely prefixed test uploads in the configured R2 bucket. Cleanup removes only that run's recorded objects and fails the run if deletion fails. Use approved storage configuration; for generated certificates the user authorized the existing configured bucket and will run the suites on their VPS. Clean up only test-created objects. See the authoritative guide for defaults, feature-step handoffs, reporting, and cleanup.
 
@@ -69,4 +69,15 @@ adminPassword
 
 from the isolated API and `ams-server/.env`, so separate Postman environment files are not required for the automated VPS flow.
 
-Step 1 now includes dedicated real certificate renewal/upload/history baselines in all three layers, plus scoped-storage Go tests. Run logs and cleanup evidence are retained in the printed `.vps-test-run/run.<suffix>/` directory. See the guide for journal cleanup retry and reporting.
+Step 1's external renewal baseline passed all three layers on the user's Fedora VPS. Step 2 adds own ADMIN signing-profile persistence, bounded PNG/JPEG validation and normalization, private R2 reads, immutable replacement, role/ownership/category gates, and controlled storage/concurrency failures. The maintained feature collection has 73 requests and its Playwright spec has 2 real-stack tests. Step 2 live results remain pending.
+
+Run the growing feature suites after each slice, as the configured test OS account (use `ams_test_runner` for peer authentication on the current VPS):
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/generated-renewal-certificates.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+The runner needs no Step 2 change: the collection/spec are already registered, Go discovers the new tests, static image fixtures are committed, the existing oversize fixture is reused, and signature writes use the same scoped object journal. Run logs and cleanup evidence are retained in the printed `.vps-test-run/run.<suffix>/` directory. See the guide for journal cleanup retry and reporting.

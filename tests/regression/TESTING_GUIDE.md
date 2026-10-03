@@ -466,9 +466,26 @@ Dropping isolated database: ams_e2e_...
 
 The success line alone does not prove all feature paths ran. Verify selections/counts/skips and cleanup. With `KEEP_DB=1`, document retention and later cleanup. Disabled notification delivery does not verify live SMTP/ClickUp; integration-specific checks need a separately scoped test setup.
 
-## Generated-certificate Step 1 baseline and evidence
+## Generated-certificate feature-step coverage and evidence
 
-The focused Go file `ams-server/generated_renewal_certificates_integration_test.go`, Newman collection `api/generated-renewal-certificates.postman_collection.json`, and Playwright spec `e2e/generated-renewal-certificates.spec.ts` currently verify the existing external renewal workflow. They contain real implemented checks, not placeholders for future generated endpoints. All are included in the maintained broader run. The Go integration test verifies two preserved historical documents; Newman creates its own fixtures and downloads from R2; Playwright renews through the UI, checks automatic validity dates, and confirms persisted history/document bytes after reload.
+The focused Go file `ams-server/generated_renewal_certificates_integration_test.go`, Newman collection `api/generated-renewal-certificates.postman_collection.json`, and Playwright spec `e2e/generated-renewal-certificates.spec.ts` verify the existing external renewal workflow and own ADMIN signing profiles. They contain implemented checks, not placeholders for future generated endpoints. All are included in the maintained broader run. The baseline preserves historical documents, checks automatic validity dates, and downloads persisted R2 document bytes after reload.
+
+Step 1 passed on the user's Fedora VPS on 3 October 2026: run.BQqdIV recorded 106 Go passes, no failures/skips, Newman passed, and 6 journaled objects deleted; the spec-loading fix was verified by run.BfIKDk with all 5 Playwright tests passed, 1 journaled object deleted, and the disposable database dropped. The second run selected Playwright only. Newman request/assertion totals from the first run were not supplied.
+
+Step 2 adds 47 signing-profile requests to the collection (73 requests total), a second real-stack Playwright test, image-normalization tests in `ams-server/certificateissuance/signature_image_test.go`, and scoped storage/read tests in `ams-server/utils/object_storage_test.go`. Coverage includes organization persistence, account-derived identity, private owner-only image access, PNG/JPEG normalization, retained earlier images, oversized/invalid images, ownership/category bypasses, role/status changes, controlled storage/publication failures, and overlapping uploads. Playwright also checks the Account form at 320, 768, 1024, and 1440 pixels. These live Step 2 checks remain pending until the user returns results.
+
+Use the configured test OS account rather than running the script as root. On the current Fedora VPS the PostgreSQL role `ams_test_runner` uses Unix-socket peer authentication and requires the matching OS account. The test checkout is `/home/pms/ams-testing/asset-management-system`; synchronizing Git changes as `pms` and running the script as `ams_test_runner` are separate operations.
+
+```bash
+# Run in an ams_test_runner shell after synchronizing certgen.
+cd /home/pms/ams-testing/asset-management-system
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/generated-renewal-certificates.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+No runner change is required for Step 2: its existing default collection/spec registration and Go discovery include the added cases; committed PNG/JPEG fixtures and the generated oversize certificate fixture supply uploads; signature writes use the established scoped journal. Earlier signature objects remain readable until run cleanup, even if database rows are reset or source users are deleted.
 
 The exit summary reports each layer and database/storage cleanup separately. Go JSON events and `go-summary.txt` expose passed/failed/skipped cases, including named skips. Newman CLI summaries are retained per collection; `--bail failure` stops at the first failed prerequisite/assertion. Playwright retains list/HTML/JSON results plus its configured failure traces/screenshots. Share `summary.txt`, `go-summary.txt`, Newman totals, Playwright totals, and the first failure/trace. Do not send `cleanup.env`: it contains the isolated database connection string. Reports/traces can include session data; inspect before sharing.
 

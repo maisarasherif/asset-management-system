@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Generated renewal certificates \u2014 existing workflow baseline",
-    "description": "Step 1 real upload/read/date/history baseline. Grow this collection as generated issuance lands; no future endpoint placeholders. Each run creates its own prerequisites. R2 deletion is owned by the runner journal.",
+    "name": "Generated renewal certificates — baseline and own admin signing profiles",
+    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -682,6 +682,1678 @@
               "pm.response.to.have.status(200);"
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "Own ADMIN signing profiles and immutable signature images",
+      "item": [
+        {
+          "name": "Create Own signing account",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/user",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Own\",\n  \"last_name\": \"Examiner\",\n  \"email\": \"signer-{{runSuffix}}@example.com\",\n  \"password\": \"Signing-profile-test-123!\",\n  \"role\": \"ADMIN\",\n  \"status\": \"ACTIVE\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create Own signing account: status 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('signerUserId', body.user_id);",
+                  "pm.expect(body.user_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Own signing account",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"signer-{{runSuffix}}@example.com\",\n  \"password\": \"Signing-profile-test-123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login Own signing account: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('signerToken', body.token);",
+                  "pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Other signing account",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/user",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Other\",\n  \"last_name\": \"Examiner\",\n  \"email\": \"otherSigner-{{runSuffix}}@example.com\",\n  \"password\": \"Signing-profile-test-123!\",\n  \"role\": \"ADMIN\",\n  \"status\": \"ACTIVE\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create Other signing account: status 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('otherSignerUserId', body.user_id);",
+                  "pm.expect(body.user_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Other signing account",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"otherSigner-{{runSuffix}}@example.com\",\n  \"password\": \"Signing-profile-test-123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login Other signing account: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('otherSignerToken', body.token);",
+                  "pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Restricted signing account",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/user",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Restricted\",\n  \"last_name\": \"Examiner\",\n  \"email\": \"restrictedSigner-{{runSuffix}}@example.com\",\n  \"password\": \"Signing-profile-test-123!\",\n  \"role\": \"USER\",\n  \"status\": \"ACTIVE\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create Restricted signing account: status 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('restrictedSignerUserId', body.user_id);",
+                  "pm.expect(body.user_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Restricted signing account",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"restrictedSigner-{{runSuffix}}@example.com\",\n  \"password\": \"Signing-profile-test-123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login Restricted signing account: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('restrictedSignerToken', body.token);",
+                  "pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Client signing account",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/user",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Client\",\n  \"last_name\": \"Examiner\",\n  \"email\": \"clientSigner-{{runSuffix}}@example.com\",\n  \"password\": \"Signing-profile-test-123!\",\n  \"role\": \"CLIENT\",\n  \"status\": \"ACTIVE\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create Client signing account: status 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('clientSignerUserId', body.user_id);",
+                  "pm.expect(body.user_id).to.match(/^[0-9a-f-]{36}$/i);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Client signing account",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"clientSigner-{{runSuffix}}@example.com\",\n  \"password\": \"Signing-profile-test-123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login Client signing account: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('clientSignerToken', body.token);",
+                  "pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read initial own signing profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Read initial own signing profile: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.user_id).to.eql(pm.collectionVariables.get('signerUserId'));",
+                  "pm.expect(body.full_name).to.eql('Own Examiner');",
+                  "pm.expect(body.organization).to.eql('Porto Marine Services L.L.C.');",
+                  "pm.expect(body.signature).to.eql(null);",
+                  "pm.expect(body.competency_category_id).to.eql(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Save own signing organization",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": \"  Porto Marine — Inspection  \"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Save own signing organization: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.expect(pm.response.json().organization).to.eql('Porto Marine — Inspection');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read persisted signing organization",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Read persisted signing organization: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.expect(pm.response.json().organization).to.eql('Porto Marine — Inspection');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Query owner cannot change profile target",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile?user_id={{otherSignerUserId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Query owner cannot change profile target: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.expect(pm.response.json().user_id).to.eql(pm.collectionVariables.get('signerUserId'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject foreign profile owner",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": \"Hijacked\",\n  \"user_id\": \"{{otherSignerUserId}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reject foreign profile owner: status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject self-assigned competency category",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": \"Hijacked\",\n  \"competency_category_id\": \"00000000-0000-0000-0000-000000000001\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reject self-assigned competency category: status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject foreign current signature",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": \"Hijacked\",\n  \"current_signature_id\": \"00000000-0000-0000-0000-000000000001\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reject foreign current signature: status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject empty signing organization",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": \" \"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reject empty signing organization: status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject overlong signing organization",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": \"界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reject overlong signing organization: status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject NUL signing organization",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": \"Porto\\u0000Marine\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reject NUL signing organization: status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Super admin cannot use own ADMIN signing profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Super admin cannot use own ADMIN signing profile: status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Super admin cannot edit own ADMIN signing profile",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": \"Forbidden\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Super admin cannot edit own ADMIN signing profile: status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Super admin cannot upload own ADMIN signature",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/signing-profile/signature",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "image/png",
+                  "src": "tests/regression/fixtures/signature-sample.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Super admin cannot upload own ADMIN signature: status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "USER cannot use own ADMIN signing profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{restrictedSignerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('USER cannot use own ADMIN signing profile: status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "USER cannot edit own ADMIN signing profile",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{restrictedSignerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": \"Forbidden\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('USER cannot edit own ADMIN signing profile: status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "USER cannot upload own ADMIN signature",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/signing-profile/signature",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{restrictedSignerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "image/png",
+                  "src": "tests/regression/fixtures/signature-sample.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('USER cannot upload own ADMIN signature: status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CLIENT cannot use own ADMIN signing profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientSignerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('CLIENT cannot use own ADMIN signing profile: status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CLIENT cannot edit own ADMIN signing profile",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientSignerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": \"Forbidden\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('CLIENT cannot edit own ADMIN signing profile: status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CLIENT cannot upload own ADMIN signature",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/signing-profile/signature",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientSignerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "image/png",
+                  "src": "tests/regression/fixtures/signature-sample.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('CLIENT cannot upload own ADMIN signature: status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Anonymous signing profile is rejected",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Anonymous signing profile is rejected: status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          }
+        },
+        {
+          "name": "Upload initial transparent PNG signature",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/signing-profile/signature",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "image/png",
+                  "src": "tests/regression/fixtures/signature-sample.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Upload initial transparent PNG signature: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const body = pm.response.json(); const image = body.signature;",
+                  "pm.expect(image.width).to.eql(120); pm.expect(image.height).to.eql(48);",
+                  "pm.expect(image.sha256).to.match(/^[a-f0-9]{64}$/);",
+                  "pm.expect(image.file_key).to.eql(undefined);",
+                  "pm.expect(body.user_id).to.eql(pm.collectionVariables.get('signerUserId'));",
+                  "pm.collectionVariables.set('signatureFirstId', image.signature_id);",
+                  "pm.collectionVariables.set('signatureFirstSize', image.byte_size);",
+                  "pm.collectionVariables.set('signatureFirstHash', image.sha256);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read original private signature from R2",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile/signatures/{{signatureFirstId}}/file",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Read original private signature from R2: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const bytes = Array.from(pm.response.stream);",
+                  "pm.expect(pm.response.headers.get('Content-Type')).to.include('image/png');",
+                  "pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store');",
+                  "pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.eql('nosniff');",
+                  "pm.expect(bytes.slice(0, 8)).to.eql([137,80,78,71,13,10,26,10]);",
+                  "pm.expect(bytes.length).to.eql(Number(pm.collectionVariables.get('signatureFirstSize')));",
+                  "pm.collectionVariables.set('signatureFirstBytes', JSON.stringify(bytes));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Other admin cannot read owner signature",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile/signatures/{{signatureFirstId}}/file",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherSignerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Other admin cannot read owner signature: status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Super admin cannot use own signature endpoint for another account",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile/signatures/{{signatureFirstId}}/file",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Super admin cannot use own signature endpoint for another account: status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Anonymous signature read is rejected",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile/signatures/{{signatureFirstId}}/file",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Anonymous signature read is rejected: status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          }
+        },
+        {
+          "name": "Reject signature upload owner override",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/signing-profile/signature",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "image/png",
+                  "src": "tests/regression/fixtures/signature-sample.png"
+                },
+                {
+                  "key": "user_id",
+                  "type": "text",
+                  "value": "{{otherSignerUserId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reject signature upload owner override: status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject PDF disguised as signature",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/signing-profile/signature",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "image/png",
+                  "src": "tests/regression/fixtures/sample-certificate.pdf"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reject PDF disguised as signature: status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject unsafe signature dimensions before pixel decoding",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/signing-profile/signature",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "image/png",
+                  "src": "tests/regression/fixtures/signature-invalid-dimensions.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reject unsafe signature dimensions before pixel decoding: status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject oversized signature body",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/signing-profile/signature",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "image/png",
+                  "src": "tests/regression/fixtures/oversize-certificate.pdf"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reject oversized signature body: status 413', () => pm.response.to.have.status(413));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid uploads preserve current signature",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid uploads preserve current signature: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.expect(pm.response.json().signature.signature_id).to.eql(pm.collectionVariables.get('signatureFirstId'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace signature using JPEG",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/signing-profile/signature",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "contentType": "image/jpeg",
+                  "src": "tests/regression/fixtures/signature-replacement.jpg"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Replace signature using JPEG: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const image = pm.response.json().signature;",
+                  "pm.expect(image.width).to.eql(160); pm.expect(image.height).to.eql(64);",
+                  "pm.expect(image.signature_id).not.to.eql(pm.collectionVariables.get('signatureFirstId'));",
+                  "pm.expect(image.sha256).not.to.eql(pm.collectionVariables.get('signatureFirstHash'));",
+                  "pm.collectionVariables.set('signatureSecondId', image.signature_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replacement is current after reload",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Replacement is current after reload: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.expect(pm.response.json().signature.signature_id).to.eql(pm.collectionVariables.get('signatureSecondId'));",
+                  "pm.expect(pm.response.json().organization).to.eql('Porto Marine — Inspection');",
+                  "pm.expect(pm.response.json().competency_category_id).to.eql(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read normalized replacement PNG from R2",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile/signatures/{{signatureSecondId}}/file",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Read normalized replacement PNG from R2: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.expect(pm.response.headers.get('Content-Type')).to.include('image/png');",
+                  "pm.expect(Array.from(pm.response.stream).slice(0, 8)).to.eql([137,80,78,71,13,10,26,10]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Earlier signature bytes remain unchanged after replacement",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile/signatures/{{signatureFirstId}}/file",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{signerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Earlier signature bytes remain unchanged after replacement: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.expect(Array.from(pm.response.stream)).to.eql(JSON.parse(pm.collectionVariables.get('signatureFirstBytes')));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Other admin profile remains unchanged",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/account/signing-profile",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherSignerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Other admin profile remains unchanged: status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.user_id).to.eql(pm.collectionVariables.get('otherSignerUserId'));",
+                  "pm.expect(body.organization).to.eql('Porto Marine Services L.L.C.'); pm.expect(body.signature).to.eql(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Client signing account",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/user/{{clientSignerUserId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delete Client signing account: status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Restricted signing account",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/user/{{restrictedSignerUserId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delete Restricted signing account: status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Other signing account",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/user/{{otherSignerUserId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delete Other signing account: status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Own signing account",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/user/{{signerUserId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delete Own signing account: status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

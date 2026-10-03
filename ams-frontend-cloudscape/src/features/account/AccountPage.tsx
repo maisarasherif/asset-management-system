@@ -18,6 +18,7 @@ import { logoutRequest, updatePassword } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import { humanizeEnum } from "../../utils/format";
+import { SigningProfileSettings } from "./SigningProfileSettings";
 
 export function AccountPage() {
   const navigate = useNavigate();
@@ -96,6 +97,7 @@ export function AccountPage() {
         </Header>
       }
     >
+      <SpaceBetween direction="vertical" size="l">
       <ColumnLayout columns={2} variant="text-grid">
         <Container header={<Header variant="h2">Profile</Header>}>
           <SpaceBetween direction="vertical" size="s">
@@ -154,6 +156,8 @@ export function AccountPage() {
         </Container>
 
       </ColumnLayout>
+      {session?.role === "ADMIN" ? <SigningProfileSettings key={session.userId} /> : null}
+      </SpaceBetween>
     </ContentLayout>
   );
 }

@@ -123,6 +123,31 @@ type CertificateCompetencyCategory struct {
 	CreatedAt            time.Time `json:"created_at"`
 }
 
+type CertificateSignatureVersion struct {
+	SignatureID       uuid.UUID  `json:"signature_id"`
+	OwnerKind         string     `json:"owner_kind"`
+	OwnerID           uuid.UUID  `json:"owner_id"`
+	AccountUserID     *uuid.UUID `json:"account_user_id"`
+	CompetentPersonID *uuid.UUID `json:"competent_person_id"`
+	FileKey           string     `json:"file_key"`
+	Sha256            string     `json:"sha256"`
+	Width             int32      `json:"width"`
+	Height            int32      `json:"height"`
+	ByteSize          int64      `json:"byte_size"`
+	StorageState      string     `json:"storage_state"`
+	CreatedByUserID   *uuid.UUID `json:"created_by_user_id"`
+	CreatedAt         time.Time  `json:"created_at"`
+}
+
+type CertificateSigningProfile struct {
+	UserID               uuid.UUID  `json:"user_id"`
+	Organization         string     `json:"organization"`
+	CompetencyCategoryID *uuid.UUID `json:"competency_category_id"`
+	CurrentSignatureID   *uuid.UUID `json:"current_signature_id"`
+	OwnerKind            string     `json:"owner_kind"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+}
+
 type CertificateUploadAudit struct {
 	FileKey           string     `json:"file_key"`
 	FileName          string     `json:"file_name"`
