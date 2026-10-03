@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { expect, test, type APIRequestContext } from "@playwright/test";
 
 const api = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:18082/v1";
-const pdf = readFileSync(fileURLToPath(new URL("../fixtures/sample-certificate.pdf", import.meta.url)));
+const pdf = readFileSync(resolve(__dirname, "../fixtures/sample-certificate.pdf"));
 
 // Exercise today's real workflow before extending it with generated issuance.
 // Prerequisites belong to this spec, independent of whole-app fixtures.
