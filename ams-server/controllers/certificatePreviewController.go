@@ -39,7 +39,7 @@ func previewError(c *gin.Context, err error) {
 	case errors.Is(err, issuance.ErrPreviewExpired):
 		c.JSON(http.StatusGone, gin.H{"error": err.Error()})
 	case errors.Is(err, issuance.ErrForbidden), errors.Is(err, issuance.ErrIssuerForbidden), errors.Is(err, issuance.ErrManagementForbidden),
-		errors.Is(err, issuance.ErrSigningProfileNotFound), errors.Is(err, issuance.ErrSignerIneligible), errors.Is(err, issuance.ErrNotFound), errors.Is(err, issuance.ErrStorage), errors.Is(err, issuance.ErrImage):
+		errors.Is(err, issuance.ErrSigningProfileNotFound), errors.Is(err, issuance.ErrSignerIneligible), errors.Is(err, issuance.ErrNotFound), errors.Is(err, issuance.ErrStorage), errors.Is(err, issuance.ErrImage), errors.Is(err, issuance.ErrImageDimensions):
 		signingError(c, err)
 	default:
 		logger.Log.Error().Err(err).Msg("certificate preview operation failed")

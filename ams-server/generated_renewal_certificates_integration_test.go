@@ -189,7 +189,13 @@ func TestGeneratedRenewalPreviewHTTPPDFTokenAndRoleBoundaries(t *testing.T) {
 	second := stringField(t, createCertificate(t, h, certificatePayload(component, testID, 95)), "certificate_id")
 	person := signingPerson(t, h, "José Preview Examiner", signingCategory(t, h, "PREVIEW_HTTP", true), true)
 	personPath := "/v1/competent-person/" + person.String() + "/signing-profile/signature"
-	performMultipartRequest(t, h.router, h.adminToken, personPath, "file", "signature.png", signingImage(t, false), nil, http.StatusOK)
+	// JPEG input must normalize to an 8-bit PNG that gopdf can embed.
+	personProfile := decodeObject(t, performMultipartRequest(t, h.router, h.adminToken, personPath, "file", "signature.jpg", signingImage(t, true), nil, http.StatusOK))
+	personSignature := stringField(t, personProfile["signature"].(map[string]any), "signature_id")
+	personImage := performJSONRequest(t, h.router, h.adminToken, http.MethodGet, strings.TrimSuffix(personPath, "/signature")+"/signatures/"+personSignature+"/file", nil, http.StatusOK)
+	if len(personImage) < 25 || personImage[24] != 8 {
+		t.Fatal("saved competent-person JPEG must become an 8-bit PNG")
+	}
 	path := "/v1/certificate/" + certificate + "/generated-preview"
 	input := map[string]any{"signer_id": person, "issue_date": "2026-10-04", "remarks": "Examiné — Ω Ж\nSecond line", "measurements": "10 bar"}
 	journalBefore, err := os.ReadFile(os.Getenv("AMS_TEST_STORAGE_MANIFEST"))
@@ -245,7 +251,7 @@ func TestGeneratedRenewalPreviewHTTPPDFTokenAndRoleBoundaries(t *testing.T) {
 	if _, err := management.AssignCategory(ctx, signingActor(t, h), admin, &response.Snapshot.Signer.CategoryID); err != nil {
 		t.Fatal(err)
 	}
-	performMultipartRequest(t, h.router, adminToken, "/v1/account/signing-profile/signature", "file", "own.png", signingImage(t, false), nil, http.StatusOK)
+	performMultipartRequest(t, h.router, adminToken, "/v1/account/signing-profile/signature", "file", "own.jpg", signingImage(t, true), nil, http.StatusOK)
 	own := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodPost, path, map[string]any{"issue_date": "2026-10-04"}, http.StatusOK))
 	assertField(t, own["snapshot"].(map[string]any)["signer"].(map[string]any), "full_name", "Own Preview")
 	for _, invalid := range []map[string]any{

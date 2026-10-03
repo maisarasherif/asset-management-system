@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"image/png"
 	"regexp"
 	"strings"
@@ -158,6 +159,29 @@ func TestExaminationPDFUnicodeTransparencyPaginationAndMissingGlyph(t *testing.T
 		if !bytes.Contains(pdf, []byte(fmt.Sprintf("<%04X>", char))) {
 			t.Fatalf("missing Unicode map for %c", char)
 		}
+	}
+	// Existing signatures may have been saved as 16-bit PNGs before upload
+	// normalization was fixed. Rendering must preserve their immutable bytes.
+	legacy := signature16BitFixture(t)
+	original := append([]byte(nil), legacy...)
+	legacyPDF, err := renderer.Render(context.Background(), snapshot, DocumentNumber(snapshot, "XX"), legacy)
+	if err != nil || !bytes.HasPrefix(legacyPDF, []byte("%PDF-")) || !bytes.Contains(legacyPDF, []byte("/SMask")) {
+		t.Fatal("legacy 16-bit signature did not render with transparency", err)
+	}
+	if !bytes.Equal(legacy, original) {
+		t.Fatal("rendering mutated the stored signature bytes")
+	}
+	// Reproduce the previous JPEG -> YCbCr -> 16-bit PNG storage path.
+	decodedJPEG, err := jpeg.Decode(bytes.NewReader(signatureImageFixture(t, "jpeg")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var legacyJPEG bytes.Buffer
+	if err := png.Encode(&legacyJPEG, decodedJPEG); err != nil || legacyJPEG.Bytes()[24] != 16 {
+		t.Fatal("legacy JPEG fixture must be a 16-bit PNG", err)
+	}
+	if output, err := renderer.Render(context.Background(), snapshot, DocumentNumber(snapshot, "XX"), legacyJPEG.Bytes()); err != nil || !bytes.HasPrefix(output, []byte("%PDF-")) {
+		t.Fatal("legacy JPEG signature could not be embedded", err)
 	}
 	snapshot.Remarks = strings.Repeat("A pressure observation with a readable continuation.\n", 75)
 	long, err := renderer.Render(context.Background(), snapshot, DocumentNumber(snapshot, "XX"), signature.Bytes())

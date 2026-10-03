@@ -195,6 +195,12 @@ func (PDFRenderer) Render(ctx context.Context, s Snapshot, number string, signat
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// The caller verifies stored signature integrity before rendering. Convert
+	// legacy 16-bit PNGs in memory without changing the immutable R2 object.
+	signature, signatureSize, err := signatureForPDF(signature)
+	if err != nil {
+		return nil, err
+	}
 	r := &certificatePDF{ctx: ctx, number: number}
 	r.pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
 	option := gopdf.TtfOption{OnGlyphNotFound: func(rune) { r.missingGlyph = true }}
@@ -275,19 +281,12 @@ func (PDFRenderer) Render(ctx context.Context, s Snapshot, number string, signat
 	r.text(pdfMargin+10, y+3, 237, 8, true, "DATE", gopdf.Left)
 	r.text(pdfMargin+10, y+19, 237, 10, false, date(s.IssueDate), gopdf.Left)
 	r.text(pdfMargin+277, start+8, 218, 8, true, "SIGNATURE / STAMP", gopdf.Left)
-	config, _, err := image.DecodeConfig(bytes.NewReader(signature))
-	if err != nil {
-		return nil, ErrImage
-	}
-	if config.Width < 1 || config.Height < 1 {
-		return nil, ErrImage
-	}
 	holder, err := gopdf.ImageHolderByBytes(signature)
 	if err != nil {
 		return nil, err
 	}
-	scale := math.Min(205/float64(config.Width), 68/float64(config.Height))
-	w, h := float64(config.Width)*scale, float64(config.Height)*scale
+	scale := math.Min(205/float64(signatureSize.Width), 68/float64(signatureSize.Height))
+	w, h := float64(signatureSize.Width)*scale, float64(signatureSize.Height)*scale
 	if r.err == nil {
 		r.err = r.pdf.ImageByHolder(holder, pdfMargin+277+(205-w)/2, start+34+(68-h)/2, &gopdf.Rect{W: w, H: h})
 	}

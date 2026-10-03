@@ -207,10 +207,17 @@ test("SUPER_ADMIN manages signatures and categories; generated previews enforce 
     const firstImage = await page.request.get(`${personAPI}/signatures/${firstID}/file`);
     expect(firstImage.status()).toBe(200);
     const firstBytes = await firstImage.body();
+    expect(firstBytes[24], "saved PNG bit depth").toBe(8);
     await file.setInputFiles({ name: "replacement.jpg", mimeType: "image/jpeg", buffer: signatureJPEG });
     await management.getByRole("button", { name: "Save competent person signature", exact: true }).click();
     await expect(preview).toHaveJSProperty("naturalWidth", 160);
     await expect(preview).toHaveJSProperty("naturalHeight", 64);
+    const replacementSignature = (await (await page.request.get(personAPI)).json()).signature;
+    const replacementImage = await page.request.get(`${personAPI}/signatures/${replacementSignature.signature_id}/file`);
+    expect(replacementImage.status()).toBe(200);
+    const replacementBytes = await replacementImage.body();
+    expect(replacementBytes[24], "JPEG-normalized competent-person PNG bit depth").toBe(8);
+    expect(createHash("sha256").update(replacementBytes).digest("hex")).toBe(replacementSignature.sha256);
     const retained = await page.request.get(`${personAPI}/signatures/${firstID}/file`);
     expect(retained.status()).toBe(200);
     expect(await retained.body()).toEqual(firstBytes);
@@ -513,6 +520,7 @@ test("ADMIN saves and replaces their own private signing image through Account w
     expect(originalResponse.status()).toBe(200);
     expect(originalResponse.headers()["cache-control"]).toBe("no-store");
     const originalBytes = await originalResponse.body();
+    expect(originalBytes[24], "saved PNG bit depth").toBe(8);
     expect(createHash("sha256").update(originalBytes).digest("hex")).toBe(first.sha256);
 
     await file.setInputFiles({ name: "signature.jpg", mimeType: "image/jpeg", buffer: signatureJPEG });
@@ -521,6 +529,11 @@ test("ADMIN saves and replaces their own private signing image through Account w
     await expect(preview).toHaveJSProperty("naturalHeight", 64);
     const second = (await ownProfile()).signature;
     expect(second.signature_id).not.toBe(first.signature_id);
+    const secondImage = await page.request.get(`${api}${accountPath}/signatures/${second.signature_id}/file`);
+    expect(secondImage.status()).toBe(200);
+    const secondBytes = await secondImage.body();
+    expect(secondBytes[24], "JPEG-normalized account PNG bit depth").toBe(8);
+    expect(createHash("sha256").update(secondBytes).digest("hex")).toBe(second.sha256);
     const retainedResponse = await page.request.get(`${api}${accountPath}/signatures/${first.signature_id}/file`);
     expect(retainedResponse.status()).toBe(200);
     expect(await retainedResponse.body()).toEqual(originalBytes);
