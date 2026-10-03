@@ -89,3 +89,5 @@ RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
 E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
+
+The later focused browser rerun recorded 2 passes and a 120-second SUPER_ADMIN timeout, reported in cleanup. The supplied snapshot and source place the stall at a Sign out button lookup on the certificate page: its sidebar sign-out action is a menuitem inside a closed menu. The spec now visits Account before using its visible Sign out button, limits that click to 10 seconds, and records bounded cleanup failures without replacing the original error. Automatic failure-report hosting remains enabled. Rerun the same focused Playwright command after reviewing/publishing this test-only correction; the latest run's cleanup summary was not supplied. Go/Newman and shared suites need no changes, and the runner needs no additional change for this correction.

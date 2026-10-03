@@ -486,7 +486,9 @@ E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-Step 3 still awaits all three focused browser tests and cleanup passing. Static typechecking and discovery do not satisfy that gate.
+The subsequent browser-only result had 2 passes and 1 failure in 2.5 minutes. The SUPER_ADMIN test exhausted its 120-second budget and its finally-block DELETE replaced the stalled-action error. The supplied snapshot remained on the certificate page immediately after deactivation checks. Source inspection found a Sign out button lookup there, but the sidebar uses a menuitem inside a closed menu; the visible button is on Account. The spec now navigates to Account, verifies its heading, and uses its visible Sign out button with a 10-second click bound. Cleanup DELETEs have 5-second request bounds; all registered fixture deletions are attempted, and cleanup errors are annotated when there is an original failure rather than replacing it. Cleanup failure still fails an otherwise successful test. Runner/HTML hosting defaults, application behavior, Go/Newman, and shared regression files remain unchanged for this correction. The user did not supply a run ID or final cleanup summary for this latest result; no cleanup pass is inferred.
+
+Step 3 still awaits all three focused browser tests and cleanup passing. Static typechecking and discovery do not satisfy that gate. Use the same focused Playwright command above after reviewing and publishing the correction.
 
 Use the configured test OS account rather than running the script as root. On the current Fedora VPS the PostgreSQL role `ams_test_runner` uses Unix-socket peer authentication and requires the matching OS account. The test checkout is `/home/pms/ams-testing/asset-management-system`; synchronizing Git changes as `pms` and running the script as `ams_test_runner` are separate operations.
 

@@ -113,6 +113,7 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
   const adminPassword = "Managed-signing-test-123!";
   const cleanup: string[] = [];
   let cleanupHeaders: { Authorization: string } | undefined;
+  let testBodyFailed = false;
   const loginUI = async (email: string, password: string) => {
     await page.goto("/login");
     await page.getByLabel("Email", { exact: true }).fill(email);
@@ -257,7 +258,11 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     await expect(signing.getByText(/No eligible competent person has a saved signature/)).toBeVisible();
     expect((await page.request.put(`${api}/competent-person/${eligible.competent_person_id}`, { data: personInput })).status()).toBe(200);
 
-    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    // The certificate sidebar exposes Sign out as a menuitem in a closed menu.
+    // Account has a visible Sign out button, as used by the own-profile test.
+    await page.goto("/account");
+    await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Sign out", exact: true }).click({ timeout: 10_000 });
     await expect(page).toHaveURL(/\/login$/);
     // Sign-out clears the root's persisted token. Obtain a fresh API token for
     // category changes and cleanup, independently of the ordinary admin UI.
@@ -310,10 +315,26 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     await page.goto("/administration");
     await expect(page.getByRole("heading", { name: "Administration", exact: true })).toBeVisible();
     await expect(management).toHaveCount(0);
+  } catch (error) {
+    testBodyFailed = true;
+    throw error;
   } finally {
+    const cleanupErrors: string[] = [];
     for (const path of cleanup.reverse()) {
-      const response = cleanupHeaders ? await request.delete(`${api}${path}`, { headers: cleanupHeaders }) : await page.request.delete(`${api}${path}`);
-      expect([200, 404], `cleanup managed signer fixture ${path}`).toContain(response.status());
+      try {
+        const response = cleanupHeaders
+          ? await request.delete(`${api}${path}`, { headers: cleanupHeaders, timeout: 5_000 })
+          : await page.request.delete(`${api}${path}`, { timeout: 5_000 });
+        if (![200, 404].includes(response.status())) throw new Error(`HTTP ${response.status()}`);
+      } catch (error) {
+        cleanupErrors.push(`${path}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (cleanupErrors.length) {
+      const description = cleanupErrors.join("\n");
+      // Preserve the failed action/timeout; the isolated runner also cleans DB/R2.
+      if (testBodyFailed) test.info().annotations.push({ type: "fixture cleanup failure", description });
+      else throw new Error(`Managed signer fixture cleanup failed:\n${description}`);
     }
   }
 });
