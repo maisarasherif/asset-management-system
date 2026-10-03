@@ -8,6 +8,7 @@
 - Keep implementation changes scoped to what is required to complete the feature or fix.
 - If verification is needed, limit it to non-invasive checks unless the user asks for broader testing.
 - Leave unrelated existing workspace changes alone.
+- For generated renewal certificates, leave changes uncommitted and unpushed for the user's review. The user commits and pushes to GitHub; provide a suggested commit message instead. Do not synchronize unreviewed changes to the VPS.
 
 ## Regression File Updates
 

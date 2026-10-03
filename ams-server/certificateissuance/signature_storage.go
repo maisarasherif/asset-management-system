@@ -8,10 +8,14 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
-type R2Signatures struct{}
+type R2Signatures struct{ CompetentPerson bool }
 
-func (R2Signatures) PrepareKey(id, ownerID uuid.UUID) (string, error) {
-	return utils.PrepareObjectKey(fmt.Sprintf("signature-files/account/%s/%s.png", ownerID, id))
+func (s R2Signatures) PrepareKey(id, ownerID uuid.UUID) (string, error) {
+	kind := "account"
+	if s.CompetentPerson {
+		kind = "competent-person"
+	}
+	return utils.PrepareObjectKey(fmt.Sprintf("signature-files/%s/%s/%s.png", kind, ownerID, id))
 }
 
 func (R2Signatures) Put(ctx context.Context, key string, data []byte) error {

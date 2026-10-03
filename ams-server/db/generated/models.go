@@ -179,6 +179,13 @@ type CompetentPerson struct {
 	UpdatedAt            time.Time `json:"updated_at"`
 }
 
+type CompetentPersonSigningProfile struct {
+	CompetentPersonID  uuid.UUID  `json:"competent_person_id"`
+	CurrentSignatureID *uuid.UUID `json:"current_signature_id"`
+	OwnerKind          string     `json:"owner_kind"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+}
+
 type ComplianceRecord struct {
 	RecordID      uuid.UUID  `json:"record_id"`
 	DisplayID     string     `json:"display_id"`

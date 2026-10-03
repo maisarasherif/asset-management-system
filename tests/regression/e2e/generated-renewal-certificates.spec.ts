@@ -102,6 +102,194 @@ test("certificate renewal baseline uploads through UI and reads the historical R
   }
 });
 
+test("SUPER_ADMIN manages competent signatures and admin categories; generated signer selection enforces eligibility", async ({ page, request }) => {
+  const rootEmail = process.env.PLAYWRIGHT_ADMIN_EMAIL;
+  const rootPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD;
+  expect(rootEmail).toBeTruthy();
+  expect(rootPassword).toBeTruthy();
+  expect(process.env.AMS_TEST_STORAGE_PREFIX).toBeTruthy();
+  const suffix = `managed-signers-${Date.now()}`;
+  const adminEmail = `${suffix}@example.com`;
+  const adminPassword = "Managed-signing-test-123!";
+  const cleanup: string[] = [];
+  let cleanupHeaders: { Authorization: string } | undefined;
+  const loginUI = async (email: string, password: string) => {
+    await page.goto("/login");
+    await page.getByLabel("Email", { exact: true }).fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+  };
+  const post = async (path: string, data: unknown, idField: string) => {
+    const response = await page.request.post(`${api}${path}`, { data });
+    expect(response.status(), await response.text()).toBe(201);
+    const body = await response.json();
+    expect(body[idField]).toBeTruthy();
+    return body;
+  };
+  const select = async (label: string, option: string) => {
+    await page.getByLabel(label, { exact: true }).click();
+    await page.getByRole("option", { name: new RegExp(`^${option}`) }).click();
+  };
+  const narrow = async (width: number) => {
+    await page.setViewportSize({ width, height: 900 });
+    const close = page.getByRole("button", { name: "Close primary navigation", exact: true });
+    if (width < 1101 && await close.isVisible()) await close.click();
+  };
+  try {
+    await loginUI(rootEmail!, rootPassword!);
+    const main = await post("/main-category", { main_category_name: suffix, description: "Signer selection", sort_order: 100 }, "main_category_id");
+    cleanup.push(`/main-category/${main.main_category_id}`);
+    const category = await post("/category", { main_category_id: main.main_category_id, category_name: suffix, description: "Signer selection", sort_order: 100 }, "category_id");
+    cleanup.push(`/category/${category.category_id}`);
+    const scopeResponse = await page.request.get(`${api}/catalog-scopes/default`);
+    expect(scopeResponse.status()).toBe(200);
+    const scope = await scopeResponse.json();
+    const scopedMain = await post(`/catalog-scope/${scope.scope_id}/main-category`, { main_category_name: suffix, description: "Signer selection", sort_order: 100 }, "scope_main_category_id");
+    cleanup.push(`/catalog-scope-main-category/${scopedMain.scope_main_category_id}`);
+    const scopedCategory = await post(`/catalog-scope/${scope.scope_id}/category`, { main_category_id: main.main_category_id, category_name: suffix, description: "Signer selection", sort_order: 100 }, "scope_category_id");
+    cleanup.push(`/catalog-scope-category/${scopedCategory.scope_category_id}`);
+    const type = await post("/test-type", { test_name: suffix, validity_duration: 12, description: "Signer selection" }, "test_id");
+    cleanup.push(`/test-type/${type.test_id}`);
+    const allowedCategory = await post("/competency-category", { category_code: suffix, category_name: suffix, description: "Allowed signer", active: true }, "competency_category_id");
+    const otherCategory = await post("/competency-category", { category_code: `other-${suffix}`, category_name: `Other ${suffix}`, description: "Other signer", active: true }, "competency_category_id");
+    const personInput = { full_name: `Eligible ${suffix}`, person_type: "Internal", organization: "Porto Marine", competency_category_id: allowedCategory.competency_category_id, active: true };
+    const eligible = await post("/competent-person", personInput, "competent_person_id");
+    const unsigned = await post("/competent-person", { ...personInput, full_name: `Unsigned ${suffix}` }, "competent_person_id");
+    const inactive = await post("/competent-person", { ...personInput, full_name: `Inactive ${suffix}`, active: false }, "competent_person_id");
+    const wrongCategory = await post("/competent-person", { ...personInput, full_name: `Wrong ${suffix}`, competency_category_id: otherCategory.competency_category_id }, "competent_person_id");
+    const blank = await post("/competent-person", { ...personInput, full_name: `Incomplete ${suffix}`, organization: "\t " }, "competent_person_id");
+    const admin = await post("/user", { first_name: "Managed", last_name: "Examiner", email: adminEmail, password: adminPassword, role: "ADMIN", status: "ACTIVE" }, "user_id");
+    cleanup.push(`/user/${admin.user_id}`);
+    const asset = await post("/asset", { name: suffix, description: "Signer selection", photo: "", datasheet: "", status: "ACTIVE", asset_kind: "COMPONENTIZED", location: "Warehouse", assigned_project: "" }, "asset_id");
+    cleanup.push(`/asset/${asset.asset_id}`);
+    const component = await post("/component", { asset_id: asset.asset_id, category_id: category.category_id, scope_category_id: scopedCategory.scope_category_id, name: suffix, serial_number: suffix, manufacturer: "PMS", model: "Signer", location: "Warehouse", assigned_project: "", equipment_type: "Equipment", structure: "Fixed", class: "A", class_code: "A1", safety_critical: "YES", description: "Signer selection" }, "component_id");
+    cleanup.push(`/component/${component.component_id}`);
+    const certificate = await post("/certificate", { component_id: component.component_id, certificate_name: suffix, test_id: type.test_id, issue_date: "2026-01-02T00:00:00Z", expiry_date: "2027-01-02T00:00:00Z", certificate_file: "", issuing_authority: "PMS", imca_ref: "D018", imca_d018: "Signer selection", maintenance_notes: "", competency_category_ids: [allowedCategory.competency_category_id] }, "certificate_id");
+    cleanup.push(`/certificate/${certificate.certificate_id}`);
+    const certificateURL = `/assets/${asset.asset_id}/components/${component.component_id}/certificates/${certificate.certificate_id}`;
+    const certificateAPI = `${api}/certificate/${certificate.certificate_id}`;
+    const personAPI = `${api}/competent-person/${eligible.competent_person_id}/signing-profile`;
+    const adminAPI = `${api}/user/${admin.user_id}/signing-profile`;
+    // Populate excluded people too: inactivity/category, rather than a missing
+    // image, must be the reason they are absent from the generated dropdown.
+    for (const person of [inactive, wrongCategory, blank]) {
+      const response = await page.request.post(`${api}/competent-person/${person.competent_person_id}/signing-profile/signature`, { multipart: { file: { name: "signature.png", mimeType: "image/png", buffer: signaturePNG } } });
+      expect(response.status(), await response.text()).toBe(200);
+    }
+
+    await page.goto("/administration");
+    const management = page.getByRole("region", { name: "Certificate signer management", exact: true });
+    await expect(management).toBeVisible();
+    await select("Competent person signature", eligible.full_name);
+    await expect(management.getByText("No competent person signature saved.", { exact: true })).toBeVisible();
+    const file = management.locator('input[type="file"]');
+    await file.setInputFiles({ name: "signature.png", mimeType: "image/png", buffer: signaturePNG });
+    await management.getByRole("button", { name: "Save competent person signature", exact: true }).click();
+    const preview = management.getByRole("img", { name: "Saved signature or stamp", exact: true });
+    await expect(preview).toHaveJSProperty("naturalWidth", 120);
+    const firstProfile = await page.request.get(personAPI);
+    expect(firstProfile.status()).toBe(200);
+    const firstID = (await firstProfile.json()).signature.signature_id;
+    const firstImage = await page.request.get(`${personAPI}/signatures/${firstID}/file`);
+    expect(firstImage.status()).toBe(200);
+    const firstBytes = await firstImage.body();
+    await file.setInputFiles({ name: "replacement.jpg", mimeType: "image/jpeg", buffer: signatureJPEG });
+    await management.getByRole("button", { name: "Save competent person signature", exact: true }).click();
+    await expect(preview).toHaveJSProperty("naturalWidth", 160);
+    await expect(preview).toHaveJSProperty("naturalHeight", 64);
+    const retained = await page.request.get(`${personAPI}/signatures/${firstID}/file`);
+    expect(retained.status()).toBe(200);
+    expect(await retained.body()).toEqual(firstBytes);
+    await file.setInputFiles({ name: "invalid.png", mimeType: "image/png", buffer: pdf });
+    await management.getByRole("button", { name: "Save competent person signature", exact: true }).click();
+    await expect(management.getByText("choose a valid PNG or JPEG signature image", { exact: true })).toBeVisible();
+    await file.setInputFiles([]);
+
+    await select("Admin signing account", adminEmail);
+    await select("Admin signing competency category", allowedCategory.category_name);
+    await management.getByRole("button", { name: "Save admin signing category", exact: true }).click();
+    await expect(page.getByText("Admin signing category saved", { exact: true })).toBeVisible();
+    const assigned = await page.request.get(adminAPI);
+    expect(assigned.status()).toBe(200);
+    expect((await assigned.json()).competency_category_id).toBe(allowedCategory.competency_category_id);
+    for (const width of [320, 768, 1024, 1440]) {
+      await narrow(width);
+      await expect(management.getByLabel("Admin signing competency category", { exact: true })).toBeVisible();
+      await expect(preview).toBeVisible();
+      expect((await preview.boundingBox())!.width).toBeLessThanOrEqual(width);
+    }
+    await page.reload();
+    await select("Admin signing account", adminEmail);
+    await expect(management.getByLabel("Admin signing competency category", { exact: true })).toContainText(allowedCategory.category_name);
+
+    await page.goto(certificateURL);
+    const signing = page.getByRole("region", { name: "Generated certificate signing", exact: true });
+    await expect(signing).toBeVisible();
+    await signing.getByLabel("Generated certificate competent person", { exact: true }).click();
+    await expect(page.getByRole("option", { name: new RegExp(eligible.full_name) })).toBeVisible();
+    for (const person of [unsigned, inactive, wrongCategory, blank]) await expect(page.getByRole("option", { name: new RegExp(person.full_name) })).toHaveCount(0);
+    await page.getByRole("option", { name: new RegExp(eligible.full_name) }).click();
+    await expect(signing.getByRole("img", { name: "Saved signature or stamp", exact: true })).toHaveJSProperty("naturalWidth", 160);
+    const eligibleResponse = await page.request.get(`${certificateAPI}/generated-signers`);
+    expect(eligibleResponse.status()).toBe(200);
+    expect((await eligibleResponse.json()).map((row: { signer_id: string }) => row.signer_id)).toEqual([eligible.competent_person_id]);
+
+    // Changing the person after selection must invalidate the server resolver.
+    const deactivate = await page.request.put(`${api}/competent-person/${eligible.competent_person_id}`, { data: { ...personInput, active: false } });
+    expect(deactivate.status()).toBe(200);
+    const rejected = await page.request.post(`${certificateAPI}/generated-signer`, { data: { signer_id: eligible.competent_person_id } });
+    expect(rejected.status()).toBe(400);
+    await page.reload();
+    await expect(signing.getByText(/No eligible competent person has a saved signature/)).toBeVisible();
+    expect((await page.request.put(`${api}/competent-person/${eligible.competent_person_id}`, { data: personInput })).status()).toBe(200);
+
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    // Sign-out clears the root's persisted token. Obtain a fresh API token for
+    // category changes and cleanup, independently of the ordinary admin UI.
+    const rootLogin = await request.post(`${api}/login`, { data: { email: rootEmail, password: rootPassword } });
+    expect(rootLogin.status()).toBe(200);
+    cleanupHeaders = { Authorization: `Bearer ${(await rootLogin.json()).token}` };
+    await loginUI(adminEmail, adminPassword);
+    await page.goto(certificateURL);
+    await expect(signing.getByText(/Your signing profile is not eligible/)).toBeVisible();
+    await page.goto("/account");
+    await page.locator('input[type="file"]').setInputFiles({ name: "own.png", mimeType: "image/png", buffer: signaturePNG });
+    await page.getByRole("button", { name: "Save signature", exact: true }).click();
+    await expect(page.getByRole("img", { name: "Saved signature or stamp", exact: true })).toHaveJSProperty("naturalWidth", 120);
+    await page.goto(certificateURL);
+    await expect(signing.getByText("Managed Examiner", { exact: true })).toBeVisible();
+    await expect(signing.getByLabel("Generated certificate competent person", { exact: true })).toHaveCount(0);
+    await expect(signing.getByRole("img", { name: "Saved signature or stamp", exact: true })).toHaveJSProperty("naturalWidth", 120);
+    const ownChoices = await page.request.get(`${certificateAPI}/generated-signers`);
+    expect(ownChoices.status()).toBe(200);
+    expect((await ownChoices.json()).map((row: { signer_id: string }) => row.signer_id)).toEqual([admin.user_id]);
+    expect((await page.request.get(personAPI)).status()).toBe(403);
+    expect((await page.request.put(adminAPI, { data: { competency_category_id: otherCategory.competency_category_id } })).status()).toBe(403);
+    expect((await page.request.post(`${certificateAPI}/generated-signer`, { data: { signer_id: eligible.competent_person_id } })).status()).toBe(403);
+    for (const width of [320, 768, 1024, 1440]) {
+      await narrow(width);
+      await expect(signing.getByText("Managed Examiner", { exact: true })).toBeVisible();
+      await expect(signing.getByRole("img", { name: "Saved signature or stamp", exact: true })).toBeVisible();
+    }
+    const cleared = await request.put(adminAPI, { headers: cleanupHeaders, data: { competency_category_id: null } });
+    expect(cleared.status()).toBe(200);
+    await page.reload();
+    await expect(signing.getByText(/Your signing profile is not eligible/)).toBeVisible();
+    await expect(signing.getByRole("img", { name: "Saved signature or stamp", exact: true })).toHaveCount(0);
+    expect((await page.request.post(`${certificateAPI}/generated-signer`, { data: {} })).status()).toBe(400);
+    await page.goto("/administration");
+    await expect(page.getByRole("heading", { name: "Administration", exact: true })).toBeVisible();
+    await expect(management).toHaveCount(0);
+  } finally {
+    for (const path of cleanup.reverse()) {
+      const response = cleanupHeaders ? await request.delete(`${api}${path}`, { headers: cleanupHeaders }) : await page.request.delete(`${api}${path}`);
+      expect([200, 404], `cleanup managed signer fixture ${path}`).toContain(response.status());
+    }
+  }
+});
+
 test("ADMIN saves and replaces their own private signing image through Account while other roles cannot use it", async ({ page, request }) => {
   const rootEmail = process.env.PLAYWRIGHT_ADMIN_EMAIL;
   const rootPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD;

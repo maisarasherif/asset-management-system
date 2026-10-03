@@ -30,6 +30,7 @@ import {
 } from "../../lib/api/ams";
 import { ApiError } from "../../lib/api/client";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
+import { GeneratedCertificateSigner } from "./GeneratedCertificateSigner";
 import { Select } from "../../components/shared/OptimizedSelect";
 import { TableCellText } from "../../components/shared/TableCells";
 import { useAuth } from "../../providers/auth-context";
@@ -604,6 +605,10 @@ function renderCertificateDetailPage({
             </Box>
           </Container>
         </ColumnLayout>
+
+        {isAdmin ? (
+          <GeneratedCertificateSigner key={certificateId} certificateId={certificateId} />
+        ) : null}
 
         {isAdmin ? (
           <Container

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"time"
 
@@ -37,6 +38,12 @@ func signingError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, issuance.ErrForbidden):
 		status, message = http.StatusForbidden, issuance.ErrForbidden.Error()
+	case errors.Is(err, issuance.ErrManagementForbidden), errors.Is(err, issuance.ErrIssuerForbidden):
+		status, message = http.StatusForbidden, err.Error()
+	case errors.Is(err, issuance.ErrSigningProfileNotFound):
+		status, message = http.StatusNotFound, issuance.ErrSigningProfileNotFound.Error()
+	case errors.Is(err, issuance.ErrSigningCategory), errors.Is(err, issuance.ErrSigningAccount), errors.Is(err, issuance.ErrSignerIneligible):
+		status, message = http.StatusBadRequest, err.Error()
 	case errors.Is(err, issuance.ErrNotFound):
 		status, message = http.StatusNotFound, issuance.ErrNotFound.Error()
 	case errors.Is(err, issuance.ErrConflict):
@@ -127,29 +134,14 @@ func UploadOwnSignature(pool *pgxpool.Pool) gin.HandlerFunc {
 			signingError(c, err)
 			return
 		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, issuance.MaxSignatureBytes+64*1024)
-		file, header, err := c.Request.FormFile("file")
+		file, ok := signingUpload(c)
 		if c.Request.MultipartForm != nil {
 			defer c.Request.MultipartForm.RemoveAll()
 		}
-		if err != nil {
-			var limit *http.MaxBytesError
-			if errors.As(err, &limit) {
-				signingError(c, issuance.ErrImageSize)
-			} else {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "choose one PNG or JPEG signature image"})
-			}
+		if !ok {
 			return
 		}
 		defer file.Close()
-		if header.Size > issuance.MaxSignatureBytes {
-			signingError(c, issuance.ErrImageSize)
-			return
-		}
-		if len(c.Request.MultipartForm.Value) != 0 || len(c.Request.MultipartForm.File) != 1 || len(c.Request.MultipartForm.File["file"]) != 1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "upload only your signature image; ownership and category cannot be supplied"})
-			return
-		}
 		profile, err := service.ReplaceOwnSignature(ctx, id, file)
 		if err != nil {
 			signingError(c, err)
@@ -158,6 +150,31 @@ func UploadOwnSignature(pool *pgxpool.Pool) gin.HandlerFunc {
 		c.Header("Cache-Control", "no-store")
 		c.JSON(http.StatusOK, profile)
 	}
+}
+
+func signingUpload(c *gin.Context) (multipart.File, bool) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, issuance.MaxSignatureBytes+64*1024)
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		var limit *http.MaxBytesError
+		if errors.As(err, &limit) {
+			signingError(c, issuance.ErrImageSize)
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "choose one PNG or JPEG signature image"})
+		}
+		return nil, false
+	}
+	if header.Size > issuance.MaxSignatureBytes {
+		file.Close()
+		signingError(c, issuance.ErrImageSize)
+		return nil, false
+	}
+	if len(c.Request.MultipartForm.Value) != 0 || len(c.Request.MultipartForm.File) != 1 || len(c.Request.MultipartForm.File["file"]) != 1 {
+		file.Close()
+		c.JSON(http.StatusBadRequest, gin.H{"error": "upload only the signature image; ownership and category cannot be supplied"})
+		return nil, false
+	}
+	return file, true
 }
 
 func GetOwnSignatureImage(pool *pgxpool.Pool) gin.HandlerFunc {

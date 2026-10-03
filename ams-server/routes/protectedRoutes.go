@@ -126,6 +126,13 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	account.PUT("/account/signing-profile", controller.UpdateOwnSigningProfile(pool))
 	account.POST("/account/signing-profile/signature", controller.UploadOwnSignature(pool))
 	account.GET("/account/signing-profile/signatures/:signature_id/file", controller.GetOwnSignatureImage(pool))
+	account.GET("/competent-person/:competent_person_id/signing-profile", controller.GetCompetentSigningProfile(pool))
+	account.POST("/competent-person/:competent_person_id/signing-profile/signature", controller.UploadCompetentSignature(pool))
+	account.GET("/competent-person/:competent_person_id/signing-profile/signatures/:signature_id/file", controller.GetCompetentSignatureImage(pool))
+	account.GET("/user/:user_id/signing-profile", controller.GetAdminSigningProfile(pool))
+	account.PUT("/user/:user_id/signing-profile", controller.AssignAdminSigningCategory(pool))
+	account.GET("/certificate/:certificate_id/generated-signers", controller.ListGeneratedSigners(pool))
+	account.POST("/certificate/:certificate_id/generated-signer", controller.ResolveGeneratedSigner(pool))
 	account.POST("/logout", controller.LogoutUser(pool))
 
 	platformAdmin := router.Group("/v1/platform")

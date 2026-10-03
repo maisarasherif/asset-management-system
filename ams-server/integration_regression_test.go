@@ -1912,6 +1912,7 @@ TRUNCATE TABLE
   asset_maintenance_events,
   certificate_upload_audit,
   certificate_signing_profiles,
+  competent_person_signing_profiles,
   certificate_signature_versions,
   certificate_competency_categories,
   certificates,

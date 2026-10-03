@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"hash/crc32"
 	"image"
@@ -358,5 +359,334 @@ func TestGeneratedRenewalSlowSignatureReplacementCannotOverwriteNewerImage(t *te
 	current, err := service.OwnProfile(ctx, user.UserID)
 	if err != nil || current.Signature.ID != newer.Signature.ID {
 		t.Fatal("older upload overwrote newer publication")
+	}
+}
+
+func signingActor(t *testing.T, h *integrationHarness) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	if err := h.pool.QueryRow(context.Background(), "SELECT user_id FROM users WHERE token=$1", h.adminToken).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func signingPerson(t *testing.T, h *integrationHarness, name string, category uuid.UUID, active bool) uuid.UUID {
+	t.Helper()
+	p, err := db.New(h.pool).CreateCompetentPerson(context.Background(), db.CreateCompetentPersonParams{
+		FullName: name, PersonType: "Internal", Organization: "Porto Marine", CompetencyCategoryID: category, Active: active,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p.CompetentPersonID
+}
+
+func signingCategory(t *testing.T, h *integrationHarness, name string, active bool) uuid.UUID {
+	t.Helper()
+	c, err := db.New(h.pool).CreateCompetencyCategory(context.Background(), db.CreateCompetencyCategoryParams{
+		CategoryCode: name, CategoryName: name, Description: "Signer eligibility fixture", Active: active,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.CompetencyCategoryID
+}
+
+func TestGeneratedRenewalSuperAdminManagementRejectsDirectRoleAndFieldBypasses(t *testing.T) {
+	h := setupIntegrationTest(t)
+	category := signingCategory(t, h, "MANAGE", true)
+	inactive := signingCategory(t, h, "INACTIVE", false)
+	person := signingPerson(t, h, "Managed examiner", category, true)
+	adminToken := createIntegrationUserToken(t, h.pool, "Admin", "Examiner", "managed-admin@example.com", "signing-password", "ADMIN")
+	profile := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodGet, "/v1/account/signing-profile", nil, http.StatusOK))
+	adminID := stringField(t, profile, "user_id")
+	personPath := "/v1/competent-person/" + person.String() + "/signing-profile"
+	accountPath := "/v1/user/" + adminID + "/signing-profile"
+	for _, token := range []string{adminToken,
+		createIntegrationUserToken(t, h.pool, "User", "Examiner", "managed-user@example.com", "signing-password", "USER"),
+		createIntegrationUserToken(t, h.pool, "Client", "Examiner", "managed-client@example.com", "signing-password", "CLIENT"), ""} {
+		status := http.StatusForbidden
+		if token == "" {
+			status = http.StatusUnauthorized
+		}
+		performJSONRequest(t, h.router, token, http.MethodGet, personPath, nil, status)
+		performMultipartRequest(t, h.router, token, personPath+"/signature", "file", "signature.png", signingImage(t, false), nil, status)
+		performJSONRequest(t, h.router, token, http.MethodGet, personPath+"/signatures/"+uuid.NewString()+"/file", nil, status)
+		performJSONRequest(t, h.router, token, http.MethodGet, accountPath, nil, status)
+		performJSONRequest(t, h.router, token, http.MethodPut, accountPath, map[string]any{"competency_category_id": category}, status)
+	}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/competent-person/"+uuid.NewString()+"/signing-profile", nil, http.StatusNotFound)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/user/"+uuid.NewString()+"/signing-profile", nil, http.StatusNotFound)
+	for _, input := range []map[string]any{
+		{}, {"competency_category_id": "invalid"}, {"competency_category_id": uuid.New()}, {"competency_category_id": inactive},
+		{"competency_category_id": category, "organization": "Spoof"}, {"competency_category_id": category, "user_id": uuid.New()},
+	} {
+		performJSONRequest(t, h.router, h.adminToken, http.MethodPut, accountPath, input, http.StatusBadRequest)
+	}
+	for _, role := range []string{"USER", "CLIENT", "SUPER_ADMIN"} {
+		user := createIntegrationUser(t, h.pool, role, "Target", "managed-target-"+role+"@example.com", "signing-password", role)
+		performJSONRequest(t, h.router, h.adminToken, http.MethodPut, "/v1/user/"+user.UserID.String()+"/signing-profile", map[string]any{"competency_category_id": category}, http.StatusBadRequest)
+	}
+	performMultipartRequest(t, h.router, h.adminToken, personPath+"/signature", "file", "fake.png", []byte("%PDF-1.4"), nil, http.StatusBadRequest)
+	performMultipartRequest(t, h.router, h.adminToken, personPath+"/signature", "file", "oversized.png", bytes.Repeat([]byte{'x'}, issuance.MaxSignatureBytes+1), nil, http.StatusRequestEntityTooLarge)
+	performMultipartRequest(t, h.router, h.adminToken, personPath+"/signature", "file", "image.png", signingImage(t, false), map[string]string{"competent_person_id": uuid.NewString()}, http.StatusBadRequest)
+	assigned := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPut, accountPath, map[string]any{"competency_category_id": category}, http.StatusOK))
+	assertField(t, assigned, "competency_category_id", category.String())
+	cleared := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPut, accountPath, map[string]any{"competency_category_id": nil}, http.StatusOK))
+	if cleared["competency_category_id"] != nil {
+		t.Fatal("category was not cleared")
+	}
+	// Existing JWT claims do not grant management after demotion.
+	actor := signingActor(t, h)
+	if _, err := h.pool.Exec(context.Background(), "UPDATE users SET role='ADMIN' WHERE user_id=$1", actor); err != nil {
+		t.Fatal(err)
+	}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPut, accountPath, map[string]any{"competency_category_id": category}, http.StatusForbidden)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodGet, personPath, nil, http.StatusForbidden)
+}
+
+func TestGeneratedRenewalSignerEligibilityRevalidatesCategoryStatusAndOwnership(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	actor := signingActor(t, h)
+	a := signingCategory(t, h, "ELIGIBLE_A", true)
+	b := signingCategory(t, h, "ELIGIBLE_B", true)
+	inactive := signingCategory(t, h, "ELIGIBLE_INACTIVE", false)
+	allowed := signingPerson(t, h, "Allowed examiner", a, true)
+	unsigned := signingPerson(t, h, "Unsigned examiner", a, true)
+	wrong := signingPerson(t, h, "Wrong category examiner", b, true)
+	inactivePerson := signingPerson(t, h, "Inactive examiner", a, false)
+	inactiveCategory := signingPerson(t, h, "Inactive category examiner", inactive, true)
+	blank := signingPerson(t, h, "Blank organization examiner", a, true)
+	if _, err := h.pool.Exec(ctx, "UPDATE competent_persons SET organization=E'\\t ' WHERE competent_person_id=$1", blank); err != nil {
+		t.Fatal(err)
+	}
+	store := &signingMemoryStore{objects: map[string][]byte{}}
+	manager := issuance.SignerManagement{Pool: h.pool, Store: store}
+	for _, person := range []uuid.UUID{allowed, wrong, inactivePerson, inactiveCategory, blank} {
+		if _, err := manager.ReplacePersonSignature(ctx, actor, person, bytes.NewReader(signingImage(t, false))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	component, testID := createComponentFixture(t, h, "Signer eligibility component")
+	payload := certificatePayload(component, testID, 90)
+	payload["competency_category_ids"] = []string{a.String()}
+	cert := uuid.MustParse(stringField(t, createCertificate(t, h, payload), "certificate_id"))
+	path := "/v1/certificate/" + cert.String()
+	adminToken := createIntegrationUserToken(t, h.pool, "Own", "Examiner", "eligible-admin@example.com", "signing-password", "ADMIN")
+	p := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodGet, "/v1/account/signing-profile", nil, http.StatusOK))
+	admin := uuid.MustParse(stringField(t, p, "user_id"))
+	assertChoices := func(token string, expected ...uuid.UUID) {
+		t.Helper()
+		var rows []issuance.EligibleSigner
+		raw := performJSONRequest(t, h.router, token, http.MethodGet, path+"/generated-signers", nil, http.StatusOK)
+		if err := json.Unmarshal(raw, &rows); err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != len(expected) {
+			t.Fatalf("eligible signer count: got %d, want %d: %s", len(rows), len(expected), raw)
+		}
+		for _, id := range expected {
+			found := false
+			for _, row := range rows {
+				if row.SignerID == id {
+					found = true
+					if row.Signature.ID == uuid.Nil || row.Signature.Key != "" {
+						t.Fatal("missing signature or exposed private key")
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("expected signer %s missing: %s", id, raw)
+			}
+		}
+	}
+	assertChoices(h.adminToken, allowed)
+	assertChoices(adminToken)
+	if _, err := manager.AssignCategory(ctx, actor, admin, &a); err != nil {
+		t.Fatal(err)
+	}
+	assertChoices(adminToken) // A category alone does not confer eligibility.
+	own := issuance.Signatures{Repository: issuance.PostgresSignatures{Pool: h.pool}, Store: store}
+	ownProfile, err := own.ReplaceOwnSignature(ctx, admin, bytes.NewReader(signingImage(t, false)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertChoices(adminToken, admin)
+	resolved := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodPost, path+"/generated-signer", map[string]any{}, http.StatusOK))
+	assertField(t, resolved, "owner_kind", "ACCOUNT")
+	assertField(t, resolved, "full_name", "Own Examiner")
+	for _, id := range []uuid.UUID{allowed, uuid.New()} {
+		performJSONRequest(t, h.router, adminToken, http.MethodPost, path+"/generated-signer", map[string]any{"signer_id": id}, http.StatusForbidden)
+	}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-signer", map[string]any{"signer_id": allowed}, http.StatusOK)
+	for _, id := range []uuid.UUID{admin, unsigned, wrong, inactivePerson, inactiveCategory, blank, uuid.New()} {
+		performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-signer", map[string]any{"signer_id": id}, http.StatusBadRequest)
+	}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-signer", map[string]any{}, http.StatusBadRequest)
+	performJSONRequest(t, h.router, adminToken, http.MethodPost, path+"/generated-signer", map[string]any{"signer_id": admin, "organization": "Spoof"}, http.StatusBadRequest)
+	for _, role := range []string{"USER", "CLIENT"} {
+		token := createIntegrationUserToken(t, h.pool, role, "Signer", "eligible-"+role+"@example.com", "signing-password", role)
+		performJSONRequest(t, h.router, token, http.MethodGet, path+"/generated-signers", nil, http.StatusForbidden)
+		performJSONRequest(t, h.router, token, http.MethodPost, path+"/generated-signer", map[string]any{"signer_id": allowed}, http.StatusForbidden)
+	}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/certificate/"+uuid.NewString()+"/generated-signers", nil, http.StatusNotFound)
+	if _, err := h.pool.Exec(ctx, "UPDATE competency_categories SET active=FALSE WHERE competency_category_id=$1", a); err != nil {
+		t.Fatal(err)
+	}
+	assertChoices(h.adminToken)
+	assertChoices(adminToken)
+	performJSONRequest(t, h.router, adminToken, http.MethodPost, path+"/generated-signer", map[string]any{}, http.StatusBadRequest)
+	if _, err := h.pool.Exec(ctx, "UPDATE competency_categories SET active=TRUE WHERE competency_category_id=$1", a); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE competent_persons SET active=FALSE WHERE competent_person_id=$1", allowed); err != nil {
+		t.Fatal(err)
+	}
+	assertChoices(h.adminToken)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-signer", map[string]any{"signer_id": allowed}, http.StatusBadRequest)
+	if _, err := h.pool.Exec(ctx, "UPDATE competent_persons SET active=TRUE WHERE competent_person_id=$1", allowed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.AssignCategory(ctx, actor, admin, &b); err != nil {
+		t.Fatal(err)
+	}
+	assertChoices(adminToken)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, path, map[string]any{"competency_category_ids": []string{}}, http.StatusOK)
+	assertChoices(h.adminToken, allowed, wrong)
+	assertChoices(adminToken, admin) // No allowed-category rows means unrestricted.
+	cleared, err := manager.AssignCategory(ctx, actor, admin, nil)
+	if err != nil || cleared.Signature.ID != ownProfile.Signature.ID {
+		t.Fatal("category clear changed saved signature")
+	}
+	assertChoices(adminToken)
+	if _, err := manager.AssignCategory(ctx, actor, admin, &a); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE users SET status='SUSPENDED' WHERE user_id=$1", admin); err != nil {
+		t.Fatal(err)
+	}
+	managedInactive, err := manager.AssignCategory(ctx, actor, admin, nil)
+	if err != nil || managedInactive.Signature.ID != ownProfile.Signature.ID {
+		t.Fatal("super admin could not manage suspended admin without changing its signature")
+	}
+	performJSONRequest(t, h.router, adminToken, http.MethodGet, path+"/generated-signers", nil, http.StatusForbidden)
+}
+
+func TestGeneratedRenewalCompetentSignaturesUsePrivateImmutableR2Versions(t *testing.T) {
+	h := setupIntegrationTest(t)
+	requireStorageIntegrationEnv(t)
+	if os.Getenv("AMS_TEST_STORAGE_PREFIX") == "" {
+		t.Fatal("use isolated runner storage")
+	}
+	category := signingCategory(t, h, "CP_R2", true)
+	person := signingPerson(t, h, "R2 managed examiner", category, true)
+	other := signingPerson(t, h, "Other managed examiner", category, true)
+	path := "/v1/competent-person/" + person.String() + "/signing-profile"
+	first := decodeObject(t, performMultipartRequest(t, h.router, h.adminToken, path+"/signature", "file", "signature.png", signingImage(t, false), nil, http.StatusOK))
+	id := stringField(t, first["signature"].(map[string]any), "signature_id")
+	filePath := path + "/signatures/" + id + "/file"
+	original := performJSONRequest(t, h.router, h.adminToken, http.MethodGet, filePath, nil, http.StatusOK)
+	img, err := png.Decode(bytes.NewReader(original))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, alpha := img.At(0, 0).RGBA()
+	if alpha != 0 {
+		t.Fatal("competent signature lost alpha")
+	}
+	digest := sha256.Sum256(original)
+	assertField(t, first["signature"].(map[string]any), "sha256", hex.EncodeToString(digest[:]))
+	second := decodeObject(t, performMultipartRequest(t, h.router, h.adminToken, path+"/signature", "file", "signature.jpg", signingImage(t, true), nil, http.StatusOK))
+	secondID := stringField(t, second["signature"].(map[string]any), "signature_id")
+	if secondID == id {
+		t.Fatal("competent signature was overwritten")
+	}
+	current := performJSONRequest(t, h.router, h.adminToken, http.MethodGet, path+"/signatures/"+secondID+"/file", nil, http.StatusOK)
+	if _, err := png.Decode(bytes.NewReader(current)); err != nil {
+		t.Fatal("JPEG not normalized")
+	}
+	if !bytes.Equal(original, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, filePath, nil, http.StatusOK)) {
+		t.Fatal("earlier image changed")
+	}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/competent-person/"+other.String()+"/signing-profile/signatures/"+id+"/file", nil, http.StatusNotFound)
+	token := createIntegrationUserToken(t, h.pool, "Admin", "Examiner", "cp-r2-admin@example.com", "signing-password", "ADMIN")
+	performJSONRequest(t, h.router, token, http.MethodGet, filePath, nil, http.StatusForbidden)
+	var key string
+	var creator uuid.UUID
+	if err := h.pool.QueryRow(context.Background(), "SELECT file_key,created_by_user_id FROM certificate_signature_versions WHERE signature_id=$1", id).Scan(&key, &creator); err != nil {
+		t.Fatal(err)
+	}
+	journal, err := os.ReadFile(os.Getenv("AMS_TEST_STORAGE_MANIFEST"))
+	if err != nil || !strings.HasPrefix(key, os.Getenv("AMS_TEST_STORAGE_PREFIX")) || !strings.Contains(key, "competent-person") || !bytes.Contains(journal, []byte(key+"\n")) || creator != signingActor(t, h) {
+		t.Fatal("competent signature ownership or cleanup scope lost")
+	}
+	// A profile cannot point at another person's stored signature.
+	if _, err := h.pool.Exec(context.Background(), "INSERT INTO competent_person_signing_profiles(competent_person_id,current_signature_id) VALUES($1,$2)", other, id); err == nil {
+		t.Fatal("foreign competent signature association accepted")
+	}
+	if _, err := h.pool.Exec(context.Background(), "DELETE FROM competent_persons WHERE competent_person_id=$1", person); err != nil {
+		t.Fatal(err)
+	}
+	var owner uuid.UUID
+	if err := h.pool.QueryRow(context.Background(), "SELECT owner_id FROM certificate_signature_versions WHERE signature_id=$1 AND competent_person_id IS NULL", id).Scan(&owner); err != nil || owner != person {
+		t.Fatal("competent person deletion erased stable signature ownership")
+	}
+}
+
+func TestGeneratedRenewalCompetentSignatureFailuresAndRevokedActorCannotPublish(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	actor := signingActor(t, h)
+	person := signingPerson(t, h, "Publication examiner", signingCategory(t, h, "CP_FAILURE", true), true)
+	store := &signingMemoryStore{objects: map[string][]byte{}}
+	service := issuance.SignerManagement{Pool: h.pool, Store: store}
+	original, err := service.ReplacePersonSignature(ctx, actor, person, bytes.NewReader(signingImage(t, false)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.failPut = true
+	if _, err := service.ReplacePersonSignature(ctx, actor, person, bytes.NewReader(signingImage(t, true))); !errors.Is(err, issuance.ErrStorage) {
+		t.Fatalf("storage failure: %v", err)
+	}
+	store.failPut = false
+	current, err := service.PersonProfile(ctx, actor, person)
+	if err != nil || current.Signature.ID != original.Signature.ID {
+		t.Fatal("failed upload changed current signature")
+	}
+	var newer issuance.CompetentSigningProfile
+	store.beforePut = func() {
+		var err error
+		newer, err = service.ReplacePersonSignature(ctx, actor, person, bytes.NewReader(signingImage(t, true)))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := service.ReplacePersonSignature(ctx, actor, person, bytes.NewReader(signingImage(t, false))); !errors.Is(err, issuance.ErrConflict) {
+		t.Fatalf("slow competent upload overwrote newer: %v", err)
+	}
+	current, err = service.PersonProfile(ctx, actor, person)
+	if err != nil || current.Signature.ID != newer.Signature.ID {
+		t.Fatal("slow upload became current")
+	}
+	store.beforePut = func() {
+		if _, err := h.pool.Exec(ctx, "UPDATE users SET role='ADMIN' WHERE user_id=$1", actor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := service.ReplacePersonSignature(ctx, actor, person, bytes.NewReader(signingImage(t, false))); !errors.Is(err, issuance.ErrConflict) {
+		t.Fatalf("revoked manager published: %v", err)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE users SET role='SUPER_ADMIN' WHERE user_id=$1", actor); err != nil {
+		t.Fatal(err)
+	}
+	current, err = service.PersonProfile(ctx, actor, person)
+	if err != nil || current.Signature.ID != newer.Signature.ID {
+		t.Fatal("revoked actor changed current image")
+	}
+	var failed int
+	if err := h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_signature_versions WHERE owner_id=$1 AND storage_state='FAILED'", person).Scan(&failed); err != nil || failed != 3 {
+		t.Fatal("failed competent uploads lost persistent references")
 	}
 }

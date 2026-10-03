@@ -46,6 +46,7 @@ import type {
   UserManagementAuditLog,
 } from "../../types/ams";
 import { formatDateTime, humanizeEnum } from "../../utils/format";
+import { SignerManagementSettings } from "./SignerManagementSettings";
 
 type UserEditor =
   | {
@@ -1169,6 +1170,7 @@ function AdministrationView({
     <>
       <ContentLayout header={layoutHeader}>
         <SpaceBetween direction="vertical" size="l">
+          {canManageSuperAdmins ? <SignerManagementSettings users={users} people={people} categories={categories} /> : null}
           <AdminTableSection
             actionText="Create user"
             columnDefinitions={userColumns}

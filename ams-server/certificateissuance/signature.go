@@ -47,6 +47,10 @@ type SigningProfile struct {
 type SignatureRepository interface {
 	Profile(context.Context, uuid.UUID) (SigningProfile, error)
 	UpdateOrganization(context.Context, uuid.UUID, string) error
+	SignatureVersionRepository
+}
+
+type SignatureVersionRepository interface {
 	Prepare(context.Context, SignatureVersion) (*uuid.UUID, error)
 	Publish(context.Context, uuid.UUID, uuid.UUID, *uuid.UUID) error
 	MarkFailed(context.Context, uuid.UUID) error
@@ -93,48 +97,59 @@ func (s Signatures) ReplaceOwnSignature(ctx context.Context, userID uuid.UUID, r
 	if _, err := s.OwnProfile(ctx, userID); err != nil {
 		return SigningProfile{}, err
 	}
-	image, err := NormalizeSignature(reader)
-	if err != nil {
-		return SigningProfile{}, err
-	}
-	version := SignatureVersion{ID: uuid.New(), OwnerID: userID, SHA256: image.SHA256,
-		Width: image.Width, Height: image.Height, ByteSize: int64(len(image.PNG))}
-	version.Key, err = s.Store.PrepareKey(version.ID, userID)
-	if err != nil {
-		return SigningProfile{}, errors.Join(ErrStorage, err)
-	}
-	// Persist the key before PUT. Failed/uncertain writes remain identifiable;
-	// only the publication transaction makes an image current or readable.
-	previous, err := s.Repository.Prepare(ctx, version)
-	if err != nil {
-		return SigningProfile{}, err
-	}
-	if err = s.Store.Put(ctx, version.Key, image.PNG); err != nil {
-		s.markFailed(version.ID)
-		return SigningProfile{}, errors.Join(ErrStorage, err)
-	}
-	if err = s.Repository.Publish(ctx, userID, version.ID, previous); err != nil {
-		s.markFailed(version.ID)
+	if err := replaceSignature(ctx, userID, reader, s.Repository, s.Store); err != nil {
 		return SigningProfile{}, err
 	}
 	return s.OwnProfile(ctx, userID)
 }
 
-func (s Signatures) markFailed(id uuid.UUID) {
+func replaceSignature(ctx context.Context, ownerID uuid.UUID, reader io.Reader, repository SignatureVersionRepository, storage SignatureStore) error {
+	image, err := NormalizeSignature(reader)
+	if err != nil {
+		return err
+	}
+	version := SignatureVersion{ID: uuid.New(), OwnerID: ownerID, SHA256: image.SHA256,
+		Width: image.Width, Height: image.Height, ByteSize: int64(len(image.PNG))}
+	version.Key, err = storage.PrepareKey(version.ID, ownerID)
+	if err != nil {
+		return errors.Join(ErrStorage, err)
+	}
+	// Persist the key before PUT. Failed/uncertain writes remain identifiable;
+	// only the publication transaction makes an image current or readable.
+	previous, err := repository.Prepare(ctx, version)
+	if err != nil {
+		return err
+	}
+	if err = storage.Put(ctx, version.Key, image.PNG); err != nil {
+		markSignatureFailed(repository, version.ID)
+		return errors.Join(ErrStorage, err)
+	}
+	if err = repository.Publish(ctx, ownerID, version.ID, previous); err != nil {
+		markSignatureFailed(repository, version.ID)
+		return err
+	}
+	return nil
+}
+
+func markSignatureFailed(repository SignatureVersionRepository, id uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_ = s.Repository.MarkFailed(ctx, id)
+	_ = repository.MarkFailed(ctx, id)
 }
 
 func (s Signatures) OwnImage(ctx context.Context, userID, signatureID uuid.UUID) ([]byte, error) {
 	if _, err := s.OwnProfile(ctx, userID); err != nil {
 		return nil, err
 	}
-	version, err := s.Repository.StoredVersion(ctx, userID, signatureID)
+	return readSignature(ctx, userID, signatureID, s.Repository, s.Store)
+}
+
+func readSignature(ctx context.Context, ownerID, signatureID uuid.UUID, repository SignatureVersionRepository, storage SignatureStore) ([]byte, error) {
+	version, err := repository.StoredVersion(ctx, ownerID, signatureID)
 	if err != nil {
 		return nil, err
 	}
-	data, err := s.Store.Read(ctx, version.Key)
+	data, err := storage.Read(ctx, version.Key)
 	if err != nil {
 		return nil, errors.Join(ErrStorage, err)
 	}

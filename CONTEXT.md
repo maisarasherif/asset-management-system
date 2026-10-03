@@ -183,7 +183,12 @@ _Avoid_: Uploader, non-admin signer
 **Signing Profile**:
 The reusable personal details, competency category, and signature/stamp used to identify the signer on a Generated Certificate. An ordinary admin's Signing Profile belongs to their user account; a selectable Competent Person's Signing Profile belongs to their competent-person record.
 Ordinary admins manage their organization and signature from Account. Their name comes from the user record; category assignment belongs to super admins. A signature is a validated PNG/JPEG image stored privately as a normalized PNG, accessed through authenticated owner routes.
+Super admins manage the current signature of an existing Competent Person from Administration and may assign or clear an ordinary admin's signing category. Inactive profiles remain manageable, but cannot be selected for generated signing.
 _Avoid_: User-to-competent-person link, login credentials
+
+**Signer Eligibility**:
+The current permission to select a Signing Profile for a specific Certificate. An active admin needs complete personal details, a saved Signature Version, and an active competency category allowed by the certificate. If the certificate has no category restrictions, any active category is permitted. Ordinary admins see only their own eligible account; super admins select from eligible active Competent Persons. The server revalidates eligibility when resolving a selection and again in later preview/approval steps.
+_Avoid_: Dropdown visibility as authorization, unrestricted impersonation, user-to-competent-person mapping
 
 **Signature Version**:
 A saved signature/stamp image that remains unchanged after it is created. A Signing Profile identifies its current Signature Version, while each Generated Certificate preserves the version used at issuance.
