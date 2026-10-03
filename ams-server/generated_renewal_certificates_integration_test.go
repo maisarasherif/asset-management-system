@@ -213,7 +213,7 @@ func TestGeneratedRenewalPreviewHTTPPDFTokenAndRoleBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", map[string]any{"preview_token": old}, http.StatusGone)
-	for _, role := range []string{"USER", "VIEWER", "CLIENT", "ADMIN", "SUPER_ADMIN"} {
+	for _, role := range []string{"USER", "CLIENT", "ADMIN", "SUPER_ADMIN"} {
 		token := createIntegrationUserToken(t, h.pool, "Preview", role, "preview-"+role+"@example.com", "preview-password", role)
 		status := http.StatusForbidden
 		if role == "SUPER_ADMIN" {
@@ -225,6 +225,14 @@ func TestGeneratedRenewalPreviewHTTPPDFTokenAndRoleBoundaries(t *testing.T) {
 			validateStatus = http.StatusBadRequest
 		}
 		performJSONRequest(t, h.router, token, http.MethodPost, path+"/validate", tokenInput, validateStatus)
+		if role == "USER" {
+			// VIEWER belongs to product_access, not users.role. Product access
+			// must not grant certificate signing authority to an ordinary user.
+			viewer := mustGetIntegrationUserByEmail(t, h.pool, "preview-USER@example.com")
+			grantHRAdminProductAccess(t, h, viewer.UserID.String(), "VIEWER")
+			performJSONRequest(t, h.router, token, http.MethodPost, path, input, http.StatusForbidden)
+			performJSONRequest(t, h.router, token, http.MethodPost, path+"/validate", tokenInput, http.StatusForbidden)
+		}
 	}
 	journalAfter, err := os.ReadFile(os.Getenv("AMS_TEST_STORAGE_MANIFEST"))
 	if err != nil || !bytes.Equal(journalBefore, journalAfter) {
