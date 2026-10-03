@@ -5,8 +5,9 @@ import { Select } from "../../components/shared/OptimizedSelect";
 import { getCompetentSignatureImage, getOwnSignatureImage, listGeneratedSigners, resolveGeneratedSigner } from "../../lib/api/signing-profile";
 import { useAuth } from "../../providers/auth-context";
 import { SignatureImagePreview } from "../account/SignatureImagePreview";
+import { GeneratedCertificatePreview } from "./GeneratedCertificatePreview";
 
-export function GeneratedCertificateSigner({ certificateId }: { certificateId: string }) {
+export function GeneratedCertificateSigner({ certificateId, issueDate, expiryDate, validityMonths, requiresRenewal }: { certificateId: string; issueDate: string; expiryDate: string; validityMonths: number | null; requiresRenewal: boolean }) {
   const { session } = useAuth();
   const superAdmin = session?.role === "SUPER_ADMIN";
   const [selectedId, setSelectedId] = useState("");
@@ -36,6 +37,7 @@ export function GeneratedCertificateSigner({ certificateId }: { certificateId: s
             <Box>{confirmed.competency_category_name}</Box>
             <SignatureImagePreview key={confirmed.signature.signature_id} queryKey={["generated-signer-image", session?.userId, confirmed.owner_kind, confirmed.signer_id, confirmed.signature.signature_id]}
               loadImage={() => confirmed.owner_kind === "ACCOUNT" ? getOwnSignatureImage(confirmed.signature.signature_id) : getCompetentSignatureImage(confirmed.signer_id, confirmed.signature.signature_id)} />
+            <GeneratedCertificatePreview key={`${confirmed.signer_id}:${confirmed.signature.signature_id}:${confirmed.full_name}:${confirmed.organization}:${issueDate}:${expiryDate}`} certificateId={certificateId} signerId={confirmed.signer_id} issueDate={issueDate} expiryDate={expiryDate} validityMonths={validityMonths} requiresRenewal={requiresRenewal} />
           </>
         ) : null}
       </SpaceBetween>

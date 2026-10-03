@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Generated renewal certificates - signing profiles and eligible signers",
-    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal. Super-admin competent-person signature management, ordinary-admin category assignment/clearing, private image version history, direct role/field bypasses, restricted/unrestricted signer eligibility, and status changes after selection.",
+    "name": "Generated renewal certificates - signing, eligibility, and PDF preview",
+    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal. Super-admin competent-person signature management, ordinary-admin category assignment/clearing, private image version history, direct role/field bypasses, restricted/unrestricted signer eligibility, and status changes after selection. Stateless gopdf PDF previews, XX numbering, private signed snapshots, account/certificate/purpose bindings, changed sources and eligibility, role gates, non-expiring tests, and no publication before approval. Real token expiry is covered in Go through the HTTP endpoint.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -5928,6 +5928,1454 @@
           ]
         },
         {
+          "name": "Stateless generated PDF preview and token security",
+          "item": [
+            {
+              "name": "Snapshot current certificate before previews",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Snapshot current certificate before previews: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('previewOriginalCertificate', JSON.stringify(pm.response.json()));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Snapshot upload history before previews",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/uploads",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Snapshot upload history before previews: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('previewOriginalUploads', JSON.stringify(pm.response.json()));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Prepare stateless competent person PDF preview",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Prepare stateless competent person PDF preview: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store');",
+                      "pm.expect(Buffer.from(b.pdf_base64,'base64').subarray(0,5).toString()).to.eql('%PDF-');",
+                      "pm.expect(b.document_number).to.match(/^PMS-CE-261004-.+-XX$/);",
+                      "pm.expect(b.snapshot.issue_date).to.eql('2026-10-04'); pm.expect(b.snapshot.expiry_date).to.eql('2027-10-04');",
+                      "pm.expect(b.snapshot.remarks).to.eql('Examiné — Ω Ж\\nSecond line'); pm.expect(b.snapshot.measurements).to.eql('10 bar');",
+                      "pm.expect(b.snapshot.signer.owner_kind).to.eql('COMPETENT_PERSON'); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('competent_person_id'));",
+                      "pm.expect(b.snapshot.schema_version).to.eql(1); pm.expect(b.snapshot.template_version).to.eql('pms-examination-a4-v1');",
+                      "const claims=JSON.parse(Buffer.from(b.preview_token.split('.')[1],'base64').toString()); pm.expect(claims.exp-claims.iat).to.eql(1800); pm.expect(claims.purpose).to.eql('certificate-preview');",
+                      "pm.expect(claims.snapshot.signer.signature).not.to.have.property('file_key');",
+                      "pm.collectionVariables.set('generatedPreviewToken',b.preview_token);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Validate reviewed preview without publication",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{generatedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Validate reviewed preview without publication: status 204\", () => pm.response.to.have.status(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Preview cannot authenticate as access token",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{generatedPreviewToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Preview cannot authenticate as access token: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Access token cannot validate as preview",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{adminToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Access token cannot validate as preview: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Cross certificate preview token is rejected",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{generatedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Cross certificate preview token is rejected: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Cross account preview token is rejected",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{generatedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Cross account preview token is rejected: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Tampered signature is rejected",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{previewTampered}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const parts=pm.collectionVariables.get('generatedPreviewToken').split('.'); parts[2]=(parts[2][0]==='A'?'B':'A')+parts[2].slice(1); pm.collectionVariables.set('previewTampered',parts.join('.'));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Tampered signature is rejected: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Invalid calendar date",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-02-30\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Invalid calendar date: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Expiry before issue",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"expiry_date\": \"2026-10-03\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Expiry before issue: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Oversize remarks",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\n  \"measurements\": \"10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Oversize remarks: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Unsupported PDF glyph produces an explicit error",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Unsupported emoji 🚀\",\n  \"measurements\": \"10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Unsupported PDF glyph: status 400', () => pm.response.to.have.status(400));",
+                      "if (pm.response.code === 400) pm.expect(pm.response.json().error).to.include('characters unsupported');"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Invalid control character",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"\\u0000\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Invalid control character: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Unsigned source override",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"snapshot\": {}\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Unsigned source override: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Unknown issued number",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"document_number\": \"forged\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Unknown issued number: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Ineligible competent person",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{mgWrong}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Ineligible competent person: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "ADMIN cannot preview another signer",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"ADMIN cannot preview another signer: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "USER cannot prepare a preview",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{restrictedSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"USER cannot prepare a preview: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "USER cannot validate a preview",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{restrictedSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{generatedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"USER cannot validate a preview: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "CLIENT cannot prepare a preview",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"CLIENT cannot prepare a preview: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "CLIENT cannot validate a preview",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{generatedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"CLIENT cannot validate a preview: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "ADMIN preview resolves only their own signing details",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Own examination\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"ADMIN preview resolves only their own signing details: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.snapshot.signer.owner_kind).to.eql('ACCOUNT'); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('signerUserId')); pm.collectionVariables.set('ownGeneratedPreviewToken',b.preview_token); pm.expect(Buffer.from(b.pdf_base64,'base64').subarray(0,5).toString()).to.eql('%PDF-');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Own ADMIN token validates",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{ownGeneratedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Own ADMIN token validates: status 204\", () => pm.response.to.have.status(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Change IMCA reference after review",
+              "request": {
+                "method": "PATCH",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"imca_ref\": \"Changed after preview\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Change IMCA reference after review: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Reviewed source change requires fresh preview",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{generatedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Reviewed source change requires fresh preview: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Restore source reference",
+              "request": {
+                "method": "PATCH",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"imca_ref\": \"{{previewOriginalIMCA}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('previewOriginalIMCA',JSON.parse(pm.collectionVariables.get('previewOriginalCertificate')).imca_ref);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Restore source reference: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Restored content still invalidates old certificate version",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{generatedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Restored content still invalidates old certificate version: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Refresh preview after source change",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Refresh preview after source change: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store');",
+                      "pm.expect(Buffer.from(b.pdf_base64,'base64').subarray(0,5).toString()).to.eql('%PDF-');",
+                      "pm.expect(b.document_number).to.match(/^PMS-CE-261004-.+-XX$/);",
+                      "pm.expect(b.snapshot.issue_date).to.eql('2026-10-04'); pm.expect(b.snapshot.expiry_date).to.eql('2027-10-04');",
+                      "pm.expect(b.snapshot.remarks).to.eql('Examiné — Ω Ж\\nSecond line'); pm.expect(b.snapshot.measurements).to.eql('10 bar');",
+                      "pm.expect(b.snapshot.signer.owner_kind).to.eql('COMPETENT_PERSON'); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('competent_person_id'));",
+                      "pm.expect(b.snapshot.schema_version).to.eql(1); pm.expect(b.snapshot.template_version).to.eql('pms-examination-a4-v1');",
+                      "const claims=JSON.parse(Buffer.from(b.preview_token.split('.')[1],'base64').toString()); pm.expect(claims.exp-claims.iat).to.eql(1800); pm.expect(claims.purpose).to.eql('certificate-preview');",
+                      "pm.expect(claims.snapshot.signer.signature).not.to.have.property('file_key');",
+                      "pm.collectionVariables.set('generatedPreviewToken',b.preview_token);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Refreshed preview validates",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{generatedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Refreshed preview validates: status 204\", () => pm.response.to.have.status(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Dates and current document remain unchanged",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Dates and current document remain unchanged: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const a=JSON.parse(pm.collectionVariables.get('previewOriginalCertificate')), b=pm.response.json(); for (const k of ['issue_date','expiry_date','certificate_file']) pm.expect(b[k],k).to.eql(a[k]);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Preview creates no upload history",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/uploads",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Preview creates no upload history: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.expect(pm.response.json()).to.eql(JSON.parse(pm.collectionVariables.get('previewOriginalUploads')));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Create non-expiring preview test",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/test-type",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"test_name\": \"Non-expiring preview {{runSuffix}}\",\n  \"requires_renewal\": false,\n  \"validity_duration\": null,\n  \"description\": \"No expiry preview\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Create non-expiring preview test: status 201\", () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) {",
+                      "pm.collectionVariables.set('previewNonexpiringTestId',pm.response.json().test_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Create non-expiring preview certificate",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"test_id\": \"{{previewNonexpiringTestId}}\",\n  \"certificate_name\": \"Non-expiring preview {{runSuffix}}\",\n  \"issue_date\": \"2026-10-04T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"PMS\",\n  \"imca_ref\": \"D018\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"\",\n  \"competency_category_ids\": []\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Create non-expiring preview certificate: status 201\", () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) {",
+                      "pm.collectionVariables.set('previewNonexpiringCertificateId',pm.response.json().certificate_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Non-expiring preview omits expiry and shows correct validity",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Non-expiring preview omits expiry and shows correct validity: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.snapshot.expiry_date).to.eql(''); pm.expect(b.snapshot.validity_period).to.eql('No expiry');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Non-expiring preview rejects supplied expiry",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"expiry_date\": \"2027-10-04\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Non-expiring preview rejects supplied expiry: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete non-expiring preview certificate",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Delete non-expiring preview certificate: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete non-expiring preview test",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/test-type/{{previewNonexpiringTestId}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Delete non-expiring preview test: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
           "name": "Deactivate signing category after selecting signer",
           "request": {
             "method": "PUT",
@@ -5960,6 +7408,44 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Deactivate signing category after selecting signer: status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Changed eligibility invalidates reviewed preview: Inactive category removes competent eligibility",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"preview_token\": \"{{generatedPreviewToken}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Changed signer requires fresh preview', () => pm.response.to.have.status(409));"
                 ]
               }
             }
@@ -6136,6 +7622,44 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Deactivate previously selected competent person: status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Changed eligibility invalidates reviewed preview: Inactive person removes competent eligibility",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"preview_token\": \"{{generatedPreviewToken}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Changed signer requires fresh preview', () => pm.response.to.have.status(409));"
                 ]
               }
             }

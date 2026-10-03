@@ -520,3 +520,41 @@ set +a
 ```
 
 New storage paths introduced by later slices must journal their test-owned objects through the same scoped storage boundary before uploading. Do not infer ownership from current database rows or delete objects outside that journal.
+
+
+## Step 4: stateless generated examination PDF preview
+
+Step 4 is prepared on certgen and awaits user-run live suites and PDF review. It adds synchronous gopdf previews to the generated signer panel: automatic equipment/component/test/IMCA/signing details, dates/validity, optional remarks and measurements, and a PMS-CE number ending XX. This is a preview-only slice; approval/number allocation and final publication follow in Step 5. Existing external upload behavior remains available.
+
+The signed snapshot token lasts 30 minutes and is bound to the issuing account and certificate with a preview-specific purpose, issuer, audience, algorithm, and derived key separate from authentication. Current source content, certificate version, signer eligibility, and signature are checked on validation; stale review returns 409 and expiry 410. Preparing, validating, editing, canceling, reloading, or navigating away creates no DB/R2 draft, renewal, history row, or number reservation. Preview/token/PDF Blob URL remain only in the mounted component's memory; discard revokes the URL and cancels pending responses. Expiry retains typed form details for a new preview.
+
+Dedicated coverage:
+
+- ams-server/generated_renewal_certificates_integration_test.go adds two preview integration tests covering source/race/eligibility changes, no DB or storage writes, injected renderer/read failures, real private signature retrieval, HTTP PDF output, auth/role/account/certificate/expiry boundaries, invalid dates/text, ordinary-admin identity, and non-expiring tests.
+- ams-server/certificateissuance/preview_test.go covers cryptographic token validation and auth-token isolation, calendar/number formatting, Unicode maps, transparency, ordinary and long pagination, missing glyphs, and cancellation.
+- api/generated-renewal-certificates.postman_collection.json now contains 234 requests, including 40 added preview/security/no-side-effect/non-expiring checks. Real expired server-signed tokens are exercised by Go's HTTP test; Newman does not receive the signing secret.
+- e2e/generated-renewal-certificates.spec.ts still contains 3 maintained real-stack journeys, expanded with SUPER_ADMIN and own-ADMIN preview creation, PDF bytes/attachments, dates, editing, refresh/cancel/revoke, reload, browser-clock expiry, responsive widths, long pagination, unchanged current certificate/history, and invalid form controls. Clock acceleration checks UI expiry separately from Go's server-side expiry checks.
+
+The runner adds AMS_CERTIFICATE_PREVIEW_EVIDENCE_DIR for Go to save ordinary/long PDF examples under the private run directory. Registration, signature storage journal cleanup, and automatic on-failure HTML report hosting already cover this step. No additional migration or server/font runtime is needed; assets are embedded and gopdf is pinned to v0.38.1. SQLC was regenerated for the joined preview-source query. Shared integration_regression_test.go, system-api-smoke.postman_collection.json, and whole-app-regression.spec.ts need no changes: their existing contracts remain compatible and the dedicated files cover this new behavior.
+
+After reviewing, committing, and pushing locally yourself, update the exact certgen change in the VPS test checkout. Run as ams_test_runner:
+
+```bash
+cd /home/pms/ams-testing/asset-management-system
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/generated-renewal-certificates.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Expected collection requests: 234; browser tests: 3. Return Go pass/fail/skip counts, Newman counts, browser results, cleanup, run ID, and PDF feedback. Storage-dependent skips do not satisfy the gate. After a failed browser run, inspect the hosted report and press Ctrl+C to allow cleanup. To inspect a successful run's PDF attachments, use the retained report as the test account:
+
+```bash
+cd /home/pms/ams-testing/asset-management-system/ams-frontend-cloudscape
+# Replace run.YOUR_RUN_ID with the directory printed by the runner.
+npx playwright show-report /home/pms/ams-testing/asset-management-system/.vps-test-run/run.YOUR_RUN_ID/playwright-report
+```
+
+The Go examples are retained in that run directory as pdf-previews/examination-preview.pdf and pdf-previews/examination-preview-long.pdf. Playwright attaches ordinary/long examples to its HTML report. Inspect the actual gopdf output: small upper-left logo; centered CERTIFICATE OF EXAMINATION below the header; complete PMS-CE number ending XX; correct equipment/component/serial/location/validity; test description and IMCA references; no printed equipment/component ID, manufacturer/model, issuing authority, or signer category; optional section omission/line breaks; issue date repeated beside the signer; proportional transparent signature; company/website/page footer; readable Unicode; and long-text continuation without clipping, with the signer block kept together. Ordinary short content should fit one A4 page. The bundled Noto Sans supports Latin, Greek, and Cyrillic; missing glyphs cause an explicit error. Additional scripts require deliberate font/shaping support and are not claimed as covered.
+
+Local frontend/backend builds, compile-only Go test checks, strict Playwright spec typechecking, discovery of 3 tests, collection/embedded-script syntax validation, Bash syntax, and diff whitespace checks passed. Codex has not executed live suites, services, PDF rendering, or R2 calls. Changes remain uncommitted and unpushed. All three selected layers, cleanup, and PDF visual review must pass before Step 5; no layout or latency pass is inferred from compilation.

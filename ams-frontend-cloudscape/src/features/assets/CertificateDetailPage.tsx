@@ -607,7 +607,7 @@ function renderCertificateDetailPage({
         </ColumnLayout>
 
         {isAdmin ? (
-          <GeneratedCertificateSigner key={certificateId} certificateId={certificateId} />
+          <GeneratedCertificateSigner key={certificateId} certificateId={certificateId} issueDate={toDateInputValue(certificate.issue_date)} expiryDate={toDateInputValue(certificate.expiry_date)} validityMonths={selectedTestType?.validity_duration ?? null} requiresRenewal={selectedTypeRequiresExpiry} />
         ) : null}
 
         {isAdmin ? (

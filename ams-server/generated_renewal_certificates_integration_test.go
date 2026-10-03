@@ -16,6 +16,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +25,257 @@ import (
 	issuance "github.com/maisarasherif/asset-management-system/ams-server/certificateissuance"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 )
+
+type previewControlledRenderer struct {
+	render  func()
+	failure error
+}
+
+func (r previewControlledRenderer) Render(context.Context, issuance.Snapshot, string, []byte) ([]byte, error) {
+	if r.render != nil {
+		r.render()
+	}
+	return []byte("%PDF-controlled"), r.failure
+}
+
+func TestGeneratedRenewalPreviewStaleSourcesFailuresAndNoDrafts(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	actor := signingActor(t, h)
+	component, testID := createComponentFixture(t, h, "Preview Pressure Gauge")
+	certificate := uuid.MustParse(stringField(t, createCertificate(t, h, certificatePayload(component, testID, 93)), "certificate_id"))
+	person := signingPerson(t, h, "Preview Examiner", signingCategory(t, h, "PREVIEW", true), true)
+	store := &signingMemoryStore{objects: map[string][]byte{}}
+	management := issuance.SignerManagement{Pool: h.pool, Store: store}
+	if _, err := management.ReplacePersonSignature(ctx, actor, person, bytes.NewReader(signingImage(t, false))); err != nil {
+		t.Fatal(err)
+	}
+	service := issuance.Previews{Management: management, Secret: []byte(os.Getenv("SECRET_KEY")), Renderer: previewControlledRenderer{}}
+	input := issuance.PreviewInput{SignerID: &person, IssueDate: "2026-10-04", Remarks: "Examiné — Ω Ж\nTwo lines", Measurements: "10 bar"}
+	original, err := db.New(h.pool).GetCertificateByID(ctx, certificate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := json.Marshal(original)
+	// Count every table, not just dates: preview may not create DB drafts/audit rows.
+	counts := func() map[string]int64 {
+		result := map[string]int64{}
+		rows, err := h.pool.Query(ctx, "SELECT tablename FROM pg_tables WHERE schemaname='public'")
+		if err != nil {
+			t.Fatal(err)
+		}
+		names := []string{}
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				t.Fatal(err)
+			}
+			names = append(names, name)
+		}
+		rows.Close()
+		for _, name := range names {
+			var count int64
+			if err := h.pool.QueryRow(ctx, "SELECT count(*) FROM "+`"`+strings.ReplaceAll(name, `"`, `""`)+`"`).Scan(&count); err != nil {
+				t.Fatal(err)
+			}
+			result[name] = count
+		}
+		return result
+	}
+	initialCounts, _ := json.Marshal(counts())
+	objects := len(store.objects)
+	preview, err := service.Prepare(ctx, actor, certificate, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(preview.Number, "-XX") || preview.Snapshot.ExpiryDate != "2027-10-04" || preview.Snapshot.Measurements != "10 bar" {
+		t.Fatalf("unexpected preview: %+v", preview.Snapshot)
+	}
+	if _, err := service.Validate(ctx, actor, certificate, preview.Token); err != nil {
+		t.Fatal(err)
+	}
+	renderFailure := errors.New("controlled preview renderer failure")
+	service.Renderer = previewControlledRenderer{failure: renderFailure}
+	if _, err := service.Prepare(ctx, actor, certificate, input); !errors.Is(err, renderFailure) {
+		t.Fatal("renderer failure swallowed", err)
+	}
+	service.Renderer = previewControlledRenderer{}
+	afterCounts, _ := json.Marshal(counts())
+	if !bytes.Equal(initialCounts, afterCounts) || objects != len(store.objects) {
+		t.Fatal("preview created a DB or storage draft")
+	}
+	for _, change := range []struct {
+		name, sql string
+		id        uuid.UUID
+	}{
+		{"component", "UPDATE components SET name=name||' changed' WHERE component_id=$1", uuid.MustParse(component)},
+		{"equipment", "UPDATE assets SET name=name||' changed' WHERE asset_id=(SELECT asset_id FROM components WHERE component_id=$1)", uuid.MustParse(component)},
+		{"test", "UPDATE test_types SET description=description||' changed' WHERE test_id=$1", uuid.MustParse(testID)},
+		{"references", "UPDATE certificates SET imca_ref=imca_ref||' changed' WHERE certificate_id=$1", certificate},
+		{"signer", "UPDATE competent_persons SET organization=organization||' changed' WHERE competent_person_id=$1", person},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			fresh, err := service.Prepare(ctx, actor, certificate, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := h.pool.Exec(ctx, change.sql, change.id); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := service.Validate(ctx, actor, certificate, fresh.Token); !errors.Is(err, issuance.ErrPreviewChanged) {
+				t.Fatal("changed source accepted", err)
+			}
+		})
+	}
+	fresh, err := service.Prepare(ctx, actor, certificate, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := management.ReplacePersonSignature(ctx, actor, person, bytes.NewReader(signingImage(t, true))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Validate(ctx, actor, certificate, fresh.Token); !errors.Is(err, issuance.ErrPreviewChanged) {
+		t.Fatal("replaced signature accepted", err)
+	}
+	fresh, err = service.Prepare(ctx, actor, certificate, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE competent_persons SET active=FALSE WHERE competent_person_id=$1", person); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Validate(ctx, actor, certificate, fresh.Token); !errors.Is(err, issuance.ErrPreviewChanged) {
+		t.Fatal("inactive signer accepted", err)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE competent_persons SET active=TRUE WHERE competent_person_id=$1", person); err != nil {
+		t.Fatal(err)
+	}
+	service.Renderer = previewControlledRenderer{render: func() {
+		if _, err := h.pool.Exec(ctx, "UPDATE certificates SET imca_d018=imca_d018||' render race' WHERE certificate_id=$1", certificate); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	if _, err := service.Prepare(ctx, actor, certificate, input); !errors.Is(err, issuance.ErrPreviewChanged) {
+		t.Fatal("source changed during render accepted", err)
+	}
+	service.Renderer = previewControlledRenderer{}
+	for key := range store.objects {
+		store.objects[key] = []byte("corrupt image")
+	}
+	if _, err := service.Prepare(ctx, actor, certificate, input); !errors.Is(err, issuance.ErrStorage) {
+		t.Fatal("corrupt stored image accepted", err)
+	}
+	current, err := db.New(h.pool).GetCertificateByID(ctx, certificate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current.ImcaRef = original.ImcaRef
+	current.ImcaD018 = original.ImcaD018
+	after, _ := json.Marshal(current)
+	if !bytes.Equal(before, after) {
+		t.Fatal("preview changed current document, dates, or certificate version")
+	}
+}
+
+func TestGeneratedRenewalPreviewHTTPPDFTokenAndRoleBoundaries(t *testing.T) {
+	h := setupIntegrationTest(t)
+	requireStorageIntegrationEnv(t)
+	if os.Getenv("AMS_TEST_STORAGE_PREFIX") == "" {
+		t.Fatal("use isolated preview storage")
+	}
+	ctx := context.Background()
+	component, testID := createComponentFixture(t, h, "Preview Pressure Gauge")
+	certificate := stringField(t, createCertificate(t, h, certificatePayload(component, testID, 94)), "certificate_id")
+	second := stringField(t, createCertificate(t, h, certificatePayload(component, testID, 95)), "certificate_id")
+	person := signingPerson(t, h, "José Preview Examiner", signingCategory(t, h, "PREVIEW_HTTP", true), true)
+	personPath := "/v1/competent-person/" + person.String() + "/signing-profile/signature"
+	performMultipartRequest(t, h.router, h.adminToken, personPath, "file", "signature.png", signingImage(t, false), nil, http.StatusOK)
+	path := "/v1/certificate/" + certificate + "/generated-preview"
+	input := map[string]any{"signer_id": person, "issue_date": "2026-10-04", "remarks": "Examiné — Ω Ж\nSecond line", "measurements": "10 bar"}
+	journalBefore, err := os.ReadFile(os.Getenv("AMS_TEST_STORAGE_MANIFEST"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response issuance.PreviewResponse
+	if err := json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path, input, http.StatusOK), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(response.PDF, []byte("%PDF-")) || !strings.HasSuffix(response.Number, "-XX") || response.Snapshot.Signer.FullName != "José Preview Examiner" {
+		t.Fatal("preview document incomplete")
+	}
+	tokenInput := map[string]any{"preview_token": response.Token}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", tokenInput, http.StatusNoContent)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/certificate/"+second+"/generated-preview/validate", tokenInput, http.StatusBadRequest)
+	performJSONRequest(t, h.router, response.Token, http.MethodPost, path, input, http.StatusUnauthorized)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", map[string]any{"preview_token": h.adminToken}, http.StatusBadRequest)
+	old, err := issuance.SignPreview([]byte(os.Getenv("SECRET_KEY")), signingActor(t, h), response.Snapshot, time.Now().Add(-31*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", map[string]any{"preview_token": old}, http.StatusGone)
+	for _, role := range []string{"USER", "VIEWER", "CLIENT", "ADMIN", "SUPER_ADMIN"} {
+		token := createIntegrationUserToken(t, h.pool, "Preview", role, "preview-"+role+"@example.com", "preview-password", role)
+		status := http.StatusForbidden
+		if role == "SUPER_ADMIN" {
+			status = http.StatusOK
+		}
+		performJSONRequest(t, h.router, token, http.MethodPost, path, input, status)
+		validateStatus := http.StatusForbidden
+		if role == "ADMIN" || role == "SUPER_ADMIN" {
+			validateStatus = http.StatusBadRequest
+		}
+		performJSONRequest(t, h.router, token, http.MethodPost, path+"/validate", tokenInput, validateStatus)
+	}
+	journalAfter, err := os.ReadFile(os.Getenv("AMS_TEST_STORAGE_MANIFEST"))
+	if err != nil || !bytes.Equal(journalBefore, journalAfter) {
+		t.Fatal("preview created storage objects")
+	}
+	adminToken := createIntegrationUserToken(t, h.pool, "Own", "Preview", "own-preview@example.com", "preview-password", "ADMIN")
+	profile := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodGet, "/v1/account/signing-profile", nil, http.StatusOK))
+	admin := uuid.MustParse(stringField(t, profile, "user_id"))
+	management := issuance.SignerManagement{Pool: h.pool, Store: issuance.R2Signatures{}}
+	if _, err := management.AssignCategory(ctx, signingActor(t, h), admin, &response.Snapshot.Signer.CategoryID); err != nil {
+		t.Fatal(err)
+	}
+	performMultipartRequest(t, h.router, adminToken, "/v1/account/signing-profile/signature", "file", "own.png", signingImage(t, false), nil, http.StatusOK)
+	own := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodPost, path, map[string]any{"issue_date": "2026-10-04"}, http.StatusOK))
+	assertField(t, own["snapshot"].(map[string]any)["signer"].(map[string]any), "full_name", "Own Preview")
+	for _, invalid := range []map[string]any{
+		{"signer_id": person, "issue_date": "2026-02-30"}, {"signer_id": person, "issue_date": "2026-10-04", "expiry_date": "2026-10-03"},
+		{"signer_id": person, "issue_date": "2026-10-04", "remarks": strings.Repeat("a", 4001)},
+		{"signer_id": person, "issue_date": "2026-10-04", "measurements": "\u0000"},
+		{"signer_id": person, "issue_date": "2026-10-04", "remarks": "unsupported emoji \U0001F680"},
+		{"signer_id": person, "issue_date": "2026-10-04", "document_number": "forged"},
+	} {
+		performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path, invalid, http.StatusBadRequest)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE test_types SET requires_renewal=FALSE,validity_duration=NULL WHERE test_id=$1", uuid.MustParse(testID)); err != nil {
+		t.Fatal(err)
+	}
+	nonExpiring := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path, map[string]any{"signer_id": person, "issue_date": "2026-10-04"}, http.StatusOK))
+	assertField(t, nonExpiring["snapshot"].(map[string]any), "expiry_date", "")
+	assertField(t, nonExpiring["snapshot"].(map[string]any), "validity_period", "No expiry")
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path, map[string]any{"signer_id": person, "issue_date": "2026-10-04", "expiry_date": "2027-10-04"}, http.StatusBadRequest)
+	if _, err := h.pool.Exec(ctx, "UPDATE test_types SET requires_renewal=TRUE,validity_duration=12 WHERE test_id=$1", uuid.MustParse(testID)); err != nil {
+		t.Fatal(err)
+	}
+	if directory := os.Getenv("AMS_CERTIFICATE_PREVIEW_EVIDENCE_DIR"); directory != "" {
+		if err := os.MkdirAll(directory, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, "examination-preview.pdf"), response.PDF, 0600); err != nil {
+			t.Fatal(err)
+		}
+		input["remarks"] = strings.Repeat("Long examination remarks with continuation and readable text.\n", 60)
+		var long issuance.PreviewResponse
+		if err := json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path, input, http.StatusOK), &long); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, "examination-preview-long.pdf"), long.PDF, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
 // Baseline for the workflow the generated-certificate feature will extend.
 // Until atomic external renewal lands, upload and date publication are separate.

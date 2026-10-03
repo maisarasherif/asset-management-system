@@ -187,7 +187,7 @@ Super admins manage the current signature of an existing Competent Person from A
 _Avoid_: User-to-competent-person link, login credentials
 
 **Signer Eligibility**:
-The current permission to select a Signing Profile for a specific Certificate. An active admin needs complete personal details, a saved Signature Version, and an active competency category allowed by the certificate. If the certificate has no category restrictions, any active category is permitted. Ordinary admins see only their own eligible account; super admins select from eligible active Competent Persons. The server revalidates eligibility when resolving a selection and again in later preview/approval steps.
+The current permission to select a Signing Profile for a specific Certificate. An active admin needs complete personal details, a saved Signature Version, and an active competency category allowed by the certificate. If the certificate has no category restrictions, any active category is permitted. Ordinary admins see only their own eligible account; super admins select from eligible active Competent Persons. The server revalidates eligibility when resolving a selection, preparing a Renewal Preview, and validating its signed token. Approval must revalidate again when that later issuance step is implemented.
 _Avoid_: Dropdown visibility as authorization, unrestricted impersonation, user-to-competent-person mapping
 
 **Signature Version**:

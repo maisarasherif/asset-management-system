@@ -102,7 +102,7 @@ test("certificate renewal baseline uploads through UI and reads the historical R
   }
 });
 
-test("SUPER_ADMIN manages competent signatures and admin categories; generated signer selection enforces eligibility", async ({ page, request }) => {
+test("SUPER_ADMIN manages signatures and categories; generated previews enforce eligibility and stay in memory", async ({ page, request }) => {
   const rootEmail = process.env.PLAYWRIGHT_ADMIN_EMAIL;
   const rootPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD;
   expect(rootEmail).toBeTruthy();
@@ -153,6 +153,8 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     cleanup.push(`/catalog-scope-category/${scopedCategory.scope_category_id}`);
     const type = await post("/test-type", { test_name: suffix, validity_duration: 12, description: "Signer selection" }, "test_id");
     cleanup.push(`/test-type/${type.test_id}`);
+    const noExpiryType = await post("/test-type", { test_name: `No expiry ${suffix}`, validity_duration: null, requires_renewal: false, description: "Non-expiring examination" }, "test_id");
+    cleanup.push(`/test-type/${noExpiryType.test_id}`);
     const allowedCategory = await post("/competency-category", { category_code: suffix, category_name: suffix, description: "Allowed signer", active: true }, "competency_category_id");
     const otherCategory = await post("/competency-category", { category_code: `other-${suffix}`, category_name: `Other ${suffix}`, description: "Other signer", active: true }, "competency_category_id");
     const personInput = { full_name: `Eligible ${suffix}`, person_type: "Internal", organization: "Porto Marine", competency_category_id: allowedCategory.competency_category_id, active: true };
@@ -174,6 +176,8 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     const unrestricted = await post("/certificate", { ...certificateInput, certificate_name: `Unrestricted ${suffix}`, competency_category_ids: [] }, "certificate_id");
     cleanup.push(`/certificate/${unrestricted.certificate_id}`);
     expect(unrestricted.competency_category_ids).toEqual([]);
+    const noExpiryCertificate = await post("/certificate", { ...certificateInput, certificate_name: `No expiry ${suffix}`, test_id: noExpiryType.test_id, expiry_date: null }, "certificate_id");
+    cleanup.push(`/certificate/${noExpiryCertificate.certificate_id}`);
     const certificateURL = `/assets/${asset.asset_id}/components/${component.component_id}/certificates/${certificate.certificate_id}`;
     const certificateAPI = `${api}/certificate/${certificate.certificate_id}`;
     const unrestrictedURL = `/assets/${asset.asset_id}/components/${component.component_id}/certificates/${unrestricted.certificate_id}`;
@@ -249,11 +253,81 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     expect((await page.request.post(`${unrestrictedAPI}/generated-signer`, { data: { signer_id: wrongCategory.competent_person_id } })).status()).toBe(200);
     expect((await page.request.post(`${certificateAPI}/generated-signer`, { data: { signer_id: wrongCategory.competent_person_id } })).status()).toBe(400);
 
+    const previewForm = signing.getByRole("region", { name: "Generated certificate preview", exact: true });
+    const pdfReview = signing.getByRole("region", { name: "Examination certificate PDF review", exact: true });
+    await previewForm.getByLabel("Generated certificate issue date", { exact: true }).fill("2026-10-04");
+    await expect(previewForm.getByLabel("Generated certificate expiry date", { exact: true })).toHaveValue("2027-10-04");
+    await previewForm.getByLabel("Test remarks (optional)", { exact: true }).fill("Examiné — Ω Ж\nSecond line");
+    await previewForm.getByLabel("Measurements (optional)", { exact: true }).fill("Applied pressure: 10 bar");
+    const beforePreview = await (await page.request.get(certificateAPI)).json();
+    const uploadsBeforePreview = await (await page.request.get(`${certificateAPI}/uploads`)).json();
+    const makePreview = async () => {
+      const [response] = await Promise.all([
+        page.waitForResponse((response) => response.url() === `${certificateAPI}/generated-preview` && response.request().method() === "POST", { timeout: 35_000 }),
+        previewForm.getByRole("button", { name: /^(Preview examination certificate|Refresh PDF preview)$/ }).click(),
+      ]);
+      expect(response.status(), await response.text()).toBe(200);
+      const data = await response.json();
+      await expect(pdfReview).toBeVisible();
+      expect(data.document_number).toMatch(/^PMS-CE-261004-.+-XX$/);
+      expect(data.snapshot.signer.signer_id).toBe(eligible.competent_person_id);
+      expect(data.snapshot.expiry_date).toBe("2027-10-04");
+      expect(Buffer.from(data.pdf_base64, "base64").subarray(0, 5).toString()).toBe("%PDF-");
+      return data;
+    };
+    const reviewed = await makePreview();
+    expect(reviewed.snapshot.remarks).toBe("Examiné — Ω Ж\nSecond line");
+    expect(reviewed.snapshot.measurements).toBe("Applied pressure: 10 bar");
+    await test.info().attach("examination-preview.pdf", { body: Buffer.from(reviewed.pdf_base64, "base64"), contentType: "application/pdf" });
+    const iframe = pdfReview.locator('iframe[title="Examination certificate PDF preview"]');
+    await expect(iframe).toHaveAttribute("src", /^blob:/);
+    const oldBlob = (await iframe.getAttribute("src"))!;
+    expect(await page.evaluate(async (url) => (await (await fetch(url)).arrayBuffer()).byteLength, oldBlob)).toBeGreaterThan(1000);
+    expect((await page.request.post(`${certificateAPI}/generated-preview/validate`, { data: { preview_token: reviewed.preview_token } })).status()).toBe(204);
+    expect((await page.request.post(`${unrestrictedAPI}/generated-preview/validate`, { data: { preview_token: reviewed.preview_token } })).status()).toBe(400);
+    for (const width of [320, 768, 1024, 1440]) {
+      await narrow(width);
+      await expect(iframe).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+    }
+    await previewForm.getByRole("button", { name: "Cancel PDF preview", exact: true }).click();
+    await expect(pdfReview).toHaveCount(0);
+    await expect.poll(() => page.evaluate(async (url) => { try { await fetch(url); return true; } catch { return false; } }, oldBlob)).toBe(false);
+    await expect(previewForm.getByLabel("Measurements (optional)", { exact: true })).toHaveValue("Applied pressure: 10 bar");
+    await makePreview();
+    await previewForm.getByLabel("Test remarks (optional)", { exact: true }).fill("A recorded pressure observation with readable continuation.\n".repeat(60));
+    await expect(pdfReview).toHaveCount(0);
+    const longPreview = await makePreview();
+    expect((Buffer.from(longPreview.pdf_base64, "base64").toString("latin1").match(/\/Type\s*\/Page(?:\s|\/)/g) ?? []).length).toBeGreaterThan(1);
+    await test.info().attach("examination-preview-long.pdf", { body: Buffer.from(longPreview.pdf_base64, "base64"), contentType: "application/pdf" });
+    await page.reload();
+    await expect(pdfReview).toHaveCount(0);
+    await select("Generated certificate competent person", eligible.full_name);
+    await expect(previewForm.getByLabel("Test remarks (optional)", { exact: true })).toHaveValue("");
+    const afterPreview = await (await page.request.get(certificateAPI)).json();
+    for (const key of ["issue_date", "expiry_date", "certificate_file", "updated_at"]) expect(afterPreview[key]).toEqual(beforePreview[key]);
+    expect(await (await page.request.get(`${certificateAPI}/uploads`)).json()).toEqual(uploadsBeforePreview);
+
+    await page.goto(`/assets/${asset.asset_id}/components/${component.component_id}/certificates/${noExpiryCertificate.certificate_id}`);
+    await select("Generated certificate competent person", eligible.full_name);
+    await expect(previewForm.getByLabel("Generated certificate expiry date", { exact: true })).toHaveCount(0);
+    await expect(previewForm.getByText("This test has no expiry date.", { exact: true })).toBeVisible();
+    const noExpiryResponse = page.waitForResponse((response) => response.url() === `${api}/certificate/${noExpiryCertificate.certificate_id}/generated-preview` && response.request().method() === "POST");
+    await previewForm.getByRole("button", { name: "Preview examination certificate", exact: true }).click();
+    const noExpiryHTTP = await noExpiryResponse;
+    expect(noExpiryHTTP.status()).toBe(200);
+    const noExpiryPDF = await noExpiryHTTP.json();
+    expect(noExpiryPDF.snapshot.expiry_date).toBe("");
+    expect(noExpiryPDF.snapshot.validity_period).toBe("No expiry");
+    await expect(pdfReview).toBeVisible();
+    await page.goto(certificateURL);
+
     // Changing the person after selection must invalidate the server resolver.
     const deactivate = await page.request.put(`${api}/competent-person/${eligible.competent_person_id}`, { data: { ...personInput, active: false } });
     expect(deactivate.status()).toBe(200);
     const rejected = await page.request.post(`${certificateAPI}/generated-signer`, { data: { signer_id: eligible.competent_person_id } });
     expect(rejected.status()).toBe(400);
+    expect((await page.request.post(`${certificateAPI}/generated-preview/validate`, { data: { preview_token: reviewed.preview_token } })).status()).toBe(409);
     await page.reload();
     await expect(signing.getByText(/No eligible competent person has a saved signature/)).toBeVisible();
     expect((await page.request.put(`${api}/competent-person/${eligible.competent_person_id}`, { data: personInput })).status()).toBe(200);
@@ -301,6 +375,41 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     const categoryA = await request.put(adminAPI, { headers: cleanupHeaders, data: { competency_category_id: allowedCategory.competency_category_id } });
     expect(categoryA.status()).toBe(200);
     await page.goto(certificateURL);
+    // Ordinary admins get the same preview workflow with only their account identity.
+    await expect(previewForm).toBeVisible();
+    await previewForm.getByLabel("Generated certificate issue date", { exact: true }).fill("2026-10-04");
+    const ownPreviewResponse = page.waitForResponse((response) => response.url() === `${certificateAPI}/generated-preview` && response.request().method() === "POST");
+    await previewForm.getByRole("button", { name: "Preview examination certificate", exact: true }).click();
+    const ownPreviewHTTP = await ownPreviewResponse;
+    expect(ownPreviewHTTP.status()).toBe(200);
+    const ownPreview = await ownPreviewHTTP.json();
+    expect(ownPreview.snapshot.signer.owner_kind).toBe("ACCOUNT");
+    expect(ownPreview.snapshot.signer.signer_id).toBe(admin.user_id);
+    await expect(pdfReview).toBeVisible();
+    await previewForm.getByLabel("Generated certificate expiry date", { exact: true }).fill("2026-10-03");
+    await expect(pdfReview).toHaveCount(0);
+    await expect(previewForm.getByRole("button", { name: "Preview examination certificate", exact: true })).toBeDisabled();
+    await previewForm.getByLabel("Generated certificate expiry date", { exact: true }).fill("2027-10-04");
+    await previewForm.getByLabel("Test remarks (optional)", { exact: true }).fill("x".repeat(4001));
+    await expect(previewForm.getByRole("button", { name: "Preview examination certificate", exact: true })).toBeDisabled();
+    await previewForm.getByLabel("Test remarks (optional)", { exact: true }).fill("Own examination");
+    await previewForm.getByLabel("Test remarks (optional)", { exact: true }).fill("Unsupported emoji 🚀");
+    const glyphFailureResponse = page.waitForResponse((response) => response.url() === `${certificateAPI}/generated-preview` && response.request().method() === "POST");
+    await previewForm.getByRole("button", { name: "Preview examination certificate", exact: true }).click();
+    expect((await glyphFailureResponse).status()).toBe(400);
+    await expect(previewForm.getByText(/characters unsupported by the PDF font/)).toBeVisible();
+    await expect(pdfReview).toHaveCount(0);
+    await previewForm.getByLabel("Test remarks (optional)", { exact: true }).fill("Own examination");
+    // Install the browser clock before preview so its expiry timer is controlled.
+    await page.clock.install();
+    const expiresResponse = page.waitForResponse((response) => response.url() === `${certificateAPI}/generated-preview` && response.request().method() === "POST");
+    await previewForm.getByRole("button", { name: "Preview examination certificate", exact: true }).click();
+    expect((await expiresResponse).status()).toBe(200);
+    await expect(pdfReview).toBeVisible();
+    await page.clock.fastForward(31 * 60 * 1000);
+    await expect(pdfReview).toHaveCount(0);
+    await expect(previewForm.getByText(/This preview expired/)).toBeVisible();
+    await expect(previewForm.getByLabel("Test remarks (optional)", { exact: true })).toHaveValue("Own examination");
     for (const width of [320, 768, 1024, 1440]) {
       await narrow(width);
       await expect(signing.getByText("Managed Examiner", { exact: true })).toBeVisible();

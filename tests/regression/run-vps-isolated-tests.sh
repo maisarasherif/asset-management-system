@@ -456,6 +456,7 @@ if [[ "$RUN_GO_REGRESSION" == "1" ]]; then
     APP_ENV=test \
       DATABASE_URL="$TEST_DATABASE_URL" \
       AMS_RUN_INTEGRATION=1 \
+      AMS_CERTIFICATE_PREVIEW_EVIDENCE_DIR="$RUN_DIR/pdf-previews" \
       ALERT_RECIPIENT_EMAIL="" \
       CLICKUP_API_TOKEN="" \
       CLICKUP_LIST_ID="" \
