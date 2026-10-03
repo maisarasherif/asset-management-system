@@ -9,6 +9,7 @@
 - If verification is needed, limit it to non-invasive checks unless the user asks for broader testing.
 - Leave unrelated existing workspace changes alone.
 - For generated renewal certificates, leave changes uncommitted and unpushed for the user's review. The user commits and pushes to GitHub; provide a suggested commit message instead. Do not synchronize unreviewed changes to the VPS.
+- Keep automatic Playwright HTML report hosting on failure for generated renewal VPS tests; the user uses the hosted report to inspect failure artifacts. After inspection, Ctrl+C stops report hosting and allows runner cleanup.
 
 ## Regression File Updates
 

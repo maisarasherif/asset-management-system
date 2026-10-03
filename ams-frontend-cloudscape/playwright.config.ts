@@ -16,7 +16,7 @@ export default defineConfig({
   retries: 0,
   timeout: 120_000,
   workers: 1,
-  reporter: [["list"], ["html", { open: "never" }]],
+  reporter: [["list"], ["html", { open: "on-failure" }]],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:4174",
     ...(browserChannel ? { channel: browserChannel } : {}),

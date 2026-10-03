@@ -128,7 +128,8 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     return body;
   };
   const select = async (label: string, option: string) => {
-    await page.getByLabel(label, { exact: true }).click();
+    // Cloudscape labels the trigger, dialog, and listbox; only the button opens it.
+    await page.getByLabel(label, { exact: true }).and(page.getByRole("button")).click();
     await page.getByRole("option", { name: new RegExp(`^${option}`) }).click();
   };
   const narrow = async (width: number) => {
@@ -222,18 +223,18 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     expect((await assigned.json()).competency_category_id).toBe(allowedCategory.competency_category_id);
     for (const width of [320, 768, 1024, 1440]) {
       await narrow(width);
-      await expect(management.getByLabel("Admin signing competency category", { exact: true })).toBeVisible();
+      await expect(management.getByLabel("Admin signing competency category", { exact: true }).and(management.getByRole("button"))).toBeVisible();
       await expect(preview).toBeVisible();
       expect((await preview.boundingBox())!.width).toBeLessThanOrEqual(width);
     }
     await page.reload();
     await select("Admin signing account", adminEmail);
-    await expect(management.getByLabel("Admin signing competency category", { exact: true })).toContainText(allowedCategory.category_name);
+    await expect(management.getByLabel("Admin signing competency category", { exact: true }).and(management.getByRole("button"))).toContainText(allowedCategory.category_name);
 
     await page.goto(certificateURL);
     const signing = page.getByRole("region", { name: "Generated certificate signing", exact: true });
     await expect(signing).toBeVisible();
-    await signing.getByLabel("Generated certificate competent person", { exact: true }).click();
+    await signing.getByLabel("Generated certificate competent person", { exact: true }).and(signing.getByRole("button")).click();
     await expect(page.getByRole("option", { name: new RegExp(eligible.full_name) })).toBeVisible();
     for (const person of [unsigned, inactive, wrongCategory, blank]) await expect(page.getByRole("option", { name: new RegExp(person.full_name) })).toHaveCount(0);
     await page.getByRole("option", { name: new RegExp(eligible.full_name) }).click();
@@ -272,7 +273,7 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     await expect(page.getByRole("img", { name: "Saved signature or stamp", exact: true })).toHaveJSProperty("naturalWidth", 120);
     await page.goto(certificateURL);
     await expect(signing.getByText("Managed Examiner", { exact: true })).toBeVisible();
-    await expect(signing.getByLabel("Generated certificate competent person", { exact: true })).toHaveCount(0);
+    await expect(signing.getByLabel("Generated certificate competent person", { exact: true }).and(signing.getByRole("button"))).toHaveCount(0);
     await expect(signing.getByRole("img", { name: "Saved signature or stamp", exact: true })).toHaveJSProperty("naturalWidth", 120);
     const ownChoices = await page.request.get(`${certificateAPI}/generated-signers`);
     expect(ownChoices.status()).toBe(200);
@@ -289,7 +290,7 @@ test("SUPER_ADMIN manages competent signatures and admin categories; generated s
     expect((await page.request.post(`${certificateAPI}/generated-signer`, { data: {} })).status()).toBe(400);
     await page.goto(unrestrictedURL);
     await expect(signing.getByText("Managed Examiner", { exact: true })).toBeVisible();
-    await expect(signing.getByLabel("Generated certificate competent person", { exact: true })).toHaveCount(0);
+    await expect(signing.getByLabel("Generated certificate competent person", { exact: true }).and(signing.getByRole("button"))).toHaveCount(0);
     await expect(signing.getByRole("img", { name: "Saved signature or stamp", exact: true })).toHaveJSProperty("naturalWidth", 120);
     expect((await page.request.post(`${unrestrictedAPI}/generated-signer`, { data: {} })).status()).toBe(200);
     const categoryA = await request.put(adminAPI, { headers: cleanupHeaders, data: { competency_category_id: allowedCategory.competency_category_id } });
