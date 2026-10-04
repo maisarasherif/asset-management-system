@@ -358,3 +358,12 @@ bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 Return the results/cleanup/exit/evidence path and updated long PDF for visual verification. Prior passing regression/timing evidence remains recorded; Step 8 awaits this renderer correction's focused live verification and final sign-off. Nothing committed/pushed. Suggested commit: `fix(certificates): prevent empty PDF continuation headings`.
+
+
+### Step 8 complete — run.yNbzjh, 5 October 2026
+
+The final empty-heading fix passed **194 Go tests, 0 failures/skips; Newman; all four dedicated browser journeys in 2.2m**. Storage cleanup deleted 73 objects, database ams_e2e_20261004214142 was dropped, exit 0. Evidence: `.vps-test-run/run.yNbzjh`. Timing summary contains 50 successful samples across both layers/all four operations; previews have browser/Newman p50 189/182ms, generated issuance 647/656ms, and the largest observed successful duration is a 919ms browser retry. These are functional timings, not a load benchmark. Detailed counts/percentiles are in the authoritative guide.
+
+The updated examination-preview-long.pdf was rendered and all three pages inspected. All 60 remarks remain (17 + 43); page 3 starts with Measurements without the empty Remarks (continued) heading, followed by the readable signer/signature block. Header/footer/numbering remain consistent, with no clipping/overlap/out-of-page text. The guide records the supplied document's path and hash. All eight implementation steps and agreed verification are complete, retaining prior combined broader-browser/supplemental and own/competent/recovered PDF evidence. No additional rerun or attachment is required solely for this evidence update; deployment/merge is not claimed.
+
+Dedicated Go/Newman/Playwright files, shared Go/system API/whole-app baselines and the runner need no further edits. The runner already registers the dedicated suites and preserves reports/scoped cleanup. Codex performed PDF inspection and documentation updates only, with no live suites, commit/push or VPS synchronization. Suggested documentation commit: `docs(certificates): mark final regression and PDF review complete`.
