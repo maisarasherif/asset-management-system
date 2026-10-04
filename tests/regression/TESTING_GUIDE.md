@@ -577,7 +577,7 @@ Local frontend/backend builds, compile-only Go test checks, strict Playwright sp
 
 ## Step 5: approved generated issuance
 
-Prepared on 4 October 2026 on certgen. **Live VPS gate pending**; the earlier run.x5jllI verifies Step 4 only. Changes remain uncommitted and unpushed for the user's review. Approval confirmation now reserves one component/issue-date sequence and immutable snapshot, synchronously renders/stores/verifies the PDF, then atomically publishes the current certificate's file, dates, and status. The final number uses PMS-CE-yymmdd-componentDisplayID-initials-nn, padded to at least two sequence digits. Certificate detail adds paginated issuance history and private links to completed documents. No PDF layout change is included.
+Prepared on 4 October 2026 on certgen. **Step 5 is verified** across the first run's 161 Go passes, run.fTsdAI's Newman/Playwright passes, and Codex's review of all six supplied PDF attachments on 4 October. The earlier run.x5jllI verifies Step 4 only. Codex leaves its changes uncommitted and unpushed for the user's review. Approval confirmation now reserves one component/issue-date sequence and immutable snapshot, synchronously renders/stores/verifies the PDF, then atomically publishes the current certificate's file, dates, and status. The final number uses PMS-CE-yymmdd-componentDisplayID-initials-nn, padded to at least two sequence digits. Certificate detail adds paginated issuance history and private links to completed documents. No PDF layout change is included.
 
 Duplicate confirmation returns the same approval/number. Concurrent processing returns saved status; the UI checks it without creating another approval. Failed work keeps its number and preserves the current certificate. An existing approval can resume using its original signed identity after preview expiry, but an expired, previously unapproved preview cannot reserve a number. Stored-document retries reuse verified bytes at the stable key; conditional object creation prevents overwrite. A certificate update version fence and issuer permission recheck protect publication against stale work and role changes.
 
@@ -625,3 +625,21 @@ RUN_GO_REGRESSION=0 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 NEWMAN_CO
 ```
 
 Return the Newman/Playwright summaries, cleanup, exit status and run ID, plus feedback on the preview/final PDF pairs. Step 5 remains incomplete until these checks pass. Suggested correction commit: test(certificates): isolate anonymous issuance requests from login cookies.
+
+### Step 5 automated gate passed — PDF review pending
+
+Follow-up user evidence received 4 October 2026: **run.fTsdAI passed Newman and Playwright**. Go was intentionally not run because only the Newman fixture changed; retain the earlier **161 Go passes, 0 failures/skips**. Storage cleanup deleted 25 journaled objects; database ams_e2e_20261004103418 was dropped; exit status 0. The combined results satisfy all three automated layers and confirm the anonymous-request correction. Detailed Newman/Playwright counts and timings were not included in the supplied summary. Codex did not execute live suites. No additional run is required solely to record this evidence; remaining Step 5 work is preview/final PDF feedback. Step 6 has not started.
+
+Inspect this successful run's report as ams_test_runner:
+
+```bash
+/home/pms/ams-testing/asset-management-system/ams-frontend-cloudscape/node_modules/.bin/playwright show-report /home/pms/ams-testing/asset-management-system/.vps-test-run/run.fTsdAI/playwright-report --host 127.0.0.1 --port 9323
+```
+
+The Playwright report contains both own-ADMIN and competent-person preview/final PDF pairs. Check the allocated sequence replacing XX and consistent approved content/signatures/layout. Go did not run in run.fTsdAI, so Go-generated PDF examples belong to the earlier run directory rather than this one.
+
+### Step 5 PDF review completed
+
+On 4 October 2026 the user supplied approved-own-examination-preview.pdf, issued-own-examination.pdf, approved-competent-examination-preview.pdf, issued-competent-examination.pdf, examination-preview.pdf and examination-preview-long.pdf from run.fTsdAI. Codex used read-only Poppler rendering and text/image extraction, visually inspecting all eight pages. Both preview/final pairs match except their document-number line: PMS-CE-261004-002-MS1-XX becomes -01 for own ADMIN and -02 for the competent person. Pixel differences are confined to that line, and embedded logo/signature streams and positions are identical within each pair. Signer identity, dates/validity, automatic details, optional text, Unicode and footer remain consistent.
+
+All short documents fit one A4 page. The long preview preserves all 60 observation lines across three A4 pages, with correct page numbering and the signer block together on page 3. No clipping or overlap was observed. One non-blocking cosmetic detail carried from the approved template remains: page 3 repeats REMARKS (continued) without further remarks, followed by measurements and signer details. No renderer/PDF/source/test changes were made or live suites rerun. Combined with the documented automated evidence, this verifies Step 5; Step 6 is ready but not started. Documentation updates remain uncommitted and unpushed for the user.
