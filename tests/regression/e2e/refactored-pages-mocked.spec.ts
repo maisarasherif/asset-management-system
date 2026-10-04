@@ -1,7 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-const futureExpiry = "2099-01-01T00:00:00.000Z";
-
 type RecordedRequest = {
   method: string;
   path: string;
@@ -449,6 +447,9 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
 
 async function installMockApi(page: Page) {
   const state = createMockState();
+  // Session expiry schedules a browser timer. A 2099 expiry overflows its
+  // signed 32-bit delay and can log the mocked user out immediately.
+  const sessionExpiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
   await page.addInitScript(() => {
     window.open = (url?: string | URL) => {
@@ -474,8 +475,14 @@ async function installMockApi(page: Page) {
         email: "admin@example.test",
         role: "SUPER_ADMIN",
         status: "ACTIVE",
-        expires_at: futureExpiry,
+        expires_at: sessionExpiresAt,
         can_manage_user_passwords: true,
+      });
+    }
+
+    if (path === "/platform/products" && method === "GET") {
+      return fulfillJson(route, {
+        products: [{ product_key: "AMS", product_name: "Asset Management", product_role: "ADMIN", status: "ACTIVE" }],
       });
     }
 
@@ -1443,7 +1450,8 @@ async function installMockApi(page: Page) {
       const form = String(request.body);
       const field = (key: string) => form.match(new RegExp(`name="${key}"\\r\\n\\r\\n([^\\r]+)`))?.[1] ?? "";
       state.certificate = { ...state.certificate, issue_date:`${field("issue_date")}T00:00:00.000Z`, expiry_date:`${field("expiry_date")}T00:00:00.000Z`, certificate_file:"external-certificates/upload-2.pdf" };
-      state.uploads = [{ ...state.uploads[0], uuid:"upload-2", file_key:"external-certificates/upload-2.pdf", file_name:"uploaded-from-api.pdf", uploaded_at:"2026-01-05T00:00:00.000Z" }, ...state.uploads];
+      const fileName = form.match(/name="file"; filename="([^"]+)"/)?.[1] ?? "";
+      state.uploads = [{ ...state.uploads[0], uuid:"upload-2", file_key:"external-certificates/upload-2.pdf", file_name:fileName, uploaded_at:"2026-01-05T00:00:00.000Z" }, ...state.uploads];
       return fulfillJson(route, { issuance_id:"upload-2", state:"COMPLETED", source:"EXTERNAL" });
     }
 
@@ -1535,7 +1543,10 @@ async function installMockApi(page: Page) {
 async function bootMockedAdmin(page: Page, path: string) {
   const state = await installMockApi(page);
   await page.goto(path);
-  await expect(page.getByText("Checking authentication")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Primary navigation", exact: true })).toBeVisible();
+  // Workspace pages may normalize their query parameters after loading.
+  await expect(page).toHaveURL(url => url.pathname === new URL(path, url.origin).pathname);
+  await expectNoUnexpectedApi(state);
   return state;
 }
 
@@ -3046,7 +3057,7 @@ test.describe("mocked refactored page smoke coverage", () => {
 
     await page.getByRole("button", { name:"Upload external document", exact:true }).click();
     await page
-      .getByRole("textbox", { name: "Certificate renewal issue date" })
+      .getByLabel("Certificate renewal issue date", { exact: true })
       .fill("2026-02-01");
     await page.getByLabel("Certificate renewal file").setInputFiles({
       name: "oversized-renewal.pdf",
@@ -3087,7 +3098,7 @@ test.describe("mocked refactored page smoke coverage", () => {
     await page.getByRole("button", { name:"Upload external document", exact:true }).click();
 
     await page
-      .getByRole("textbox", { name: "Certificate renewal issue date" })
+      .getByLabel("Certificate renewal issue date", { exact: true })
       .fill("2026-02-01");
     await page.getByLabel("Certificate renewal file").setInputFiles({
       name: "proxy-rejected-certificate.pdf",
@@ -3133,10 +3144,10 @@ test.describe("mocked refactored page smoke coverage", () => {
     await expect(page.getByText("Main Harness")).toBeVisible();
 
     await page.getByRole("button", { name: "Download file" }).click();
-    latestRequest(state, "GET", "/v1/certificate/cert-1/file");
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("lastWindowOpen")))
       .toBe("https://example.test/cert-1.pdf");
+    latestRequest(state, "GET", "/v1/certificate/cert-1/file");
 
     await page.getByRole("button", { name: "Edit certificate" }).click();
     await expect(page).toHaveURL(
@@ -3146,10 +3157,10 @@ test.describe("mocked refactored page smoke coverage", () => {
     await page.getByRole("button", { name:"Upload external document", exact:true }).click();
 
     await page
-      .getByRole("textbox", { name: "Certificate renewal issue date" })
+      .getByLabel("Certificate renewal issue date", { exact: true })
       .fill("2026-02-01");
     await expect(
-      page.getByRole("textbox", { name: "Certificate renewal expiry date" }),
+      page.getByLabel("Certificate renewal expiry date", { exact: true }),
     ).toHaveValue("2027-02-01");
     await page.getByLabel("Certificate renewal file").setInputFiles({
       name: "renewed-certificate.pdf",
@@ -3166,6 +3177,7 @@ test.describe("mocked refactored page smoke coverage", () => {
       .getByRole("button", { name: "Renew/change certificate" })
       .click();
 
+    await expect(page.getByText("Certificate renewed", { exact: true })).toBeVisible();
     const uploadRequest = latestRequest(
       state,
       "POST",
@@ -3177,14 +3189,15 @@ test.describe("mocked refactored page smoke coverage", () => {
     expect(String(uploadRequest.body)).toContain("2027-02-01");
     expect(String(uploadRequest.body)).toContain('name="approval_id"');
     expect(state.recorded.filter(request => request.method === "PATCH" && request.path === "/v1/certificate/cert-1")).toHaveLength(0);
-    await expect(page.getByText("Certificate renewed")).toBeVisible();
-    await expect(page.getByText("renewed-certificate.pdf")).toHaveCount(0);
+    await expect(page.getByLabel("Certificate renewal file")).toHaveValue("");
 
-    await page.getByRole("button", { name: "View uploaded document" }).first().click();
-    latestRequest(state, "GET", "/v1/certificate/cert-1/history/upload-2/file");
+    const historyRegion = page.getByRole("region", { name: "Certificate issuance history", exact: true });
+    const renewedRow = historyRegion.getByRole("row").filter({ has: page.getByRole("cell", { name: "renewed-certificate.pdf", exact: true }) });
+    await renewedRow.getByRole("button", { name: "View uploaded document", exact: true }).click();
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("lastWindowOpen")))
       .toBe("https://example.test/upload-2.pdf");
+    latestRequest(state, "GET", "/v1/certificate/cert-1/history/upload-2/file");
     await expectNoUnexpectedApi(state);
   });
 });
