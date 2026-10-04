@@ -646,7 +646,7 @@ All short documents fit one A4 page. The long preview preserves all 60 observati
 
 ## Atomic external renewal and combined history (Step 6)
 
-Prepared 4 October 2026 on `certgen`; **dedicated Go/Newman/real-stack Playwright gate passed across run.u2Zttq and run.6TdGBM; supplemental mocked fixture correction awaits VPS verification**. Step 5 remains verified. Certificate detail defaults to generation and offers Upload external document. External renewal sends file, dates and eligible competent person in one request, saves immutable approval details, verifies original private R2 bytes, then atomically publishes file/dates/status and history. Both ADMIN and SUPER_ADMIN retain existing upload permissions; no saved competent-person signature is required. PDF/JPEG/PNG/WEBP up to 10 MiB are preserved without rewriting or PMS numbering. Non-expiring tests omit expiry; renewable expiry must be strictly after issue.
+Prepared 4 October 2026 on `certgen`; **Step 6 verified across run.u2Zttq, run.6TdGBM and run.qzL6y5, including all three supplemental mocked cases**. Step 5 remains verified. Certificate detail defaults to generation and offers Upload external document. External renewal sends file, dates and eligible competent person in one request, saves immutable approval details, verifies original private R2 bytes, then atomically publishes file/dates/status and history. Both ADMIN and SUPER_ADMIN retain existing upload permissions; no saved competent-person signature is required. PDF/JPEG/PNG/WEBP up to 10 MiB are preserved without rewriting or PMS numbering. Non-expiring tests omit expiry; renewable expiry must be strictly after issue.
 
 Migration 000053 adds original file metadata and links external audit to issuance. Combined paginated history shows generated/external/Legacy records once, opens original stored documents and reports legacy dates/signer details as unrecorded. Duplicate approval uses its original identity/object; failed, stale or permission-revoked publication preserves the current certificate. The compatibility file-only endpoint now publishes file/audit together and remains Legacy because it lacks a complete renewal snapshot. Recovery/abandonment controls remain Step 7. The approved PDF renderer/layout is unchanged.
 
@@ -725,3 +725,44 @@ RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 E2E_SPECS
 ```
 
 Changes remain uncommitted/unpushed. Suggested commit: `test(certificates): repair mocked session setup and renewal assertions`.
+
+### Step 6 verified — supplemental run.qzL6y5 passed
+
+Evidence received 4 October 2026: all three supplemental CertificateDetailPage mocked tests passed in **15.7s**: oversize rejection 5.2s, friendly upstream HTML 413 handling 2.8s, and route/download/atomic renewal/history flow 4.7s. This verifies the shared authentication fixture and subsequent locator/upload/history corrections. Storage cleanup deleted 0 journaled objects (these mocked cases do not write R2 objects); database ams_e2e_20261004160948 was dropped; exit status 0. Go/Newman were intentionally not rerun for this fixture-only correction.
+
+Combined Step 6 evidence: run.u2Zttq passed **170 Go tests, 0 failures/skips**, and Newman; run.6TdGBM passed all three dedicated real-stack Playwright journeys; run.qzL6y5 passed all three changed supplemental mocked cases. **Step 6 implementation and verification are complete.** Detailed Newman assertion counts were not supplied. The user also confirmed the report viewer works. All relevant cleanup gates passed; no more Step 6 reruns are required solely to record these results.
+
+Step 7 is ready but has not started; Steps 7 and 8 remain. This update changes only evidence/status documentation. Dedicated/shared Go/Newman/Playwright files and the runner need no edits, and no live suites were executed by Codex. Automatic failed-report hosting remains enabled. Changes remain uncommitted/unpushed. Suggested documentation commit: `docs(certificates): mark step 6 verified after VPS regression gates`.
+
+### Step 7 prepared — saved approval recovery and abandonment
+
+Prepared 4 October 2026 on `certgen`; **implementation is ready for VPS verification, which remains pending**. Step 6's recorded gates remain valid. Step 8 follows only after the Step 7 gate and any necessary fixes.
+
+Certificate issuance history now offers **Retry issuance**, **Abandon approval** with explicit confirmation, and **Retry file deletion** when cleanup fails. ACTIVE ADMIN accounts manage their own approvals; SUPER_ADMIN may recover or abandon any approval. ADMIN retries of generated certificates retain the own-account signer restriction. USER, CLIENT and anonymous recovery requests are rejected. Active processing/cleanup leases prevent duplicate work; refresh history when a lease is still active. Stale approvals cannot replace a newer certificate and offer abandonment instead.
+
+Retry uses the approved snapshot, signature version, document identity and reserved number without a preview token. Existing stored bytes are verified and reused without rendering or uploading another copy. Missing external bytes require the exact original file (digest and size verified); dates and signer edits are not accepted during recovery. Abandonment is terminal, leaves the current certificate unchanged, deletes only unissued files, and retains its audit record, number, object reference and immutable abandonment actor/time. Storage or cleanup acknowledgement failures remain recoverable. Completed/current documents, legacy upload references and historical signatures are protected. Expired writers that finish a PUT after abandonment requeue deletion; cleanup generation fencing prevents an older acknowledgement from clearing that obligation.
+
+Migration `000054_certificate_issuance_recovery` adds cleanup failure/generation and abandonment audit fields and constraints; SQLC was regenerated. Recovery POST routes are `/certificate/:certificate_id/issuances/:issuance_id/retry`, `/abandon`, and `/cleanup`. History responses include current-user action flags. The isolated runner supplies a per-run fault secret to Newman and Playwright. Controlled render, before-write, lost-PUT-acknowledgement and deletion faults are accepted only with APP_ENV=test, a valid disposable ams_e2e_ database/storage scope and the correct secret; ordinary authorization remains enforced. Production requests cannot enable them. This adds no test routes and does not change R2 bucket configuration.
+
+Dedicated coverage is delivered in:
+- `ams-server/generated_renewal_certificates_integration_test.go`: 12 recovery cases covering rendering/storage failures, byte reuse, stale work, roles/ownership/scope, terminal idempotency, deletion/database failures, reserved-number retention, protected references, active leases and late-writer/cleanup races.
+- `ams-server/controllers/generated_renewal_certificates_test.go`: isolated fault guard and history permission cases.
+- `tests/regression/api/generated-renewal-certificates.postman_collection.json`: 59 recovery requests added to the self-contained collection; 394 total requests discovered statically.
+- `tests/regression/e2e/generated-renewal-certificates.spec.ts`: a real-stack recovery journey added; 4 total journeys discovered. Browser fault injection continues actual HTTP requests with guarded test headers and does not mock server responses.
+
+The runner, shared Go harness/reset, system API smoke, whole-app browser baseline and supplemental CertificateDetailPage mocked cases were reviewed. No reset change is needed because the migration extends an already reset table. Shared baselines need no edits for these additive recovery endpoints; the dedicated files cover the changed states. The feature collection/spec remain in the default broader run. The runner now passes only the guarded fault secret; automatic HTML hosting on failure and scoped storage/database cleanup remain unchanged. After a failed report has been inspected, Ctrl+C allows cleanup to run.
+
+Static validation passed: Go build/vet, compile-only root/controller test binaries, SQLC generation, frontend TypeScript and Vite build, strict feature-spec TypeScript, Playwright discovery, Postman SDK/JSON request-body parsing and script syntax, Bash syntax and diff whitespace. **No test bodies, live stacks, Newman or Playwright executions were run by Codex.** Live migration, Go assertions, API/browser behavior and R2 cleanup require the VPS gate below. No commit, push or VPS synchronization was performed.
+
+After reviewing, committing/pushing and updating the Fedora checkout yourself, run **as ams_test_runner from `/home/pms/ams-testing/asset-management-system`**, without sudo:
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/generated-renewal-certificates.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Verify all Go/Newman/Playwright gates, storage cleanup, dropped isolated database and exit 0. Return actual pass/fail/skip counts, Newman assertions, four browser results and the printed run evidence path. Inspect the recovery PDF attachment and history actions. A storage-backed skip does not satisfy the gate. There is no new PDF layout change in Step 7.
+
+Suggested commit: `feat(certificates): add approved issuance recovery and abandonment`

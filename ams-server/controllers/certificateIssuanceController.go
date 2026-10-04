@@ -37,7 +37,7 @@ func ApproveGeneratedCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
 		defer cancel()
-		service := issuance.Issuances{Pool: pool, Previews: previewService(pool), Documents: issuance.R2Documents{}}
+		service := issuanceServiceForRequest(c, pool, issuance.R2Documents{})
 		result, err := service.Approve(ctx, actor, certificate, input.Token)
 		if err != nil {
 			if errors.Is(err, issuance.ErrIssuanceFailed) && result.ID != uuid.Nil {
@@ -204,7 +204,7 @@ func RenewExternalCertificate(pool *pgxpool.Pool) gin.HandlerFunc {
 		contentType := header.Header.Get("Content-Type")
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
 		defer cancel()
-		service := issuance.Issuances{Pool: pool, Previews: previewService(pool), Documents: issuance.R2ExternalDocuments{ContentType: contentType}}
+		service := issuanceServiceForRequest(c, pool, issuance.R2ExternalDocuments{ContentType: contentType})
 		result, err := service.ApproveExternal(ctx, actor, certificate, issuance.ExternalInput{ApprovalID: approval, PersonID: person, IssueDate: c.PostForm("issue_date"), ExpiryDate: c.PostForm("expiry_date"), FileName: header.Filename, ContentType: contentType, Data: data})
 		if err != nil {
 			switch {
@@ -268,7 +268,20 @@ func GetCertificateHistory(pool *pgxpool.Pool) gin.HandlerFunc {
 		if rows == nil {
 			rows = []db.GetCertificateHistoryRow{}
 		}
-		c.JSON(200, dto.PaginatedResponse{Data: rows, Meta: utils.BuildMeta(query, total)})
+		actor, ok := signingUser(c)
+		if !ok {
+			return
+		}
+		signingActor, err := q.GetSigningActor(ctx, actor)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "could not load recovery permissions"})
+			return
+		}
+		role := signingActor.Role
+		if signingActor.Status != "ACTIVE" {
+			role = ""
+		}
+		c.JSON(200, dto.PaginatedResponse{Data: recoveryHistory(rows, actor, role), Meta: utils.BuildMeta(query, total)})
 	}
 }
 func GetCertificateHistoryFile(pool *pgxpool.Pool) gin.HandlerFunc {

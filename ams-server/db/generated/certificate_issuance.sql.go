@@ -13,6 +13,58 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const abandonCertificateIssuance = `-- name: AbandonCertificateIssuance :one
+UPDATE certificate_issuances SET state = 'ABANDONED', cleanup_state = 'PENDING',
+ abandoned_by = $2, abandoned_at = NOW(), attempt_id = NULL, lease_until = NULL, updated_at = NOW()
+WHERE issuance_id = $1 AND (state IN ('APPROVED', 'FAILED')
+ OR (state = 'PROCESSING' AND lease_until < NOW())) RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type, cleanup_failure_code, cleanup_generation, abandoned_by, abandoned_at
+`
+
+type AbandonCertificateIssuanceParams struct {
+	IssuanceID  uuid.UUID  `json:"issuance_id"`
+	AbandonedBy *uuid.UUID `json:"abandoned_by"`
+}
+
+func (q *Queries) AbandonCertificateIssuance(ctx context.Context, arg AbandonCertificateIssuanceParams) (CertificateIssuance, error) {
+	row := q.db.QueryRow(ctx, abandonCertificateIssuance, arg.IssuanceID, arg.AbandonedBy)
+	var i CertificateIssuance
+	err := row.Scan(
+		&i.IssuanceID,
+		&i.ApprovalID,
+		&i.CertificateID,
+		&i.CertificateRef,
+		&i.ComponentID,
+		&i.Source,
+		&i.ActorID,
+		&i.ActorRef,
+		&i.SignatureID,
+		&i.DocumentNumber,
+		&i.Sequence,
+		&i.IssueDate,
+		&i.ExpiryDate,
+		&i.Snapshot,
+		&i.BaseVersion,
+		&i.State,
+		&i.FileKey,
+		&i.DocumentSha256,
+		&i.DocumentSize,
+		&i.AttemptID,
+		&i.LeaseUntil,
+		&i.FailureCode,
+		&i.CleanupState,
+		&i.ApprovedAt,
+		&i.CompletedAt,
+		&i.UpdatedAt,
+		&i.FileName,
+		&i.ContentType,
+		&i.CleanupFailureCode,
+		&i.CleanupGeneration,
+		&i.AbandonedBy,
+		&i.AbandonedAt,
+	)
+	return i, err
+}
+
 const allocateCertificateNumber = `-- name: AllocateCertificateNumber :one
 INSERT INTO certificate_number_counters(component_id, issue_date, last_sequence)
 VALUES ($1, $2, 1)
@@ -37,7 +89,7 @@ const claimCertificateIssuance = `-- name: ClaimCertificateIssuance :one
 UPDATE certificate_issuances SET state = 'PROCESSING', attempt_id = $2,
  lease_until = NOW() + INTERVAL '5 minutes', failure_code = '', updated_at = NOW()
 WHERE issuance_id = $1 AND (state IN ('APPROVED', 'FAILED') OR (state = 'PROCESSING' AND lease_until < NOW()))
-RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type
+RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type, cleanup_failure_code, cleanup_generation, abandoned_by, abandoned_at
 `
 
 type ClaimCertificateIssuanceParams struct {
@@ -77,6 +129,62 @@ func (q *Queries) ClaimCertificateIssuance(ctx context.Context, arg ClaimCertifi
 		&i.UpdatedAt,
 		&i.FileName,
 		&i.ContentType,
+		&i.CleanupFailureCode,
+		&i.CleanupGeneration,
+		&i.AbandonedBy,
+		&i.AbandonedAt,
+	)
+	return i, err
+}
+
+const claimIssuanceCleanup = `-- name: ClaimIssuanceCleanup :one
+UPDATE certificate_issuances SET cleanup_state = 'PENDING', cleanup_failure_code = '',
+ attempt_id = $2, lease_until = NOW() + INTERVAL '5 minutes', updated_at = NOW()
+WHERE issuance_id = $1 AND state = 'ABANDONED' AND cleanup_state IN ('PENDING', 'FAILED')
+ AND (lease_until IS NULL OR lease_until < NOW()) RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type, cleanup_failure_code, cleanup_generation, abandoned_by, abandoned_at
+`
+
+type ClaimIssuanceCleanupParams struct {
+	IssuanceID uuid.UUID  `json:"issuance_id"`
+	AttemptID  *uuid.UUID `json:"attempt_id"`
+}
+
+func (q *Queries) ClaimIssuanceCleanup(ctx context.Context, arg ClaimIssuanceCleanupParams) (CertificateIssuance, error) {
+	row := q.db.QueryRow(ctx, claimIssuanceCleanup, arg.IssuanceID, arg.AttemptID)
+	var i CertificateIssuance
+	err := row.Scan(
+		&i.IssuanceID,
+		&i.ApprovalID,
+		&i.CertificateID,
+		&i.CertificateRef,
+		&i.ComponentID,
+		&i.Source,
+		&i.ActorID,
+		&i.ActorRef,
+		&i.SignatureID,
+		&i.DocumentNumber,
+		&i.Sequence,
+		&i.IssueDate,
+		&i.ExpiryDate,
+		&i.Snapshot,
+		&i.BaseVersion,
+		&i.State,
+		&i.FileKey,
+		&i.DocumentSha256,
+		&i.DocumentSize,
+		&i.AttemptID,
+		&i.LeaseUntil,
+		&i.FailureCode,
+		&i.CleanupState,
+		&i.ApprovedAt,
+		&i.CompletedAt,
+		&i.UpdatedAt,
+		&i.FileName,
+		&i.ContentType,
+		&i.CleanupFailureCode,
+		&i.CleanupGeneration,
+		&i.AbandonedBy,
+		&i.AbandonedAt,
 	)
 	return i, err
 }
@@ -167,17 +275,48 @@ func (q *Queries) FailCertificateIssuance(ctx context.Context, arg FailCertifica
 	return result.RowsAffected(), nil
 }
 
+const finishIssuanceCleanup = `-- name: FinishIssuanceCleanup :execrows
+UPDATE certificate_issuances SET cleanup_state = $3, cleanup_failure_code = $4,
+ lease_until = NULL, updated_at = NOW()
+WHERE issuance_id = $1 AND state = 'ABANDONED' AND attempt_id = $2 AND cleanup_generation = $5
+`
+
+type FinishIssuanceCleanupParams struct {
+	IssuanceID         uuid.UUID  `json:"issuance_id"`
+	AttemptID          *uuid.UUID `json:"attempt_id"`
+	CleanupState       string     `json:"cleanup_state"`
+	CleanupFailureCode string     `json:"cleanup_failure_code"`
+	CleanupGeneration  int64      `json:"cleanup_generation"`
+}
+
+func (q *Queries) FinishIssuanceCleanup(ctx context.Context, arg FinishIssuanceCleanupParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finishIssuanceCleanup,
+		arg.IssuanceID,
+		arg.AttemptID,
+		arg.CleanupState,
+		arg.CleanupFailureCode,
+		arg.CleanupGeneration,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getCertificateHistory = `-- name: GetCertificateHistory :many
-SELECT history_id, source, state, document_number, file_name, content_type, issue_date, expiry_date, signer_name, signer_organization, recorded_at, snapshot_available FROM (
+SELECT history_id, source, state, document_number, file_name, content_type, issue_date, expiry_date, signer_name, signer_organization, recorded_at, snapshot_available, actor_id, failure_code, cleanup_state, cleanup_failure_code, lease_until, owner_kind, signer_id FROM (
  SELECT issuance_id AS history_id, source, state, COALESCE(document_number, '')::TEXT AS document_number,
  file_name, content_type, issue_date, expiry_date,
  COALESCE(snapshot->'signer'->>'full_name', '')::TEXT AS signer_name,
  COALESCE(snapshot->'signer'->>'organization', '')::TEXT AS signer_organization,
- approved_at AS recorded_at, TRUE AS snapshot_available
+ approved_at AS recorded_at, TRUE AS snapshot_available, actor_id::TEXT AS actor_id,
+ failure_code, cleanup_state, cleanup_failure_code, lease_until,
+ COALESCE(snapshot->'signer'->>'owner_kind', '')::TEXT AS owner_kind,
+ COALESCE(snapshot->'signer'->>'signer_id', '')::TEXT AS signer_id
  FROM certificate_issuances ci WHERE ci.certificate_id = $1
  UNION ALL
  SELECT uuid, 'LEGACY', 'LEGACY', '', file_name, '', NULL::DATE, NULL::DATE,
- '', '', uploaded_at, FALSE
+ '', '', uploaded_at, FALSE, '', '', 'NONE', '', NULL::TIMESTAMPTZ, '', ''
  FROM certificate_upload_audit ua WHERE ua.certificate_id = $1 AND ua.issuance_id IS NULL
 ) history ORDER BY recorded_at DESC, history_id DESC LIMIT $3 OFFSET $2
 `
@@ -201,6 +340,13 @@ type GetCertificateHistoryRow struct {
 	SignerOrganization string      `json:"signer_organization"`
 	RecordedAt         time.Time   `json:"recorded_at"`
 	SnapshotAvailable  bool        `json:"snapshot_available"`
+	ActorID            string      `json:"actor_id"`
+	FailureCode        string      `json:"failure_code"`
+	CleanupState       string      `json:"cleanup_state"`
+	CleanupFailureCode string      `json:"cleanup_failure_code"`
+	LeaseUntil         *time.Time  `json:"lease_until"`
+	OwnerKind          string      `json:"owner_kind"`
+	SignerID           string      `json:"signer_id"`
 }
 
 func (q *Queries) GetCertificateHistory(ctx context.Context, arg GetCertificateHistoryParams) ([]GetCertificateHistoryRow, error) {
@@ -225,6 +371,13 @@ func (q *Queries) GetCertificateHistory(ctx context.Context, arg GetCertificateH
 			&i.SignerOrganization,
 			&i.RecordedAt,
 			&i.SnapshotAvailable,
+			&i.ActorID,
+			&i.FailureCode,
+			&i.CleanupState,
+			&i.CleanupFailureCode,
+			&i.LeaseUntil,
+			&i.OwnerKind,
+			&i.SignerID,
 		); err != nil {
 			return nil, err
 		}
@@ -237,7 +390,7 @@ func (q *Queries) GetCertificateHistory(ctx context.Context, arg GetCertificateH
 }
 
 const getCertificateIssuance = `-- name: GetCertificateIssuance :one
-SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type FROM certificate_issuances WHERE issuance_id = $1 AND certificate_id = $2
+SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type, cleanup_failure_code, cleanup_generation, abandoned_by, abandoned_at FROM certificate_issuances WHERE issuance_id = $1 AND certificate_id = $2
 `
 
 type GetCertificateIssuanceParams struct {
@@ -277,12 +430,16 @@ func (q *Queries) GetCertificateIssuance(ctx context.Context, arg GetCertificate
 		&i.UpdatedAt,
 		&i.FileName,
 		&i.ContentType,
+		&i.CleanupFailureCode,
+		&i.CleanupGeneration,
+		&i.AbandonedBy,
+		&i.AbandonedAt,
 	)
 	return i, err
 }
 
 const getCertificateIssuanceByApproval = `-- name: GetCertificateIssuanceByApproval :one
-SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type FROM certificate_issuances WHERE approval_id = $1
+SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type, cleanup_failure_code, cleanup_generation, abandoned_by, abandoned_at FROM certificate_issuances WHERE approval_id = $1
 `
 
 func (q *Queries) GetCertificateIssuanceByApproval(ctx context.Context, approvalID uuid.UUID) (CertificateIssuance, error) {
@@ -317,6 +474,10 @@ func (q *Queries) GetCertificateIssuanceByApproval(ctx context.Context, approval
 		&i.UpdatedAt,
 		&i.FileName,
 		&i.ContentType,
+		&i.CleanupFailureCode,
+		&i.CleanupGeneration,
+		&i.AbandonedBy,
+		&i.AbandonedAt,
 	)
 	return i, err
 }
@@ -354,7 +515,7 @@ INSERT INTO certificate_issuances
 (issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref,
  issue_date, expiry_date, snapshot, base_version, file_key, file_name, content_type, document_sha256, document_size)
 VALUES ($1, $2, $3, $3, $4, 'EXTERNAL', $5, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type
+RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type, cleanup_failure_code, cleanup_generation, abandoned_by, abandoned_at
 `
 
 type InsertExternalIssuanceParams struct {
@@ -421,6 +582,10 @@ func (q *Queries) InsertExternalIssuance(ctx context.Context, arg InsertExternal
 		&i.UpdatedAt,
 		&i.FileName,
 		&i.ContentType,
+		&i.CleanupFailureCode,
+		&i.CleanupGeneration,
+		&i.AbandonedBy,
+		&i.AbandonedAt,
 	)
 	return i, err
 }
@@ -433,7 +598,7 @@ VALUES ($1, $2, $3, $3,
  $4, 'GENERATED', $5, $5, $6,
  $7, $8, $9, $10,
  $11, $12, $13)
-RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type
+RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type, cleanup_failure_code, cleanup_generation, abandoned_by, abandoned_at
 `
 
 type InsertGeneratedIssuanceParams struct {
@@ -498,12 +663,30 @@ func (q *Queries) InsertGeneratedIssuance(ctx context.Context, arg InsertGenerat
 		&i.UpdatedAt,
 		&i.FileName,
 		&i.ContentType,
+		&i.CleanupFailureCode,
+		&i.CleanupGeneration,
+		&i.AbandonedBy,
+		&i.AbandonedAt,
 	)
 	return i, err
 }
 
+const issuanceDocumentReferenced = `-- name: IssuanceDocumentReferenced :one
+SELECT EXISTS (SELECT 1 FROM certificates WHERE certificate_file = $1)
+ OR EXISTS (SELECT 1 FROM certificate_upload_audit WHERE file_key = $1)
+ OR EXISTS (SELECT 1 FROM certificate_signature_versions WHERE file_key = $1)
+ OR EXISTS (SELECT 1 FROM certificate_issuances WHERE file_key = $1 AND state = 'COMPLETED')
+`
+
+func (q *Queries) IssuanceDocumentReferenced(ctx context.Context, certificateFile string) (pgtype.Bool, error) {
+	row := q.db.QueryRow(ctx, issuanceDocumentReferenced, certificateFile)
+	var column_1 pgtype.Bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const listCertificateIssuances = `-- name: ListCertificateIssuances :many
-SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type FROM certificate_issuances WHERE certificate_id = $1
+SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type, cleanup_failure_code, cleanup_generation, abandoned_by, abandoned_at FROM certificate_issuances WHERE certificate_id = $1
 ORDER BY approved_at DESC, issuance_id DESC LIMIT $2 OFFSET $3
 `
 
@@ -551,6 +734,10 @@ func (q *Queries) ListCertificateIssuances(ctx context.Context, arg ListCertific
 			&i.UpdatedAt,
 			&i.FileName,
 			&i.ContentType,
+			&i.CleanupFailureCode,
+			&i.CleanupGeneration,
+			&i.AbandonedBy,
+			&i.AbandonedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -573,8 +760,57 @@ func (q *Queries) LockCertificateForApproval(ctx context.Context, certificateID 
 	return renewal_version, err
 }
 
+const lockIssuanceForRecovery = `-- name: LockIssuanceForRecovery :one
+SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type, cleanup_failure_code, cleanup_generation, abandoned_by, abandoned_at FROM certificate_issuances WHERE issuance_id = $1 AND certificate_id = $2 FOR UPDATE
+`
+
+type LockIssuanceForRecoveryParams struct {
+	IssuanceID    uuid.UUID `json:"issuance_id"`
+	CertificateID uuid.UUID `json:"certificate_id"`
+}
+
+func (q *Queries) LockIssuanceForRecovery(ctx context.Context, arg LockIssuanceForRecoveryParams) (CertificateIssuance, error) {
+	row := q.db.QueryRow(ctx, lockIssuanceForRecovery, arg.IssuanceID, arg.CertificateID)
+	var i CertificateIssuance
+	err := row.Scan(
+		&i.IssuanceID,
+		&i.ApprovalID,
+		&i.CertificateID,
+		&i.CertificateRef,
+		&i.ComponentID,
+		&i.Source,
+		&i.ActorID,
+		&i.ActorRef,
+		&i.SignatureID,
+		&i.DocumentNumber,
+		&i.Sequence,
+		&i.IssueDate,
+		&i.ExpiryDate,
+		&i.Snapshot,
+		&i.BaseVersion,
+		&i.State,
+		&i.FileKey,
+		&i.DocumentSha256,
+		&i.DocumentSize,
+		&i.AttemptID,
+		&i.LeaseUntil,
+		&i.FailureCode,
+		&i.CleanupState,
+		&i.ApprovedAt,
+		&i.CompletedAt,
+		&i.UpdatedAt,
+		&i.FileName,
+		&i.ContentType,
+		&i.CleanupFailureCode,
+		&i.CleanupGeneration,
+		&i.AbandonedBy,
+		&i.AbandonedAt,
+	)
+	return i, err
+}
+
 const lockProcessingIssuance = `-- name: LockProcessingIssuance :one
-SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type FROM certificate_issuances WHERE issuance_id = $1 AND attempt_id = $2 AND state = 'PROCESSING' FOR UPDATE
+SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type, cleanup_failure_code, cleanup_generation, abandoned_by, abandoned_at FROM certificate_issuances WHERE issuance_id = $1 AND attempt_id = $2 AND state = 'PROCESSING' FOR UPDATE
 `
 
 type LockProcessingIssuanceParams struct {
@@ -614,6 +850,10 @@ func (q *Queries) LockProcessingIssuance(ctx context.Context, arg LockProcessing
 		&i.UpdatedAt,
 		&i.FileName,
 		&i.ContentType,
+		&i.CleanupFailureCode,
+		&i.CleanupGeneration,
+		&i.AbandonedBy,
+		&i.AbandonedAt,
 	)
 	return i, err
 }
@@ -681,4 +921,15 @@ func (q *Queries) RecordIssuanceDocument(ctx context.Context, arg RecordIssuance
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const requeueLateIssuanceCleanup = `-- name: RequeueLateIssuanceCleanup :exec
+UPDATE certificate_issuances SET cleanup_state = 'PENDING', attempt_id = NULL,
+ lease_until = NULL, cleanup_generation = cleanup_generation + 1, updated_at = NOW()
+WHERE issuance_id = $1 AND state = 'ABANDONED'
+`
+
+func (q *Queries) RequeueLateIssuanceCleanup(ctx context.Context, issuanceID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, requeueLateIssuanceCleanup, issuanceID)
+	return err
 }

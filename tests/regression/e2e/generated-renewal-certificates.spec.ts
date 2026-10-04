@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { expect, test, type APIRequestContext } from "@playwright/test";
 
 const api = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:18082/v1";
@@ -9,6 +9,143 @@ const signaturePNG = readFileSync(resolve(__dirname, "../fixtures/signature-samp
 const signatureJPEG = readFileSync(resolve(__dirname, "../fixtures/signature-replacement.jpg"));
 
 // Prerequisites belong to this spec, independent of whole-app fixtures.
+test("saved approvals recover through history without replacing approved details or completed documents", async ({ page, request }) => {
+  test.setTimeout(240_000);
+  const rootEmail = process.env.PLAYWRIGHT_ADMIN_EMAIL!;
+  const rootPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD!;
+  const faultToken = process.env.PLAYWRIGHT_ISSUANCE_FAULT_TOKEN!;
+  expect(faultToken, "isolated runner recovery fault token").toBeTruthy();
+  expect(process.env.AMS_TEST_STORAGE_PREFIX).toBeTruthy();
+  const suffix = `recovery-${Date.now()}`;
+  const cleanup: string[] = [];
+  let failed = false;
+  const login = async (email: string, password: string) => {
+    await page.goto("/login"); await page.getByLabel("Email", { exact: true }).fill(email); await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click(); await expect(page).toHaveURL(/\/dashboard$/);
+  };
+  const logout = async () => { await page.goto("/account"); await page.getByRole("button", { name: "Sign out", exact: true }).click({ timeout: 10_000 }); await expect(page).toHaveURL(/\/login$/); };
+  const post = async (path: string, data: unknown) => { const r = await page.request.post(`${api}${path}`, { data }); expect(r.status(), await r.text()).toBe(201); return r.json(); };
+  const faultHeaders = (mode: string) => ({ "X-AMS-Issuance-Test-Token": faultToken, "X-AMS-Issuance-Test-Fault": mode });
+  try {
+    await login(rootEmail, rootPassword);
+    const main = await post("/main-category", { main_category_name: suffix, description: "Recovery", sort_order: 100 }); cleanup.push(`/main-category/${main.main_category_id}`);
+    const category = await post("/category", { main_category_id: main.main_category_id, category_name: suffix, description: "Recovery", sort_order: 100 }); cleanup.push(`/category/${category.category_id}`);
+    const scope = await (await page.request.get(`${api}/catalog-scopes/default`)).json();
+    const scopedMain = await post(`/catalog-scope/${scope.scope_id}/main-category`, { main_category_name: suffix, description: "Recovery", sort_order: 100 }); cleanup.push(`/catalog-scope-main-category/${scopedMain.scope_main_category_id}`);
+    const scopedCategory = await post(`/catalog-scope/${scope.scope_id}/category`, { main_category_id: main.main_category_id, category_name: suffix, description: "Recovery", sort_order: 100 }); cleanup.push(`/catalog-scope-category/${scopedCategory.scope_category_id}`);
+    const type = await post("/test-type", { test_name: suffix, validity_duration: 12, description: "Recovery" }); cleanup.push(`/test-type/${type.test_id}`);
+    const signingCategory = await post("/competency-category", { category_code: suffix, category_name: suffix, description: "Recovery", active: true });
+    const personInput = { full_name: suffix, organization: "Porto Marine", person_type: "Internal", competency_category_id: signingCategory.competency_category_id, active: true };
+    const person = await post("/competent-person", personInput);
+    const image = await page.request.post(`${api}/competent-person/${person.competent_person_id}/signing-profile/signature`, { multipart: { file: { name: "signature.png", mimeType: "image/png", buffer: signaturePNG } } }); expect(image.status()).toBe(200);
+    const ownerEmail = `owner-${suffix}@example.com`, otherEmail = `other-${suffix}@example.com`, password = "Recovery-test-123!";
+    const owner = await post("/user", { first_name: "Own", last_name: "Recovery", email: ownerEmail, password, role: "ADMIN", status: "ACTIVE" }); cleanup.push(`/user/${owner.user_id}`);
+    const other = await post("/user", { first_name: "Other", last_name: "Recovery", email: otherEmail, password, role: "ADMIN", status: "ACTIVE" }); cleanup.push(`/user/${other.user_id}`);
+    expect((await page.request.put(`${api}/user/${owner.user_id}/signing-profile`, { data: { competency_category_id: signingCategory.competency_category_id } })).status()).toBe(200);
+    const asset = await post("/asset", { name: suffix, description: "Recovery", photo: "", datasheet: "", status: "ACTIVE", asset_kind: "COMPONENTIZED", location: "Warehouse", assigned_project: "" }); cleanup.push(`/asset/${asset.asset_id}`);
+    const component = await post("/component", { asset_id: asset.asset_id, category_id: category.category_id, scope_category_id: scopedCategory.scope_category_id, name: suffix, serial_number: suffix, manufacturer: "PMS", model: "Recovery", location: "Warehouse", assigned_project: "", equipment_type: "Equipment", structure: "Fixed", class: "A", class_code: "A1", safety_critical: "YES", description: "Recovery" }); cleanup.push(`/component/${component.component_id}`);
+    const certificateInput = { component_id: component.component_id, certificate_name: suffix, test_id: type.test_id, issue_date: "2026-01-02T00:00:00Z", expiry_date: "2027-01-02T00:00:00Z", certificate_file: "", issuing_authority: "PMS", imca_ref: "D018", imca_d018: "Recovery", maintenance_notes: "", competency_category_ids: [signingCategory.competency_category_id] };
+    const cert = await post("/certificate", certificateInput); cleanup.push(`/certificate/${cert.certificate_id}`);
+    const certificateAPI = `${api}/certificate/${cert.certificate_id}`;
+    const certificateURL = `/assets/${asset.asset_id}/components/${component.component_id}/certificates/${cert.certificate_id}`;
+    const region = page.getByRole("region", { name: "Certificate issuance history", exact: true });
+    const rowFor = (number: string) => region.getByRole("row").filter({ has: page.getByRole("cell", { name: number, exact: true }) });
+    const approveFailure = async (mode: string, own = false) => {
+      const previewHTTP = await page.request.post(`${certificateAPI}/generated-preview`, { data: { ...(own ? {} : { signer_id: person.competent_person_id }), issue_date: "2026-10-04", remarks: "Saved recovery details" } });
+      expect(previewHTTP.status(), await previewHTTP.text()).toBe(200); const preview = await previewHTTP.json();
+      const issueHTTP = await page.request.post(`${certificateAPI}/generated-issuance`, { data: { preview_token: preview.preview_token }, headers: faultHeaders(mode) });
+      expect(issueHTTP.status(), await issueHTTP.text()).toBe(503); const issuance = (await issueHTTP.json()).issuance;
+      expect(issuance.state).toBe("FAILED"); expect(issuance.snapshot).toEqual(preview.snapshot);
+      await page.goto(certificateURL); await expect(rowFor(issuance.document_number).getByText("Failed", { exact: true })).toBeVisible();
+      return { issuance, preview };
+    };
+    const before = await (await page.request.get(certificateAPI)).json();
+    const stored = await approveFailure("after-write");
+    expect(await (await page.request.get(certificateAPI)).json()).toEqual(before);
+    await logout(); await login(otherEmail, password); await page.goto(certificateURL);
+    await expect(rowFor(stored.issuance.document_number)).toBeVisible();
+    await expect(region.getByRole("button", { name: "Retry issuance", exact: true })).toHaveCount(0);
+    expect((await page.request.post(`${certificateAPI}/issuances/${stored.issuance.issuance_id}/retry`)).status()).toBe(403);
+    await logout(); await login(rootEmail, rootPassword); await page.goto(certificateURL);
+    expect((await page.request.put(`${api}/competent-person/${person.competent_person_id}`, { data: { ...personInput, organization: "Changed after approval" } })).status()).toBe(200);
+    // Continue the real HTTP request with a render fault. Success proves stored bytes were reused.
+    const retryPath = `${certificateAPI}/issuances/${stored.issuance.issuance_id}/retry`;
+    await page.route(retryPath, route => route.continue({ headers: { ...route.request().headers(), ...faultHeaders("render") } }), { times: 1 });
+    const retryPromise = page.waitForResponse(r => r.url() === retryPath && r.request().method() === "POST");
+    await rowFor(stored.issuance.document_number).getByRole("button", { name: "Retry issuance", exact: true }).click();
+    const retriedHTTP = await retryPromise; expect(retriedHTTP.status(), await retriedHTTP.text()).toBe(200); const completed = await retriedHTTP.json();
+    expect(completed.issuance_id).toBe(stored.issuance.issuance_id); expect(completed.document_sha256).toBe(stored.issuance.document_sha256); expect(completed.snapshot).toEqual(stored.preview.snapshot);
+    await expect(rowFor(completed.document_number).getByText("Completed", { exact: true })).toBeVisible();
+    await expect(rowFor(completed.document_number).getByRole("button", { name: "Abandon approval", exact: true })).toHaveCount(0);
+    const linkHTTP = await page.request.get(`${certificateAPI}/issuances/${completed.issuance_id}/file`); expect(linkHTTP.status()).toBe(200); const savedURL = (await linkHTTP.json()).url;
+    const savedPDF = await request.get(savedURL); expect(savedPDF.status()).toBe(200); const originalBytes = await savedPDF.body();
+    expect(createHash("sha256").update(originalBytes).digest("hex")).toBe(completed.document_sha256);
+    const rendering = await approveFailure("render");
+    const renderRetry = page.waitForResponse(r => r.url().endsWith(`/issuances/${rendering.issuance.issuance_id}/retry`));
+    await rowFor(rendering.issuance.document_number).getByRole("button", { name: "Retry issuance", exact: true }).click(); expect((await renderRetry).status()).toBe(200);
+    await expect(rowFor(rendering.issuance.document_number).getByText("Completed", { exact: true })).toBeVisible();
+    const abandoned = await approveFailure("after-write");
+    const beforeAbandon = await (await page.request.get(certificateAPI)).json();
+    await rowFor(abandoned.issuance.document_number).getByRole("button", { name: "Abandon approval", exact: true }).click();
+    const modal = page.getByRole("dialog", { name: "Abandon this approval?", exact: true }); await expect(modal).toBeVisible();
+    await modal.getByRole("button", { name: "Cancel", exact: true }).click(); await expect(rowFor(abandoned.issuance.document_number).getByText("Failed", { exact: true })).toBeVisible();
+    await rowFor(abandoned.issuance.document_number).getByRole("button", { name: "Abandon approval", exact: true }).click();
+    const abandonPath = `${certificateAPI}/issuances/${abandoned.issuance.issuance_id}/abandon`;
+    await page.route(abandonPath, route => route.continue({ headers: { ...route.request().headers(), ...faultHeaders("delete") } }), { times: 1 });
+    const abandonPromise = page.waitForResponse(r => r.url() === abandonPath);
+    await modal.getByRole("button", { name: "Abandon approval", exact: true }).click(); expect((await abandonPromise).status()).toBe(503);
+    await expect(rowFor(abandoned.issuance.document_number).getByText("Abandoned; file deletion failed.", { exact: true })).toBeVisible();
+    await expect(rowFor(abandoned.issuance.document_number).getByRole("button", { name: "Retry issuance", exact: true })).toHaveCount(0);
+    expect((await page.request.post(`${certificateAPI}/issuances/${abandoned.issuance.issuance_id}/retry`)).status()).toBe(409);
+    await rowFor(abandoned.issuance.document_number).getByRole("button", { name: "Retry file deletion", exact: true }).click();
+    await expect(rowFor(abandoned.issuance.document_number).getByText("Abandoned; unissued file deleted.", { exact: true })).toBeVisible();
+    expect(await (await page.request.get(certificateAPI)).json()).toEqual(beforeAbandon);
+    expect((await page.request.post(`${certificateAPI}/issuances/${abandoned.issuance.issuance_id}/cleanup`)).status()).toBe(200);
+    await logout(); await login(ownerEmail, password);
+    expect((await page.request.post(`${api}/account/signing-profile/signature`, { multipart: { file: { name: "own.png", mimeType: "image/png", buffer: signaturePNG } } })).status()).toBe(200);
+    const own = await approveFailure("after-write", true);
+    await expect(rowFor(own.issuance.document_number).getByRole("button", { name: "Retry issuance", exact: true })).toBeVisible();
+    await expect(rowFor(abandoned.issuance.document_number).getByRole("button", { name: "Retry file deletion", exact: true })).toHaveCount(0);
+    await rowFor(own.issuance.document_number).getByRole("button", { name: "Retry issuance", exact: true }).click();
+    await expect(rowFor(own.issuance.document_number).getByText("Completed", { exact: true })).toBeVisible();
+    await logout(); await login(rootEmail, rootPassword);
+    const external = { approval_id: randomUUID(), competent_person_id: person.competent_person_id, issue_date: "2026-10-05", expiry_date: "2027-10-05", file: { name: "original-recovery.pdf", mimeType: "application/pdf", buffer: pdf } };
+    const externalHTTP = await page.request.post(`${certificateAPI}/external-renewal`, { multipart: external, headers: faultHeaders("before-write") }); expect(externalHTTP.status()).toBe(503);
+    const externalFailed = (await externalHTTP.json()).issuance;
+    await page.goto(certificateURL);
+    const externalRow = rowFor("original-recovery.pdf");
+    await externalRow.getByRole("button", { name: "Retry issuance", exact: true }).click();
+    await expect(page.getByText("storage has no approved external file; choose the same original renewal file and retry", { exact: true })).toBeVisible();
+    const originalInput = externalRow.getByLabel("Original renewal file for original-recovery.pdf", { exact: true });
+    await originalInput.setInputFiles({ name: "wrong.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 wrong bytes") });
+    const mismatch = page.waitForResponse(r => r.url().endsWith(`/issuances/${externalFailed.issuance_id}/retry`));
+    await externalRow.getByRole("button", { name: "Retry issuance", exact: true }).click(); expect((await mismatch).status()).toBe(409);
+    await originalInput.setInputFiles({ name: "original-recovery.pdf", mimeType: "application/pdf", buffer: pdf });
+    await externalRow.getByRole("button", { name: "Retry issuance", exact: true }).click(); await expect(externalRow.getByText("Completed", { exact: true })).toBeVisible();
+    const externalLink = await (await page.request.get(`${certificateAPI}/issuances/${externalFailed.issuance_id}/file`)).json(); expect(await (await request.get(externalLink.url)).body()).toEqual(pdf);
+    const stale = await approveFailure("render");
+    const laterExternal = await page.request.post(`${certificateAPI}/external-renewal`, { multipart: { ...external, approval_id: randomUUID(), file: { ...external.file, name: "later-recovery.pdf" } } }); expect(laterExternal.status()).toBe(200);
+    expect((await page.request.post(`${certificateAPI}/issuances/${stale.issuance.issuance_id}/retry`)).status()).toBe(409);
+    await page.reload(); await expect(rowFor(stale.issuance.document_number).getByRole("button", { name: "Retry issuance", exact: true })).toHaveCount(0);
+    await rowFor(stale.issuance.document_number).getByRole("button", { name: "Abandon approval", exact: true }).click(); await modal.getByRole("button", { name: "Abandon approval", exact: true }).click();
+    await expect(rowFor(stale.issuance.document_number).getByText("Abandoned; unissued file deleted.", { exact: true })).toBeVisible();
+    for (const width of [320, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 }); const close = page.getByRole("button", { name: "Close primary navigation", exact: true }); if (width < 1101 && await close.isVisible()) await close.click();
+      await expect(region.getByRole("table")).toBeVisible(); expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+    }
+    expect(await (await request.get(savedURL)).body()).toEqual(originalBytes);
+    await test.info().attach("recovered-issued-examination.pdf", { body: originalBytes, contentType: "application/pdf" });
+  } catch (error) { failed = true; throw error; }
+  finally {
+    // Restore the super-admin session for fixture cleanup even after an owner journey fails.
+    const errors: string[] = [];
+    let headers: { Authorization: string } | undefined;
+    try { const loginHTTP = await request.post(`${api}/login`, { data: { email: rootEmail, password: rootPassword }, timeout: 5_000 }); if (!loginHTTP.ok()) throw new Error(`HTTP ${loginHTTP.status()}`); headers = { Authorization: `Bearer ${(await loginHTTP.json()).token}` }; } catch (error) { errors.push(`Cleanup login: ${String(error)}`); }
+    if (headers) for (const path of cleanup.reverse()) { try { const response = await request.delete(`${api}${path}`, { headers, timeout: 5_000 }); if (![200, 404].includes(response.status())) errors.push(`${path}: HTTP ${response.status()}`); } catch (error) { errors.push(`${path}: ${String(error)}`); } }
+    if (errors.length) { await test.info().attach("recovery-cleanup-errors", { body: errors.join("\n"), contentType: "text/plain" }); if (!failed) throw new Error(errors.join("\n")); }
+  }
+});
+
 test("external renewal publishes dates and original bytes in one request and preserves legacy history", async ({ page, request }) => {
   const email = process.env.PLAYWRIGHT_ADMIN_EMAIL;
   const password = process.env.PLAYWRIGHT_ADMIN_PASSWORD;

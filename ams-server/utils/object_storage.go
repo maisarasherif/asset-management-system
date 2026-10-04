@@ -100,3 +100,29 @@ func ReadStorageObject(ctx context.Context, key string, maxBytes int64) ([]byte,
 	}
 	return data, nil
 }
+
+// DeleteStoredObject is idempotent, including when an earlier DELETE lost its acknowledgement.
+func DeleteStoredObject(ctx context.Context, key string) error {
+	if !validPreparedObjectKey(key) {
+		return errors.New("invalid object key")
+	}
+	prefix, _, err := testStorageScope()
+	if err != nil {
+		return err
+	}
+	if prefix != "" && (!strings.HasPrefix(key, prefix) || key == prefix) {
+		return errors.New("object key is outside the test storage scope")
+	}
+	config, err := loadStorageConfig()
+	if err != nil {
+		return err
+	}
+	_, err = newS3Client(config).DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(config.bucket), Key: aws.String(key)})
+	return err
+}
+
+// IsolatedTestStorageEnabled reuses all database, environment and run-scope checks.
+func IsolatedTestStorageEnabled() bool {
+	prefix, _, err := testStorageScope()
+	return err == nil && prefix != ""
+}

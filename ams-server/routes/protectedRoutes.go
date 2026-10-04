@@ -137,6 +137,9 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	account.POST("/certificate/:certificate_id/generated-preview", controller.PrepareCertificatePreview(pool))
 	account.POST("/certificate/:certificate_id/generated-preview/validate", controller.ValidateCertificatePreview(pool))
 	account.POST("/certificate/:certificate_id/generated-issuance", controller.ApproveGeneratedCertificate(pool))
+	account.POST("/certificate/:certificate_id/issuances/:issuance_id/retry", controller.RecoverCertificateIssuance(pool, "retry"))
+	account.POST("/certificate/:certificate_id/issuances/:issuance_id/abandon", controller.RecoverCertificateIssuance(pool, "abandon"))
+	account.POST("/certificate/:certificate_id/issuances/:issuance_id/cleanup", controller.RecoverCertificateIssuance(pool, "cleanup"))
 	account.POST("/logout", controller.LogoutUser(pool))
 
 	platformAdmin := router.Group("/v1/platform")

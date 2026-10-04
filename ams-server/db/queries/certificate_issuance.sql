@@ -80,14 +80,48 @@ SELECT * FROM (
  file_name, content_type, issue_date, expiry_date,
  COALESCE(snapshot->'signer'->>'full_name', '')::TEXT AS signer_name,
  COALESCE(snapshot->'signer'->>'organization', '')::TEXT AS signer_organization,
- approved_at AS recorded_at, TRUE AS snapshot_available
+ approved_at AS recorded_at, TRUE AS snapshot_available, actor_id::TEXT AS actor_id,
+ failure_code, cleanup_state, cleanup_failure_code, lease_until,
+ COALESCE(snapshot->'signer'->>'owner_kind', '')::TEXT AS owner_kind,
+ COALESCE(snapshot->'signer'->>'signer_id', '')::TEXT AS signer_id
  FROM certificate_issuances ci WHERE ci.certificate_id = sqlc.arg(certificate_id)
  UNION ALL
  SELECT uuid, 'LEGACY', 'LEGACY', '', file_name, '', NULL::DATE, NULL::DATE,
- '', '', uploaded_at, FALSE
+ '', '', uploaded_at, FALSE, '', '', 'NONE', '', NULL::TIMESTAMPTZ, '', ''
  FROM certificate_upload_audit ua WHERE ua.certificate_id = sqlc.arg(certificate_id) AND ua.issuance_id IS NULL
 ) history ORDER BY recorded_at DESC, history_id DESC LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountCertificateHistory :one
 SELECT ((SELECT count(*) FROM certificate_issuances ci WHERE ci.certificate_id = $1)
  + (SELECT count(*) FROM certificate_upload_audit ua WHERE ua.certificate_id = $1 AND ua.issuance_id IS NULL))::BIGINT;
+
+-- name: LockIssuanceForRecovery :one
+SELECT * FROM certificate_issuances WHERE issuance_id = $1 AND certificate_id = $2 FOR UPDATE;
+
+-- name: IssuanceDocumentReferenced :one
+SELECT EXISTS (SELECT 1 FROM certificates WHERE certificate_file = $1)
+ OR EXISTS (SELECT 1 FROM certificate_upload_audit WHERE file_key = $1)
+ OR EXISTS (SELECT 1 FROM certificate_signature_versions WHERE file_key = $1)
+ OR EXISTS (SELECT 1 FROM certificate_issuances WHERE file_key = $1 AND state = 'COMPLETED');
+
+-- name: AbandonCertificateIssuance :one
+UPDATE certificate_issuances SET state = 'ABANDONED', cleanup_state = 'PENDING',
+ abandoned_by = $2, abandoned_at = NOW(), attempt_id = NULL, lease_until = NULL, updated_at = NOW()
+WHERE issuance_id = $1 AND (state IN ('APPROVED', 'FAILED')
+ OR (state = 'PROCESSING' AND lease_until < NOW())) RETURNING *;
+
+-- name: ClaimIssuanceCleanup :one
+UPDATE certificate_issuances SET cleanup_state = 'PENDING', cleanup_failure_code = '',
+ attempt_id = $2, lease_until = NOW() + INTERVAL '5 minutes', updated_at = NOW()
+WHERE issuance_id = $1 AND state = 'ABANDONED' AND cleanup_state IN ('PENDING', 'FAILED')
+ AND (lease_until IS NULL OR lease_until < NOW()) RETURNING *;
+
+-- name: FinishIssuanceCleanup :execrows
+UPDATE certificate_issuances SET cleanup_state = $3, cleanup_failure_code = $4,
+ lease_until = NULL, updated_at = NOW()
+WHERE issuance_id = $1 AND state = 'ABANDONED' AND attempt_id = $2 AND cleanup_generation = $5;
+
+-- name: RequeueLateIssuanceCleanup :exec
+UPDATE certificate_issuances SET cleanup_state = 'PENDING', attempt_id = NULL,
+ lease_until = NULL, cleanup_generation = cleanup_generation + 1, updated_at = NOW()
+WHERE issuance_id = $1 AND state = 'ABANDONED';

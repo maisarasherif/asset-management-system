@@ -14,6 +14,10 @@ export interface CertificateIssuance {
   document_sha256: string;
   document_size: number;
   failure_code: string;
+  cleanup_state: "NONE" | "PENDING" | "FAILED" | "DELETED";
+  cleanup_failure_code: string;
+  abandoned_by: string | null;
+  abandoned_at: string | null;
   approved_at: string;
   completed_at: string | null;
   file_name: string;
@@ -47,6 +51,18 @@ export interface CertificateHistory {
  signer_organization: string;
  recorded_at: string;
  snapshot_available: boolean;
+ failure_code: string;
+ cleanup_state: CertificateIssuance["cleanup_state"];
+ cleanup_failure_code: string;
+ can_retry: boolean;
+ can_abandon: boolean;
+ can_retry_cleanup: boolean;
+}
+export type IssuanceRecoveryAction = "retry" | "abandon" | "cleanup";
+export function recoverCertificateIssuance(certificateId: string, issuanceId: string, action: IssuanceRecoveryAction, file?: File) {
+ const body = file ? new FormData() : undefined;
+ if (body && file) body.append("file", file);
+ return apiRequest<CertificateIssuance>(`/v1/certificate/${encodeURIComponent(certificateId)}/issuances/${encodeURIComponent(issuanceId)}/${action}`, { method: "POST", body });
 }
 export function listCertificateHistory(certificateId: string,page=1) {
  return apiRequest<{data:CertificateHistory[];meta:{total:number}}>(`/v1/certificate/${encodeURIComponent(certificateId)}/history?page=${page}&limit=20`);

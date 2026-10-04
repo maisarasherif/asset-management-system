@@ -993,13 +993,30 @@ func TestGeneratedRenewalCompetentSignatureFailuresAndRevokedActorCannotPublish(
 // Step 5 uses deterministic fault injection against the real disposable database.
 // All live R2 writes are exercised separately by the HTTP/UI/API gates.
 type issuanceMemoryDocuments struct {
-	mu           sync.Mutex
-	objects      map[string][]byte
-	failPut      bool
-	uncertainPut bool
-	failRead     bool
-	afterPut     func()
-	puts         int
+	mu              sync.Mutex
+	objects         map[string][]byte
+	failPut         bool
+	uncertainPut    bool
+	failRead        bool
+	afterPut        func()
+	puts            int
+	deletes         int
+	failDelete      bool
+	uncertainDelete bool
+}
+
+func (s *issuanceMemoryDocuments) Delete(_ context.Context, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deletes++
+	if s.failDelete {
+		return errors.New("controlled DELETE failure")
+	}
+	delete(s.objects, key)
+	if s.uncertainDelete {
+		return errors.New("controlled lost DELETE acknowledgement")
+	}
+	return nil
 }
 
 func (s *issuanceMemoryDocuments) PrepareKey(id, cert uuid.UUID) (string, error) {
@@ -1035,6 +1052,569 @@ func (s *issuanceMemoryDocuments) Read(_ context.Context, key string) ([]byte, e
 		return nil, issuance.ErrDocumentMissing
 	}
 	return bytes.Clone(data), nil
+}
+
+func recoveryFailureFixture(t *testing.T, h *integrationHarness) (issuance.Issuances, uuid.UUID, uuid.UUID, issuance.Issuance, *issuanceMemoryDocuments) {
+	t.Helper()
+	service, actor, cert, input, documents := generatedIssuanceFixture(t, h)
+	preview, err := service.Previews.Prepare(context.Background(), actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	documents.uncertainPut = true
+	failed, err := service.Approve(context.Background(), actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) || failed.State != "FAILED" {
+		t.Fatal(failed, err)
+	}
+	documents.uncertainPut = false
+	return service, actor, cert, failed, documents
+}
+
+func TestGeneratedRenewalRecoveryReusesSavedApprovalAfterProfileChanges(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, failed, documents := recoveryFailureFixture(t, h)
+	original, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+	before, _ := json.Marshal(original)
+	source, err := db.New(h.pool).GetCertificatePreviewSource(ctx, cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var snapshot issuance.Snapshot
+	if err := json.Unmarshal(failed.Snapshot, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE competent_persons SET full_name='Changed after approval', active=false WHERE competent_person_id=$1", snapshot.Signer.SignerID); err != nil {
+		t.Fatal(err)
+	}
+	renderer := &issuanceRecordingRenderer{failure: errors.New("retry must reuse stored bytes")}
+	service.Previews.Renderer = renderer
+	puts := documents.puts
+	completed, err := service.Retry(ctx, actor, cert, failed.ID, nil)
+	if err != nil || completed.State != "COMPLETED" || completed.ID != failed.ID || completed.Number != failed.Number || completed.SHA256 != failed.SHA256 || !bytes.Equal(completed.Snapshot, failed.Snapshot) || renderer.calls != 0 || documents.puts != puts {
+		t.Fatal(completed, err, renderer.calls, documents.puts)
+	}
+	// Repeated retry is idempotent and a completed certificate cannot be abandoned.
+	repeated, err := service.Retry(ctx, actor, cert, failed.ID, nil)
+	if err != nil || repeated.CompletedAt == nil || !repeated.CompletedAt.Equal(*completed.CompletedAt) {
+		t.Fatal(repeated, err)
+	}
+	if _, err = service.Abandon(ctx, actor, cert, failed.ID); !errors.Is(err, issuance.ErrIssuanceCompleted) {
+		t.Fatal(err)
+	}
+	if _, err = service.RetryCleanup(ctx, actor, cert, failed.ID); !errors.Is(err, issuance.ErrIssuanceCompleted) {
+		t.Fatal(err)
+	}
+	if documents.deletes != 0 {
+		t.Fatal("completed file deleted")
+	}
+	// Publication happened only on recovery, not during the uncertain PUT.
+	if len(before) == 0 {
+		t.Fatal("missing original fixture")
+	}
+	var version int64
+	if err := h.pool.QueryRow(ctx, "SELECT renewal_version FROM certificates WHERE certificate_id=$1", cert).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != source.RenewalVersion+1 {
+		t.Fatal("retry published more than once")
+	}
+}
+
+func TestGeneratedRenewalRecoveryRenderAndStorageFailuresKeepOneNumber(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, input, documents := generatedIssuanceFixture(t, h)
+	preview, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renderer := &issuanceRecordingRenderer{failure: errors.New("render failed")}
+	service.Previews.Renderer = renderer
+	failed, err := service.Approve(ctx, actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) {
+		t.Fatal(err)
+	}
+	renderer.failure = nil
+	documents.failPut = true
+	second, err := service.Retry(ctx, actor, cert, failed.ID, nil)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) || second.Number != failed.Number {
+		t.Fatal(second, err)
+	}
+	documents.failPut = false
+	completed, err := service.Retry(ctx, actor, cert, failed.ID, nil)
+	if err != nil || completed.Number != failed.Number || completed.State != "COMPLETED" {
+		t.Fatal(completed, err)
+	}
+	var count int
+	if err = h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_issuances WHERE certificate_id=$1", cert).Scan(&count); err != nil || count != 1 {
+		t.Fatal(count, err)
+	}
+}
+
+func TestGeneratedRenewalRecoveryAbandonRetainsAuditAndRetriesDeletion(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, failed, documents := recoveryFailureFixture(t, h)
+	current, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+	before, _ := json.Marshal(current)
+	row, _ := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: failed.ID})
+	documents.failDelete = true
+	abandoned, err := service.Abandon(ctx, actor, cert, failed.ID)
+	if !errors.Is(err, issuance.ErrIssuanceCleanup) || abandoned.State != "ABANDONED" || abandoned.CleanupState != "FAILED" || abandoned.CleanupFailureCode != "STORAGE_DELETE" || abandoned.Number != failed.Number {
+		t.Fatal(abandoned, err)
+	}
+	if len(documents.objects[row.FileKey]) == 0 {
+		t.Fatal("failed deletion lost retained file")
+	}
+	if _, err = service.Retry(ctx, actor, cert, failed.ID, nil); !errors.Is(err, issuance.ErrIssuanceAbandoned) {
+		t.Fatal(err)
+	}
+	documents.failDelete = false
+	documents.uncertainDelete = true
+	lost, err := service.RetryCleanup(ctx, actor, cert, failed.ID)
+	if !errors.Is(err, issuance.ErrIssuanceCleanup) || lost.CleanupState != "FAILED" {
+		t.Fatal(lost, err)
+	}
+	documents.uncertainDelete = false
+	deleted, err := service.RetryCleanup(ctx, actor, cert, failed.ID)
+	if err != nil || deleted.CleanupState != "DELETED" {
+		t.Fatal(deleted, err)
+	}
+	deletes := documents.deletes
+	for i := 0; i < 2; i++ {
+		again, err := service.Abandon(ctx, actor, cert, failed.ID)
+		if err != nil || again.CleanupState != "DELETED" {
+			t.Fatal(again, err)
+		}
+		_, err = service.RetryCleanup(ctx, actor, cert, failed.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if documents.deletes != deletes || len(documents.objects) != 0 {
+		t.Fatal("terminal cleanup performed another delete")
+	}
+	retained, _ := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: failed.ID})
+	if retained.FileKey != row.FileKey || !bytes.Equal(retained.Snapshot, row.Snapshot) || retained.DocumentNumber != row.DocumentNumber || retained.DocumentSha256 != row.DocumentSha256 {
+		t.Fatal("abandonment changed approved audit")
+	}
+	if retained.AbandonedBy == nil || *retained.AbandonedBy != actor || retained.AbandonedAt == nil {
+		t.Fatal("abandonment actor/time not retained")
+	}
+	if _, err = h.pool.Exec(ctx, "UPDATE certificate_issuances SET abandoned_by=$2 WHERE issuance_id=$1", failed.ID, uuid.New()); err == nil {
+		t.Fatal("abandonment audit could be rewritten")
+	}
+	assertCertificateUnchanged(t, h, cert, before)
+	// Reserved sequence is never recycled after abandonment.
+	var snap issuance.Snapshot
+	_ = json.Unmarshal(failed.Snapshot, &snap)
+	preview, err := service.Previews.Prepare(ctx, actor, cert, issuance.PreviewInput{SignerID: &snap.Signer.SignerID, IssueDate: failed.IssueDate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := service.Approve(ctx, actor, cert, preview.Token)
+	if err != nil || !strings.HasSuffix(next.Number, "-02") {
+		t.Fatal(next, err)
+	}
+}
+
+func TestGeneratedRenewalRecoveryExternalRequiresExactOriginalWhenMissing(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, preview, documents := generatedIssuanceFixture(t, h)
+	input := externalInput(*preview.SignerID)
+	documents.failPut = true
+	failed, err := service.ApproveExternal(ctx, actor, cert, input)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) {
+		t.Fatal(err)
+	}
+	documents.failPut = false
+	missing, err := service.Retry(ctx, actor, cert, failed.ID, nil)
+	if !errors.Is(err, issuance.ErrOriginalFileRequired) || missing.FailureCode != "DOCUMENT_INPUT" {
+		t.Fatal(missing, err)
+	}
+	if _, err = service.Retry(ctx, actor, cert, failed.ID, []byte("wrong original")); !errors.Is(err, issuance.ErrApprovalMismatch) {
+		t.Fatal(err)
+	}
+	completed, err := service.Retry(ctx, actor, cert, failed.ID, input.Data)
+	if err != nil || completed.State != "COMPLETED" || completed.Number != "" || completed.ID != failed.ID {
+		t.Fatal(completed, err)
+	}
+	if _, err = service.Abandon(ctx, actor, cert, failed.ID); !errors.Is(err, issuance.ErrIssuanceCompleted) {
+		t.Fatal(err)
+	}
+}
+
+func TestGeneratedRenewalRecoveryStaleApprovalCanOnlyBeAbandoned(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, failed, documents := recoveryFailureFixture(t, h)
+	if _, err := h.pool.Exec(ctx, "UPDATE certificates SET renewal_version=renewal_version+1 WHERE certificate_id=$1", cert); err != nil {
+		t.Fatal(err)
+	}
+	current, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+	before, _ := json.Marshal(current)
+	stale, err := service.Retry(ctx, actor, cert, failed.ID, nil)
+	if !errors.Is(err, issuance.ErrIssuanceConflict) || stale.FailureCode != "STALE_CERTIFICATE" {
+		t.Fatal(stale, err)
+	}
+	abandoned, err := service.Abandon(ctx, actor, cert, failed.ID)
+	if err != nil || abandoned.CleanupState != "DELETED" || documents.deletes != 1 {
+		t.Fatal(abandoned, err)
+	}
+	assertCertificateUnchanged(t, h, cert, before)
+}
+
+func TestGeneratedRenewalRecoveryScopesRolesAndOwnership(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, failed, _ := recoveryFailureFixture(t, h)
+	for _, role := range []string{"ADMIN", "USER", "CLIENT"} {
+		token := createIntegrationUserToken(t, h.pool, "Other", "Recovery", strings.ToLower(role)+"-recovery@example.com", "recovery-password", role)
+		var other uuid.UUID
+		if err := h.pool.QueryRow(ctx, "SELECT user_id FROM users WHERE token=$1", token).Scan(&other); err != nil {
+			t.Fatal(err)
+		}
+		for _, action := range []string{"retry", "abandon", "cleanup"} {
+			path := "/v1/certificate/" + cert.String() + "/issuances/" + failed.ID.String() + "/" + action
+			performJSONRequest(t, h.router, token, http.MethodPost, path, nil, http.StatusForbidden)
+		}
+		if _, err := service.Retry(ctx, other, cert, failed.ID, nil); !errors.Is(err, issuance.ErrIssuerForbidden) {
+			t.Fatal(role, err)
+		}
+	}
+	if _, err := service.Retry(ctx, actor, uuid.New(), failed.ID, nil); !errors.Is(err, issuance.ErrNotFound) {
+		t.Fatal(err)
+	}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/certificate/"+uuid.NewString()+"/issuances/"+failed.ID.String()+"/retry", nil, http.StatusNotFound)
+	if _, err := h.pool.Exec(ctx, "UPDATE users SET role='ADMIN' WHERE user_id=$1", actor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Retry(ctx, actor, cert, failed.ID, nil); !errors.Is(err, issuance.ErrIssuerForbidden) {
+		t.Fatal("downgraded super admin used competent signer", err)
+	}
+	// Own abandonment remains possible even after losing super-admin signer selection.
+	abandoned, err := service.Abandon(ctx, actor, cert, failed.ID)
+	if err != nil || abandoned.State != "ABANDONED" {
+		t.Fatal(abandoned, err)
+	}
+}
+
+func TestGeneratedRenewalRecoveryLeaseAndReferencedFilesAreProtected(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, failed, documents := recoveryFailureFixture(t, h)
+	if _, err := h.pool.Exec(ctx, "UPDATE certificate_issuances SET state='PROCESSING',lease_until=NOW()+INTERVAL '1 minute' WHERE issuance_id=$1", failed.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Abandon(ctx, actor, cert, failed.ID); !errors.Is(err, issuance.ErrIssuanceBusy) {
+		t.Fatal(err)
+	}
+	processing, err := service.Retry(ctx, actor, cert, failed.ID, nil)
+	if err != nil || processing.State != "PROCESSING" {
+		t.Fatal(processing, err)
+	}
+	if _, err = h.pool.Exec(ctx, "UPDATE certificate_issuances SET lease_until=NOW()-INTERVAL '1 minute' WHERE issuance_id=$1", failed.ID); err != nil {
+		t.Fatal(err)
+	}
+	row, _ := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: failed.ID})
+	if _, err = h.pool.Exec(ctx, "UPDATE certificates SET certificate_file=$2 WHERE certificate_id=$1", cert, row.FileKey); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Abandon(ctx, actor, cert, failed.ID); !errors.Is(err, issuance.ErrIssuanceCompleted) {
+		t.Fatal(err)
+	}
+	if documents.deletes != 0 {
+		t.Fatal("current file deleted")
+	}
+	if _, err = h.pool.Exec(ctx, "UPDATE certificates SET certificate_file='' WHERE certificate_id=$1", cert); err != nil {
+		t.Fatal(err)
+	}
+	abandoned, err := service.Abandon(ctx, actor, cert, failed.ID)
+	if err != nil || abandoned.CleanupState != "DELETED" {
+		t.Fatal(abandoned, err)
+	}
+}
+
+type recoveryBlockedPut struct {
+	*issuanceMemoryDocuments
+	entered chan struct{}
+	release chan struct{}
+}
+
+type recoveryDelayedDeleteAcknowledgement struct {
+	*issuanceMemoryDocuments
+	mu      sync.Mutex
+	first   bool
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s *recoveryDelayedDeleteAcknowledgement) Delete(ctx context.Context, key string) error {
+	s.mu.Lock()
+	first := !s.first
+	s.first = true
+	s.mu.Unlock()
+	err := s.issuanceMemoryDocuments.Delete(ctx, key)
+	if first {
+		close(s.entered)
+		<-s.release
+	}
+	return err
+}
+
+type recoveryBlockedPutAndDelete struct {
+	recoveryBlockedPut
+	deletion *recoveryDelayedDeleteAcknowledgement
+}
+
+func (s recoveryBlockedPutAndDelete) Delete(ctx context.Context, key string) error {
+	return s.deletion.Delete(ctx, key)
+}
+
+func TestGeneratedRenewalRecoveryLateWriteFencesOlderCleanupAcknowledgement(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, input, documents := generatedIssuanceFixture(t, h)
+	preview, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writing := recoveryBlockedPut{documents, make(chan struct{}), make(chan struct{})}
+	deletion := &recoveryDelayedDeleteAcknowledgement{issuanceMemoryDocuments: documents, entered: make(chan struct{}), release: make(chan struct{})}
+	service.Documents = recoveryBlockedPutAndDelete{writing, deletion}
+	issued := make(chan error, 1)
+	go func() { _, e := service.Approve(ctx, actor, cert, preview.Token); issued <- e }()
+	defer func() {
+		for _, ch := range []chan struct{}{writing.release, deletion.release} {
+			select {
+			case <-ch:
+			default:
+				close(ch)
+			}
+		}
+	}()
+	select {
+	case <-writing.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("PUT did not start")
+	}
+	rows, err := db.New(h.pool).ListCertificateIssuances(ctx, db.ListCertificateIssuancesParams{CertificateID: cert, Limit: 1})
+	if err != nil || len(rows) != 1 {
+		t.Fatal(rows, err)
+	}
+	row := rows[0]
+	if _, err = h.pool.Exec(ctx, "UPDATE certificate_issuances SET lease_until=NOW()-INTERVAL '1 minute' WHERE issuance_id=$1", row.IssuanceID); err != nil {
+		t.Fatal(err)
+	}
+	abandoned := make(chan error, 1)
+	go func() { _, e := service.Abandon(ctx, actor, cert, row.IssuanceID); abandoned <- e }()
+	select {
+	case <-deletion.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("DELETE acknowledgement did not pause")
+	}
+	close(writing.release)
+	select {
+	case err = <-issued:
+		if !errors.Is(err, issuance.ErrIssuanceAbandoned) {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("late writer did not clean up")
+	}
+	close(deletion.release)
+	select {
+	case err = <-abandoned:
+		if !errors.Is(err, issuance.ErrIssuanceCleanup) {
+			t.Fatal("older cleanup should lose its generation claim", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("old cleanup did not finish")
+	}
+	latest, err := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: row.IssuanceID})
+	if err != nil || latest.State != "ABANDONED" || latest.CleanupState != "DELETED" || latest.CleanupGeneration != 1 || len(documents.objects) != 0 || documents.deletes != 2 {
+		t.Fatal(latest, err, documents.deletes)
+	}
+}
+
+func (s recoveryBlockedPut) Put(ctx context.Context, key string, data []byte) error {
+	close(s.entered)
+	<-s.release
+	return s.issuanceMemoryDocuments.Put(ctx, key, data)
+}
+
+func TestGeneratedRenewalRecoveryAbandonExpiredWriterDeletesLateObject(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, input, documents := generatedIssuanceFixture(t, h)
+	preview, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked := recoveryBlockedPut{documents, make(chan struct{}), make(chan struct{})}
+	service.Documents = blocked
+	done := make(chan error, 1)
+	go func() { _, err := service.Approve(ctx, actor, cert, preview.Token); done <- err }()
+	select {
+	case <-blocked.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("PUT did not start")
+	}
+	// Always release the paused worker, including a failed assertion.
+	defer func() {
+		select {
+		case <-blocked.release:
+		default:
+			close(blocked.release)
+		}
+	}()
+	rows, err := db.New(h.pool).ListCertificateIssuances(ctx, db.ListCertificateIssuancesParams{CertificateID: cert, Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatal("missing approved worker")
+	}
+	row := rows[0]
+	if _, err = h.pool.Exec(ctx, "UPDATE certificate_issuances SET lease_until=NOW()-INTERVAL '1 minute' WHERE issuance_id=$1", row.IssuanceID); err != nil {
+		t.Fatal(err)
+	}
+	abandoned, err := service.Abandon(ctx, actor, cert, row.IssuanceID)
+	if err != nil || abandoned.CleanupState != "DELETED" {
+		t.Fatal(abandoned, err)
+	}
+	close(blocked.release)
+	select {
+	case err = <-done:
+		if !errors.Is(err, issuance.ErrIssuanceAbandoned) {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("late writer did not finish")
+	}
+	latest, err := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: row.IssuanceID})
+	if err != nil || latest.State != "ABANDONED" || latest.CleanupState != "DELETED" || latest.CleanupGeneration != 1 || len(documents.objects) != 0 || documents.deletes != 2 {
+		t.Fatal(latest, err, documents.deletes)
+	}
+}
+
+func TestGeneratedRenewalRecoveryCleanupDatabaseFailureRetainsReference(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, failed, documents := recoveryFailureFixture(t, h)
+	_, err := h.pool.Exec(ctx, `CREATE FUNCTION controlled_cleanup_failure() RETURNS TRIGGER AS $$ BEGIN
+ IF OLD.state='ABANDONED' AND NEW.cleanup_state='DELETED' THEN RAISE EXCEPTION 'controlled cleanup acknowledgement failure'; END IF;
+ RETURN NEW; END; $$ LANGUAGE plpgsql;
+ CREATE TRIGGER controlled_cleanup_failure BEFORE UPDATE ON certificate_issuances FOR EACH ROW EXECUTE FUNCTION controlled_cleanup_failure();`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.pool.Exec(ctx, "DROP TRIGGER IF EXISTS controlled_cleanup_failure ON certificate_issuances; DROP FUNCTION IF EXISTS controlled_cleanup_failure()")
+	abandoned, err := service.Abandon(ctx, actor, cert, failed.ID)
+	if !errors.Is(err, issuance.ErrIssuanceCleanup) || abandoned.State != "ABANDONED" || abandoned.CleanupState != "PENDING" || len(documents.objects) != 0 {
+		t.Fatal(abandoned, err)
+	}
+	row, err := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: failed.ID})
+	if err != nil || row.FileKey == "" {
+		t.Fatal(row, err)
+	}
+	if _, err = h.pool.Exec(ctx, "DROP TRIGGER controlled_cleanup_failure ON certificate_issuances; DROP FUNCTION controlled_cleanup_failure()"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = h.pool.Exec(ctx, "UPDATE certificate_issuances SET lease_until=NOW()-INTERVAL '1 minute' WHERE issuance_id=$1", failed.ID); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := service.RetryCleanup(ctx, actor, cert, failed.ID)
+	if err != nil || deleted.CleanupState != "DELETED" || documents.deletes != 2 {
+		t.Fatal(deleted, err)
+	}
+}
+
+type recoveryBlockedDelete struct {
+	*issuanceMemoryDocuments
+	once    sync.Once
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s *recoveryBlockedDelete) Delete(ctx context.Context, key string) error {
+	s.once.Do(func() { close(s.entered); <-s.release })
+	return s.issuanceMemoryDocuments.Delete(ctx, key)
+}
+
+func TestGeneratedRenewalRecoveryCleanupLeasePreventsDuplicateActiveDeletion(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, failed, documents := recoveryFailureFixture(t, h)
+	blocked := &recoveryBlockedDelete{issuanceMemoryDocuments: documents, entered: make(chan struct{}), release: make(chan struct{})}
+	service.Documents = blocked
+	done := make(chan error, 1)
+	go func() { _, err := service.Abandon(ctx, actor, cert, failed.ID); done <- err }()
+	select {
+	case <-blocked.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("DELETE did not start")
+	}
+	defer func() {
+		select {
+		case <-blocked.release:
+		default:
+			close(blocked.release)
+		}
+	}()
+	pending, err := service.RetryCleanup(ctx, actor, cert, failed.ID)
+	if err != nil || pending.CleanupState != "PENDING" || documents.deletes != 0 {
+		t.Fatal(pending, err)
+	}
+	close(blocked.release)
+	select {
+	case err = <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("DELETE did not finish")
+	}
+	deleted, err := service.RetryCleanup(ctx, actor, cert, failed.ID)
+	if err != nil || deleted.CleanupState != "DELETED" || documents.deletes != 1 {
+		t.Fatal(deleted, err)
+	}
+}
+
+func TestGeneratedRenewalRecoveryProtectsLegacyAndSignatureReferences(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, failed, documents := recoveryFailureFixture(t, h)
+	row, _ := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: failed.ID})
+	var snapshot issuance.Snapshot
+	_ = json.Unmarshal(row.Snapshot, &snapshot)
+	if _, err := h.pool.Exec(ctx, "INSERT INTO certificate_upload_audit (certificate_id,file_key,file_name,uploaded_by,competent_person_id,uploaded_at) VALUES ($1,$2,'protected-legacy.pdf',$3,$4,NOW())", cert, row.FileKey, actor.String(), snapshot.Signer.SignerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Abandon(ctx, actor, cert, failed.ID); !errors.Is(err, issuance.ErrIssuanceCompleted) {
+		t.Fatal(err)
+	}
+	if documents.deletes != 0 {
+		t.Fatal("referenced legacy document deleted")
+	}
+	if _, err := h.pool.Exec(ctx, "DELETE FROM certificate_upload_audit WHERE file_key=$1", row.FileKey); err != nil {
+		t.Fatal(err)
+	}
+	// Restore a failed approval's key as a retained historical Signature Version.
+	var signatureID uuid.UUID
+	if err := h.pool.QueryRow(ctx, `INSERT INTO certificate_signature_versions
+ (owner_kind,owner_id,file_key,sha256,width,height,byte_size,created_by_user_id,storage_state)
+ SELECT owner_kind,owner_id,$1,sha256,width,height,byte_size,created_by_user_id,storage_state FROM certificate_signature_versions WHERE signature_id=$2 RETURNING signature_id`, row.FileKey, row.SignatureID).Scan(&signatureID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Abandon(ctx, actor, cert, failed.ID); !errors.Is(err, issuance.ErrIssuanceCompleted) {
+		t.Fatal(err)
+	}
+	if documents.deletes != 0 {
+		t.Fatal("historical signature deleted")
+	}
 }
 
 func externalInput(person uuid.UUID) issuance.ExternalInput {

@@ -34,7 +34,7 @@ func previewError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, issuance.ErrPreviewInput), errors.Is(err, issuance.ErrPreviewText), errors.Is(err, issuance.ErrPreviewToken):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	case errors.Is(err, issuance.ErrPreviewChanged):
+	case errors.Is(err, issuance.ErrPreviewChanged), errors.Is(err, issuance.ErrIssuanceAbandoned):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, issuance.ErrPreviewExpired):
 		c.JSON(http.StatusGone, gin.H{"error": err.Error()})

@@ -11893,6 +11893,2273 @@
           ]
         },
         {
+          "name": "Saved approval recovery and idempotent abandonment",
+          "item": [
+            {
+              "name": "Recovery fixture: create independent certificate",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"certificate_name\": \"Recovery {{runSuffix}}\",\n  \"issue_date\": \"2026-04-01T00:00:00Z\",\n  \"expiry_date\": \"2027-04-01T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"Bureau Veritas\",\n  \"test_id\": \"{{test_id}}\",\n  \"imca_ref\": \"\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"Generated-renewal implementation baseline\",\n  \"competency_category_ids\": []\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Recovery fixture: create independent certificate: status 201\", () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(pm.environment.get('issuanceFaultToken'), 'run-vps-isolated-tests.sh fault token').to.be.a('string').with.length.above(31); pm.collectionVariables.set('recoveryCert',b.certificate_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Capture unchanged recovery certificate before approval",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Capture recovery current certificate: status 200',()=>pm.response.to.have.status(200));",
+                      "if(pm.response.code===200)pm.collectionVariables.set('recoveryCurrent',JSON.stringify(pm.response.json()));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Review recovery certificate",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Immutable recovery approval\",\n  \"signer_id\": \"{{competent_person_id}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Review recovery certificate: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.collectionVariables.set('recoveryToken',b.preview_token); pm.collectionVariables.set('recoverySnapshot',JSON.stringify(b.snapshot));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Persist approved PDF despite lost storage acknowledgement",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Token",
+                    "value": "{{issuanceFaultToken}}"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Fault",
+                    "value": "after-write"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{recoveryToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Persist approved PDF despite lost storage acknowledgement: status 503\", () => pm.response.to.have.status(503));",
+                      "if (pm.response.code === 503) {",
+                      "const b=pm.response.json();",
+                      "const a=b.issuance; pm.expect(a.state).to.eql('FAILED'); pm.collectionVariables.set('recoveryId',a.issuance_id); pm.collectionVariables.set('recoveryNumber',a.document_number); pm.collectionVariables.set('recoveryHash',a.document_sha256); pm.collectionVariables.set('recoverySize',a.document_size); pm.expect(a.snapshot).to.eql(JSON.parse(pm.collectionVariables.get('recoverySnapshot')));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Failed approval leaves current certificate unchanged",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Failed approval leaves current certificate unchanged: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b).to.eql(JSON.parse(pm.collectionVariables.get('recoveryCurrent')));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Failed generated history offers super admin recovery",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/history",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Failed generated history offers super admin recovery: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "const a=b.data.find(x=>x.history_id===pm.collectionVariables.get('recoveryId')); pm.expect(a.state).to.eql('FAILED'); pm.expect(a.can_retry).to.eql(true); pm.expect(a.can_abandon).to.eql(true);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "otherToken cannot retry another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otherSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"otherToken cannot retry another approval: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "restrictedToken cannot retry another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{restrictedSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"restrictedToken cannot retry another approval: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "clientToken cannot retry another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"clientToken cannot retry another approval: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "anonymous cannot retry another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"anonymous cannot retry another approval: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Recovery retry cannot cross certificates",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Recovery retry cannot cross certificates: status 404\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "otherToken cannot abandon another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/abandon",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otherSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"otherToken cannot abandon another approval: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "restrictedToken cannot abandon another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/abandon",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{restrictedSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"restrictedToken cannot abandon another approval: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "clientToken cannot abandon another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/abandon",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"clientToken cannot abandon another approval: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "anonymous cannot abandon another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/abandon",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"anonymous cannot abandon another approval: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Recovery abandon cannot cross certificates",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/issuances/{{recoveryId}}/abandon",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Recovery abandon cannot cross certificates: status 404\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "otherToken cannot cleanup another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/cleanup",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otherSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"otherToken cannot cleanup another approval: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "restrictedToken cannot cleanup another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/cleanup",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{restrictedSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"restrictedToken cannot cleanup another approval: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "clientToken cannot cleanup another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/cleanup",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"clientToken cannot cleanup another approval: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "anonymous cannot cleanup another approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/cleanup",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"anonymous cannot cleanup another approval: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Recovery cleanup cannot cross certificates",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/issuances/{{recoveryId}}/cleanup",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Recovery cleanup cannot cross certificates: status 404\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Unfinished document cannot be downloaded",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Unfinished document cannot be downloaded: status 404\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Replace signer profile after approved storage failure",
+              "request": {
+                "method": "PUT",
+                "url": "{{baseUrl}}/competent-person/{{competent_person_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"full_name\": \"Recovery examiner {{runSuffix}}\",\n  \"organization\": \"Updated after approval\",\n  \"person_type\": \"Internal\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": true\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Replace signer profile after approved storage failure: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Retry reuses stored PDF even with renderer disabled",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "X-AMS-Issuance-Test-Token",
+                    "value": "{{issuanceFaultToken}}"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Fault",
+                    "value": "render"
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Retry reuses stored PDF even with renderer disabled: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.state).to.eql('COMPLETED'); pm.expect(b.issuance_id).to.eql(pm.collectionVariables.get('recoveryId')); pm.expect(b.document_number).to.eql(pm.collectionVariables.get('recoveryNumber')); pm.expect(b.document_sha256).to.eql(pm.collectionVariables.get('recoveryHash')); pm.expect(b.document_size).to.eql(Number(pm.collectionVariables.get('recoverySize'))); pm.expect(b.snapshot).to.eql(JSON.parse(pm.collectionVariables.get('recoverySnapshot'))); pm.collectionVariables.set('recoveryCompleted',JSON.stringify(b));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Completed retry is idempotent",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Completed retry is idempotent: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b).to.eql(JSON.parse(pm.collectionVariables.get('recoveryCompleted')));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Completed approval cannot be abandoned",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/abandon",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Completed approval cannot be abandoned: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Completed document cannot be deleted",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/cleanup",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Completed document cannot be deleted: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Completed history hides all recovery actions",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/history",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Completed history hides all recovery actions: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "const a=b.data.find(x=>x.history_id===pm.collectionVariables.get('recoveryId')); pm.expect(a.can_retry).to.eql(false); pm.expect(a.can_abandon).to.eql(false); pm.expect(a.can_retry_cleanup).to.eql(false);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Review rendering recovery",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Immutable recovery approval\",\n  \"signer_id\": \"{{competent_person_id}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Review rendering recovery: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.collectionVariables.set('recoveryToken',b.preview_token); pm.collectionVariables.set('recoverySnapshot',JSON.stringify(b.snapshot));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Rendering failure keeps approval and reserved number",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Token",
+                    "value": "{{issuanceFaultToken}}"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Fault",
+                    "value": "render"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{recoveryToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Rendering failure keeps approval and reserved number: status 503\", () => pm.response.to.have.status(503));",
+                      "if (pm.response.code === 503) {",
+                      "const b=pm.response.json();",
+                      "const a=b.issuance; pm.expect(a.state).to.eql('FAILED'); pm.collectionVariables.set('recoveryId',a.issuance_id); pm.collectionVariables.set('recoveryNumber',a.document_number); pm.collectionVariables.set('recoveryHash',a.document_sha256); pm.collectionVariables.set('recoverySize',a.document_size); pm.expect(a.snapshot).to.eql(JSON.parse(pm.collectionVariables.get('recoverySnapshot')));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Retry rendering failure completes same approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Retry rendering failure completes same approval: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.state).to.eql('COMPLETED');pm.expect(b.document_number).to.eql(pm.collectionVariables.get('recoveryNumber'));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Review abandonment",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Immutable recovery approval\",\n  \"signer_id\": \"{{competent_person_id}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Review abandonment: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.collectionVariables.set('recoveryToken',b.preview_token); pm.collectionVariables.set('recoverySnapshot',JSON.stringify(b.snapshot));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Create unpublished stored PDF to abandon",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Token",
+                    "value": "{{issuanceFaultToken}}"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Fault",
+                    "value": "after-write"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{recoveryToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Create unpublished stored PDF to abandon: status 503\", () => pm.response.to.have.status(503));",
+                      "if (pm.response.code === 503) {",
+                      "const b=pm.response.json();",
+                      "const a=b.issuance; pm.expect(a.state).to.eql('FAILED'); pm.collectionVariables.set('recoveryId',a.issuance_id); pm.collectionVariables.set('recoveryNumber',a.document_number); pm.collectionVariables.set('recoveryHash',a.document_sha256); pm.collectionVariables.set('recoverySize',a.document_size); pm.expect(a.snapshot).to.eql(JSON.parse(pm.collectionVariables.get('recoverySnapshot')));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Capture current certificate before abandonment",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Capture current certificate before abandonment: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.collectionVariables.set('beforeAbandon',JSON.stringify(b));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Deletion failure leaves terminal approval and recoverable cleanup",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/abandon",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "X-AMS-Issuance-Test-Token",
+                    "value": "{{issuanceFaultToken}}"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Fault",
+                    "value": "delete"
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Deletion failure leaves terminal approval and recoverable cleanup: status 503\", () => pm.response.to.have.status(503));",
+                      "if (pm.response.code === 503) {",
+                      "const b=pm.response.json();",
+                      "const a=b.issuance;pm.expect(a.state).to.eql('ABANDONED');pm.expect(a.cleanup_state).to.eql('FAILED');pm.expect(a.cleanup_failure_code).to.eql('STORAGE_DELETE');pm.expect(a.document_number).to.eql(pm.collectionVariables.get('recoveryNumber'));",
+                      "pm.expect(a.abandoned_by).to.be.a('string');pm.expect(a.abandoned_at).to.be.a('string');pm.collectionVariables.set('abandonActor',a.abandoned_by);pm.collectionVariables.set('abandonTime',a.abandoned_at);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Abandoned history offers deletion retry only",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/history",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Abandoned history offers deletion retry only: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "const a=b.data.find(x=>x.history_id===pm.collectionVariables.get('recoveryId'));pm.expect(a.can_retry).to.eql(false);pm.expect(a.can_abandon).to.eql(false);pm.expect(a.can_retry_cleanup).to.eql(true);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Abandoned approval cannot be retried",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Abandoned approval cannot be retried: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Abandoned original approval cannot publish again",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{recoveryToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Abandoned original approval cannot publish again: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Retry deletion completes cleanup",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/cleanup",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Retry deletion completes cleanup: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.state).to.eql('ABANDONED');pm.expect(b.cleanup_state).to.eql('DELETED');pm.expect(b.cleanup_failure_code).to.eql('');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Repeated abandonment is idempotent",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/abandon",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Repeated abandonment is idempotent: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.cleanup_state).to.eql('DELETED');",
+                      "pm.expect(b.abandoned_by).to.eql(pm.collectionVariables.get('abandonActor'));pm.expect(b.abandoned_at).to.eql(pm.collectionVariables.get('abandonTime'));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Repeated deletion is idempotent",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/cleanup",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Repeated deletion is idempotent: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.cleanup_state).to.eql('DELETED');",
+                      "pm.expect(b.abandoned_by).to.eql(pm.collectionVariables.get('abandonActor'));pm.expect(b.abandoned_at).to.eql(pm.collectionVariables.get('abandonTime'));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Abandonment leaves current document and dates unchanged",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Abandonment leaves current document and dates unchanged: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b).to.eql(JSON.parse(pm.collectionVariables.get('beforeAbandon')));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Review own ADMIN recovery",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Immutable recovery approval\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Review own ADMIN recovery: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.collectionVariables.set('recoveryToken',b.preview_token); pm.collectionVariables.set('recoverySnapshot',JSON.stringify(b.snapshot));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Own ADMIN saves a failed approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Token",
+                    "value": "{{issuanceFaultToken}}"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Fault",
+                    "value": "after-write"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{recoveryToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Own ADMIN saves a failed approval: status 503\", () => pm.response.to.have.status(503));",
+                      "if (pm.response.code === 503) {",
+                      "const b=pm.response.json();",
+                      "const a=b.issuance; pm.expect(a.state).to.eql('FAILED'); pm.collectionVariables.set('recoveryId',a.issuance_id); pm.collectionVariables.set('recoveryNumber',a.document_number); pm.collectionVariables.set('recoveryHash',a.document_sha256); pm.collectionVariables.set('recoverySize',a.document_size); pm.expect(a.snapshot).to.eql(JSON.parse(pm.collectionVariables.get('recoverySnapshot')));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Own ADMIN history exposes own retry",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/history",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Own ADMIN history exposes own retry: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "const a=b.data.find(x=>x.history_id===pm.collectionVariables.get('recoveryId'));pm.expect(a.can_retry).to.eql(true);pm.expect(a.can_abandon).to.eql(true);pm.expect(b.data.filter(x=>x.actor_id!==pm.collectionVariables.get('signerUserId')).every(x=>!x.can_retry&&!x.can_abandon&&!x.can_retry_cleanup)).to.eql(true);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Own ADMIN retries only their saved account approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Own ADMIN retries only their saved account approval: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.state).to.eql('COMPLETED');pm.expect(b.snapshot.signer.owner_kind).to.eql('ACCOUNT');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "External pre-write failure saves original digest",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-05"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-05"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "X-AMS-Issuance-Test-Token",
+                    "value": "{{issuanceFaultToken}}"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Fault",
+                    "value": "before-write"
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External pre-write failure saves original digest: status 503\", () => pm.response.to.have.status(503));",
+                      "if (pm.response.code === 503) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.issuance.state).to.eql('FAILED');pm.collectionVariables.set('recoveryId',b.issuance.issuance_id);pm.collectionVariables.set('recoveryHash',b.issuance.document_sha256);pm.expect(b.issuance.document_number).to.eql('');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Missing external bytes require original file",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Missing external bytes require original file: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Changed external bytes cannot replace approved file",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "image/png",
+                      "src": "tests/regression/fixtures/signature-sample.png"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Changed external bytes cannot replace approved file: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Exact original external file resumes stored approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Exact original external file resumes stored approval: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.state).to.eql('COMPLETED');pm.expect(b.document_number).to.eql('');pm.expect(b.document_sha256).to.eql(pm.collectionVariables.get('recoveryHash'));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "External lost acknowledgement leaves reusable bytes",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-05"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-05"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "X-AMS-Issuance-Test-Token",
+                    "value": "{{issuanceFaultToken}}"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Fault",
+                    "value": "after-write"
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External lost acknowledgement leaves reusable bytes: status 503\", () => pm.response.to.have.status(503));",
+                      "if (pm.response.code === 503) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.issuance.state).to.eql('FAILED');pm.collectionVariables.set('recoveryId',b.issuance.issuance_id);pm.collectionVariables.set('recoveryHash',b.issuance.document_sha256);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Stored external bytes resume without reupload",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Stored external bytes resume without reupload: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.state).to.eql('COMPLETED');pm.expect(b.document_sha256).to.eql(pm.collectionVariables.get('recoveryHash'));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Review failed approval that will become stale",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Immutable recovery approval\",\n  \"signer_id\": \"{{competent_person_id}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Review failed approval that will become stale: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.collectionVariables.set('recoveryToken',b.preview_token); pm.collectionVariables.set('recoverySnapshot',JSON.stringify(b.snapshot));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Create stale candidate",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Token",
+                    "value": "{{issuanceFaultToken}}"
+                  },
+                  {
+                    "key": "X-AMS-Issuance-Test-Fault",
+                    "value": "render"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{recoveryToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Create stale candidate: status 503\", () => pm.response.to.have.status(503));",
+                      "if (pm.response.code === 503) {",
+                      "const b=pm.response.json();",
+                      "const a=b.issuance; pm.expect(a.state).to.eql('FAILED'); pm.collectionVariables.set('recoveryId',a.issuance_id); pm.collectionVariables.set('recoveryNumber',a.document_number); pm.collectionVariables.set('recoveryHash',a.document_sha256); pm.collectionVariables.set('recoverySize',a.document_size); pm.expect(a.snapshot).to.eql(JSON.parse(pm.collectionVariables.get('recoverySnapshot')));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "A later external renewal advances current certificate",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-05"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-05"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"A later external renewal advances current certificate: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Stale approved work cannot overwrite later renewal",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/retry",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Stale approved work cannot overwrite later renewal: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Stale history permits abandonment only",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/history",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Stale history permits abandonment only: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "const a=b.data.find(x=>x.history_id===pm.collectionVariables.get('recoveryId'));pm.expect(a.failure_code).to.eql('STALE_CERTIFICATE');pm.expect(a.can_retry).to.eql(false);pm.expect(a.can_abandon).to.eql(true);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Abandon stale approval without a stored file",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}/abandon",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Abandon stale approval without a stored file: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json();",
+                      "pm.expect(b.state).to.eql('ABANDONED');pm.expect(b.cleanup_state).to.eql('DELETED');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Recovery cleanup: delete independent certificate",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Recovery cleanup: delete independent certificate: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            }
+          ]
+        },
+        {
           "name": "Management cleanup: Delete unrestricted Certificate",
           "request": {
             "method": "DELETE",

@@ -27,6 +27,12 @@ func (s R2ExternalDocuments) Put(ctx context.Context, key string, data []byte) e
 func (s R2ExternalDocuments) Read(ctx context.Context, key string) ([]byte, error) {
 	return (R2Documents{}).Read(ctx, key)
 }
+func (s R2ExternalDocuments) Delete(ctx context.Context, key string) error {
+	return (R2Documents{}).Delete(ctx, key)
+}
+func (R2Documents) Delete(ctx context.Context, key string) error {
+	return utils.DeleteStoredObject(ctx, key)
+}
 
 func (R2Documents) PrepareKey(id, certificate uuid.UUID) (string, error) {
 	return utils.PrepareObjectKey(fmt.Sprintf("issued-certificates/%s/%s.pdf", certificate, id))

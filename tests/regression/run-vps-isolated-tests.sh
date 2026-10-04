@@ -437,6 +437,7 @@ export APP_ENV=test
 export DATABASE_URL="$TEST_DATABASE_URL"
 export AMS_TEST_STORAGE_PREFIX="ams-e2e/$(python3 -c 'import uuid; print(uuid.uuid4())')/"
 export AMS_TEST_STORAGE_MANIFEST="$RUN_DIR/storage-objects.txt"
+export AMS_ISSUANCE_TEST_FAULT_TOKEN="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 : >"$AMS_TEST_STORAGE_MANIFEST"
 printf 'APP_ENV=test\nDATABASE_URL=%q\nAMS_TEST_STORAGE_PREFIX=%q\nAMS_TEST_STORAGE_MANIFEST=%q\n' \
   "$TEST_DATABASE_URL" "$AMS_TEST_STORAGE_PREFIX" "$AMS_TEST_STORAGE_MANIFEST" >"$RUN_DIR/cleanup.env"
@@ -489,7 +490,8 @@ if [[ "$RUN_NEWMAN" == "1" ]]; then
         --env-var "baseUrl=$API_BASE_URL" \
         --env-var "adminEmail=$ADMIN_EMAIL" \
         --env-var "adminPassword=$ADMIN_PASSWORD" \
-        --env-var "testStoragePrefix=$AMS_TEST_STORAGE_PREFIX"
+        --env-var "testStoragePrefix=$AMS_TEST_STORAGE_PREFIX" \
+        --env-var "issuanceFaultToken=$AMS_ISSUANCE_TEST_FAULT_TOKEN"
     ) | tee "$RUN_DIR/$(basename "$collection").log"
   done
   NEWMAN_STATUS=passed
@@ -530,6 +532,7 @@ if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
     cd "$FRONTEND_DIR"
     PLAYWRIGHT_BASE_URL="$FRONTEND_BASE_URL" \
       PLAYWRIGHT_API_BASE_URL="$API_BASE_URL" \
+      PLAYWRIGHT_ISSUANCE_FAULT_TOKEN="$AMS_ISSUANCE_TEST_FAULT_TOKEN" \
       PLAYWRIGHT_ADMIN_EMAIL="$ADMIN_EMAIL" \
       PLAYWRIGHT_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
       PLAYWRIGHT_RUN_ROUTINE_MAINTENANCE_TRIGGER=1 \

@@ -29,6 +29,7 @@ type DocumentStore interface {
 	// Put creates an object only if absent; an existing document must never be overwritten.
 	Put(context.Context, string, []byte) error
 	Read(context.Context, string) ([]byte, error)
+	Delete(context.Context, string) error
 }
 type Issuances struct {
 	Pool      *pgxpool.Pool
@@ -36,22 +37,26 @@ type Issuances struct {
 	Documents DocumentStore
 }
 type Issuance struct {
-	ID            uuid.UUID       `json:"issuance_id"`
-	CertificateID uuid.UUID       `json:"certificate_id"`
-	Source        string          `json:"source"`
-	ActorID       uuid.UUID       `json:"actor_id"`
-	Number        string          `json:"document_number"`
-	State         string          `json:"state"`
-	IssueDate     string          `json:"issue_date"`
-	ExpiryDate    string          `json:"expiry_date"`
-	Snapshot      json.RawMessage `json:"snapshot"`
-	FileName      string          `json:"file_name"`
-	ContentType   string          `json:"content_type"`
-	SHA256        string          `json:"document_sha256"`
-	Size          int64           `json:"document_size"`
-	FailureCode   string          `json:"failure_code"`
-	ApprovedAt    time.Time       `json:"approved_at"`
-	CompletedAt   *time.Time      `json:"completed_at"`
+	ID                 uuid.UUID       `json:"issuance_id"`
+	CertificateID      uuid.UUID       `json:"certificate_id"`
+	Source             string          `json:"source"`
+	ActorID            uuid.UUID       `json:"actor_id"`
+	Number             string          `json:"document_number"`
+	State              string          `json:"state"`
+	IssueDate          string          `json:"issue_date"`
+	ExpiryDate         string          `json:"expiry_date"`
+	Snapshot           json.RawMessage `json:"snapshot"`
+	FileName           string          `json:"file_name"`
+	ContentType        string          `json:"content_type"`
+	SHA256             string          `json:"document_sha256"`
+	Size               int64           `json:"document_size"`
+	FailureCode        string          `json:"failure_code"`
+	CleanupState       string          `json:"cleanup_state"`
+	CleanupFailureCode string          `json:"cleanup_failure_code"`
+	AbandonedBy        *uuid.UUID      `json:"abandoned_by"`
+	AbandonedAt        *time.Time      `json:"abandoned_at"`
+	ApprovedAt         time.Time       `json:"approved_at"`
+	CompletedAt        *time.Time      `json:"completed_at"`
 }
 
 func PublicIssuance(row db.CertificateIssuance) (Issuance, error) {
@@ -66,6 +71,8 @@ func PublicIssuance(row db.CertificateIssuance) (Issuance, error) {
 	return Issuance{ID: row.IssuanceID, CertificateID: row.CertificateID, Source: row.Source, ActorID: row.ActorID,
 		Number: row.DocumentNumber.String, State: row.State, IssueDate: row.IssueDate.Time.Format("2006-01-02"), ExpiryDate: expiry,
 		Snapshot: json.RawMessage(row.Snapshot), FileName: row.FileName, ContentType: row.ContentType, SHA256: row.DocumentSha256, Size: row.DocumentSize, FailureCode: row.FailureCode,
+		CleanupState: row.CleanupState, CleanupFailureCode: row.CleanupFailureCode,
+		AbandonedBy: row.AbandonedBy, AbandonedAt: row.AbandonedAt,
 		ApprovedAt: row.ApprovedAt, CompletedAt: row.CompletedAt}, nil
 }
 func dateValue(value string) pgtype.Date {
@@ -181,7 +188,11 @@ func (s Issuances) process(ctx context.Context, row db.CertificateIssuance) (Iss
 }
 func (s Issuances) processDocument(ctx context.Context, row db.CertificateIssuance, payload []byte) (Issuance, error) {
 	q := db.New(s.Pool)
-	if row.State == "COMPLETED" || row.State == "ABANDONED" {
+	if row.State == "ABANDONED" {
+		result, err := PublicIssuance(row)
+		return result, errors.Join(ErrIssuanceAbandoned, err)
+	}
+	if row.State == "COMPLETED" {
 		return PublicIssuance(row)
 	}
 	attempt := uuid.New()
@@ -191,6 +202,10 @@ func (s Issuances) processDocument(ctx context.Context, row db.CertificateIssuan
 		if readErr != nil {
 			return Issuance{}, readErr
 		}
+		if current.State == "ABANDONED" {
+			result, err := PublicIssuance(current)
+			return result, errors.Join(ErrIssuanceAbandoned, err)
+		}
 		return PublicIssuance(current)
 	}
 	if err != nil {
@@ -198,6 +213,7 @@ func (s Issuances) processDocument(ctx context.Context, row db.CertificateIssuan
 		return result, errors.Join(ErrIssuanceFailed, err)
 	}
 	row = claimed
+	documentWriteAttempted := false
 	fail := func(code string, cause error) (Issuance, error) {
 		if errors.Is(cause, ErrIssuanceConflict) {
 			code = "STALE_CERTIFICATE"
@@ -212,6 +228,18 @@ func (s Issuances) processDocument(ctx context.Context, row db.CertificateIssuan
 		}
 		if row.State == "COMPLETED" {
 			return PublicIssuance(row)
+		}
+		if row.State == "ABANDONED" {
+			// A processor whose lease expired may finish a PUT after abandonment.
+			// Remove that late object without making the approval retryable again.
+			if documentWriteAttempted {
+				if err := q.RequeueLateIssuanceCleanup(recovery, row.IssuanceID); err != nil {
+					result, _ := PublicIssuance(row)
+					return result, errors.Join(ErrIssuanceAbandoned, err)
+				}
+			}
+			result, cleanupErr := s.cleanup(recovery, row)
+			return result, errors.Join(ErrIssuanceAbandoned, cause, cleanupErr)
 		}
 		result, _ := PublicIssuance(row)
 		return result, errors.Join(ErrIssuanceFailed, cause, markErr)
@@ -232,6 +260,9 @@ func (s Issuances) processDocument(ctx context.Context, row db.CertificateIssuan
 	if errors.Is(err, ErrDocumentMissing) {
 		if row.Source == "EXTERNAL" {
 			data = payload
+			if len(data) == 0 {
+				return fail("DOCUMENT_INPUT", ErrOriginalFileRequired)
+			}
 			if !matchesDocument(data, row.DocumentSha256, row.DocumentSize) {
 				return fail("DOCUMENT_INPUT", ErrExternalInput)
 			}
@@ -259,6 +290,7 @@ func (s Issuances) processDocument(ctx context.Context, row db.CertificateIssuan
 		if err != nil || n != 1 {
 			return fail("DOCUMENT_METADATA", errors.Join(ErrIssuanceConflict, err))
 		}
+		documentWriteAttempted = true
 		if err := s.Documents.Put(ctx, row.FileKey, data); err != nil {
 			return fail("STORAGE_WRITE", err)
 		}
