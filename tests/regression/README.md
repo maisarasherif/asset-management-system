@@ -308,3 +308,17 @@ bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 The passed Go/Newman/supplemental evidence remains valid. Step 8 remains pending the broader browser rerun, measured timings and final PDF review. See the authoritative guide's latest Step 8 entry for causes, retained evidence and the command to summarize original run.47x15g timing artifacts without rerunning requests. Suggested commit: `test(regression): repair final certificate gate fixtures and selectors`.
+
+### Step 8 second browser gate — HR/Admin date fixture
+
+The latest full profile reports **17 of 18 passed (4.2m)**, including all four certificate journeys and every previously corrected case. The remaining HR/Admin overview fixture used UTC today while the backend uses Asia/Dubai calendar dates, producing 44 days remaining and Upcoming after Dubai midnight. The fixture now uses Dubai today and one shared issue/expiry reference; assertions require its own row to show 45 days, its policy and Due now. No production changes are needed. The supplied output has no run path, cleanup summary or exit status.
+
+Strict TypeScript, discovery of both HR/Admin cases, runner Bash syntax and diff whitespace checks passed. The runner and dedicated/shared Go/API/certificate browser baselines need no edits for this fixture-only correction. Retain the previous Go/Newman/supplemental passes and the other 17 browser passes. After publishing/updating the VPS yourself, rerun both HR/Admin cases as ams_test_runner:
+
+```bash
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='../tests/regression/e2e/hr-admin-product.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Return the results, cleanup/exit summary and evidence path. Step 8 still requires this live correction, timings and final PDF feedback. No live tests, commits, pushes or VPS synchronization were performed by Codex. Suggested commit: `test(hr-admin): align overview expiry fixtures with Dubai dates`.

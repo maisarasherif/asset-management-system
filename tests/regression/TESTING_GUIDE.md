@@ -875,3 +875,21 @@ python3 tests/regression/support/certificate-latency-summary.py \
 ```
 
 Return the printed table or JSON; measured latency values have not yet been supplied. The browser-only rerun produces its own timing summary without Newman samples; keep layer/run provenance when comparing. Final own/competent/long-text/recovered PDF feedback also remains pending. Suggested commit: `test(regression): repair final certificate gate fixtures and selectors`.
+
+### Step 8 second broad browser gate — Dubai calendar fixture correction
+
+Evidence received 5 October 2026: the complete 18-test browser profile now reports **17 passed, 1 failed in 4.2m**. All eight previously failing cases pass, as do all four dedicated certificate journeys. Only the HR/Admin ADMIN product journey failed: its overview fixture displayed **44 days left / Upcoming** instead of **45 days left / Due now**. The supplied output does not include this run's evidence directory, cleanup results or exit status; these remain unrecorded. Retain the earlier 193 Go passes, Newman pass and three supplemental mocked-page passes.
+
+The fixture used UTC today's date while renewal queue SQL compares calendar dates in **Asia/Dubai**. Between 20:00 and midnight UTC, Dubai is already on the following date. The UI correctly classified the resulting 44-day expiry as Upcoming. The browser fixture now derives its calendar date in Asia/Dubai and shares one reference instant for issue/expiry. Its overview assertions target its own unique record row and require the 45-day countdown, record-type policy and Due now state. Production SQL/UI behavior and reminder semantics are unchanged; no timeout increase, skipped case or relaxed status assertion is introduced.
+
+Strict TypeScript checks for the broader specs and dedicated certificate spec passed; Playwright discovery lists both HR/Admin journeys. Runner Bash syntax and diff whitespace checks passed. Codex did not execute test bodies, commit/push or synchronize the VPS. The dedicated Go/Newman/certificate browser files and shared Go/system API/whole-app baselines need no changes for this test fixture correction. The isolated runner already selects HR/Admin and needs no edits; automatic failure report hosting and scoped cleanup remain enabled.
+
+After reviewing/publishing/synchronizing this correction yourself, run **both HR/Admin journeys**, as ams_test_runner from the Fedora repo root. The other 17 browser passes remain valid; Go/Newman do not need repeating for this fixture-only change:
+
+```bash
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='../tests/regression/e2e/hr-admin-product.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Return the two browser results, cleanup summary, exit status and evidence path. Step 8 remains pending this correction's live verification, timing evidence and final PDF feedback. The preceding entry's command can summarize the retained run.47x15g certificate timings without rerunning requests. Suggested commit: `test(hr-admin): align overview expiry fixtures with Dubai dates`.

@@ -178,9 +178,18 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function isoDateOffset(days: number) {
-  const now = new Date();
-  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + days, 0, 0, 0));
+function isoDateOffset(days: number, reference: Date) {
+  // Renewal queue SQL compares calendar dates in Asia/Dubai, including when
+  // Dubai has entered tomorrow but the UTC date has not changed yet.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Dubai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(reference);
+  const part = (type: "year" | "month" | "day") =>
+    Number(parts.find((value) => value.type === type)!.value);
+  const date = new Date(Date.UTC(part("year"), part("month") - 1, part("day") + days));
   return date.toISOString();
 }
 
@@ -359,12 +368,13 @@ test.describe("HR/Admin product E2E", () => {
       `PW Overview Visa ${suffix}`,
       "RENEWABLE"
     );
+    const overviewReferenceDate = new Date();
     await postJson(setupRequest, token, "/hr-admin/compliance-records", {
       subject_type: "PERSON",
       subject_id: overviewPerson.person_id,
       record_type_id: overviewRecordType.record_type_id,
-      issue_date: isoDateOffset(-1),
-      expiry_date: isoDateOffset(45),
+      issue_date: isoDateOffset(-1, overviewReferenceDate),
+      expiry_date: isoDateOffset(45, overviewReferenceDate),
       document_file: "",
       issuing_authority: "Overview Authority",
       notes: "Overview due record",
@@ -398,7 +408,12 @@ test.describe("HR/Admin product E2E", () => {
       await expect(page.getByRole("heading", { name: "HR/Admin overview" })).toBeVisible();
       await expect(page.getByText(overviewPersonName)).toBeVisible();
       await expect(page.getByText(overviewRecordType.type_name)).toBeVisible();
-      await expect(page.getByRole("table").getByText("Due now")).toBeVisible();
+      const overviewRow = page.getByRole("row").filter({
+        has: page.getByRole("cell", { name: overviewRecordType.type_name, exact: true }),
+      });
+      await expect(overviewRow.getByText("45 days left", { exact: true })).toBeVisible();
+      await expect(overviewRow.getByText("Record type: 45, 15, 5 days", { exact: true })).toBeVisible();
+      await expect(overviewRow.getByText("Due now", { exact: true })).toBeVisible();
 
       const assetRequestsBeforeHRAdmin = assetRequests;
       await createPersonThroughUi(page, suffix);
