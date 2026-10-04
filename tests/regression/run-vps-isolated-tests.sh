@@ -27,7 +27,16 @@ RUN_GO_REGRESSION="${RUN_GO_REGRESSION:-${RUN_REGRESSION:-0}}"
 RUN_NEWMAN="${RUN_NEWMAN:-1}"
 NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json tests/regression/api/hr-admin-product.postman_collection.json tests/regression/api/generated-renewal-certificates.postman_collection.json}"
 RUN_PLAYWRIGHT="${RUN_PLAYWRIGHT:-1}"
-E2E_SPECS="${E2E_SPECS:-../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/hr-admin-product.spec.ts ../tests/regression/e2e/generated-renewal-certificates.spec.ts}"
+E2E_PROFILE="${E2E_PROFILE:-default}"
+DEFAULT_E2E_SPECS="../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/hr-admin-product.spec.ts ../tests/regression/e2e/generated-renewal-certificates.spec.ts"
+case "$E2E_PROFILE" in
+  default) ;;
+  certificates-final)
+    DEFAULT_E2E_SPECS+=" ../tests/regression/e2e/client-asset-certificates.spec.ts ../tests/regression/e2e/single-asset-equipment.spec.ts ../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/template-catalog.spec.ts ../tests/regression/e2e/user-management-permissions.spec.ts ../tests/regression/e2e/scheduler-management.spec.ts ../tests/regression/e2e/auth-cookie-session.spec.ts ../tests/regression/e2e/api-auth-smoke.spec.ts"
+    ;;
+  *) echo "ERROR: unknown E2E_PROFILE: $E2E_PROFILE" >&2; exit 2 ;;
+esac
+E2E_SPECS="${E2E_SPECS:-$DEFAULT_E2E_SPECS}"
 
 API_PID=""
 FRONTEND_PID=""
@@ -533,6 +542,7 @@ if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
     PLAYWRIGHT_BASE_URL="$FRONTEND_BASE_URL" \
       PLAYWRIGHT_API_BASE_URL="$API_BASE_URL" \
       PLAYWRIGHT_ISSUANCE_FAULT_TOKEN="$AMS_ISSUANCE_TEST_FAULT_TOKEN" \
+      PLAYWRIGHT_CERTIFICATE_TIMING_DIR="$RUN_DIR/certificate-timings" \
       PLAYWRIGHT_ADMIN_EMAIL="$ADMIN_EMAIL" \
       PLAYWRIGHT_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
       PLAYWRIGHT_RUN_ROUTINE_MAINTENANCE_TRIGGER=1 \
@@ -545,6 +555,13 @@ if [[ "$RUN_PLAYWRIGHT" == "1" && -n "$E2E_SPECS" ]]; then
   PLAYWRIGHT_STATUS=passed
 else
   echo "Skipping Playwright E2E specs"
+fi
+
+if [[ -f "$RUN_DIR/generated-renewal-certificates.postman_collection.json.log" || -d "$RUN_DIR/certificate-timings" ]]; then
+  python3 "$REPO_ROOT/tests/regression/support/certificate-latency-summary.py" \
+    --newman-log "$RUN_DIR/generated-renewal-certificates.postman_collection.json.log" \
+    --playwright-dir "$RUN_DIR/certificate-timings" \
+    --output "$RUN_DIR/certificate-latency-summary.json"
 fi
 
 # The EXIT trap reports success only after object/database cleanup succeeds.

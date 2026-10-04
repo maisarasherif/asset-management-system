@@ -44,6 +44,7 @@ The regression role must connect to the maintenance database (`postgres`), creat
 | `KEEP_DB` | `0` | Set `1` to retain the last database state at exit. |
 | `NEWMAN_COLLECTIONS` | Seven below | Space-separated repository-relative paths. |
 | `E2E_SPECS` | Three below | Space-separated spec paths relative to the frontend directory. |
+| `E2E_PROFILE` | `default` | `certificates-final` selects 11 related browser specs unless explicit `E2E_SPECS` overrides it. |
 
 The runner still builds/starts the API and checks login for a Go-only invocation; it checks both test ports even with Playwright disabled. Flags select test layers, not a minimal infrastructure mode.
 
@@ -68,6 +69,48 @@ Default Playwright specs:
 ```
 
 Other feature-specific and mocked specs are opt-in through `E2E_SPECS`. The whole-app spec covers route health and selected behavior, not every feature workflow. Mocked page tests do not replace real end-to-end feature checks.
+
+### Step 8 final certificate regression and timing evidence
+
+Prepared 4 October 2026 on `certgen`. Step 7 remains verified across run.2zwEuQ (192 Go passes, no failures/skips; Newman passed) and run.Xnlhcs (four dedicated browser journeys passed). **Step 8 implementation is ready; its live gate and final timing/PDF evidence are pending.** Earlier passes do not verify the new hardening change.
+
+Recovery and abandonment from issuance history now invalidate the preview panel's saved-approval status. Failed approvals remain observable without continuous polling. A completed or abandoned approval clears its previous PDF review, confirmation and failure message; abandonment displays its retained number and terminal state. Go adds an HTTP status-contract case for recovered/abandoned records, Newman adds two status requests, and Playwright exercises both transitions without reloading the certificate page. No PDF template, schema, numbering or permission changes were made.
+
+Dedicated files updated:
+
+- `ams-server/generated_renewal_certificates_integration_test.go`
+- `tests/regression/api/generated-renewal-certificates.postman_collection.json` (396 requests discovered)
+- `tests/regression/e2e/generated-renewal-certificates.spec.ts` (four journeys discovered)
+
+The runner now offers `E2E_PROFILE=certificates-final`. It selects these 11 maintained specs: `whole-app-regression`, `hr-admin-product`, `generated-renewal-certificates`, `client-asset-certificates`, `single-asset-equipment`, `routine-maintenance`, `template-catalog`, `user-management-permissions`, `scheduler-management`, `auth-cookie-session`, and `api-auth-smoke`. Static discovery lists **18 tests**, including four dedicated certificate journeys and the supplemental session-expiry mock. The profile supplies the existing isolated credentials, client/maintenance trigger flags and guarded issuance fault secret. These specs supplement certificate coverage with related catalog, asset, access, notification and product workflows. The broader profile is opt-in because normal implementation runs intentionally use smaller selections; it is required for final certificate verification.
+
+After reviewing/committing/pushing and synchronizing the changes yourself, run **as `ams_test_runner`, without sudo, from `/home/pms/ams-testing/asset-management-system`**:
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='' E2E_SPECS='' E2E_PROFILE=certificates-final \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Empty overrides restore the maintained seven-collection selection and the profile's 11 specs, even if previous focused selections were exported. Explicit nonempty `E2E_SPECS` overrides the profile. Go still requires `RUN_GO_REGRESSION=1` and discovers all backend package tests. The existing shared Go harness/reset, system API smoke and whole-app spec were reviewed and need no edits for this UI cache/status change; the dedicated files cover it, while the final run executes the shared baselines. SQLC regeneration is unnecessary because SQL did not change. Report hosting on failure and scoped R2/database cleanup remain enabled.
+
+Then rerun the **three changed supplemental CertificateDetailPage mock cases** from Step 6 as a separate gate. The full mock suite includes unrelated pages; these three relevant cases are selected explicitly and supplement the real stack:
+
+```bash
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='../tests/regression/e2e/refactored-pages-mocked.spec.ts --grep CertificateDetailPage' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Both runs must finish their selected gates and cleanup successfully. Report actual Go pass/fail/skip counts, each Newman collection's assertions/failures, browser results, storage deletion/database cleanup and exit status, plus both run evidence paths. A storage-backed skip does not satisfy certificate verification. On failure, inspect the automatically hosted report, then Ctrl+C to allow cleanup; exit 130 from report interruption does not mean the tests passed.
+
+The dedicated collection records compact successful request timings in its existing Newman log. The browser spec attaches `certificate-request-timings.json` and retains per-test JSON in `certificate-timings/`. After selected suites pass, `support/certificate-latency-summary.py` prints and writes **`certificate-latency-summary.json`** under that run's evidence directory. It groups Newman/browser measurements by preview, generated issuance, external renewal and retry, reporting count, minimum, nearest-rank p50/p95 and maximum milliseconds. The layers use Newman response time and Playwright request-to-response-end duration respectively; these are different observations and remain separate. Only HTTP 200 previews and completed publication/retry responses count. Controlled fault requests, errors and pending work are excluded; repeated idempotent successful requests remain included, so retry timings include both recovery and completed retries. No credentials, tokens, URLs or document IDs enter these timing artifacts.
+
+Return the printed timing table or summary JSON from the successful final run. Missing operation samples require investigation before declaring the timing evidence complete. Small functional-test samples describe this VPS/R2 run; they are not a load benchmark or an SLA, and there is no arbitrary latency pass/fail threshold. On failed runs, raw browser timing attachments and Newman log lines remain available; the combined summary may not have been produced yet. These measurements add no production instrumentation or extra application requests.
+
+Finally, review report PDF attachments for both own ADMIN and competent-person issuance, matching approved previews, long text/pagination and recovered stored documents. Confirm the approved layout, signature proportions, Unicode, dates/validity and footer; the final issued document changes the `XX` placeholder to its allocated number. Existing dedicated tests recheck snapshots and stored bytes after source/signature edits and exclude other identities from ordinary ADMIN issuance. Return any remaining visual issue before feature sign-off.
+
+Static verification passed: frontend TypeScript/Vite build, Go compile-only test binary/vet, strict dedicated-spec TypeScript, Playwright discovery, Postman SDK/JSON/script syntax, Python/Bash syntax and diff whitespace. No live suites or servers were run by Codex; changes remain uncommitted/unpushed. Suggested commit: `fix(certificates): synchronize recovery state and prepare final regression`.
 
 ### Storage and external effects
 
@@ -734,9 +777,9 @@ Combined Step 6 evidence: run.u2Zttq passed **170 Go tests, 0 failures/skips**, 
 
 Step 7 is ready but has not started; Steps 7 and 8 remain. This update changes only evidence/status documentation. Dedicated/shared Go/Newman/Playwright files and the runner need no edits, and no live suites were executed by Codex. Automatic failed-report hosting remains enabled. Changes remain uncommitted/unpushed. Suggested documentation commit: `docs(certificates): mark step 6 verified after VPS regression gates`.
 
-### Step 7 prepared — saved approval recovery and abandonment
+### Step 7 recovery and abandonment — verified
 
-Prepared 4 October 2026 on `certgen`; **implementation is ready for VPS verification, which remains pending**. Step 6's recorded gates remain valid. Step 8 follows only after the Step 7 gate and any necessary fixes.
+Prepared 4 October 2026 on `certgen`; **Step 7 is verified across run.2zwEuQ and run.Xnlhcs**. Step 6's recorded gates remain valid. Step 8 remains and has not started; combined verification evidence is recorded below.
 
 Certificate issuance history now offers **Retry issuance**, **Abandon approval** with explicit confirmation, and **Retry file deletion** when cleanup fails. ACTIVE ADMIN accounts manage their own approvals; SUPER_ADMIN may recover or abandon any approval. ADMIN retries of generated certificates retain the own-account signer restriction. USER, CLIENT and anonymous recovery requests are rejected. Active processing/cleanup leases prevent duplicate work; refresh history when a lease is still active. Stale approvals cannot replace a newer certificate and offer abandonment instead.
 
@@ -782,3 +825,11 @@ RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 E2E_SPECS
 ```
 
 Changes remain uncommitted/unpushed. Suggested commit: `test(certificates): account for existing unrestricted signer fixtures`.
+
+### Step 7 verified — run.Xnlhcs passed all four browser journeys
+
+Evidence received 4 October 2026: run.Xnlhcs passed all four dedicated Playwright journeys in **2.2m**: saved-approval recovery 41.6s, external renewal/history 18.0s, SUPER_ADMIN signer management and own ADMIN issuance 56.3s, and own private signing profile 13.4s. This verifies the shared unrestricted-signer baseline correction with all four journeys running together. Storage cleanup deleted 23 journaled objects; isolated database ams_e2e_20261004173713 was dropped; exit status 0. Go/Newman were intentionally not rerun for the browser-only assertion correction.
+
+Combined Step 7 evidence: run.2zwEuQ passed **192 Go tests, 0 failures/skips**, and Newman; run.Xnlhcs passed all four focused Playwright journeys and cleanup. Newman assertion totals were not supplied. **Step 7 implementation and verification are complete. Step 8 (final hardening and broader regression) remains and has not started.** No additional Step 7 rerun is required solely to record this evidence.
+
+Only evidence/status documentation changed in this update. Dedicated Go/Newman/Playwright files, the shared regression baselines and the runner need no changes. Automatic failed-report hosting remains enabled. No live suites were executed, and no commit, push or VPS synchronization was performed by Codex. Suggested documentation commit: `docs(certificates): mark step 7 verified after VPS regression gates`.

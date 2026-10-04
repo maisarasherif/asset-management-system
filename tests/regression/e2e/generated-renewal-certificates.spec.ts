@@ -1,12 +1,45 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page, type Request as BrowserRequest, type Response, type Route } from "@playwright/test";
 
 const api = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:18082/v1";
 const pdf = readFileSync(resolve(__dirname, "../fixtures/sample-certificate.pdf"));
 const signaturePNG = readFileSync(resolve(__dirname, "../fixtures/signature-sample.png"));
 const signatureJPEG = readFileSync(resolve(__dirname, "../fixtures/signature-replacement.jpg"));
+
+type CertificateTiming = { operation: string; status: number; duration_ms: number; controlled_fault: boolean; state: string };
+const browserTimings = new WeakMap<Page, { samples: CertificateTiming[]; pending: Promise<void>[]; controlledFaultRequests: WeakSet<BrowserRequest>; listener: (response: Response) => void }>();
+test.beforeEach(({ page }) => {
+  const samples: CertificateTiming[] = [], pending: Promise<void>[] = [];
+  const controlledFaultRequests = new WeakSet<BrowserRequest>();
+  const listener = (response: Response) => {
+    const request = response.request();
+    if (request.method() !== "POST" || !response.url().startsWith(`${api}/certificate/`)) return;
+    const operation = new URL(response.url()).pathname.match(/\/(generated-preview|generated-issuance|external-renewal|retry|abandon|cleanup)$/)?.[1];
+    if (!operation) return;
+    pending.push((async () => {
+      if (await response.finished()) return;
+      const timing = request.timing();
+      if (timing.responseEnd < 0) return;
+      const body: unknown = await response.json();
+      const state = typeof body === "object" && body !== null && "state" in body && typeof body.state === "string" ? body.state : "";
+      samples.push({ operation, status: response.status(), duration_ms: Math.round(timing.responseEnd), controlled_fault: controlledFaultRequests.has(request) || Boolean(request.headers()["x-ams-issuance-test-fault"]), state });
+    })().catch(() => { /* Failed requests remain in the trace; they are not latency samples. */ }));
+  };
+  browserTimings.set(page, { samples, pending, controlledFaultRequests, listener }); page.on("response", listener);
+});
+test.afterEach(async ({ page }, testInfo) => {
+  const timings = browserTimings.get(page); if (!timings) return;
+  page.off("response", timings.listener); await Promise.all(timings.pending); browserTimings.delete(page);
+  if (!timings.samples.length) return;
+  const path = process.env.PLAYWRIGHT_CERTIFICATE_TIMING_DIR
+    ? resolve(process.env.PLAYWRIGHT_CERTIFICATE_TIMING_DIR, `${testInfo.testId.replace(/[^a-zA-Z0-9_-]/g, "_")}-${testInfo.retry}.json`)
+    : testInfo.outputPath("certificate-request-timings.json");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify({ test: testInfo.title, samples: timings.samples }, null, 2));
+  await testInfo.attach("certificate-request-timings.json", { path, contentType: "application/json" });
+});
 
 // Prerequisites belong to this spec, independent of whole-app fixtures.
 test("saved approvals recover through history without replacing approved details or completed documents", async ({ page, request }) => {
@@ -26,6 +59,10 @@ test("saved approvals recover through history without replacing approved details
   const logout = async () => { await page.goto("/account"); await page.getByRole("button", { name: "Sign out", exact: true }).click({ timeout: 10_000 }); await expect(page).toHaveURL(/\/login$/); };
   const post = async (path: string, data: unknown) => { const r = await page.request.post(`${api}${path}`, { data }); expect(r.status(), await r.text()).toBe(201); return r.json(); };
   const faultHeaders = (mode: string) => ({ "X-AMS-Issuance-Test-Token": faultToken, "X-AMS-Issuance-Test-Fault": mode });
+  const continueWithFault = (route: Route, mode: string) => {
+    browserTimings.get(page)?.controlledFaultRequests.add(route.request());
+    return route.continue({ headers: { ...route.request().headers(), ...faultHeaders(mode) } });
+  };
   try {
     await login(rootEmail, rootPassword);
     const main = await post("/main-category", { main_category_name: suffix, description: "Recovery", sort_order: 100 }); cleanup.push(`/main-category/${main.main_category_id}`);
@@ -50,13 +87,33 @@ test("saved approvals recover through history without replacing approved details
     const certificateURL = `/assets/${asset.asset_id}/components/${component.component_id}/certificates/${cert.certificate_id}`;
     const region = page.getByRole("region", { name: "Certificate issuance history", exact: true });
     const rowFor = (number: string) => region.getByRole("row").filter({ has: page.getByRole("cell", { name: number, exact: true }) });
-    const approveFailure = async (mode: string, own = false) => {
-      const previewHTTP = await page.request.post(`${certificateAPI}/generated-preview`, { data: { ...(own ? {} : { signer_id: person.competent_person_id }), issue_date: "2026-10-04", remarks: "Saved recovery details" } });
-      expect(previewHTTP.status(), await previewHTTP.text()).toBe(200); const preview = await previewHTTP.json();
-      const issueHTTP = await page.request.post(`${certificateAPI}/generated-issuance`, { data: { preview_token: preview.preview_token }, headers: faultHeaders(mode) });
-      expect(issueHTTP.status(), await issueHTTP.text()).toBe(503); const issuance = (await issueHTTP.json()).issuance;
+    const approveFailure = async (mode: string, own = false, throughUI = false) => {
+      let preview, issuance;
+      if (throughUI) {
+        await page.goto(certificateURL);
+        await page.getByLabel("Generated certificate competent person", { exact: true }).and(page.getByRole("button")).click();
+        await page.getByRole("option", { name: new RegExp(`^${person.full_name}`) }).click();
+        const form = page.getByRole("region", { name: "Generated certificate preview", exact: true });
+        await form.getByLabel("Generated certificate issue date", { exact: true }).fill("2026-10-04");
+        await form.getByLabel("Test remarks (optional)", { exact: true }).fill("Saved recovery details");
+        const previewEvent = page.waitForResponse(r => r.url() === `${certificateAPI}/generated-preview` && r.request().method() === "POST");
+        await form.getByRole("button", { name: "Preview examination certificate", exact: true }).click();
+        const previewHTTP = await previewEvent; expect(previewHTTP.status()).toBe(200); preview = await previewHTTP.json();
+        await page.getByRole("region", { name: "Examination certificate PDF review", exact: true }).getByRole("button", { name: "Approve and issue certificate", exact: true }).click();
+        await page.route(`${certificateAPI}/generated-issuance`, route => continueWithFault(route, mode), { times: 1 });
+        const issueEvent = page.waitForResponse(r => r.url() === `${certificateAPI}/generated-issuance` && r.request().method() === "POST");
+        await page.getByRole("dialog", { name: "Issue examination certificate", exact: true }).getByRole("button", { name: "Confirm issuance", exact: true }).click();
+        const issueHTTP = await issueEvent; expect(issueHTTP.status()).toBe(503); issuance = (await issueHTTP.json()).issuance;
+        await expect(form.getByText(`Approval saved as ${issuance.document_number}. The current certificate is unchanged. Check issuance history for status.`, { exact: true })).toBeVisible();
+      } else {
+        const previewHTTP = await page.request.post(`${certificateAPI}/generated-preview`, { data: { ...(own ? {} : { signer_id: person.competent_person_id }), issue_date: "2026-10-04", remarks: "Saved recovery details" } });
+        expect(previewHTTP.status(), await previewHTTP.text()).toBe(200); preview = await previewHTTP.json();
+        const issueHTTP = await page.request.post(`${certificateAPI}/generated-issuance`, { data: { preview_token: preview.preview_token }, headers: faultHeaders(mode) });
+        expect(issueHTTP.status(), await issueHTTP.text()).toBe(503); issuance = (await issueHTTP.json()).issuance;
+        await page.goto(certificateURL);
+      }
       expect(issuance.state).toBe("FAILED"); expect(issuance.snapshot).toEqual(preview.snapshot);
-      await page.goto(certificateURL); await expect(rowFor(issuance.document_number).getByText("Failed", { exact: true })).toBeVisible();
+      await expect(rowFor(issuance.document_number).getByText("Failed", { exact: true })).toBeVisible();
       return { issuance, preview };
     };
     const before = await (await page.request.get(certificateAPI)).json();
@@ -70,7 +127,7 @@ test("saved approvals recover through history without replacing approved details
     expect((await page.request.put(`${api}/competent-person/${person.competent_person_id}`, { data: { ...personInput, organization: "Changed after approval" } })).status()).toBe(200);
     // Continue the real HTTP request with a render fault. Success proves stored bytes were reused.
     const retryPath = `${certificateAPI}/issuances/${stored.issuance.issuance_id}/retry`;
-    await page.route(retryPath, route => route.continue({ headers: { ...route.request().headers(), ...faultHeaders("render") } }), { times: 1 });
+    await page.route(retryPath, route => continueWithFault(route, "render"), { times: 1 });
     const retryPromise = page.waitForResponse(r => r.url() === retryPath && r.request().method() === "POST");
     await rowFor(stored.issuance.document_number).getByRole("button", { name: "Retry issuance", exact: true }).click();
     const retriedHTTP = await retryPromise; expect(retriedHTTP.status(), await retriedHTTP.text()).toBe(200); const completed = await retriedHTTP.json();
@@ -80,21 +137,25 @@ test("saved approvals recover through history without replacing approved details
     const linkHTTP = await page.request.get(`${certificateAPI}/issuances/${completed.issuance_id}/file`); expect(linkHTTP.status()).toBe(200); const savedURL = (await linkHTTP.json()).url;
     const savedPDF = await request.get(savedURL); expect(savedPDF.status()).toBe(200); const originalBytes = await savedPDF.body();
     expect(createHash("sha256").update(originalBytes).digest("hex")).toBe(completed.document_sha256);
-    const rendering = await approveFailure("render");
+    const rendering = await approveFailure("render", false, true);
     const renderRetry = page.waitForResponse(r => r.url().endsWith(`/issuances/${rendering.issuance.issuance_id}/retry`));
     await rowFor(rendering.issuance.document_number).getByRole("button", { name: "Retry issuance", exact: true }).click(); expect((await renderRetry).status()).toBe(200);
     await expect(rowFor(rendering.issuance.document_number).getByText("Completed", { exact: true })).toBeVisible();
-    const abandoned = await approveFailure("after-write");
+    await expect(page.getByText(`Approval saved as ${rendering.issuance.document_number}. The current certificate is unchanged. Check issuance history for status.`, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Examination certificate PDF review", exact: true })).toHaveCount(0);
+    const abandoned = await approveFailure("after-write", false, true);
     const beforeAbandon = await (await page.request.get(certificateAPI)).json();
     await rowFor(abandoned.issuance.document_number).getByRole("button", { name: "Abandon approval", exact: true }).click();
     const modal = page.getByRole("dialog", { name: "Abandon this approval?", exact: true }); await expect(modal).toBeVisible();
     await modal.getByRole("button", { name: "Cancel", exact: true }).click(); await expect(rowFor(abandoned.issuance.document_number).getByText("Failed", { exact: true })).toBeVisible();
     await rowFor(abandoned.issuance.document_number).getByRole("button", { name: "Abandon approval", exact: true }).click();
     const abandonPath = `${certificateAPI}/issuances/${abandoned.issuance.issuance_id}/abandon`;
-    await page.route(abandonPath, route => route.continue({ headers: { ...route.request().headers(), ...faultHeaders("delete") } }), { times: 1 });
+    await page.route(abandonPath, route => continueWithFault(route, "delete"), { times: 1 });
     const abandonPromise = page.waitForResponse(r => r.url() === abandonPath);
     await modal.getByRole("button", { name: "Abandon approval", exact: true }).click(); expect((await abandonPromise).status()).toBe(503);
     await expect(rowFor(abandoned.issuance.document_number).getByText("Abandoned; file deletion failed.", { exact: true })).toBeVisible();
+    await expect(page.getByText(`Approval ${abandoned.issuance.document_number} was abandoned. Its reserved number remains in history. Prepare a new preview to issue a certificate.`, { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Examination certificate PDF review", exact: true })).toHaveCount(0);
     await expect(rowFor(abandoned.issuance.document_number).getByRole("button", { name: "Retry issuance", exact: true })).toHaveCount(0);
     expect((await page.request.post(`${certificateAPI}/issuances/${abandoned.issuance.issuance_id}/retry`)).status()).toBe(409);
     await rowFor(abandoned.issuance.document_number).getByRole("button", { name: "Retry file deletion", exact: true }).click();

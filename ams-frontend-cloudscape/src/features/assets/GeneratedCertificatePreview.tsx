@@ -40,8 +40,9 @@ export function GeneratedCertificatePreview({ certificateId, signerId, issueDate
   const status = useQuery({
     queryKey: ["issuance-status", certificateId, approved?.issuance_id],
     queryFn: ({ signal }) => getCertificateIssuance(certificateId, approved!.issuance_id, signal),
-    enabled: processing,
-    refetchInterval: query => query.state.data?.state === "COMPLETED" || query.state.data?.state === "FAILED" ? false : 2000,
+    // A failed approval stays observable so recovery in history can invalidate it.
+    enabled: Boolean(approved && approved.state !== "COMPLETED" && approved.state !== "ABANDONED"),
+    refetchInterval: query => query.state.data && query.state.data.state !== "PROCESSING" && query.state.data.state !== "APPROVED" ? false : processing ? 2000 : false,
   });
   useEffect(() => {
     if (!status.data || status.data.state === "PROCESSING" || status.data.state === "APPROVED") return;
@@ -49,8 +50,9 @@ export function GeneratedCertificatePreview({ certificateId, signerId, issueDate
     if (handledStatus.current === identity) return;
     handledStatus.current = identity;
     setApproved(status.data);
+    if (status.data.state === "ABANDONED") { setReview(null); setConfirmation(false); setError(""); }
     if (status.data.state === "COMPLETED") {
-      setReview(null); flash.success("Certificate issued", status.data.document_number);
+      setReview(null); setConfirmation(false); setError(""); flash.success("Certificate issued", status.data.document_number);
       void queryClient.invalidateQueries({ queryKey: ["certificate", certificateId] });
       void queryClient.invalidateQueries({ queryKey: ["certificates"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -139,7 +141,7 @@ export function GeneratedCertificatePreview({ certificateId, signerId, issueDate
           <Textarea ariaLabel="Measurements (optional)" value={measurements} rows={3} onChange={({ detail }) => { discard(); setMeasurements(detail.value); }} />
         </FormField>
         </fieldset>
-        {approved && approved.state !== "COMPLETED" ? <Alert type={approved.state === "FAILED" ? "warning" : "info"}>Approval saved as {approved.document_number}. The current certificate is unchanged. Check issuance history for status.</Alert> : null}
+        {approved?.state === "ABANDONED" ? <Alert type="info">Approval {approved.document_number} was abandoned. Its reserved number remains in history. Prepare a new preview to issue a certificate.</Alert> : approved && approved.state !== "COMPLETED" ? <Alert type={approved.state === "FAILED" ? "warning" : "info"}>Approval saved as {approved.document_number}. The current certificate is unchanged. Check issuance history for status.</Alert> : null}
         {status.isError && processing ? <Alert type="warning" action={<Button onClick={() => void status.refetch()}>Check issuance status</Button>}>Could not check the saved approval. Its number is retained; issuance history is available after reload.</Alert> : null}
         {error ? <Alert type="error">{error}</Alert> : null}
         {expired ? <Alert type="info">This preview expired. Your entered details are kept; create and review a fresh preview.</Alert> : null}

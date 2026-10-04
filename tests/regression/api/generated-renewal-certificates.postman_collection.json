@@ -23,6 +23,23 @@
           "if (!pm.collectionVariables.get('runSuffix')) pm.collectionVariables.set('runSuffix', 'renewal-' + Date.now());"
         ]
       }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Compact numeric records stay on one Newman CLI line even with piped output.",
+          "const certificateTimingOperation = pm.request.url.toString().match(/\\/(generated-preview|generated-issuance|external-renewal|retry)$/)?.[1];",
+          "if (certificateTimingOperation && pm.request.method === 'POST' && pm.response.code === 200) {",
+          " const certificateTimingBody = pm.response.json();",
+          " if (!pm.request.headers.get('X-AMS-Issuance-Test-Fault') && (certificateTimingOperation === 'generated-preview' || certificateTimingBody.state === 'COMPLETED')) {",
+          "  const certificateTimingCode = ['generated-preview', 'generated-issuance', 'external-renewal', 'retry'].indexOf(certificateTimingOperation);",
+          "  console.log('[CERTIFICATE_TIMING] ' + JSON.stringify([certificateTimingCode, pm.response.responseTime]));",
+          " }",
+          "}"
+        ]
+      }
     }
   ],
   "item": [
@@ -12699,6 +12716,35 @@
               }
             },
             {
+              "name": "Status refresh observes completed history recovery",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status refresh observes completed history recovery: status 200\",()=>pm.response.to.have.status(200));",
+                      "if(pm.response.code===200){const b=pm.response.json();pm.expect(b.state).to.eql('COMPLETED');pm.expect(b.document_number).to.eql(pm.collectionVariables.get('recoveryNumber'));pm.expect(b.document_sha256).to.eql(pm.collectionVariables.get('recoveryHash'));}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
               "name": "Completed retry is idempotent",
               "request": {
                 "method": "POST",
@@ -13141,6 +13187,35 @@
               "protocolProfileBehavior": {
                 "disableCookies": true
               }
+            },
+            {
+              "name": "Status refresh observes abandonment despite deletion failure",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{recoveryCert}}/issuances/{{recoveryId}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status refresh observes abandonment despite deletion failure: status 200\",()=>pm.response.to.have.status(200));",
+                      "if(pm.response.code===200){const b=pm.response.json();pm.expect(b.state).to.eql('ABANDONED');pm.expect(b.cleanup_state).to.eql('FAILED');pm.expect(b.abandoned_by).to.eql(pm.collectionVariables.get('abandonActor'));}"
+                    ]
+                  }
+                }
+              ]
             },
             {
               "name": "Abandoned history offers deletion retry only",

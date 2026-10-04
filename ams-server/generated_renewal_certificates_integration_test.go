@@ -1121,6 +1121,51 @@ func TestGeneratedRenewalRecoveryReusesSavedApprovalAfterProfileChanges(t *testi
 	}
 }
 
+// The preview panel observes this contract after a history recovery invalidates its status query.
+func TestGeneratedRenewalStatusReflectsRecoveredAndAbandonedApprovals(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, failed, documents := recoveryFailureFixture(t, h)
+	statusPath := "/v1/certificate/" + cert.String() + "/issuances/" + failed.ID.String()
+	before := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, statusPath, nil, http.StatusOK))
+	assertField(t, before, "state", "FAILED")
+	completed, err := service.Retry(ctx, actor, cert, failed.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshed := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, statusPath, nil, http.StatusOK))
+	assertField(t, refreshed, "state", "COMPLETED")
+	assertField(t, refreshed, "document_number", failed.Number)
+	if stringField(t, refreshed, "document_sha256") != completed.SHA256 {
+		t.Fatal("status lost stored digest")
+	}
+	var saved issuance.Snapshot
+	if err = json.Unmarshal(failed.Snapshot, &saved); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := service.Previews.Prepare(ctx, actor, cert, issuance.PreviewInput{SignerID: &saved.Signer.SignerID, IssueDate: failed.IssueDate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	documents.uncertainPut = true
+	second, err := service.Approve(ctx, actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) {
+		t.Fatal(err)
+	}
+	documents.uncertainPut = false
+	abandoned, err := service.Abandon(ctx, actor, cert, second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminal := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/certificate/"+cert.String()+"/issuances/"+second.ID.String(), nil, http.StatusOK))
+	assertField(t, terminal, "state", "ABANDONED")
+	assertField(t, terminal, "cleanup_state", "DELETED")
+	assertField(t, terminal, "document_number", abandoned.Number)
+	if terminal["abandoned_at"] == nil {
+		t.Fatal("terminal status lost audit timestamp")
+	}
+}
+
 func TestGeneratedRenewalRecoveryRenderAndStorageFailuresKeepOneNumber(t *testing.T) {
 	h := setupIntegrationTest(t)
 	ctx := context.Background()

@@ -57,6 +57,18 @@ bash tests/regression/run-vps-isolated-tests.sh
 
 By default, the isolated runner includes the HR/Admin and generated-renewal collections/specs. The latter cover atomic external renewal, own ADMIN signing profiles, SUPER_ADMIN competent-person signature management, admin category assignment, generated signing/issuance and combined generated/external/Legacy history. Override `NEWMAN_COLLECTIONS` or `E2E_SPECS` for focused feature-step verification or diagnosis.
 
+For the generated certificate **Step 8 final gate**, select `E2E_PROFILE=certificates-final`. This retains all seven maintained Newman collections and expands browser coverage to 11 specs (18 tests discovered). Clear earlier focused overrides so they cannot restrict this run:
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='' E2E_SPECS='' E2E_PROFILE=certificates-final \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Run as `ams_test_runner` from the Fedora repository root after reviewing/publishing and synchronizing the changes yourself. See [Step 8 in the authoritative guide](./TESTING_GUIDE.md#step-8-final-certificate-regression-and-timing-evidence) for the three supplemental certificate mock cases, timing artifacts and final PDF review. Default selections remain seven collections/three browser specs; explicit `E2E_SPECS` takes precedence over the profile. The wider profile is opt-in to keep normal step runs focused.
+
+Step 8 also synchronizes the preview panel after recovery or abandonment from history, clearing obsolete review/error controls. Dedicated Go and Newman status cases and the real-stack recovery journey cover this behavior. The feature collection has 396 requests and the dedicated spec has four journeys. Successful runs retain `certificate-latency-summary.json` with observed preview/issuance/upload/retry durations; browser timing files are attached to the report. Controlled faults are excluded, and no latency threshold is imposed. Static/build checks passed; **Step 8 live regression, measured timings and final PDF review are pending**. Shared Go/API/whole-app baselines need no edits for this UI status change and are included in the final gate. Changes remain uncommitted/unpushed.
+
 Go regression is off unless enabled; the full command above enables it explicitly. The runner isolates PostgreSQL and journals uniquely prefixed test uploads in the configured R2 bucket. Cleanup removes only that run's recorded objects and fails the run if deletion fails. Use approved storage configuration; for generated certificates the user authorized the existing configured bucket and will run the suites on their VPS. Clean up only test-created objects. See the authoritative guide for defaults, feature-step handoffs, reporting, and cleanup.
 
 The runner injects:
@@ -224,9 +236,9 @@ Combined Step 6 evidence: run.u2Zttq passed **170 Go tests, 0 failures/skips**, 
 
 Step 7 is ready but has not started; Steps 7 and 8 remain. This update changes only evidence/status documentation. Dedicated/shared Go/Newman/Playwright files and the runner need no edits, and no live suites were executed by Codex. Automatic failed-report hosting remains enabled. Changes remain uncommitted/unpushed. Suggested documentation commit: `docs(certificates): mark step 6 verified after VPS regression gates`.
 
-### Step 7 prepared — saved approval recovery and abandonment
+### Step 7 recovery and abandonment — verified
 
-Prepared 4 October 2026 on `certgen`; **implementation is ready for VPS verification, which remains pending**. Step 6's recorded gates remain valid. Step 8 follows only after the Step 7 gate and any necessary fixes.
+Prepared 4 October 2026 on `certgen`; **Step 7 is verified across run.2zwEuQ and run.Xnlhcs**. Step 6's recorded gates remain valid. Step 8 remains and has not started; combined verification evidence is recorded below.
 
 Certificate issuance history now offers **Retry issuance**, **Abandon approval** with explicit confirmation, and **Retry file deletion** when cleanup fails. ACTIVE ADMIN accounts manage their own approvals; SUPER_ADMIN may recover or abandon any approval. ADMIN retries of generated certificates retain the own-account signer restriction. USER, CLIENT and anonymous recovery requests are rejected. Active processing/cleanup leases prevent duplicate work; refresh history when a lease is still active. Stale approvals cannot replace a newer certificate and offer abandonment instead.
 
@@ -272,3 +284,11 @@ RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 E2E_SPECS
 ```
 
 Changes remain uncommitted/unpushed. Suggested commit: `test(certificates): account for existing unrestricted signer fixtures`.
+
+### Step 7 verified — run.Xnlhcs passed all four browser journeys
+
+Evidence received 4 October 2026: run.Xnlhcs passed all four dedicated Playwright journeys in **2.2m**: saved-approval recovery 41.6s, external renewal/history 18.0s, SUPER_ADMIN signer management and own ADMIN issuance 56.3s, and own private signing profile 13.4s. This verifies the shared unrestricted-signer baseline correction with all four journeys running together. Storage cleanup deleted 23 journaled objects; isolated database ams_e2e_20261004173713 was dropped; exit status 0. Go/Newman were intentionally not rerun for the browser-only assertion correction.
+
+Combined Step 7 evidence: run.2zwEuQ passed **192 Go tests, 0 failures/skips**, and Newman; run.Xnlhcs passed all four focused Playwright journeys and cleanup. Newman assertion totals were not supplied. **Step 7 implementation and verification are complete. Step 8 (final hardening and broader regression) remains and has not started.** No additional Step 7 rerun is required solely to record this evidence.
+
+Only evidence/status documentation changed in this update. Dedicated Go/Newman/Playwright files, the shared regression baselines and the runner need no changes. Automatic failed-report hosting remains enabled. No live suites were executed, and no commit, push or VPS synchronization was performed by Codex. Suggested documentation commit: `docs(certificates): mark step 7 verified after VPS regression gates`.

@@ -36,6 +36,7 @@ export function CertificateIssuanceHistory({ certificateId }: { certificateId: s
       // Errors may still have persisted an approval or cleanup outcome.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["issuances", certificateId] }),
+        queryClient.invalidateQueries({ queryKey: ["issuance-status", certificateId] }),
         queryClient.invalidateQueries({ queryKey: ["certificate", certificateId] }),
         queryClient.invalidateQueries({ queryKey: ["certificates"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
