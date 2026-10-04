@@ -529,10 +529,14 @@ async function expectRoute(
 
 async function expectOversizeCertificateUploadGuard(
   page: Page,
-  options: { expectFileNameCleared?: boolean } = {},
+  options: { expectFileNameCleared?: boolean; renewal?: boolean } = {},
 ) {
   const fileName = "oversized-certificate.pdf";
-  await page.locator('input[type="file"]').setInputFiles({
+  if (options.renewal) {
+    await page.getByRole("button", { name: "Upload external document", exact: true }).click();
+  }
+  const fileInput = options.renewal ? page.getByLabel("Certificate renewal file", { exact: true }) : page.locator('input[type="file"]');
+  await fileInput.setInputFiles({
     name: fileName,
     mimeType: "application/pdf",
     buffer: Buffer.alloc(10 * 1024 * 1024 + 1, 65),
@@ -617,6 +621,7 @@ test.describe("whole app regression", () => {
       );
       await expectOversizeCertificateUploadGuard(page, {
         expectFileNameCleared: true,
+        renewal: true,
       });
       await expectRoute(
         page,

@@ -39,7 +39,7 @@ async function loginApi(request: APIRequestContext) {
   return body.token;
 }
 
-async function createAsset(request: APIRequestContext, token: string, name: string) {
+async function createAsset(request: APIRequestContext, token: string, name: string, projectName: string) {
   const response = await request.post(`${API_BASE_URL}/asset`, {
     headers: { Authorization: `Bearer ${token}` },
     data: {
@@ -49,19 +49,20 @@ async function createAsset(request: APIRequestContext, token: string, name: stri
       description: "Created by Playwright to verify routine maintenance.",
       status: "ACTIVE",
       location: "E2E Yard",
-      assigned_project: "E2E Maintenance",
+      assigned_project: projectName,
       maintenance_interval_hours: 100,
       template_id: null,
     },
   });
 
-  expect(response.ok()).toBeTruthy();
+  expect(response.ok(), `create maintenance asset: ${response.status()} ${await response.text()}`).toBeTruthy();
   return (await response.json()) as Asset;
 }
 
 async function deleteAsset(request: APIRequestContext, token: string, assetId: string) {
   const response = await request.delete(`${API_BASE_URL}/asset/${assetId}`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
   });
 
   expect([200, 404]).toContain(response.status());
@@ -84,15 +85,31 @@ test.describe("routine maintenance browser flow", () => {
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const assetName = `PW Maintenance Asset ${suffix}`;
     const cleanupRequest = await playwrightRequest.newContext();
-    const token = await loginApi(cleanupRequest);
-    const asset = await createAsset(cleanupRequest, token, assetName);
+    let token = await loginApi(cleanupRequest);
+    let assetId: string | null = null;
+    let projectId: string | null = null;
+    let failed = false;
 
     try {
+      const projectResponse = await cleanupRequest.post(`${API_BASE_URL}/project`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { project_name: `PW Maintenance Project ${suffix}`, description: "Routine maintenance fixture", status: "ACTIVE" },
+      });
+      expect(projectResponse.status(), await projectResponse.text()).toBe(201);
+      const project = await projectResponse.json();
+      projectId = project.project_id;
+      const asset = await createAsset(cleanupRequest, token, assetName, project.project_name);
+      assetId = asset.asset_id;
       await page.goto("/login");
 
       await page.getByLabel("Email").fill(ADMIN_EMAIL!);
       await page.getByLabel("Password").fill(ADMIN_PASSWORD!);
+      const browserLogin = page.waitForResponse(response => response.url() === `${API_BASE_URL}/login` && response.request().method() === "POST");
       await page.getByRole("button", { name: "Sign in" }).click();
+      const loginResponse = await browserLogin;
+      expect(loginResponse.status()).toBe(200);
+      token = (await loginResponse.json()).token;
+      expect(token, "current browser login token for fixture requests").toBeTruthy();
 
       await expect(page).toHaveURL(/\/dashboard$/);
 
@@ -132,9 +149,19 @@ test.describe("routine maintenance browser flow", () => {
       await expect(page.getByText("On schedule")).toBeVisible();
       await expect(page.getByText("200 h").first()).toBeVisible();
       await expect(page.getByText("Completed", { exact: true }).first()).toBeVisible();
+    } catch (failure) {
+      failed = true; throw failure;
     } finally {
-      await deleteAsset(cleanupRequest, token, asset.asset_id);
-      await cleanupRequest.dispose();
+      try {
+        if (assetId) await deleteAsset(cleanupRequest, token, assetId);
+        if (projectId) {
+          const response = await cleanupRequest.delete(`${API_BASE_URL}/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10_000 });
+          expect([200, 404]).toContain(response.status());
+        }
+      } catch (failure) {
+        await test.info().attach("fixture-cleanup-error", { body: String(failure), contentType: "text/plain" });
+        if (!failed) throw failure;
+      } finally { await cleanupRequest.dispose(); }
     }
   });
 });

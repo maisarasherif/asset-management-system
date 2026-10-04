@@ -37,6 +37,7 @@ async function loginApi(request: APIRequestContext) {
 async function getTemplates(request: APIRequestContext, token: string) {
   const response = await request.get(`${API_BASE_URL}/templates`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
   });
   expect(response.ok()).toBeTruthy();
   return (await response.json()) as Array<{ template_id: string; template_name: string }>;
@@ -45,6 +46,7 @@ async function getTemplates(request: APIRequestContext, token: string) {
 async function getPaginated<T>(request: APIRequestContext, token: string, path: string) {
   const response = await request.get(`${API_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
   });
   expect(response.ok()).toBeTruthy();
   const body = (await response.json()) as { data: T[] };
@@ -54,6 +56,7 @@ async function getPaginated<T>(request: APIRequestContext, token: string, path: 
 async function getTestTypes(request: APIRequestContext, token: string) {
   const response = await request.get(`${API_BASE_URL}/test-types`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
   });
   expect(response.ok()).toBeTruthy();
   return (await response.json()) as Array<{ test_id: string; test_name: string }>;
@@ -81,6 +84,7 @@ async function deleteIfPresent(
 ) {
   const response = await request.delete(`${API_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
   });
 
   expect([200, 404]).toContain(response.status());
@@ -110,6 +114,7 @@ async function cleanupByName(
 
   const scopesResponse = await request.get(`${API_BASE_URL}/catalog-scopes`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
   });
   if (scopesResponse.ok()) {
     const scopes = (await scopesResponse.json()) as Array<{ scope_id: string }>;
@@ -174,16 +179,9 @@ async function selectCloudscapeOption(page: Page, testId: string, optionText: st
   const trigger = container.locator("button,[role='combobox'],input").first();
   await trigger.click();
 
-  const optionByRole = page.getByRole("option", {
-    name: new RegExp(`^${escapeRegExp(optionText)}$`),
-  });
-
-  if ((await optionByRole.count()) > 0) {
-    await optionByRole.first().click();
-    return;
-  }
-
-  await page.getByText(optionText, { exact: true }).last().click();
+  await page.getByRole("option", {
+    name: new RegExp(`^${escapeRegExp(optionText)}(?:$|\\s)`),
+  }).click({ timeout: 10_000 });
 }
 
 async function selectCloudscapeMultiOption(page: Page, testId: string, optionText: string) {
@@ -209,14 +207,20 @@ test.describe("template and catalog browser flow", () => {
     };
     const componentName = `PW Component ${suffix}`;
     const cleanupRequest = await playwrightRequest.newContext();
-    const token = await loginApi(cleanupRequest);
+    let token = await loginApi(cleanupRequest);
+    let failed = false;
 
     try {
       await page.goto("/login");
 
       await page.getByLabel("Email").fill(ADMIN_EMAIL!);
       await page.getByLabel("Password").fill(ADMIN_PASSWORD!);
+      const browserLogin = page.waitForResponse(response => response.url() === `${API_BASE_URL}/login` && response.request().method() === "POST");
       await page.getByRole("button", { name: "Sign in" }).click();
+      const loginResponse = await browserLogin;
+      expect(loginResponse.status()).toBe(200);
+      token = (await loginResponse.json()).token;
+      expect(token, "current browser login token for fixture requests").toBeTruthy();
 
       await expect(page).toHaveURL(/\/dashboard$/);
 
@@ -248,16 +252,16 @@ test.describe("template and catalog browser flow", () => {
       await expect(page.getByText("Category created")).toBeVisible();
       await expect(page.getByText(names.categoryName)).toBeVisible();
 
-      await page.getByRole("button", { name: "Create test type" }).click();
-      const testDialog = page.getByRole("dialog");
-      await testDialog.getByLabel("Test type name").fill(names.testName);
+      await page.getByRole("button", { name: "Create test / certificate type", exact: true }).click();
+      const testDialog = page.getByRole("dialog", { name: "Create test / certificate type", exact: true });
+      await testDialog.getByLabel("Test / Certificate type name", { exact: true }).fill(names.testName);
       await testDialog.getByLabel("Validity duration (months)").fill("12");
       await testDialog
         .getByLabel("Description")
         .fill("Created by Playwright to verify the test type flow.");
-      await testDialog.getByRole("button", { name: "Create test type" }).click();
+      await testDialog.getByRole("button", { name: "Create type", exact: true }).click();
 
-      await expect(page.getByText("Test type created")).toBeVisible();
+      await expect(page.getByText("Test / Certificate type created", { exact: true })).toBeVisible();
       await expect(page.getByText(names.testName)).toBeVisible();
 
       await page.getByRole("link", { name: "Templates" }).click();
@@ -311,9 +315,14 @@ test.describe("template and catalog browser flow", () => {
       ).toBeVisible();
       await expect(page.getByText(componentName, { exact: true }).first()).toBeVisible();
       await expect(page.getByText(names.testName, { exact: true }).first()).toBeVisible();
+    } catch (failure) {
+      failed = true; throw failure;
     } finally {
-      await cleanupByName(cleanupRequest, token, names);
-      await cleanupRequest.dispose();
+      try { await cleanupByName(cleanupRequest, token, names); }
+      catch (failure) {
+        await test.info().attach("fixture-cleanup-error", { body: String(failure), contentType: "text/plain" });
+        if (!failed) throw failure;
+      } finally { await cleanupRequest.dispose(); }
     }
   });
 });

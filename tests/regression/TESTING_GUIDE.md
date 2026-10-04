@@ -833,3 +833,45 @@ Evidence received 4 October 2026: run.Xnlhcs passed all four dedicated Playwrigh
 Combined Step 7 evidence: run.2zwEuQ passed **192 Go tests, 0 failures/skips**, and Newman; run.Xnlhcs passed all four focused Playwright journeys and cleanup. Newman assertion totals were not supplied. **Step 7 implementation and verification are complete. Step 8 (final hardening and broader regression) remains and has not started.** No additional Step 7 rerun is required solely to record this evidence.
 
 Only evidence/status documentation changed in this update. Dedicated Go/Newman/Playwright files, the shared regression baselines and the runner need no changes. Automatic failed-report hosting remains enabled. No live suites were executed, and no commit, push or VPS synchronization was performed by Codex. Suggested documentation commit: `docs(certificates): mark step 7 verified after VPS regression gates`.
+
+### Step 8 first broad VPS gate — browser fixture corrections
+
+Evidence received 5 October 2026 from run.47x15g: **193 Go tests passed, 0 failed/skipped; Newman passed; Playwright reported 10 passes and 8 failures in 8.3m**. All four dedicated certificate journeys passed, including the new recovery/abandonment preview synchronization (43.7s), external renewal (18.4s), generated issuance/signers (55.1s), and own signing profile (13.5s). The broader failures are across seven other browser spec files. Storage cleanup deleted 74 journaled objects and dropped ams_e2e_20261004195349. Both cleanups passed; exit 130 followed Ctrl+C stopping the failed HTML report. Newman assertion totals were not supplied.
+
+The separate supplemental run.5mSUXv passed all three CertificateDetailPage mock cases in **14.9s** (5.1s oversize rejection, 2.8s friendly HTML 413 handling, 4.8s route/renewal/history actions). It deleted 0 journaled objects, dropped ams_e2e_20261004195154 and exited 0. Go/Newman were intentionally disabled. This supplemental gate is verified and does not need rerunning for the following unrelated browser fixture changes.
+
+The attached output and page snapshots establish these corrections:
+
+| Spec | Cause and correction |
+| --- | --- |
+| auth-cookie-session (two cases) | Account is a menuitem inside the profile menu, not a sidebar link. The fresh-tab case now opens that menu, navigates to Account and verifies its heading before checking cross-tab logout. The expiry mock previously returned a new authenticated session after every logout/reload; it now retains a fixed expiry, transitions to anonymous after logout, supplies AMS product access, clears a seeded mock cookie and verifies anonymous reload with exactly one logout. |
+| client-asset-certificates | The certificate renewal duration field is labeled Renewal. Update the label while retaining the 6-month duration, validity, file-action layout and suspended-access assertions. |
+| routine-maintenance and scheduler-management | Fixtures named assigned projects they did not create. Each now creates its own unique active project and removes it after its asset, preserving project-backed maintenance/scheduler coverage. |
+| single-asset-equipment and template-catalog | API setup tokens became stale when browser login replaced the same user's stored token. All four setup/browser specs now capture that actual browser login response and use its current token for later API verification/cleanup. Login still returns a token; missing login-token output was ruled out. Cleanup errors are attached separately and do not replace the original failure; failed cleanup still fails otherwise passing tests. Relevant cleanup calls are bounded. |
+| template-catalog | Align the create action, dialog, name field, submit action and success message with the current test / certificate type labels. Dropdown options are awaited by role rather than falling back based on an immediate count. |
+| whole-app-regression | The certificate detail page starts in Generate mode, which has no upload input. Select Upload external document and target Certificate renewal file before asserting the oversize guard. Creation/edit guards retain their existing file inputs. |
+
+These corrections change browser fixtures/assertions only. Production certificate/auth/project behavior, SQL, Go and Newman files are unchanged. Keep the 193 Go passes and Newman pass, along with the four dedicated browser passes and supplemental gate. The dedicated files remain `ams-server/generated_renewal_certificates_integration_test.go`, `api/generated-renewal-certificates.postman_collection.json` and `e2e/generated-renewal-certificates.spec.ts`; they need no edits for these broader-spec fixes. Shared Go regression and system API smoke were reviewed and need no changes. The whole-app browser baseline is updated for the renewal source selector.
+
+The isolated runner was reviewed and needs no change: its certificates-final profile already selects all affected specs, supplies prerequisites/flags, retains timing artifacts, hosts reports on failure, and performs scoped storage/database cleanup. Strict TypeScript checks passed for all seven touched specs and the dedicated certificate spec; discovery still lists 18 tests across 11 files; Bash syntax and diff whitespace passed. User-run evidence is the reproduction loop. Codex did not execute test bodies, start a stack, or commit/push/synchronize files.
+
+After reviewing/publishing/synchronizing these changes yourself, rerun **all 18 browser tests together**, as ams_test_runner from the Fedora repo root:
+
+```bash
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='' E2E_PROFILE=certificates-final \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Return actual browser results, cleanup and exit status, and the run evidence path. No test is removed or skipped to bypass these failures. Preserve automatic failed-report hosting; inspect then Ctrl+C to permit cleanup. The broad browser gate, final timing evidence and PDF sign-off remain pending, so Step 8 is not complete.
+
+The original failed broad run retains certificate timing samples because all four dedicated journeys passed. Its combined summary did not run after the wider Playwright failure. Generate that summary from the existing artifacts, without rerunning requests:
+
+```bash
+python3 tests/regression/support/certificate-latency-summary.py \
+  --newman-log .vps-test-run/run.47x15g/generated-renewal-certificates.postman_collection.json.log \
+  --playwright-dir .vps-test-run/run.47x15g/certificate-timings \
+  --output .vps-test-run/run.47x15g/certificate-latency-summary.json
+```
+
+Return the printed table or JSON; measured latency values have not yet been supplied. The browser-only rerun produces its own timing summary without Newman samples; keep layer/run provenance when comparing. Final own/competent/long-text/recovered PDF feedback also remains pending. Suggested commit: `test(regression): repair final certificate gate fixtures and selectors`.

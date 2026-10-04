@@ -85,6 +85,7 @@ async function postJson<T>(
 async function getJson<T>(request: APIRequestContext, token: string, path: string) {
   const response = await request.get(`${API_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
   });
 
   expect(response.ok()).toBeTruthy();
@@ -94,6 +95,7 @@ async function getJson<T>(request: APIRequestContext, token: string, path: strin
 async function deleteIfPresent(request: APIRequestContext, token: string, path: string) {
   const response = await request.delete(`${API_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
   });
 
   expect([200, 404]).toContain(response.status());
@@ -106,16 +108,9 @@ async function selectCloudscapeOption(page: Page, testId: string, optionText: st
   const trigger = container.locator("button,[role='combobox'],input").first();
   await trigger.click();
 
-  const optionByRole = page.getByRole("option", {
-    name: new RegExp(`^${escapeRegExp(optionText)}$`),
-  });
-
-  if ((await optionByRole.count()) > 0) {
-    await optionByRole.first().click();
-    return;
-  }
-
-  await page.getByText(optionText, { exact: true }).last().click();
+  await page.getByRole("option", {
+    name: new RegExp(`^${escapeRegExp(optionText)}(?:$|\\s)`),
+  }).click({ timeout: 10_000 });
 }
 
 async function selectCloudscapeMultiOption(page: Page, testId: string, optionText: string) {
@@ -138,7 +133,8 @@ test.describe("single-asset equipment flow", () => {
     const loadTestName = `PW Single Load ${suffix}`;
     const assetName = `PW Single Equipment Asset ${suffix}`;
     const setupRequest = await playwrightRequest.newContext();
-    const token = await loginApi(setupRequest);
+    let token = await loginApi(setupRequest);
+    let failed = false;
     let assetId: string | null = null;
     let equipmentType: CreatedEquipmentType | null = null;
     let visualTest: CreatedTestType | null = null;
@@ -218,7 +214,12 @@ test.describe("single-asset equipment flow", () => {
       await page.goto("/login");
       await page.getByLabel("Email").fill(ADMIN_EMAIL!);
       await page.getByLabel("Password").fill(ADMIN_PASSWORD!);
+      const browserLogin = page.waitForResponse(response => response.url() === `${API_BASE_URL}/login` && response.request().method() === "POST");
       await page.getByRole("button", { name: "Sign in" }).click();
+      const loginResponse = await browserLogin;
+      expect(loginResponse.status()).toBe(200);
+      token = (await loginResponse.json()).token;
+      expect(token, "current browser login token for fixture requests").toBeTruthy();
       await expect(page).toHaveURL(/\/dashboard$/);
 
       await page.goto("/assets/new");
@@ -300,40 +301,46 @@ test.describe("single-asset equipment flow", () => {
         },
       });
       expect(forbiddenComponent.status()).toBe(409);
+    } catch (failure) {
+      failed = true; throw failure;
     } finally {
-      if (assetId) {
-        await deleteIfPresent(setupRequest, token, `/asset/${assetId}`);
-      }
-      if (scopeCategory) {
-        await deleteIfPresent(
-          setupRequest,
-          token,
-          `/catalog-scope-category/${scopeCategory.scope_category_id}`
-        );
-      }
-      if (category) {
-        await deleteIfPresent(setupRequest, token, `/category/${category.category_id}`);
-      }
-      if (scopeMainCategory) {
-        await deleteIfPresent(
-          setupRequest,
-          token,
-          `/catalog-scope-main-category/${scopeMainCategory.scope_main_category_id}`
-        );
-      }
-      if (mainCategory) {
-        await deleteIfPresent(setupRequest, token, `/main-category/${mainCategory.main_category_id}`);
-      }
-      if (equipmentType) {
-        await deleteIfPresent(setupRequest, token, `/equipment-type/${equipmentType.equipment_type_id}`);
-      }
-      if (visualTest) {
-        await deleteIfPresent(setupRequest, token, `/test-type/${visualTest.test_id}`);
-      }
-      if (loadTest) {
-        await deleteIfPresent(setupRequest, token, `/test-type/${loadTest.test_id}`);
-      }
-      await setupRequest.dispose();
+      try {
+        if (assetId) {
+          await deleteIfPresent(setupRequest, token, `/asset/${assetId}`);
+        }
+        if (scopeCategory) {
+          await deleteIfPresent(
+            setupRequest,
+            token,
+            `/catalog-scope-category/${scopeCategory.scope_category_id}`
+          );
+        }
+        if (category) {
+          await deleteIfPresent(setupRequest, token, `/category/${category.category_id}`);
+        }
+        if (scopeMainCategory) {
+          await deleteIfPresent(
+            setupRequest,
+            token,
+            `/catalog-scope-main-category/${scopeMainCategory.scope_main_category_id}`
+          );
+        }
+        if (mainCategory) {
+          await deleteIfPresent(setupRequest, token, `/main-category/${mainCategory.main_category_id}`);
+        }
+        if (equipmentType) {
+          await deleteIfPresent(setupRequest, token, `/equipment-type/${equipmentType.equipment_type_id}`);
+        }
+        if (visualTest) {
+          await deleteIfPresent(setupRequest, token, `/test-type/${visualTest.test_id}`);
+        }
+        if (loadTest) {
+          await deleteIfPresent(setupRequest, token, `/test-type/${loadTest.test_id}`);
+        }
+      } catch (failure) {
+        await test.info().attach("fixture-cleanup-error", { body: String(failure), contentType: "text/plain" });
+        if (!failed) throw failure;
+      } finally { await setupRequest.dispose(); }
     }
   });
 });

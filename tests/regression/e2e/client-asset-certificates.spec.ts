@@ -322,7 +322,7 @@ test.describe("client asset certificates browser flow", () => {
       await expect(record.getByText("Validity", { exact: true })).toBeVisible();
       await expect(record.getByText("Valid", { exact: true })).toBeVisible();
       await expect(record.getByText("Test type", { exact: true })).toHaveCount(0);
-      await expect(record.getByText("Test period", { exact: true })).toBeVisible();
+      await expect(record.getByText("Renewal", { exact: true })).toBeVisible();
       await expect(record.getByText("6 months", { exact: true })).toBeVisible();
 
       const buttonBounds = await page.locator(".client-certificate-scroll").evaluate((scroll) => {

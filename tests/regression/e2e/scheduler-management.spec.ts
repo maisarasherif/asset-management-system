@@ -77,13 +77,14 @@ async function postJson<T>(
     data,
   });
 
-  expect(response.ok()).toBeTruthy();
+  expect(response.ok(), `POST ${path}: ${response.status()} ${await response.text()}`).toBeTruthy();
   return (await response.json()) as T;
 }
 
 async function getJson<T>(request: APIRequestContext, token: string, path: string) {
   const response = await request.get(`${API_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
   });
 
   expect(response.ok()).toBeTruthy();
@@ -93,6 +94,7 @@ async function getJson<T>(request: APIRequestContext, token: string, path: strin
 async function deleteIfPresent(request: APIRequestContext, token: string, path: string) {
   const response = await request.delete(`${API_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
   });
 
   expect([200, 404]).toContain(response.status());
@@ -118,7 +120,9 @@ test.describe("scheduler management flow", () => {
     const issueDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const expiryDate = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString();
     const setupRequest = await playwrightRequest.newContext();
-    const token = await loginApi(setupRequest);
+    let token = await loginApi(setupRequest);
+    let failed = false;
+    let projectId: string | null = null;
     let assetId: string | null = null;
     let mainCategoryId: string | null = null;
     let categoryId: string | null = null;
@@ -186,6 +190,12 @@ test.describe("scheduler management flow", () => {
       });
       testTypeId = testType.test_id;
 
+      const project = await postJson<{ project_id: string; project_name: string }>(setupRequest, token, "/project", {
+        project_name: `PW Scheduler Project ${suffix}`,
+        description: "Created by Playwright for scheduler management.",
+        status: "ACTIVE",
+      });
+      projectId = project.project_id;
       const asset = await postJson<CreatedAsset>(setupRequest, token, "/asset", {
         name: assetName,
         photo: "",
@@ -193,7 +203,7 @@ test.describe("scheduler management flow", () => {
         description: "Created by Playwright for scheduler management.",
         status: "ACTIVE",
         location: "Scheduler Yard",
-        assigned_project: "Scheduler Project",
+        assigned_project: project.project_name,
         maintenance_interval_hours: 0,
       });
       assetId = asset.asset_id;
@@ -207,7 +217,7 @@ test.describe("scheduler management flow", () => {
         manufacturer: "Playwright Manufacturer",
         description: "Created by Playwright for scheduler management.",
         location: "Scheduler Yard",
-        assigned_project: "Scheduler Project",
+        assigned_project: project.project_name,
         equipment_type: "Scheduler Equipment",
         structure: "Portable",
         model: "PW-SCHED",
@@ -231,7 +241,12 @@ test.describe("scheduler management flow", () => {
       await page.goto("/login");
       await page.getByLabel("Email").fill(ADMIN_EMAIL!);
       await page.getByLabel("Password").fill(ADMIN_PASSWORD!);
+      const browserLogin = page.waitForResponse(response => response.url() === `${API_BASE_URL}/login` && response.request().method() === "POST");
       await page.getByRole("button", { name: "Sign in" }).click();
+      const loginResponse = await browserLogin;
+      expect(loginResponse.status()).toBe(200);
+      token = (await loginResponse.json()).token;
+      expect(token, "current browser login token for fixture requests").toBeTruthy();
       await expect(page).toHaveURL(/\/dashboard$/);
 
       await page.goto("/scheduler");
@@ -242,30 +257,39 @@ test.describe("scheduler management flow", () => {
 
       await page.getByRole("button", { name: "Run scheduler now" }).click();
       await expect(page.getByText("Scheduler run completed")).toBeVisible();
+    } catch (failure) {
+      failed = true; throw failure;
     } finally {
-      if (assetId) {
-        await deleteIfPresent(setupRequest, token, `/asset/${assetId}`);
-      }
-      if (scopeCategoryId) {
-        await deleteIfPresent(setupRequest, token, `/catalog-scope-category/${scopeCategoryId}`);
-      }
-      if (categoryId) {
-        await deleteIfPresent(setupRequest, token, `/category/${categoryId}`);
-      }
-      if (scopeMainCategoryId) {
-        await deleteIfPresent(
-          setupRequest,
-          token,
-          `/catalog-scope-main-category/${scopeMainCategoryId}`
-        );
-      }
-      if (mainCategoryId) {
-        await deleteIfPresent(setupRequest, token, `/main-category/${mainCategoryId}`);
-      }
-      if (testTypeId) {
-        await deleteIfPresent(setupRequest, token, `/test-type/${testTypeId}`);
-      }
-      await setupRequest.dispose();
+      try {
+        if (assetId) {
+          await deleteIfPresent(setupRequest, token, `/asset/${assetId}`);
+        }
+        if (scopeCategoryId) {
+          await deleteIfPresent(setupRequest, token, `/catalog-scope-category/${scopeCategoryId}`);
+        }
+        if (categoryId) {
+          await deleteIfPresent(setupRequest, token, `/category/${categoryId}`);
+        }
+        if (scopeMainCategoryId) {
+          await deleteIfPresent(
+            setupRequest,
+            token,
+            `/catalog-scope-main-category/${scopeMainCategoryId}`
+          );
+        }
+        if (mainCategoryId) {
+          await deleteIfPresent(setupRequest, token, `/main-category/${mainCategoryId}`);
+        }
+        if (testTypeId) {
+          await deleteIfPresent(setupRequest, token, `/test-type/${testTypeId}`);
+        }
+        if (projectId) {
+          await deleteIfPresent(setupRequest, token, `/project/${projectId}`);
+        }
+      } catch (failure) {
+        await test.info().attach("fixture-cleanup-error", { body: String(failure), contentType: "text/plain" });
+        if (!failed) throw failure;
+      } finally { await setupRequest.dispose(); }
     }
   });
 });

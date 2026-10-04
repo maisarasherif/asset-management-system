@@ -292,3 +292,19 @@ Evidence received 4 October 2026: run.Xnlhcs passed all four dedicated Playwrigh
 Combined Step 7 evidence: run.2zwEuQ passed **192 Go tests, 0 failures/skips**, and Newman; run.Xnlhcs passed all four focused Playwright journeys and cleanup. Newman assertion totals were not supplied. **Step 7 implementation and verification are complete. Step 8 (final hardening and broader regression) remains and has not started.** No additional Step 7 rerun is required solely to record this evidence.
 
 Only evidence/status documentation changed in this update. Dedicated Go/Newman/Playwright files, the shared regression baselines and the runner need no changes. Automatic failed-report hosting remains enabled. No live suites were executed, and no commit, push or VPS synchronization was performed by Codex. Suggested documentation commit: `docs(certificates): mark step 7 verified after VPS regression gates`.
+
+## Step 8 broad-run browser correction — 5 October 2026
+
+run.47x15g passed 193 Go tests (0 failures/skips), Newman and all four dedicated certificate journeys; the wider browser run reported 10 passes/8 failures in 8.3m. Scoped cleanup deleted 74 objects and dropped the database; exit 130 followed stopping the failed report. run.5mSUXv separately passed all three supplemental certificate mocks in 14.9s, with cleanup and exit 0.
+
+Seven broader specs now use current labels/source selection, a stateful expiry mock, real project prerequisites and the current browser login token for API checks/cleanup. Cleanup errors preserve the original failure. Production behavior and the dedicated Go/Newman/certificate files are unchanged. Shared whole-app upload coverage is updated; shared Go/API smoke need no edits. The runner was reviewed and needs no changes. Strict TypeScript, 18-test discovery, Bash syntax and diff whitespace passed; no live suites were run by Codex. Changes remain uncommitted/unpushed.
+
+Rerun only the complete browser profile, keeping all 18 tests together:
+
+```bash
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='' E2E_PROFILE=certificates-final \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+The passed Go/Newman/supplemental evidence remains valid. Step 8 remains pending the broader browser rerun, measured timings and final PDF review. See the authoritative guide's latest Step 8 entry for causes, retained evidence and the command to summarize original run.47x15g timing artifacts without rerunning requests. Suggested commit: `test(regression): repair final certificate gate fixtures and selectors`.

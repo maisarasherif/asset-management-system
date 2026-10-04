@@ -25,9 +25,11 @@ test.describe("HTTP-only cookie session", () => {
     const secondTab = await context.newPage();
     await secondTab.goto("/assets");
     await expect(secondTab).toHaveURL(/\/assets$/);
-    await expect(
-      secondTab.getByRole("link", { name: "Account" })
-    ).toBeVisible();
+    await secondTab.getByRole("navigation", { name: "Primary navigation" })
+      .locator('button[aria-haspopup="menu"]').click();
+    await secondTab.getByRole("menuitem", { name: "Account", exact: true }).click();
+    await expect(secondTab).toHaveURL(/\/account$/);
+    await expect(secondTab.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
 
     await page.goto("/account");
     await page.getByRole("button", { name: "Sign out" }).click();
@@ -55,8 +57,12 @@ test.describe("HTTP-only cookie session", () => {
 });
 
 test.describe("HTTP-only cookie expiry", () => {
-  test("scheduled session expiry clears the server cookie before showing login", async ({ page }) => {
+  test("scheduled session expiry clears the server cookie before showing login", async ({ page, context, baseURL }) => {
     let logoutCalls = 0;
+    let authenticated = true;
+    // The application expires sessions five seconds early. Allow bootstrap before the timer fires.
+    const expiresAt = new Date(Date.now() + 6000).toISOString();
+    await context.addCookies([{ name: "ams_access_token", value: "expiry-fixture", url: baseURL!, httpOnly: true, sameSite: "Lax" }]);
 
     await page.route("**/v1/**", async (route) => {
       const request = route.request();
@@ -64,6 +70,10 @@ test.describe("HTTP-only cookie expiry", () => {
       const path = url.pathname.replace(/^\/v1/, "");
 
       if (path === "/session" && request.method() === "GET") {
+        if (!authenticated) {
+          await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "no token provided" }) });
+          return;
+        }
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -74,7 +84,7 @@ test.describe("HTTP-only cookie expiry", () => {
             email: "admin@example.test",
             role: "SUPER_ADMIN",
             status: "ACTIVE",
-            expires_at: new Date(Date.now() + 1000).toISOString(),
+            expires_at: expiresAt,
             can_manage_user_passwords: true,
           }),
         });
@@ -83,11 +93,18 @@ test.describe("HTTP-only cookie expiry", () => {
 
       if (path === "/logout" && request.method() === "POST") {
         logoutCalls += 1;
+        authenticated = false;
         await route.fulfill({
           status: 200,
           contentType: "application/json",
+          headers: { "Set-Cookie": "ams_access_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax" },
           body: JSON.stringify({ message: "user logged out successfully" }),
         });
+        return;
+      }
+
+      if (path === "/platform/products" && request.method() === "GET") {
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ products: [{ product_key: "AMS", product_name: "Asset Management", product_role: "ADMIN", status: "ACTIVE" }] }) });
         return;
       }
 
@@ -103,5 +120,9 @@ test.describe("HTTP-only cookie expiry", () => {
     await expect(page).toHaveURL(/\/login$/);
     await expect.poll(() => logoutCalls).toBe(1);
     await expect(page.getByRole("heading", { name: "Staff login" })).toBeVisible();
+    expect((await context.cookies()).some(cookie => cookie.name === "ams_access_token")).toBe(false);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Staff login" })).toBeVisible();
+    expect(logoutCalls).toBe(1);
   });
 });
