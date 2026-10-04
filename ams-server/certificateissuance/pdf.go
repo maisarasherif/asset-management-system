@@ -36,6 +36,7 @@ type certificatePDF struct {
 	ctx          context.Context
 	number       string
 	y            float64
+	bodyTop      float64
 	err          error
 	missingGlyph bool
 	logo         gopdf.ImageHolder
@@ -107,17 +108,22 @@ func (r *certificatePDF) page() {
 	ruleY := pdfLogoTop + r.logoHeight + pdfLogoRuleGap
 	r.pdf.Line(pdfMargin, ruleY, pdfMargin+pdfWidth, ruleY)
 	r.pdf.SetTextColor(45, 93, 153)
-	r.text(pdfMargin, 105, pdfWidth, 18, true, "CERTIFICATE OF EXAMINATION", gopdf.Center)
+	// Keep the reviewed spacing below the header while allowing the title,
+	// number, and body to follow the logo/line position on every page.
+	titleY := ruleY + 16
+	numberY := titleY + 32
+	r.text(pdfMargin, titleY, pdfWidth, 18, true, "CERTIFICATE OF EXAMINATION", gopdf.Center)
 	numberLines := r.lines(r.number, pdfWidth, 11, true)
 	if len(numberLines) > 3 {
 		r.err = ErrPreviewInput
 		return
 	}
 	for i, line := range numberLines {
-		r.text(pdfMargin, 137+float64(i)*15, pdfWidth, 11, true, line, gopdf.Center)
+		r.text(pdfMargin, numberY+float64(i)*15, pdfWidth, 11, true, line, gopdf.Center)
 	}
 	r.pdf.SetTextColor(23, 44, 66)
-	r.y = 164 + float64(max(0, len(numberLines)-1))*15
+	r.bodyTop = numberY + 27 + float64(max(0, len(numberLines)-1))*15
+	r.y = r.bodyTop
 }
 func (r *certificatePDF) space(height float64) {
 	if r.y+height > pdfBottom {
@@ -261,7 +267,7 @@ func (PDFRenderer) Render(ctx context.Context, s Snapshot, number string, signat
 	nameLines := r.lines(s.Signer.FullName, 237, 10, false)
 	orgLines := r.lines(s.Signer.Organization, 237, 10, false)
 	height := math.Max(112, 74+float64(len(nameLines)+len(orgLines))*15)
-	if height+40 > pdfBottom-164 {
+	if height+40 > pdfBottom-r.bodyTop {
 		return nil, ErrPreviewInput
 	}
 	r.space(height + 29)

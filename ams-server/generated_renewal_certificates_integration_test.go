@@ -219,13 +219,15 @@ func TestGeneratedRenewalPreviewHTTPPDFTokenAndRoleBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", map[string]any{"preview_token": old}, http.StatusGone)
-	previousLayout := response.Snapshot
-	previousLayout.TemplateVersion = "pms-examination-a4-v1"
-	previousToken, err := issuance.SignPreview([]byte(os.Getenv("SECRET_KEY")), signingActor(t, h), previousLayout, time.Now().Truncate(time.Second))
-	if err != nil {
-		t.Fatal(err)
+	for _, template := range []string{"pms-examination-a4-v1", "pms-examination-a4-v2"} {
+		previousLayout := response.Snapshot
+		previousLayout.TemplateVersion = template
+		previousToken, err := issuance.SignPreview([]byte(os.Getenv("SECRET_KEY")), signingActor(t, h), previousLayout, time.Now().Truncate(time.Second))
+		if err != nil {
+			t.Fatal(err)
+		}
+		performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", map[string]any{"preview_token": previousToken}, http.StatusBadRequest)
 	}
-	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", map[string]any{"preview_token": previousToken}, http.StatusBadRequest)
 	for _, role := range []string{"USER", "CLIENT", "ADMIN", "SUPER_ADMIN"} {
 		token := createIntegrationUserToken(t, h.pool, "Preview", role, "preview-"+role+"@example.com", "preview-password", role)
 		status := http.StatusForbidden

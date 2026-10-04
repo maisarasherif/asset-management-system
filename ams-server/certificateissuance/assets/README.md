@@ -2,7 +2,7 @@
 
 Noto Sans Regular and Bold (static hinted TTF) are bundled under the SIL Open Font License 1.1 in OFL.md. Sources: https://github.com/notofonts/notofonts.github.io/tree/main/fonts/NotoSans/hinted/ttf and https://github.com/google/fonts/tree/main/ofl/notosans. The font covers Latin, Greek, and Cyrillic. The renderer rejects missing glyphs rather than silently substituting spaces. Additional scripts require explicit font/shaping support.
 
-porto-marine-logo.png is the existing company SVG from ams-frontend-cloudscape/public/porto-marine-logo.svg, rasterized during the approved layout proposal. Rendering uses only embedded assets, without network/font dependencies. Template version: pms-examination-a4-v2; the header separator sits 10 points below the logo on every page. Earlier v1 preview tokens require a fresh preview so the reviewed layout remains the issuance layout. gopdf is pinned to v0.38.1 (MIT): https://github.com/signintech/gopdf/tree/v0.38.1.
+porto-marine-logo.png is the existing company SVG from ams-frontend-cloudscape/public/porto-marine-logo.svg, rasterized during the approved layout proposal. Rendering uses only embedded assets, without network/font dependencies. Template version: pms-examination-a4-v3; the header separator sits 10 points below the logo, the title starts 16 points below the separator, the number starts 32 points below the title, and the body starts 27 points below the number (plus wrapped-number lines). These positions follow the header on every page; the footer stays at the bottom. Earlier v1/v2 preview tokens require a fresh preview so the reviewed layout remains the issuance layout. gopdf is pinned to v0.38.1 (MIT): https://github.com/signintech/gopdf/tree/v0.38.1.
 
 SHA-256 of bundled bytes:
 
