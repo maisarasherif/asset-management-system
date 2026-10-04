@@ -610,3 +610,18 @@ The Go test retains pdf-previews/approved-examination-preview.pdf and pdf-previe
 Compare preview/final pairs. The intended content difference is XX becoming the allocated sequence; the approved v3 layout, signer/signature, dates/validity, equipment/component/test/IMCA details and optional text must remain consistent. Verify the current certificate changes only after completion and the older PDF remains available after another issuance or signature edit. No Step 6 work should begin until all selected layers, cleanup and PDF feedback pass.
 
 Suggested commit message: feat(certificates): approve and publish generated renewals.
+
+### Step 5 first VPS gate and anonymous-request correction
+
+User results received 4 October 2026: **161 Go passes, 0 failures, 0 skips**. Newman stopped at request 228 with one failed assertion: Anonymous cannot approve another account review expected 401 but received 403. Playwright did not run. Storage cleanup deleted 24 journaled objects; database ams_e2e_20261004100656 was dropped; exit status 1. No run directory identifier was supplied.
+
+The three new anonymous approval/history/document cases used noauth without disabling cookies. Newman can therefore send a cookie from a preceding login; the server correctly reads it as authentication. Each now sets protocolProfileBehavior.disableCookies=true, matching the existing anonymous cases, and keeps its strict 401 assertion. Local JSON/SDK and script-syntax checks plus a structural check of all anonymous requests verify the fixture correction; live confirmation remains pending. The collection still contains 270 requests. This changes the Newman fixture only; dedicated Go and Playwright files and shared regression suites need no changes. The runner remains compatible and automatic failed-report hosting stays enabled.
+
+After reviewing and synchronizing this correction, rerun the two unverified layers as ams_test_runner. The successful Go result can be retained because backend and Go test sources are unchanged:
+
+```bash
+cd /home/pms/ams-testing/asset-management-system
+RUN_GO_REGRESSION=0 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 NEWMAN_COLLECTIONS='tests/regression/api/generated-renewal-certificates.postman_collection.json' E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Return the Newman/Playwright summaries, cleanup, exit status and run ID, plus feedback on the preview/final PDF pairs. Step 5 remains incomplete until these checks pass. Suggested correction commit: test(certificates): isolate anonymous issuance requests from login cookies.

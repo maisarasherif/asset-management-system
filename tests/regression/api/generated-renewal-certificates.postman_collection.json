@@ -8023,7 +8023,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
             },
             {
               "name": "Other ADMIN cannot approve another account review",
@@ -8479,7 +8482,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
             },
             {
               "name": "Anonymous cannot read staff issued document",
@@ -8500,7 +8506,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
             },
             {
               "name": "Replace competent signature after completed issuance",
