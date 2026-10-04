@@ -21,7 +21,7 @@ import (
 
 const PreviewTTL = 30 * time.Minute
 const SnapshotVersion = 1
-const TemplateVersion = "pms-examination-a4-v1"
+const TemplateVersion = "pms-examination-a4-v2"
 const previewIssuer = "AMS-CERTIFICATE-PREVIEW"
 const previewAudience = "generated-certificate-approval"
 

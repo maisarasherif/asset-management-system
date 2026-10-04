@@ -206,7 +206,7 @@ func TestGeneratedRenewalPreviewHTTPPDFTokenAndRoleBoundaries(t *testing.T) {
 	if err := json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path, input, http.StatusOK), &response); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.HasPrefix(response.PDF, []byte("%PDF-")) || !strings.HasSuffix(response.Number, "-XX") || response.Snapshot.Signer.FullName != "José Preview Examiner" {
+	if !bytes.HasPrefix(response.PDF, []byte("%PDF-")) || !strings.HasSuffix(response.Number, "-XX") || response.Snapshot.Signer.FullName != "José Preview Examiner" || response.Snapshot.TemplateVersion != issuance.TemplateVersion {
 		t.Fatal("preview document incomplete")
 	}
 	tokenInput := map[string]any{"preview_token": response.Token}
@@ -219,6 +219,13 @@ func TestGeneratedRenewalPreviewHTTPPDFTokenAndRoleBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", map[string]any{"preview_token": old}, http.StatusGone)
+	previousLayout := response.Snapshot
+	previousLayout.TemplateVersion = "pms-examination-a4-v1"
+	previousToken, err := issuance.SignPreview([]byte(os.Getenv("SECRET_KEY")), signingActor(t, h), previousLayout, time.Now().Truncate(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", map[string]any{"preview_token": previousToken}, http.StatusBadRequest)
 	for _, role := range []string{"USER", "CLIENT", "ADMIN", "SUPER_ADMIN"} {
 		token := createIntegrationUserToken(t, h.pool, "Preview", role, "preview-"+role+"@example.com", "preview-password", role)
 		status := http.StatusForbidden

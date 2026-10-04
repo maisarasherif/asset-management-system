@@ -279,6 +279,7 @@ test("SUPER_ADMIN manages signatures and categories; generated previews enforce 
       expect(data.document_number).toMatch(/^PMS-CE-261004-.+-XX$/);
       expect(data.snapshot.signer.signer_id).toBe(eligible.competent_person_id);
       expect(data.snapshot.expiry_date).toBe("2027-10-04");
+      expect(data.snapshot.template_version).toBe("pms-examination-a4-v2");
       expect(Buffer.from(data.pdf_base64, "base64").subarray(0, 5).toString()).toBe("%PDF-");
       return data;
     };
@@ -390,6 +391,7 @@ test("SUPER_ADMIN manages signatures and categories; generated previews enforce 
     const ownPreviewHTTP = await ownPreviewResponse;
     expect(ownPreviewHTTP.status()).toBe(200);
     const ownPreview = await ownPreviewHTTP.json();
+    expect(ownPreview.snapshot.template_version).toBe("pms-examination-a4-v2");
     expect(ownPreview.snapshot.signer.owner_kind).toBe("ACCOUNT");
     expect(ownPreview.snapshot.signer.signer_id).toBe(admin.user_id);
     await expect(pdfReview).toBeVisible();

@@ -78,6 +78,7 @@ func TestPreviewTokenPurposeExpiryBindingsAndAlgorithm(t *testing.T) {
 		{"missing issued time", func(c *PreviewClaims) { c.IssuedAt = nil }},
 		{"unknown schema", func(c *PreviewClaims) { c.Snapshot.SchemaVersion = 99 }},
 		{"unknown template", func(c *PreviewClaims) { c.Snapshot.TemplateVersion = "unknown" }},
+		{"previous layout template", func(c *PreviewClaims) { c.Snapshot.TemplateVersion = "pms-examination-a4-v1" }},
 	} {
 		changed := claims
 		change.mutate(&changed)

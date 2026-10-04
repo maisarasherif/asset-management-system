@@ -28,6 +28,8 @@ type PDFRenderer struct{}
 const pdfMargin = 40.0
 const pdfWidth = 515.0
 const pdfBottom = 765.0
+const pdfLogoTop = 30.0
+const pdfLogoRuleGap = 10.0
 
 type certificatePDF struct {
 	pdf          gopdf.GoPdf
@@ -96,13 +98,14 @@ func (r *certificatePDF) page() {
 		return
 	}
 	r.pdf.AddPage()
-	if err := r.pdf.ImageByHolder(r.logo, pdfMargin, 30, &gopdf.Rect{W: 115, H: r.logoHeight}); err != nil {
+	if err := r.pdf.ImageByHolder(r.logo, pdfMargin, pdfLogoTop, &gopdf.Rect{W: 115, H: r.logoHeight}); err != nil {
 		r.err = err
 		return
 	}
 	r.pdf.SetStrokeColor(70, 181, 179)
 	r.pdf.SetLineWidth(1)
-	r.pdf.Line(pdfMargin, 89, pdfMargin+pdfWidth, 89)
+	ruleY := pdfLogoTop + r.logoHeight + pdfLogoRuleGap
+	r.pdf.Line(pdfMargin, ruleY, pdfMargin+pdfWidth, ruleY)
 	r.pdf.SetTextColor(45, 93, 153)
 	r.text(pdfMargin, 105, pdfWidth, 18, true, "CERTIFICATE OF EXAMINATION", gopdf.Center)
 	numberLines := r.lines(r.number, pdfWidth, 11, true)
