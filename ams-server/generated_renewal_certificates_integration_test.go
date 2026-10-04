@@ -1037,6 +1037,494 @@ func (s *issuanceMemoryDocuments) Read(_ context.Context, key string) ([]byte, e
 	return bytes.Clone(data), nil
 }
 
+func externalInput(person uuid.UUID) issuance.ExternalInput {
+	return issuance.ExternalInput{ApprovalID: uuid.New(), PersonID: person, IssueDate: "2026-10-04", ExpiryDate: "2027-10-04", FileName: "external.pdf", ContentType: "application/pdf", Data: []byte("%PDF-1.4 original external examination\n")}
+}
+
+func TestGeneratedRenewalExternalFailuresReplayAndImmutableBytes(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, preview, documents := generatedIssuanceFixture(t, h)
+	renderer := &issuanceRecordingRenderer{failure: errors.New("external documents must never render")}
+	service.Previews.Renderer = renderer
+	input := externalInput(*preview.SignerID)
+	original, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+	before, _ := json.Marshal(original)
+	documents.failPut = true
+	failed, err := service.ApproveExternal(ctx, actor, cert, input)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) || failed.State != "FAILED" || failed.Number != "" {
+		t.Fatal(failed, err)
+	}
+	assertCertificateUnchanged(t, h, cert, before)
+	documents.failPut = false
+	documents.uncertainPut = true
+	uncertain, err := service.ApproveExternal(ctx, actor, cert, input)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) || uncertain.ID != failed.ID {
+		t.Fatal(uncertain, err)
+	}
+	assertCertificateUnchanged(t, h, cert, before)
+	puts := documents.puts
+	row, err := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: failed.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	documents.objects[row.FileKey] = []byte("corrupted stored external document")
+	documents.uncertainPut = false
+	corrupt, err := service.ApproveExternal(ctx, actor, cert, input)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) || corrupt.FailureCode != "DOCUMENT_INTEGRITY" {
+		t.Fatal(corrupt, err)
+	}
+	assertCertificateUnchanged(t, h, cert, before)
+	documents.objects[row.FileKey] = bytes.Clone(input.Data)
+	if _, err := h.pool.Exec(ctx, "UPDATE competent_persons SET full_name='Future name',organization='Future organization' WHERE competent_person_id=$1", input.PersonID); err != nil {
+		t.Fatal(err)
+	}
+	completed, err := service.ApproveExternal(ctx, actor, cert, input)
+	if err != nil || completed.State != "COMPLETED" || completed.ID != failed.ID || documents.puts != puts || renderer.calls != 0 {
+		t.Fatal(completed, err)
+	}
+	var snapshot map[string]any
+	if err := json.Unmarshal(completed.Snapshot, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	signer := snapshot["signer"].(map[string]any)
+	if signer["full_name"] != "Issued Examiner" || signer["signature"] != nil {
+		t.Fatal("external snapshot was reconstructed or a signature was imposed", signer)
+	}
+	digest := sha256.Sum256(input.Data)
+	if completed.SHA256 != hex.EncodeToString(digest[:]) || completed.Size != int64(len(input.Data)) {
+		t.Fatal("external bytes changed")
+	}
+	for _, change := range []string{"bytes", "filename", "mime", "dates", "person", "actor", "certificate"} {
+		altered := input
+		alteredActor, alteredCert := actor, cert
+		switch change {
+		case "bytes":
+			altered.Data = []byte("different bytes")
+		case "filename":
+			altered.FileName = "different.pdf"
+		case "mime":
+			altered.ContentType = "image/png"
+		case "dates":
+			altered.ExpiryDate = "2028-10-04"
+		case "person":
+			altered.PersonID = uuid.New()
+		case "actor":
+			alteredActor = uuid.New()
+		case "certificate":
+			alteredCert = uuid.MustParse(stringField(t, createCertificate(t, h, certificatePayload(original.ComponentID.String(), original.TestID.String(), 166)), "certificate_id"))
+		}
+		_, err := service.ApproveExternal(ctx, alteredActor, alteredCert, altered)
+		if change == "actor" {
+			if !errors.Is(err, issuance.ErrIssuerForbidden) {
+				t.Fatal(change, err)
+			}
+		} else if !errors.Is(err, issuance.ErrApprovalMismatch) {
+			t.Fatal(change, err)
+		}
+	}
+	duplicate, err := service.ApproveExternal(ctx, actor, cert, input)
+	if err != nil || duplicate.ID != completed.ID || documents.puts != puts {
+		t.Fatal("duplicate external approval changed history", err)
+	}
+	var audits, counters int64
+	if err := h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_upload_audit WHERE issuance_id=$1", completed.ID).Scan(&audits); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_number_counters").Scan(&counters); err != nil {
+		t.Fatal(err)
+	}
+	if audits != 1 || counters != 0 {
+		t.Fatal("external retry duplicated audit or allocated a PMS number", audits, counters)
+	}
+	for _, sql := range []string{"UPDATE certificate_issuances SET file_name='forged.pdf' WHERE issuance_id=$1", "UPDATE certificate_issuances SET content_type='image/png' WHERE issuance_id=$1"} {
+		if _, err := h.pool.Exec(ctx, sql, completed.ID); err == nil {
+			t.Fatal("approved file metadata changed", sql)
+		}
+	}
+}
+
+func TestGeneratedRenewalExternalPublicationRollbackAndFences(t *testing.T) {
+	for _, fault := range []string{"audit", "completion", "newer certificate", "revoked issuer"} {
+		t.Run(fault, func(t *testing.T) {
+			h := setupIntegrationTest(t)
+			ctx := context.Background()
+			service, actor, cert, preview, documents := generatedIssuanceFixture(t, h)
+			input := externalInput(*preview.SignerID)
+			original, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+			before, _ := json.Marshal(original)
+			table, event, body := "certificate_upload_audit", "INSERT", "RAISE EXCEPTION 'controlled audit failure';"
+			if fault == "completion" {
+				table, event, body = "certificate_issuances", "UPDATE", "IF NEW.state='COMPLETED' THEN RAISE EXCEPTION 'controlled completion failure'; END IF;"
+			}
+			if fault == "audit" || fault == "completion" {
+				_, err := h.pool.Exec(ctx, "CREATE FUNCTION reject_external_publication() RETURNS TRIGGER AS $$ BEGIN "+body+" RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TRIGGER reject_external_publication BEFORE "+event+" ON "+table+" FOR EACH ROW EXECUTE FUNCTION reject_external_publication();")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer h.pool.Exec(context.Background(), "DROP TRIGGER IF EXISTS reject_external_publication ON "+table+"; DROP FUNCTION IF EXISTS reject_external_publication();")
+			} else {
+				documents.afterPut = func() {
+					statement := "UPDATE users SET role='USER' WHERE user_id=$1"
+					id := actor
+					if fault == "newer certificate" {
+						statement = "UPDATE certificates SET certificate_file='newer-document' WHERE certificate_id=$1"
+						id = cert
+					}
+					if _, err := h.pool.Exec(ctx, statement, id); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			failed, err := service.ApproveExternal(ctx, actor, cert, input)
+			if !errors.Is(err, issuance.ErrIssuanceFailed) || failed.State != "FAILED" {
+				t.Fatal(failed, err)
+			}
+			var audits int64
+			if err := h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_upload_audit WHERE issuance_id=$1", failed.ID).Scan(&audits); err != nil {
+				t.Fatal(err)
+			}
+			if audits != 0 {
+				t.Fatal("failed publication left a completed upload audit")
+			}
+			if fault == "newer certificate" {
+				current, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+				if current.CertificateFile != "newer-document" {
+					t.Fatal("newer document overwritten")
+				}
+				_, err = service.ApproveExternal(ctx, actor, cert, input)
+				if !errors.Is(err, issuance.ErrIssuanceConflict) {
+					t.Fatal("stale approval resumed", err)
+				}
+			} else {
+				assertCertificateUnchanged(t, h, cert, before)
+				if fault == "revoked issuer" {
+					_, err = service.ApproveExternal(ctx, actor, cert, input)
+					if !errors.Is(err, issuance.ErrIssuerForbidden) {
+						t.Fatal("revoked issuer resumed", err)
+					}
+				} else {
+					if _, err := h.pool.Exec(ctx, "DROP TRIGGER reject_external_publication ON "+table); err != nil {
+						t.Fatal(err)
+					}
+					puts := documents.puts
+					completed, err := service.ApproveExternal(ctx, actor, cert, input)
+					if err != nil || completed.State != "COMPLETED" || completed.ID != failed.ID || documents.puts != puts {
+						t.Fatal("retry failed to reuse original object", completed, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestGeneratedRenewalExternalValidationAndNoExpiry(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, preview, documents := generatedIssuanceFixture(t, h)
+	input := externalInput(*preview.SignerID)
+	for _, invalid := range []string{"empty", "oversize", "mime", "filename", "approval", "person", "date", "equal expiry", "missing expiry", "before expiry"} {
+		bad := input
+		switch invalid {
+		case "empty":
+			bad.Data = nil
+		case "oversize":
+			bad.Data = bytes.Repeat([]byte{'x'}, issuance.MaxExternalBytes+1)
+		case "mime":
+			bad.ContentType = "text/plain"
+		case "filename":
+			bad.FileName = ""
+		case "approval":
+			bad.ApprovalID = uuid.Nil
+		case "person":
+			bad.PersonID = uuid.New()
+		case "date":
+			bad.IssueDate = "2026-02-30"
+		case "equal expiry":
+			bad.ExpiryDate = bad.IssueDate
+		case "missing expiry":
+			bad.ExpiryDate = ""
+		case "before expiry":
+			bad.ExpiryDate = "2026-01-01"
+		}
+		if _, err := service.ApproveExternal(ctx, actor, cert, bad); !errors.Is(err, issuance.ErrExternalInput) {
+			t.Fatal(invalid, err)
+		}
+	}
+	person, _ := db.New(h.pool).GetCompetentPersonByID(ctx, input.PersonID)
+	for _, condition := range []string{"inactive person", "inactive category", "restricted category"} {
+		sql := "UPDATE competent_persons SET active=false WHERE competent_person_id=$1"
+		id := input.PersonID
+		if condition == "inactive category" {
+			sql = "UPDATE competency_categories SET active=false WHERE competency_category_id=$1"
+			id = person.CompetencyCategoryID
+		}
+		if condition == "restricted category" {
+			id = signingCategory(t, h, "DIFFERENT_EXTERNAL", true)
+			sql = "INSERT INTO certificate_competency_categories(certificate_id,competency_category_id) VALUES ('" + cert.String() + "',$1)"
+		}
+		if _, err := h.pool.Exec(ctx, sql, id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.ApproveExternal(ctx, actor, cert, input); !errors.Is(err, issuance.ErrExternalInput) {
+			t.Fatal(condition, err)
+		}
+		if _, err := h.pool.Exec(ctx, "UPDATE competent_persons SET active=true WHERE competent_person_id=$1", input.PersonID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.pool.Exec(ctx, "UPDATE competency_categories SET active=true WHERE competency_category_id=$1", person.CompetencyCategoryID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var approvals int64
+	if err := h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_issuances").Scan(&approvals); err != nil {
+		t.Fatal(err)
+	}
+	if approvals != 0 || documents.puts != 0 {
+		t.Fatal("invalid renewal created approval/object")
+	}
+	if _, err := h.pool.Exec(ctx, "DELETE FROM certificate_competency_categories WHERE certificate_id=$1", cert); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE test_types SET requires_renewal=false,validity_duration=NULL WHERE test_id=$1", uuid.MustParse(previewTestID(t, h, cert))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ApproveExternal(ctx, actor, cert, input); !errors.Is(err, issuance.ErrExternalInput) {
+		t.Fatal("expiry imposed on non-expiring test", err)
+	}
+	input.ExpiryDate = ""
+	input.Data = append(input.Data, make([]byte, issuance.MaxExternalBytes-len(input.Data))...)
+	completed, err := service.ApproveExternal(ctx, actor, cert, input)
+	if err != nil || completed.State != "COMPLETED" || completed.ExpiryDate != "" || completed.Size != issuance.MaxExternalBytes {
+		t.Fatal(completed, err)
+	}
+	current, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+	if current.ExpiryDate != nil || current.Status != "VALID" {
+		t.Fatal("non-expiring publication incomplete")
+	}
+}
+
+func previewTestID(t *testing.T, h *integrationHarness, certificate uuid.UUID) string {
+	t.Helper()
+	row, err := db.New(h.pool).GetCertificateByID(context.Background(), certificate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return row.TestID.String()
+}
+
+func TestGeneratedRenewalExternalConcurrentDuplicateApproval(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, preview, documents := generatedIssuanceFixture(t, h)
+	input := externalInput(*preview.SignerID)
+	start := make(chan struct{})
+	results := make(chan issuance.Issuance, 2)
+	errorsOut := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			<-start
+			result, err := service.ApproveExternal(ctx, actor, cert, input)
+			results <- result
+			errorsOut <- err
+		}()
+	}
+	close(start)
+	first, second := <-results, <-results
+	if err := <-errorsOut; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errorsOut; err != nil {
+		t.Fatal(err)
+	}
+	if first.ID != second.ID {
+		t.Fatal("duplicate allocated two approvals")
+	}
+	completed, err := service.ApproveExternal(ctx, actor, cert, input)
+	if err != nil || completed.State != "COMPLETED" {
+		t.Fatal(completed, err)
+	}
+	if documents.puts != 1 {
+		t.Fatal("duplicate overwrote external bytes", documents.puts)
+	}
+	var count int64
+	if err := h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_upload_audit WHERE issuance_id=$1", completed.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatal("concurrent approval duplicated upload history", count)
+	}
+	// Different certificate locks must not allow one shared approval ID to publish twice.
+	current, err := db.New(h.pool).GetCertificateByID(ctx, cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := uuid.MustParse(stringField(t, createCertificate(t, h, certificatePayload(current.ComponentID.String(), current.TestID.String(), 168)), "certificate_id"))
+	input.ApprovalID = uuid.New()
+	start = make(chan struct{})
+	for _, id := range []uuid.UUID{cert, other} {
+		go func(certificate uuid.UUID) {
+			<-start
+			result, err := service.ApproveExternal(ctx, actor, certificate, input)
+			results <- result
+			errorsOut <- err
+		}(id)
+	}
+	close(start)
+	<-results
+	<-results
+	err1, err2 := <-errorsOut, <-errorsOut
+	if !((err1 == nil && errors.Is(err2, issuance.ErrApprovalMismatch)) || (err2 == nil && errors.Is(err1, issuance.ErrApprovalMismatch))) {
+		t.Fatal("cross-certificate approval collision was not rejected", err1, err2)
+	}
+	if err := h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_issuances WHERE approval_id=$1", input.ApprovalID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatal("one approval ID published twice")
+	}
+}
+
+func TestGeneratedRenewalExternalHTTPFormatsRolesAndCombinedHistory(t *testing.T) {
+	h := setupIntegrationTest(t)
+	requireStorageIntegrationEnv(t)
+	ctx := context.Background()
+	component, testID := createComponentFixture(t, h, "Mixed Examination History")
+	cert := stringField(t, createCertificate(t, h, certificatePayload(component, testID, 170)), "certificate_id")
+	other := stringField(t, createCertificate(t, h, certificatePayload(component, testID, 171)), "certificate_id")
+	person := signingPerson(t, h, "External Examiner", signingCategory(t, h, "EXTERNAL_HTTP", true), true)
+	path := "/v1/certificate/" + cert
+	adminToken := createIntegrationUserToken(t, h.pool, "External", "Admin", "external-admin@example.com", "external-admin-password", "ADMIN")
+	input := externalInput(person)
+	fields := map[string]string{"approval_id": input.ApprovalID.String(), "competent_person_id": person.String(), "issue_date": input.IssueDate, "expiry_date": input.ExpiryDate}
+	for _, role := range []string{"USER", "CLIENT"} {
+		token := createIntegrationUserToken(t, h.pool, "External", role, "external-"+role+"@example.com", "external-password", role)
+		performMultipartRequest(t, h.router, token, path+"/external-renewal", "file", "external.pdf", input.Data, fields, 401)
+		performJSONRequest(t, h.router, token, http.MethodGet, path+"/history", nil, map[string]int{"USER": 200, "CLIENT": 403}[role])
+	}
+	performMultipartRequest(t, h.router, "", path+"/external-renewal", "file", "external.pdf", input.Data, fields, 401)
+	performJSONRequest(t, h.router, "", http.MethodGet, path+"/history", nil, 401)
+	for _, extra := range []string{"document_number", "signature_id", "certificate_file"} {
+		fields[extra] = "forged"
+		performMultipartRequest(t, h.router, adminToken, path+"/external-renewal", "file", "external.pdf", input.Data, fields, 400)
+		delete(fields, extra)
+	}
+	performMultipartRequest(t, h.router, adminToken, path+"/external-renewal", "file", "external.txt", []byte("text"), fields, 400)
+	performMultipartRequest(t, h.router, adminToken, path+"/external-renewal", "file", "external.pdf", nil, fields, 400)
+	performMultipartRequest(t, h.router, adminToken, path+"/external-renewal", "file", "external.pdf", bytes.Repeat([]byte{'x'}, issuance.MaxExternalBytes+1), fields, 413)
+	// A real old upload has no approved snapshot. Keep it accessible without inventing one.
+	legacy := []byte("%PDF-1.4 legacy original\n")
+	original, err := db.New(h.pool).GetCertificateByID(ctx, uuid.MustParse(cert))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := json.Marshal(original)
+	if _, err := h.pool.Exec(ctx, `CREATE FUNCTION reject_legacy_upload() RETURNS TRIGGER AS $$ BEGIN RAISE EXCEPTION 'controlled legacy audit failure'; END; $$ LANGUAGE plpgsql; CREATE TRIGGER reject_legacy_upload BEFORE INSERT ON certificate_upload_audit FOR EACH ROW EXECUTE FUNCTION reject_legacy_upload();`); err != nil {
+		t.Fatal(err)
+	}
+	defer h.pool.Exec(context.Background(), "DROP TRIGGER IF EXISTS reject_legacy_upload ON certificate_upload_audit; DROP FUNCTION IF EXISTS reject_legacy_upload();")
+	performMultipartRequest(t, h.router, h.adminToken, path+"/file", "file", "legacy.pdf", legacy, map[string]string{"competent_person_id": person.String()}, 500)
+	assertCertificateUnchanged(t, h, uuid.MustParse(cert), before)
+	if _, err := h.pool.Exec(ctx, "DROP TRIGGER reject_legacy_upload ON certificate_upload_audit"); err != nil {
+		t.Fatal(err)
+	}
+	performMultipartRequest(t, h.router, h.adminToken, path+"/file", "file", "legacy.pdf", legacy, map[string]string{"competent_person_id": person.String()}, 200)
+	types := []struct {
+		name, mime string
+		data       []byte
+	}{{"external.pdf", "application/pdf", input.Data}, {"external.png", "image/png", signingImage(t, false)}, {"external.jpg", "image/jpeg", signingImage(t, true)}, {"external.webp", "image/webp", []byte{'R', 'I', 'F', 'F', 12, 0, 0, 0, 'W', 'E', 'B', 'P', 'V', 'P', '8', ' ', 0, 0, 0, 0}}}
+	for _, file := range types {
+		fields["approval_id"] = uuid.NewString()
+		token := adminToken
+		if file.mime == "image/png" {
+			token = h.adminToken
+		}
+		var completed issuance.Issuance
+		if err := json.Unmarshal(performMultipartRequest(t, h.router, token, path+"/external-renewal", "file", file.name, file.data, fields, 200), &completed); err != nil {
+			t.Fatal(err)
+		}
+		if completed.Source != "EXTERNAL" || completed.State != "COMPLETED" || completed.Number != "" || completed.ContentType != file.mime || completed.FileName != file.name {
+			t.Fatal(completed)
+		}
+		var duplicate issuance.Issuance
+		json.Unmarshal(performMultipartRequest(t, h.router, token, path+"/external-renewal", "file", file.name, file.data, fields, 200), &duplicate)
+		if duplicate.ID != completed.ID {
+			t.Fatal("HTTP duplicate changed identity")
+		}
+		performMultipartRequest(t, h.router, token, "/v1/certificate/"+other+"/external-renewal", "file", file.name, file.data, fields, 409)
+		performJSONRequest(t, h.router, token, http.MethodGet, "/v1/certificate/"+other+"/history/"+completed.ID.String()+"/file", nil, 404)
+		link := decodeObject(t, performJSONRequest(t, h.router, token, http.MethodGet, path+"/history/"+completed.ID.String()+"/file", nil, 200))
+		response, err := http.Get(stringField(t, link, "url"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := io.ReadAll(response.Body)
+		response.Body.Close()
+		if err != nil || response.StatusCode != 200 || !bytes.Equal(data, file.data) || response.Header.Get("Content-Type") != file.mime {
+			t.Fatal("uploaded bytes/type were rewritten", file.name, err)
+		}
+		row, err := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: uuid.MustParse(cert), IssuanceID: completed.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		journal, err := os.ReadFile(os.Getenv("AMS_TEST_STORAGE_MANIFEST"))
+		if err != nil || !strings.HasPrefix(row.FileKey, os.Getenv("AMS_TEST_STORAGE_PREFIX")) || !bytes.Contains(journal, []byte(row.FileKey+"\n")) {
+			t.Fatal("external document escaped cleanup scope", err)
+		}
+	}
+	// Generated and external publication share one history, but external renewals consume no PMS numbers.
+	performMultipartRequest(t, h.router, h.adminToken, "/v1/competent-person/"+person.String()+"/signing-profile/signature", "file", "signature.png", signingImage(t, false), nil, 200)
+	var preview issuance.PreviewResponse
+	json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-preview", map[string]any{"signer_id": person, "issue_date": "2026-10-04"}, 200), &preview)
+	var generated issuance.Issuance
+	json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-issuance", map[string]any{"preview_token": preview.Token}, 200), &generated)
+	if !strings.HasSuffix(generated.Number, "-01") {
+		t.Fatal("external uploads consumed a generated sequence", generated.Number)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE competent_persons SET full_name='Future examiner' WHERE competent_person_id=$1", person); err != nil {
+		t.Fatal(err)
+	}
+	history := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, path+"/history?limit=20", nil, 200))
+	rows := history["data"].([]any)
+	if len(rows) != 6 {
+		t.Fatal("history missing records or duplicates linked audits", len(rows))
+	}
+	sources := map[string]int{}
+	for _, value := range rows {
+		row := value.(map[string]any)
+		source := stringField(t, row, "source")
+		sources[source]++
+		if source == "LEGACY" {
+			if row["snapshot_available"] != false || row["issue_date"] != nil || row["expiry_date"] != nil || row["signer_name"] != "" {
+				t.Fatal("legacy details were invented", row)
+			}
+			link := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, path+"/history/"+stringField(t, row, "history_id")+"/file", nil, 200))
+			response, err := http.Get(stringField(t, link, "url"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := io.ReadAll(response.Body)
+			response.Body.Close()
+			if err != nil || response.StatusCode != 200 || !bytes.Equal(data, legacy) {
+				t.Fatal("legacy bytes lost", err)
+			}
+		} else if row["snapshot_available"] != true || row["signer_name"] != "External Examiner" {
+			t.Fatal("snapshot reconstructed from current profile", row)
+		}
+		if row["file_key"] != nil {
+			t.Fatal("history leaked private storage key")
+		}
+	}
+	if sources["GENERATED"] != 1 || sources["EXTERNAL"] != 4 || sources["LEGACY"] != 1 {
+		t.Fatal(sources)
+	}
+	first := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, path+"/history?page=1&limit=1", nil, 200))
+	second := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, path+"/history?page=2&limit=1", nil, 200))
+	if len(first["data"].([]any)) != 1 || len(second["data"].([]any)) != 1 || first["data"].([]any)[0].(map[string]any)["history_id"] == second["data"].([]any)[0].(map[string]any)["history_id"] {
+		t.Fatal("history pagination repeated an item")
+	}
+}
+
 type issuanceRecordingRenderer struct {
 	before    func()
 	failure   error

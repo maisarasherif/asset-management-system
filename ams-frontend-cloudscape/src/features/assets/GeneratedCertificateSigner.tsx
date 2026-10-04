@@ -1,16 +1,17 @@
 import { Alert, Box, Button, Container, FormField, Header, SpaceBetween, Spinner } from "@cloudscape-design/components";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Select } from "../../components/shared/OptimizedSelect";
 import { getCompetentSignatureImage, getOwnSignatureImage, listGeneratedSigners, resolveGeneratedSigner } from "../../lib/api/signing-profile";
 import { useAuth } from "../../providers/auth-context";
 import { SignatureImagePreview } from "../account/SignatureImagePreview";
 import { GeneratedCertificatePreview } from "./GeneratedCertificatePreview";
 
-export function GeneratedCertificateSigner({ certificateId, issueDate, expiryDate, validityMonths, requiresRenewal }: { certificateId: string; issueDate: string; expiryDate: string; validityMonths: number | null; requiresRenewal: boolean }) {
+export function GeneratedCertificateSigner({ certificateId, issueDate, expiryDate, validityMonths, requiresRenewal, onIssuingChange }: { certificateId: string; issueDate: string; expiryDate: string; validityMonths: number | null; requiresRenewal: boolean; onIssuingChange?: (issuing: boolean) => void }) {
   const { session } = useAuth();
   const superAdmin = session?.role === "SUPER_ADMIN";
   const [issuing, setIssuing] = useState(false);
+  const handleIssuingChange = useCallback((value: boolean) => { setIssuing(value); onIssuingChange?.(value); }, [onIssuingChange]);
   const [selectedId, setSelectedId] = useState("");
   const choices = useQuery({ queryKey: ["generated-signers", session?.userId, certificateId], queryFn: () => listGeneratedSigners(certificateId) });
   const selected = superAdmin ? choices.data?.find((person) => person.signer_id === selectedId) : choices.data?.[0];
@@ -38,7 +39,7 @@ export function GeneratedCertificateSigner({ certificateId, issueDate, expiryDat
             <Box>{confirmed.competency_category_name}</Box>
             <SignatureImagePreview key={confirmed.signature.signature_id} queryKey={["generated-signer-image", session?.userId, confirmed.owner_kind, confirmed.signer_id, confirmed.signature.signature_id]}
               loadImage={() => confirmed.owner_kind === "ACCOUNT" ? getOwnSignatureImage(confirmed.signature.signature_id) : getCompetentSignatureImage(confirmed.signer_id, confirmed.signature.signature_id)} />
-            <GeneratedCertificatePreview key={`${confirmed.signer_id}:${confirmed.signature.signature_id}:${confirmed.full_name}:${confirmed.organization}:${issueDate}:${expiryDate}`} onIssuingChange={setIssuing} certificateId={certificateId} signerId={confirmed.signer_id} issueDate={issueDate} expiryDate={expiryDate} validityMonths={validityMonths} requiresRenewal={requiresRenewal} />
+            <GeneratedCertificatePreview key={`${confirmed.signer_id}:${confirmed.signature.signature_id}:${confirmed.full_name}:${confirmed.organization}:${issueDate}:${expiryDate}`} onIssuingChange={handleIssuingChange} certificateId={certificateId} signerId={confirmed.signer_id} issueDate={issueDate} expiryDate={expiryDate} validityMonths={validityMonths} requiresRenewal={requiresRenewal} />
           </>
         ) : null}
       </SpaceBetween>

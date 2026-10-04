@@ -8,9 +8,8 @@ const pdf = readFileSync(resolve(__dirname, "../fixtures/sample-certificate.pdf"
 const signaturePNG = readFileSync(resolve(__dirname, "../fixtures/signature-sample.png"));
 const signatureJPEG = readFileSync(resolve(__dirname, "../fixtures/signature-replacement.jpg"));
 
-// Exercise today's real workflow before extending it with generated issuance.
 // Prerequisites belong to this spec, independent of whole-app fixtures.
-test("certificate renewal baseline uploads through UI and reads the historical R2 document", async ({ page, request }) => {
+test("external renewal publishes dates and original bytes in one request and preserves legacy history", async ({ page, request }) => {
   const email = process.env.PLAYWRIGHT_ADMIN_EMAIL;
   const password = process.env.PLAYWRIGHT_ADMIN_PASSWORD;
   const prefix = process.env.AMS_TEST_STORAGE_PREFIX;
@@ -54,6 +53,14 @@ test("certificate renewal baseline uploads through UI and reads the historical R
     const certificate = await post("/certificate", { component_id: component.component_id, certificate_name: suffix, test_id: type.test_id, issue_date: "2026-01-02T00:00:00Z", expiry_date: "2027-01-02T00:00:00Z", certificate_file: "", issuing_authority: "PMS", imca_ref: "D018", imca_d018: "Baseline", maintenance_notes: "", competency_category_ids: [signerCategory.competency_category_id] }, "certificate_id");
     const certificatePath = `/certificate/${certificate.certificate_id}`;
     cleanup.push(certificatePath);
+    const noExpiryType = await post("/test-type", { test_name: `External no expiry ${suffix}`, validity_duration: null, requires_renewal: false, description: "External non-expiring renewal" }, "test_id");
+    cleanup.push(`/test-type/${noExpiryType.test_id}`);
+    const noExpiry = await post("/certificate", { component_id:component.component_id, certificate_name:`No expiry ${suffix}`, test_id:noExpiryType.test_id, issue_date:"2026-01-02T00:00:00Z", expiry_date:null, certificate_file:"", issuing_authority:"PMS", imca_ref:"D018", imca_d018:"No expiry", maintenance_notes:"", competency_category_ids:[signerCategory.competency_category_id] }, "certificate_id");
+    cleanup.push(`/certificate/${noExpiry.certificate_id}`);
+    const adminEmail = `${suffix}@example.com`;
+    const adminPassword = "external-renewal-password";
+    const admin = await post("/user", { first_name: "External", last_name: "Administrator", email: adminEmail, password: adminPassword, role: "ADMIN", status: "ACTIVE" }, "user_id");
+    cleanup.push(`/user/${admin.user_id}`);
 
     await page.goto("/login");
     await page.getByLabel("Email").fill(email!);
@@ -63,14 +70,35 @@ test("certificate renewal baseline uploads through UI and reads the historical R
     // UI login replaces the account's persisted access token. Use the browser's
     // cookie-authenticated context for all following API assertions and cleanup.
     const browserRequest: APIRequestContext = page.request;
+    const legacy = await browserRequest.post(`${api}${certificatePath}/file`, { multipart: { competent_person_id: signer.competent_person_id, file: { name: "legacy-examination.pdf", mimeType: "application/pdf", buffer: pdf } } });
+    expect(legacy.status(), await legacy.text()).toBe(200);
+    const renewals: string[] = [];
+    const patches: string[] = [];
+    page.on("request", outgoing => { if (outgoing.method() === "POST" && outgoing.url().endsWith(`${certificatePath}/external-renewal`)) renewals.push(outgoing.url()); if (outgoing.method() === "PATCH" && outgoing.url().endsWith(certificatePath)) patches.push(outgoing.url()); });
     await page.goto(`/assets/${asset.asset_id}/components/${component.component_id}/certificates/${certificate.certificate_id}`);
+    await expect(page.getByRole("region", { name: "Generated certificate signing" })).toBeVisible();
+    await page.getByRole("button", { name: "Upload external document", exact: true }).click();
+    await expect(page.getByLabel("Certificate renewal file")).toBeVisible();
+    await page.getByLabel("Certificate renewal file").setInputFiles({ name: "too-large.pdf", mimeType: "application/pdf", buffer: Buffer.alloc(10 * 1024 * 1024 + 1, 65) });
+    await expect(page.getByText("Certificate file must be 10 MB or smaller.")).toBeVisible();
+    expect(renewals).toHaveLength(0);
     await page.getByLabel("Certificate renewal issue date").fill("2026-10-02");
     await expect(page.getByLabel("Certificate renewal expiry date")).toHaveValue("2027-10-02");
     await page.getByLabel("Certificate renewal file").setInputFiles({ name: "baseline-renewal.pdf", mimeType: "application/pdf", buffer: pdf });
     await page.getByText("Select competent person", { exact: true }).click();
     await page.getByRole("option", { name: new RegExp(signer.full_name) }).click();
+    await page.getByLabel("Certificate renewal expiry date").fill("");
+    await expect(page.getByLabel("Certificate renewal expiry date")).toHaveValue("");
+    await expect(page.getByRole("button", { name:"Renew/change certificate", exact:true })).toBeDisabled();
+    await page.getByLabel("Certificate renewal issue date").fill("");
+    await expect(page.getByLabel("Certificate renewal issue date")).toHaveValue("");
+    await page.getByLabel("Certificate renewal issue date").fill("2026-10-02");
+    await expect(page.getByLabel("Certificate renewal expiry date")).toHaveValue("2027-10-02");
+    expect(renewals).toHaveLength(0);
     await page.getByRole("button", { name: "Renew/change certificate", exact: true }).click();
     await expect(page.getByText("Certificate renewed", { exact: true })).toBeVisible();
+    expect(renewals).toHaveLength(1);
+    expect(patches).toHaveLength(0);
     await expect(page.getByRole("cell", { name: "baseline-renewal.pdf", exact: true })).toBeVisible();
     const currentResponse = await browserRequest.get(`${api}${certificatePath}`);
     expect(currentResponse.status()).toBe(200);
@@ -78,26 +106,70 @@ test("certificate renewal baseline uploads through UI and reads the historical R
     expect(current.issue_date).toBe("2026-10-02T00:00:00Z");
     expect(current.expiry_date).toBe("2027-10-02T00:00:00Z");
     expect(current.certificate_file.startsWith(prefix)).toBe(true);
-    const historyResponse = await browserRequest.get(`${api}${certificatePath}/uploads?page=1&limit=20`);
+    const historyResponse = await browserRequest.get(`${api}${certificatePath}/history?page=1&limit=20`);
     expect(historyResponse.status()).toBe(200);
     const history = await historyResponse.json();
-    expect(history.data).toHaveLength(1);
-    expect(history.data[0].competent_person_id).toBe(signer.competent_person_id);
-    const linkResponse = await browserRequest.get(`${api}${certificatePath}/uploads/${history.data[0].uuid}/file`);
+    expect(history.data).toHaveLength(2);
+    const external = history.data.find((row: {source:string}) => row.source === "EXTERNAL");
+    const old = history.data.find((row: {source:string}) => row.source === "LEGACY");
+    expect(external.signer_name).toBe(signer.full_name);
+    expect(external.document_number).toBe("");
+    expect(old.snapshot_available).toBe(false);
+    expect(old.issue_date).toBeNull();
+    expect(old.signer_name).toBe("");
+    const linkResponse = await browserRequest.get(`${api}${certificatePath}/history/${external.history_id}/file`);
     expect(linkResponse.status()).toBe(200);
-    const document = await request.get((await linkResponse.json()).url);
-    expect(document.status()).toBe(200);
-    expect(await document.body()).toEqual(pdf);
+    const storedDocument = await request.get((await linkResponse.json()).url);
+    expect(storedDocument.status()).toBe(200);
+    expect(await storedDocument.body()).toEqual(pdf);
+    const historyRegion = page.getByRole("region", { name: "Certificate issuance history" });
+    await expect(historyRegion.getByText("External renewal", { exact: true })).toBeVisible();
+    await expect(historyRegion.getByText("Legacy upload", { exact: true })).toBeVisible();
+    await expect(historyRegion.getByText("Historical snapshot unavailable", { exact: true })).toBeVisible();
+    for (const name of ["baseline-renewal.pdf", "legacy-examination.pdf"]) {
+      const popupEvent = page.waitForEvent("popup");
+      await historyRegion.getByRole("row").filter({ has: page.getByRole("cell", { name, exact: true }) }).getByRole("button", { name: "View uploaded document" }).click();
+      const popup = await popupEvent;
+      await expect(popup).toHaveURL(/external-certificates|certificates\//);
+      await popup.close();
+    }
+    for (const width of [320,768,1024,1440]) {
+      await page.setViewportSize({ width,height:900 });
+      await expect(page.getByLabel("Certificate renewal file")).toBeVisible();
+      await expect(historyRegion.getByRole("table")).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width+1);
+    }
     await page.reload();
     await expect(page.getByRole("cell", { name: "baseline-renewal.pdf", exact: true })).toBeVisible();
+    await page.setViewportSize({ width:1440,height:900 });
+    await page.goto("/account");
+    await page.getByRole("button", { name: "Sign out", exact:true }).click();
+    await page.getByLabel("Email").fill(adminEmail);
+    await page.getByLabel("Password").fill(adminPassword);
+    await page.getByRole("button", { name: "Sign in", exact:true }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await page.goto(`/assets/${asset.asset_id}/components/${component.component_id}/certificates/${noExpiry.certificate_id}`);
+    await page.getByRole("button", { name: "Upload external document", exact:true }).click();
+    await expect(page.getByLabel("Certificate renewal expiry date")).toHaveCount(0);
+    await page.getByLabel("Certificate renewal issue date").fill("2026-10-04");
+    await page.getByLabel("Certificate renewal file").setInputFiles({ name:"external-no-expiry.png", mimeType:"image/png", buffer:signaturePNG });
+    await page.getByText("Select competent person", { exact:true }).click();
+    await page.getByRole("option", { name:new RegExp(signer.full_name) }).click();
+    await page.getByRole("button", { name:"Upload/change certificate", exact:true }).click();
+    await expect(page.getByText("Certificate renewed", { exact:true })).toBeVisible();
+    const noExpiryCurrent = await page.request.get(`${api}/certificate/${noExpiry.certificate_id}`);
+    expect((await noExpiryCurrent.json()).expiry_date).toBeNull();
+    const noExpiryHistory = await page.request.get(`${api}/certificate/${noExpiry.certificate_id}/history`);
+    expect((await noExpiryHistory.json()).data[0].signer_name).toBe(signer.full_name);
   } finally {
     // Ordered API cleanup supplements the runner's DB/R2 cleanup on failures.
     // The componentized asset cascades component/certificate rows as well.
+    const rootLogin = await request.post(`${api}/login`, { data:{ email,password } });
+    expect(rootLogin.status()).toBe(200);
+    const cleanupHeaders = { Authorization:`Bearer ${(await rootLogin.json()).token}` };
     for (const path of cleanup.reverse()) {
-      const response = await page.request.delete(`${api}${path}`);
-      // Before browser login, fall back to the initial API token.
-      const status = response.status() === 401 ? (await request.delete(`${api}${path}`, { headers })).status() : response.status();
-      expect([200, 404], `cleanup ${path}`).toContain(status);
+      const response = await request.delete(`${api}${path}`, { headers:cleanupHeaders });
+      expect([200, 404], `cleanup ${path}`).toContain(response.status());
     }
   }
 });

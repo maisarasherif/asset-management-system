@@ -169,8 +169,12 @@ A temporary view of a Generated Certificate awaiting approval, with a placeholde
 _Avoid_: Issued certificate, permanent draft
 
 **Legacy Upload**:
-A certificate document recorded before complete Certificate Issuance snapshots were introduced. Its file and recorded upload evidence remain available without implying a complete historical snapshot.
+A historical or file-only compatibility upload recorded without a complete Certificate Issuance snapshot. Its file and recorded upload evidence remain available without reconstructing historical dates or signer details from current records. Combined history labels it Legacy and keeps its original stored document accessible.
 _Avoid_: Issuance snapshot, reconstructed certificate
+
+**External Renewal**:
+An admin renews a Certificate by submitting an externally issued document, an eligible active Competent Person, and renewal dates together. Both ADMIN and SUPER_ADMIN retain the existing upload permission to select a competent person in an active category allowed by the certificate; the generated ADMIN self-signing rule and saved-signature requirement do not apply to external documents. The approval preserves source/signer details and the uploaded bytes' hash, size, file name, and content type. Storage is verified before file/dates/status and history are published together. Duplicate approval identity reuses the same record and object; failed or stale publication leaves the current certificate intact. The system does not rewrite the uploaded bytes, apply a saved signature, or allocate a PMS document number.
+_Avoid_: Generated Certificate, reconstructed PDF, file upload followed by date patch
 
 **Competent Person**:
 An individual recognized within the AMS Product for a competency category and identified on a certificate. Their profile contains their name, organization, category, and an admin-managed signature/stamp for use on Generated Certificates.

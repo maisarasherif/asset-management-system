@@ -37,7 +37,7 @@ const claimCertificateIssuance = `-- name: ClaimCertificateIssuance :one
 UPDATE certificate_issuances SET state = 'PROCESSING', attempt_id = $2,
  lease_until = NOW() + INTERVAL '5 minutes', failure_code = '', updated_at = NOW()
 WHERE issuance_id = $1 AND (state IN ('APPROVED', 'FAILED') OR (state = 'PROCESSING' AND lease_until < NOW()))
-RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at
+RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type
 `
 
 type ClaimCertificateIssuanceParams struct {
@@ -75,6 +75,8 @@ func (q *Queries) ClaimCertificateIssuance(ctx context.Context, arg ClaimCertifi
 		&i.ApprovedAt,
 		&i.CompletedAt,
 		&i.UpdatedAt,
+		&i.FileName,
+		&i.ContentType,
 	)
 	return i, err
 }
@@ -97,6 +99,18 @@ func (q *Queries) CompleteCertificateIssuance(ctx context.Context, arg CompleteC
 	return result.RowsAffected(), nil
 }
 
+const countCertificateHistory = `-- name: CountCertificateHistory :one
+SELECT ((SELECT count(*) FROM certificate_issuances ci WHERE ci.certificate_id = $1)
+ + (SELECT count(*) FROM certificate_upload_audit ua WHERE ua.certificate_id = $1 AND ua.issuance_id IS NULL))::BIGINT
+`
+
+func (q *Queries) CountCertificateHistory(ctx context.Context, certificateID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificateHistory, certificateID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countCertificateIssuances = `-- name: CountCertificateIssuances :one
 SELECT count(*) FROM certificate_issuances WHERE certificate_id = $1
 `
@@ -106,6 +120,32 @@ func (q *Queries) CountCertificateIssuances(ctx context.Context, certificateID u
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const createIssuedUploadAudit = `-- name: CreateIssuedUploadAudit :exec
+INSERT INTO certificate_upload_audit (certificate_id, file_key, file_name, uploaded_by, competent_person_id, issuance_id, uploaded_at)
+VALUES ($1, $2, $3, $4, $5, $6, NOW())
+`
+
+type CreateIssuedUploadAuditParams struct {
+	CertificateID     uuid.UUID  `json:"certificate_id"`
+	FileKey           string     `json:"file_key"`
+	FileName          string     `json:"file_name"`
+	UploadedBy        string     `json:"uploaded_by"`
+	CompetentPersonID *uuid.UUID `json:"competent_person_id"`
+	IssuanceID        *uuid.UUID `json:"issuance_id"`
+}
+
+func (q *Queries) CreateIssuedUploadAudit(ctx context.Context, arg CreateIssuedUploadAuditParams) error {
+	_, err := q.db.Exec(ctx, createIssuedUploadAudit,
+		arg.CertificateID,
+		arg.FileKey,
+		arg.FileName,
+		arg.UploadedBy,
+		arg.CompetentPersonID,
+		arg.IssuanceID,
+	)
+	return err
 }
 
 const failCertificateIssuance = `-- name: FailCertificateIssuance :execrows
@@ -127,8 +167,77 @@ func (q *Queries) FailCertificateIssuance(ctx context.Context, arg FailCertifica
 	return result.RowsAffected(), nil
 }
 
+const getCertificateHistory = `-- name: GetCertificateHistory :many
+SELECT history_id, source, state, document_number, file_name, content_type, issue_date, expiry_date, signer_name, signer_organization, recorded_at, snapshot_available FROM (
+ SELECT issuance_id AS history_id, source, state, COALESCE(document_number, '')::TEXT AS document_number,
+ file_name, content_type, issue_date, expiry_date,
+ COALESCE(snapshot->'signer'->>'full_name', '')::TEXT AS signer_name,
+ COALESCE(snapshot->'signer'->>'organization', '')::TEXT AS signer_organization,
+ approved_at AS recorded_at, TRUE AS snapshot_available
+ FROM certificate_issuances ci WHERE ci.certificate_id = $1
+ UNION ALL
+ SELECT uuid, 'LEGACY', 'LEGACY', '', file_name, '', NULL::DATE, NULL::DATE,
+ '', '', uploaded_at, FALSE
+ FROM certificate_upload_audit ua WHERE ua.certificate_id = $1 AND ua.issuance_id IS NULL
+) history ORDER BY recorded_at DESC, history_id DESC LIMIT $3 OFFSET $2
+`
+
+type GetCertificateHistoryParams struct {
+	CertificateID uuid.UUID `json:"certificate_id"`
+	PageOffset    int32     `json:"page_offset"`
+	PageLimit     int32     `json:"page_limit"`
+}
+
+type GetCertificateHistoryRow struct {
+	HistoryID          uuid.UUID   `json:"history_id"`
+	Source             string      `json:"source"`
+	State              string      `json:"state"`
+	DocumentNumber     string      `json:"document_number"`
+	FileName           string      `json:"file_name"`
+	ContentType        string      `json:"content_type"`
+	IssueDate          pgtype.Date `json:"issue_date"`
+	ExpiryDate         pgtype.Date `json:"expiry_date"`
+	SignerName         string      `json:"signer_name"`
+	SignerOrganization string      `json:"signer_organization"`
+	RecordedAt         time.Time   `json:"recorded_at"`
+	SnapshotAvailable  bool        `json:"snapshot_available"`
+}
+
+func (q *Queries) GetCertificateHistory(ctx context.Context, arg GetCertificateHistoryParams) ([]GetCertificateHistoryRow, error) {
+	rows, err := q.db.Query(ctx, getCertificateHistory, arg.CertificateID, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCertificateHistoryRow
+	for rows.Next() {
+		var i GetCertificateHistoryRow
+		if err := rows.Scan(
+			&i.HistoryID,
+			&i.Source,
+			&i.State,
+			&i.DocumentNumber,
+			&i.FileName,
+			&i.ContentType,
+			&i.IssueDate,
+			&i.ExpiryDate,
+			&i.SignerName,
+			&i.SignerOrganization,
+			&i.RecordedAt,
+			&i.SnapshotAvailable,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCertificateIssuance = `-- name: GetCertificateIssuance :one
-SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at FROM certificate_issuances WHERE issuance_id = $1 AND certificate_id = $2
+SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type FROM certificate_issuances WHERE issuance_id = $1 AND certificate_id = $2
 `
 
 type GetCertificateIssuanceParams struct {
@@ -166,12 +275,14 @@ func (q *Queries) GetCertificateIssuance(ctx context.Context, arg GetCertificate
 		&i.ApprovedAt,
 		&i.CompletedAt,
 		&i.UpdatedAt,
+		&i.FileName,
+		&i.ContentType,
 	)
 	return i, err
 }
 
 const getCertificateIssuanceByApproval = `-- name: GetCertificateIssuanceByApproval :one
-SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at FROM certificate_issuances WHERE approval_id = $1
+SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type FROM certificate_issuances WHERE approval_id = $1
 `
 
 func (q *Queries) GetCertificateIssuanceByApproval(ctx context.Context, approvalID uuid.UUID) (CertificateIssuance, error) {
@@ -204,6 +315,8 @@ func (q *Queries) GetCertificateIssuanceByApproval(ctx context.Context, approval
 		&i.ApprovedAt,
 		&i.CompletedAt,
 		&i.UpdatedAt,
+		&i.FileName,
+		&i.ContentType,
 	)
 	return i, err
 }
@@ -236,6 +349,82 @@ func (q *Queries) GetIssuanceSignature(ctx context.Context, signatureID uuid.UUI
 	return i, err
 }
 
+const insertExternalIssuance = `-- name: InsertExternalIssuance :one
+INSERT INTO certificate_issuances
+(issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref,
+ issue_date, expiry_date, snapshot, base_version, file_key, file_name, content_type, document_sha256, document_size)
+VALUES ($1, $2, $3, $3, $4, 'EXTERNAL', $5, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type
+`
+
+type InsertExternalIssuanceParams struct {
+	IssuanceID     uuid.UUID   `json:"issuance_id"`
+	ApprovalID     uuid.UUID   `json:"approval_id"`
+	CertificateID  uuid.UUID   `json:"certificate_id"`
+	ComponentID    uuid.UUID   `json:"component_id"`
+	ActorID        uuid.UUID   `json:"actor_id"`
+	IssueDate      pgtype.Date `json:"issue_date"`
+	ExpiryDate     pgtype.Date `json:"expiry_date"`
+	Snapshot       []byte      `json:"snapshot"`
+	BaseVersion    int64       `json:"base_version"`
+	FileKey        string      `json:"file_key"`
+	FileName       string      `json:"file_name"`
+	ContentType    string      `json:"content_type"`
+	DocumentSha256 string      `json:"document_sha256"`
+	DocumentSize   int64       `json:"document_size"`
+}
+
+func (q *Queries) InsertExternalIssuance(ctx context.Context, arg InsertExternalIssuanceParams) (CertificateIssuance, error) {
+	row := q.db.QueryRow(ctx, insertExternalIssuance,
+		arg.IssuanceID,
+		arg.ApprovalID,
+		arg.CertificateID,
+		arg.ComponentID,
+		arg.ActorID,
+		arg.IssueDate,
+		arg.ExpiryDate,
+		arg.Snapshot,
+		arg.BaseVersion,
+		arg.FileKey,
+		arg.FileName,
+		arg.ContentType,
+		arg.DocumentSha256,
+		arg.DocumentSize,
+	)
+	var i CertificateIssuance
+	err := row.Scan(
+		&i.IssuanceID,
+		&i.ApprovalID,
+		&i.CertificateID,
+		&i.CertificateRef,
+		&i.ComponentID,
+		&i.Source,
+		&i.ActorID,
+		&i.ActorRef,
+		&i.SignatureID,
+		&i.DocumentNumber,
+		&i.Sequence,
+		&i.IssueDate,
+		&i.ExpiryDate,
+		&i.Snapshot,
+		&i.BaseVersion,
+		&i.State,
+		&i.FileKey,
+		&i.DocumentSha256,
+		&i.DocumentSize,
+		&i.AttemptID,
+		&i.LeaseUntil,
+		&i.FailureCode,
+		&i.CleanupState,
+		&i.ApprovedAt,
+		&i.CompletedAt,
+		&i.UpdatedAt,
+		&i.FileName,
+		&i.ContentType,
+	)
+	return i, err
+}
+
 const insertGeneratedIssuance = `-- name: InsertGeneratedIssuance :one
 INSERT INTO certificate_issuances
 (issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref,
@@ -244,7 +433,7 @@ VALUES ($1, $2, $3, $3,
  $4, 'GENERATED', $5, $5, $6,
  $7, $8, $9, $10,
  $11, $12, $13)
-RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at
+RETURNING issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type
 `
 
 type InsertGeneratedIssuanceParams struct {
@@ -307,12 +496,14 @@ func (q *Queries) InsertGeneratedIssuance(ctx context.Context, arg InsertGenerat
 		&i.ApprovedAt,
 		&i.CompletedAt,
 		&i.UpdatedAt,
+		&i.FileName,
+		&i.ContentType,
 	)
 	return i, err
 }
 
 const listCertificateIssuances = `-- name: ListCertificateIssuances :many
-SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at FROM certificate_issuances WHERE certificate_id = $1
+SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type FROM certificate_issuances WHERE certificate_id = $1
 ORDER BY approved_at DESC, issuance_id DESC LIMIT $2 OFFSET $3
 `
 
@@ -358,6 +549,8 @@ func (q *Queries) ListCertificateIssuances(ctx context.Context, arg ListCertific
 			&i.ApprovedAt,
 			&i.CompletedAt,
 			&i.UpdatedAt,
+			&i.FileName,
+			&i.ContentType,
 		); err != nil {
 			return nil, err
 		}
@@ -381,7 +574,7 @@ func (q *Queries) LockCertificateForApproval(ctx context.Context, certificateID 
 }
 
 const lockProcessingIssuance = `-- name: LockProcessingIssuance :one
-SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at FROM certificate_issuances WHERE issuance_id = $1 AND attempt_id = $2 AND state = 'PROCESSING' FOR UPDATE
+SELECT issuance_id, approval_id, certificate_id, certificate_ref, component_id, source, actor_id, actor_ref, signature_id, document_number, sequence, issue_date, expiry_date, snapshot, base_version, state, file_key, document_sha256, document_size, attempt_id, lease_until, failure_code, cleanup_state, approved_at, completed_at, updated_at, file_name, content_type FROM certificate_issuances WHERE issuance_id = $1 AND attempt_id = $2 AND state = 'PROCESSING' FOR UPDATE
 `
 
 type LockProcessingIssuanceParams struct {
@@ -419,6 +612,8 @@ func (q *Queries) LockProcessingIssuance(ctx context.Context, arg LockProcessing
 		&i.ApprovedAt,
 		&i.CompletedAt,
 		&i.UpdatedAt,
+		&i.FileName,
+		&i.ContentType,
 	)
 	return i, err
 }
@@ -428,7 +623,7 @@ UPDATE certificates SET certificate_file = $1, issue_date = $2,
  expiry_date = $3, status = $4, updated_at = NOW()
 WHERE certificate_id = $5 AND renewal_version = $6
 AND EXISTS (SELECT 1 FROM users u WHERE u.user_id = $7 AND u.status = 'ACTIVE'
- AND (u.role = 'SUPER_ADMIN' OR (u.role = 'ADMIN' AND $8::TEXT = 'ACCOUNT' AND $9::UUID = u.user_id)))
+ AND (u.role = 'SUPER_ADMIN' OR (u.role = 'ADMIN' AND ($8::TEXT = 'EXTERNAL' OR ($9::TEXT = 'ACCOUNT' AND $10::UUID = u.user_id)))))
 `
 
 type PublishIssuedCertificateParams struct {
@@ -439,6 +634,7 @@ type PublishIssuedCertificateParams struct {
 	CertificateID uuid.UUID  `json:"certificate_id"`
 	BaseVersion   int64      `json:"base_version"`
 	ActorID       uuid.UUID  `json:"actor_id"`
+	Source        string     `json:"source"`
 	OwnerKind     string     `json:"owner_kind"`
 	SignerID      uuid.UUID  `json:"signer_id"`
 }
@@ -452,6 +648,7 @@ func (q *Queries) PublishIssuedCertificate(ctx context.Context, arg PublishIssue
 		arg.CertificateID,
 		arg.BaseVersion,
 		arg.ActorID,
+		arg.Source,
 		arg.OwnerKind,
 		arg.SignerID,
 	)

@@ -55,7 +55,7 @@ NEWMAN_COLLECTIONS="tests/regression/api/system-api-smoke.postman_collection.jso
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-By default, the isolated runner includes the HR/Admin and generated-renewal collections/specs. The latter cover the external renewal baseline, own ADMIN signing profiles, SUPER_ADMIN competent-person signature management, admin category assignment, and generated signer eligibility. Override `NEWMAN_COLLECTIONS` or `E2E_SPECS` for focused feature-step verification or diagnosis.
+By default, the isolated runner includes the HR/Admin and generated-renewal collections/specs. The latter cover atomic external renewal, own ADMIN signing profiles, SUPER_ADMIN competent-person signature management, admin category assignment, generated signing/issuance and combined generated/external/Legacy history. Override `NEWMAN_COLLECTIONS` or `E2E_SPECS` for focused feature-step verification or diagnosis.
 
 Go regression is off unless enabled; the full command above enables it explicitly. The runner isolates PostgreSQL and journals uniquely prefixed test uploads in the configured R2 bucket. Cleanup removes only that run's recorded objects and fails the run if deletion fails. Use approved storage configuration; for generated certificates the user authorized the existing configured bucket and will run the suites on their VPS. Clean up only test-created objects. See the authoritative guide for defaults, feature-step handoffs, reporting, and cleanup.
 
@@ -133,3 +133,30 @@ First Step 5 VPS result, received 4 October 2026: **161 Go passes, 0 failures/sk
 Follow-up evidence received 4 October 2026: run.fTsdAI passed Newman and Playwright; Go was intentionally not rerun after the Newman-only correction. Cleanup deleted 25 journaled objects and dropped ams_e2e_20261004103418; exit 0. Together with the earlier 161 Go passes (0 failures/skips), this satisfies Step 5's automated gate and verifies the anonymous-request correction. Detailed Newman/Playwright counts and timings were not supplied. No additional suite execution is needed solely to record these results. Preview/final PDF review is the remaining Step 5 gate; Step 6 has not started.
 
 PDF review completed 4 October 2026: the user supplied all six run.fTsdAI attachments. Codex rendered and visually inspected all eight pages, extracted text and compared both preview/final pairs. The only text/pixel differences within each pair are the document-number line: PMS-CE-261004-002-MS1-XX becomes -01 for own ADMIN and -02 for the competent person. Signature/logo streams and placements match; dates, approved text, layout and footer remain consistent. The ordinary preview fits one A4 page; the long preview retains all 60 observations across three pages and keeps the signer block together on page 3. No clipping or overlap was observed. A minor existing cosmetic detail remains: page 3 has an empty REMARKS (continued) heading before measurements. It does not affect completeness or issuance and no renderer change was made. Step 5 is verified; Step 6 is ready but not started. Documentation-only changes remain uncommitted and unpushed; no additional suite run is required.
+
+## Atomic external renewal and combined history (Step 6)
+
+Prepared 4 October 2026 on `certgen`; **implementation and static checks complete, user-run VPS gate pending**. Step 5 remains verified. Certificate detail defaults to generation and offers Upload external document. External renewal sends file, dates and eligible competent person in one request, saves immutable approval details, verifies original private R2 bytes, then atomically publishes file/dates/status and history. Both ADMIN and SUPER_ADMIN retain existing upload permissions; no saved competent-person signature is required. PDF/JPEG/PNG/WEBP up to 10 MiB are preserved without rewriting or PMS numbering. Non-expiring tests omit expiry; renewable expiry must be strictly after issue.
+
+Migration 000053 adds original file metadata and links external audit to issuance. Combined paginated history shows generated/external/Legacy records once, opens original stored documents and reports legacy dates/signer details as unrecorded. Duplicate approval uses its original identity/object; failed, stale or permission-revoked publication preserves the current certificate. The compatibility file-only endpoint now publishes file/audit together and remains Legacy because it lacks a complete renewal snapshot. Recovery/abandonment controls remain Step 7. The approved PDF renderer/layout is unchanged.
+
+Dedicated coverage: `ams-server/generated_renewal_certificates_integration_test.go` adds five top-level tests plus fault subcases for storage/rollback/integrity/concurrency, input and exact size boundaries, all four formats, private R2 access, non-expiring publication, role gates and combined historical snapshots/bytes. `tests/regression/api/generated-renewal-certificates.postman_collection.json` now has **335 requests** (65 new external/history requests) and **338 embedded scripts**. `tests/regression/e2e/generated-renewal-certificates.spec.ts` retains **three real-stack journeys**, expanded for the generated/upload chooser, one-request renewal with no date PATCH, legacy/history popup access, original bytes, unsigned competent-person Admin upload, non-expiring certificates and widths 320/768/1024/1440. Three existing CertificateDetailPage cases and contracts in `refactored-pages-mocked.spec.ts` are also updated.
+
+Passed static checks: SQLC, Go formatting/build/vet and compile-only integration binary; frontend typecheck/build/focused lint; strict feature-spec typecheck/discovery; collection JSON/SDK validity and script syntax; Bash syntax and diff whitespace. These checks do not execute test bodies/services, render certificates or call R2; no Step 6 live pass or latency is claimed. Shared Go reset, system API smoke and whole-app navigation files were reviewed and need no edits: no new tables require reset, existing routes remain compatible, and dedicated tests cover the added behavior. The isolated runner needs no change: suite/migration discovery, oversized fixture generation, scoped storage journaling/cleanup and automatic failed-report hosting already cover this step. The new WEBP fixture is a test input.
+
+Review, commit and push yourself, then synchronize that exact `certgen` revision to Fedora. Run as `ams_test_runner`:
+
+```bash
+cd /home/pms/ams-testing/asset-management-system
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 NEWMAN_COLLECTIONS='tests/regression/api/generated-renewal-certificates.postman_collection.json' E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' bash tests/regression/run-vps-isolated-tests.sh
+```
+
+An additional full strict TypeScript check of the optional mocked-pages spec reports five pre-existing fixture type errors (TS2322/TS2339). The same five errors occur on HEAD; this change introduces no new diagnostics. The dedicated feature spec passes strict checking, and both specs pass Playwright discovery. The mocked runtime gate remains pending on Fedora.
+
+Run the three changed mocked cases as a supplemental gate; the rest of that suite remains opt-in:
+
+```bash
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 E2E_SPECS='../tests/regression/e2e/refactored-pages-mocked.spec.ts --grep CertificateDetailPage' bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Return actual Go pass/fail/skip counts, Newman and Playwright summaries, cleanup, exit status and run IDs. Check generation/upload switching and history labels. On browser failure, inspect the automatically hosted report and Ctrl+C to finish cleanup. No fresh PDF layout approval is needed for this unchanged renderer. Step 7 waits for successful Step 6 verification. Suggested commit: `feat(certificates): renew external documents atomically and unify history`.

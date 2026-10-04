@@ -56,6 +56,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	admin.PATCH("/certificate/:certificate_id", controller.PatchCertificate(pool))
 	admin.DELETE("/certificate/:certificate_id", controller.DeleteCertificate(pool))
 	admin.POST("/certificate/:certificate_id/file", controller.UploadCertificateFile(pool))
+	admin.POST("/certificate/:certificate_id/external-renewal", controller.RenewExternalCertificate(pool))
 
 	// Main Category Routes
 	admin.POST("/main-category", controller.AddMainCategory(pool))
@@ -178,6 +179,8 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	protected.GET("/certificate/:certificate_id/file", controller.GetCertificateFile(pool))
 	protected.GET("/certificate/:certificate_id/uploads", controller.GetCertificateUploadAudit(pool))
 	protected.GET("/certificate/:certificate_id/issuances", controller.GetCertificateIssuances(pool))
+	protected.GET("/certificate/:certificate_id/history", controller.GetCertificateHistory(pool))
+	protected.GET("/certificate/:certificate_id/history/:history_id/file", controller.GetCertificateHistoryFile(pool))
 	protected.GET("/certificate/:certificate_id/issuances/:issuance_id", controller.GetCertificateIssuance(pool))
 	protected.GET("/certificate/:certificate_id/issuances/:issuance_id/file", controller.GetCertificateIssuanceFile(pool))
 	protected.GET("/certificate/:certificate_id/uploads/:upload_id/file", controller.GetCertificateUploadFile(pool))

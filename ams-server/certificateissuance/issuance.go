@@ -18,7 +18,7 @@ import (
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 )
 
-var ErrIssuanceFailed = errors.New("issuance was approved but could not finish; its number is retained and the current certificate is unchanged")
+var ErrIssuanceFailed = errors.New("issuance was approved but could not finish; its approval is retained and the current certificate is unchanged")
 var ErrIssuanceConflict = errors.New("the certificate changed after approval; this issuance cannot replace its current document")
 var ErrDocumentMissing = errors.New("issued object not found")
 
@@ -36,20 +36,22 @@ type Issuances struct {
 	Documents DocumentStore
 }
 type Issuance struct {
-	ID            uuid.UUID  `json:"issuance_id"`
-	CertificateID uuid.UUID  `json:"certificate_id"`
-	Source        string     `json:"source"`
-	ActorID       uuid.UUID  `json:"actor_id"`
-	Number        string     `json:"document_number"`
-	State         string     `json:"state"`
-	IssueDate     string     `json:"issue_date"`
-	ExpiryDate    string     `json:"expiry_date"`
-	Snapshot      Snapshot   `json:"snapshot"`
-	SHA256        string     `json:"document_sha256"`
-	Size          int64      `json:"document_size"`
-	FailureCode   string     `json:"failure_code"`
-	ApprovedAt    time.Time  `json:"approved_at"`
-	CompletedAt   *time.Time `json:"completed_at"`
+	ID            uuid.UUID       `json:"issuance_id"`
+	CertificateID uuid.UUID       `json:"certificate_id"`
+	Source        string          `json:"source"`
+	ActorID       uuid.UUID       `json:"actor_id"`
+	Number        string          `json:"document_number"`
+	State         string          `json:"state"`
+	IssueDate     string          `json:"issue_date"`
+	ExpiryDate    string          `json:"expiry_date"`
+	Snapshot      json.RawMessage `json:"snapshot"`
+	FileName      string          `json:"file_name"`
+	ContentType   string          `json:"content_type"`
+	SHA256        string          `json:"document_sha256"`
+	Size          int64           `json:"document_size"`
+	FailureCode   string          `json:"failure_code"`
+	ApprovedAt    time.Time       `json:"approved_at"`
+	CompletedAt   *time.Time      `json:"completed_at"`
 }
 
 func PublicIssuance(row db.CertificateIssuance) (Issuance, error) {
@@ -63,7 +65,7 @@ func PublicIssuance(row db.CertificateIssuance) (Issuance, error) {
 	}
 	return Issuance{ID: row.IssuanceID, CertificateID: row.CertificateID, Source: row.Source, ActorID: row.ActorID,
 		Number: row.DocumentNumber.String, State: row.State, IssueDate: row.IssueDate.Time.Format("2006-01-02"), ExpiryDate: expiry,
-		Snapshot: snapshot, SHA256: row.DocumentSha256, Size: row.DocumentSize, FailureCode: row.FailureCode,
+		Snapshot: json.RawMessage(row.Snapshot), FileName: row.FileName, ContentType: row.ContentType, SHA256: row.DocumentSha256, Size: row.DocumentSize, FailureCode: row.FailureCode,
 		ApprovedAt: row.ApprovedAt, CompletedAt: row.CompletedAt}, nil
 }
 func dateValue(value string) pgtype.Date {
@@ -129,7 +131,7 @@ func (s Issuances) approveTransaction(ctx context.Context, actor, certificate, a
 		}
 		a, _ := json.Marshal(saved)
 		b, _ := json.Marshal(snapshot)
-		if existing.ActorID != actor || existing.CertificateID != certificate || !bytes.Equal(a, b) {
+		if existing.Source != "GENERATED" || existing.ActorID != actor || existing.CertificateID != certificate || !bytes.Equal(a, b) {
 			return existing, ErrPreviewToken
 		}
 		return existing, nil
@@ -175,6 +177,9 @@ func (s Issuances) Approve(ctx context.Context, actor, certificate uuid.UUID, to
 	return s.process(ctx, row)
 }
 func (s Issuances) process(ctx context.Context, row db.CertificateIssuance) (Issuance, error) {
+	return s.processDocument(ctx, row, nil)
+}
+func (s Issuances) processDocument(ctx context.Context, row db.CertificateIssuance, payload []byte) (Issuance, error) {
 	q := db.New(s.Pool)
 	if row.State == "COMPLETED" || row.State == "ABANDONED" {
 		return PublicIssuance(row)
@@ -212,7 +217,7 @@ func (s Issuances) process(ctx context.Context, row db.CertificateIssuance) (Iss
 		return result, errors.Join(ErrIssuanceFailed, cause, markErr)
 	}
 	var snapshot Snapshot
-	if err := json.Unmarshal(row.Snapshot, &snapshot); err != nil || snapshot.SchemaVersion != SnapshotVersion || snapshot.TemplateVersion != TemplateVersion {
+	if err := json.Unmarshal(row.Snapshot, &snapshot); err != nil || snapshot.SchemaVersion != SnapshotVersion || (row.Source == "GENERATED" && snapshot.TemplateVersion != TemplateVersion) {
 		return fail("SNAPSHOT", ErrPreviewToken)
 	}
 	// Refuse old approved work before expensive rendering and again atomically on publication.
@@ -225,20 +230,27 @@ func (s Issuances) process(ctx context.Context, row db.CertificateIssuance) (Iss
 		return fail("STORAGE_READ", err)
 	}
 	if errors.Is(err, ErrDocumentMissing) {
-		signature, err := q.GetIssuanceSignature(ctx, *row.SignatureID)
-		if err != nil || signature.OwnerID != snapshot.Signer.SignerID || signature.OwnerKind != snapshot.Signer.OwnerKind || signature.Sha256 != snapshot.Signer.Signature.SHA256 || signature.ByteSize != snapshot.Signer.Signature.ByteSize {
-			return fail("SIGNATURE", errors.Join(ErrStorage, err))
-		}
-		image, err := s.Previews.Management.Store.Read(ctx, signature.FileKey)
-		if err != nil || !matchesDocument(image, signature.Sha256, signature.ByteSize) {
-			return fail("SIGNATURE", errors.Join(ErrStorage, err))
-		}
-		data, err = s.Previews.Renderer.Render(ctx, snapshot, row.DocumentNumber.String, image)
-		if err != nil {
-			return fail("RENDER", err)
-		}
-		if len(data) == 0 || len(data) > MaxDocumentBytes || !bytes.HasPrefix(data, []byte("%PDF-")) {
-			return fail("RENDER", ErrPreviewInput)
+		if row.Source == "EXTERNAL" {
+			data = payload
+			if !matchesDocument(data, row.DocumentSha256, row.DocumentSize) {
+				return fail("DOCUMENT_INPUT", ErrExternalInput)
+			}
+		} else {
+			signature, err := q.GetIssuanceSignature(ctx, *row.SignatureID)
+			if err != nil || signature.OwnerID != snapshot.Signer.SignerID || signature.OwnerKind != snapshot.Signer.OwnerKind || signature.Sha256 != snapshot.Signer.Signature.SHA256 || signature.ByteSize != snapshot.Signer.Signature.ByteSize {
+				return fail("SIGNATURE", errors.Join(ErrStorage, err))
+			}
+			image, err := s.Previews.Management.Store.Read(ctx, signature.FileKey)
+			if err != nil || !matchesDocument(image, signature.Sha256, signature.ByteSize) {
+				return fail("SIGNATURE", errors.Join(ErrStorage, err))
+			}
+			data, err = s.Previews.Renderer.Render(ctx, snapshot, row.DocumentNumber.String, image)
+			if err != nil {
+				return fail("RENDER", err)
+			}
+			if len(data) == 0 || len(data) > MaxDocumentBytes || !bytes.HasPrefix(data, []byte("%PDF-")) {
+				return fail("RENDER", ErrPreviewInput)
+			}
 		}
 		digest := sha256.Sum256(data)
 		row.DocumentSha256 = hex.EncodeToString(digest[:])
@@ -288,7 +300,7 @@ func (s Issuances) publish(ctx context.Context, row db.CertificateIssuance, atte
 	if err := json.Unmarshal(row.Snapshot, &snapshot); err != nil {
 		return err
 	}
-	if role == "ADMIN" && (snapshot.Signer.OwnerKind != "ACCOUNT" || snapshot.Signer.SignerID != row.ActorID) {
+	if row.Source == "GENERATED" && role == "ADMIN" && (snapshot.Signer.OwnerKind != "ACCOUNT" || snapshot.Signer.SignerID != row.ActorID) {
 		return ErrIssuerForbidden
 	}
 	if _, err := q.LockProcessingIssuance(ctx, db.LockProcessingIssuanceParams{IssuanceID: row.IssuanceID, AttemptID: &attempt}); err != nil {
@@ -307,12 +319,17 @@ func (s Issuances) publish(ctx context.Context, row db.CertificateIssuance, atte
 			status = "EXPIRING_SOON"
 		}
 	}
-	n, err := q.PublishIssuedCertificate(ctx, db.PublishIssuedCertificateParams{FileKey: row.FileKey, IssueDate: &issue, ExpiryDate: expiry, Status: status, CertificateID: row.CertificateID, BaseVersion: row.BaseVersion, ActorID: row.ActorID, OwnerKind: snapshot.Signer.OwnerKind, SignerID: snapshot.Signer.SignerID})
+	n, err := q.PublishIssuedCertificate(ctx, db.PublishIssuedCertificateParams{FileKey: row.FileKey, IssueDate: &issue, ExpiryDate: expiry, Status: status, CertificateID: row.CertificateID, BaseVersion: row.BaseVersion, ActorID: row.ActorID, Source: row.Source, OwnerKind: snapshot.Signer.OwnerKind, SignerID: snapshot.Signer.SignerID})
 	if err != nil {
 		return err
 	}
 	if n != 1 {
 		return ErrIssuanceConflict
+	}
+	if row.Source == "EXTERNAL" {
+		if err := q.CreateIssuedUploadAudit(ctx, db.CreateIssuedUploadAuditParams{CertificateID: row.CertificateID, FileKey: row.FileKey, FileName: row.FileName, UploadedBy: row.ActorID.String(), CompetentPersonID: &snapshot.Signer.SignerID, IssuanceID: &row.IssuanceID}); err != nil {
+			return err
+		}
 	}
 	n, err = q.CompleteCertificateIssuance(ctx, db.CompleteCertificateIssuanceParams{IssuanceID: row.IssuanceID, AttemptID: &attempt})
 	if err != nil {

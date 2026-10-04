@@ -151,6 +151,8 @@ type CertificateIssuance struct {
 	ApprovedAt     time.Time   `json:"approved_at"`
 	CompletedAt    *time.Time  `json:"completed_at"`
 	UpdatedAt      time.Time   `json:"updated_at"`
+	FileName       string      `json:"file_name"`
+	ContentType    string      `json:"content_type"`
 }
 
 type CertificateNumberCounter struct {
@@ -192,6 +194,7 @@ type CertificateUploadAudit struct {
 	Uuid              uuid.UUID  `json:"uuid"`
 	CertificateID     uuid.UUID  `json:"certificate_id"`
 	CompetentPersonID *uuid.UUID `json:"competent_person_id"`
+	IssuanceID        *uuid.UUID `json:"issuance_id"`
 }
 
 type CompetencyCategory struct {

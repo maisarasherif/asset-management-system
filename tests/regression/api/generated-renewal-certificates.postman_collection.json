@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Generated renewal certificates - signing, preview, and approved issuance",
-    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal. Super-admin competent-person signature management, ordinary-admin category assignment/clearing, private image version history, direct role/field bypasses, restricted/unrestricted signer eligibility, and status changes after selection. Stateless gopdf PDF previews, XX numbering, private signed snapshots, account/certificate/purpose bindings, changed sources and eligibility, role gates, non-expiring tests, and no publication before approval. Real token expiry is covered in Go through the HTTP endpoint. Approved synchronous generated issuance, duplicate approval identity, per-component/date sequences, atomic publication, real issued PDF integrity and immutable stored history, own ADMIN issuance, role/cross-certificate gates, and non-expiring publication. Fault injection and concurrent allocation are exercised by dedicated Go integration tests.",
+    "name": "Generated renewal certificates - generation, external renewal and history",
+    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal. Super-admin competent-person signature management, ordinary-admin category assignment/clearing, private image version history, direct role/field bypasses, restricted/unrestricted signer eligibility, and status changes after selection. Stateless gopdf PDF previews, XX numbering, private signed snapshots, account/certificate/purpose bindings, changed sources and eligibility, role gates, non-expiring tests, and no publication before approval. Real token expiry is covered in Go through the HTTP endpoint. Approved synchronous generated issuance, duplicate approval identity, per-component/date sequences, atomic publication, real issued PDF integrity and immutable stored history, own ADMIN issuance, role/cross-certificate gates, and non-expiring publication. Fault injection and concurrent allocation are exercised by dedicated Go integration tests. Atomic external renewal preserves original PDF/JPEG/PNG/WEBP bytes, supports unsigned eligible competent people, saved-approval replay, strict input and 10MB limits, existing upload role gates, combined paginated generated/external/Legacy history, and no fabricated legacy dates/signers. Real fault/concurrency coverage belongs to the dedicated Go file.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -8976,6 +8976,2894 @@
             },
             {
               "name": "Issuance cleanup: Delete non-expiring preview test",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/test-type/{{previewNonexpiringTestId}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Delete non-expiring preview test: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Atomic external renewal and combined legacy history",
+          "item": [
+            {
+              "name": "Capture current certificate before rejected external renewals",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Capture current certificate before rejected external renewals: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('externalBefore',JSON.stringify(pm.response.json())); pm.collectionVariables.set('externalApproval',pm.variables.replaceIn('{{$guid}}')); pm.collectionVariables.set('externalAdminApproval',pm.variables.replaceIn('{{$guid}}'));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Preserve a file-only legacy upload",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "value": "{{competent_person_id}}",
+                      "type": "text"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Preserve a file-only legacy upload: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Capture legacy document without changing its dates",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Capture legacy document without changing its dates: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('externalBefore',JSON.stringify(pm.response.json()));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Missing approval ID",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": ""
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Missing approval ID: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Missing competent person",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": ""
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Missing competent person: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Unknown competent person",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Unknown competent person: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Wrong competency category",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{mgWrong}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Wrong competency category: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Inactive competent person",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{mgInactive}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Inactive competent person: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Inactive competency category",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{mgInactiveCategoryPerson}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Inactive competency category: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Missing issue date",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": ""
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Missing issue date: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Invalid calendar date",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-02-30"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Invalid calendar date: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Missing expiry date",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Missing expiry date: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Equal issue and expiry dates",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Equal issue and expiry dates: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Expiry before issue date",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2026-01-01"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Expiry before issue date: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects Unsupported content type",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "text/plain",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects Unsupported content type: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects imposed PMS numbering",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    },
+                    {
+                      "key": "document_number",
+                      "type": "text",
+                      "value": "FORGED"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects imposed PMS numbering: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects duplicate form fields",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects duplicate form fields: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects missing file",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects missing file: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External rejects file exceeding 10 MB",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/oversize-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External rejects file exceeding 10 MB: status 413\", () => pm.response.to.have.status(413));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "USER cannot publish an external renewal",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{restrictedSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"USER cannot publish an external renewal: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "CLIENT cannot publish an external renewal",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"CLIENT cannot publish an external renewal: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Anonymous cannot publish an external renewal",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Anonymous cannot publish an external renewal: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Rejected external renewals preserve file dates and status",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Rejected external renewals preserve file dates and status: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const before=JSON.parse(pm.collectionVariables.get('externalBefore')),current=pm.response.json(); ['certificate_file','issue_date','expiry_date','status','updated_at'].forEach(key=>pm.expect(current[key],key).to.eql(before[key]));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Rejected external requests create no approval or duplicate history",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Rejected external requests create no approval or duplicate history: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const rows=pm.response.json().data; pm.expect(rows).to.have.length(3); pm.expect(rows.filter(r=>r.source==='LEGACY')).to.have.length(1); pm.expect(rows.filter(r=>r.source==='GENERATED')).to.have.length(2); pm.expect(rows.filter(r=>r.source==='EXTERNAL')).to.have.length(0);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "SUPER_ADMIN publishes original external PDF atomically",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{externalApproval}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"SUPER_ADMIN publishes original external PDF atomically: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.source).to.eql('EXTERNAL'); pm.expect(b.state).to.eql('COMPLETED'); pm.expect(b.document_number).to.eql(''); pm.expect(b.snapshot.signer).not.to.have.property('signature'); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('competent_person_id'));",
+                      "pm.expect(b.document_sha256).to.eql('3fff9eb666fbd6e108af1b35c63603f26343bf8174c794bb938012bba851d153'); pm.expect(b.document_size).to.eql(596); pm.collectionVariables.set('externalResult',JSON.stringify(b)); pm.collectionVariables.set('externalId',b.issuance_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Duplicate external approval retains identity and stored document",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{externalApproval}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Duplicate external approval retains identity and stored document: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.expect(pm.response.json()).to.eql(JSON.parse(pm.collectionVariables.get('externalResult')));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External approval rejects changed dates",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{externalApproval}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2028-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External approval rejects changed dates: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External approval rejects changed bytes",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "image/png",
+                      "src": "tests/regression/fixtures/signature-sample.png"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{externalApproval}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External approval rejects changed bytes: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External approval rejects changed competent person",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{externalApproval}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{mgUnsigned}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External approval rejects changed competent person: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External approval rejects changed certificate",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{externalApproval}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External approval rejects changed certificate: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External approval rejects changed issuer",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{externalApproval}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External approval rejects changed issuer: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External publication updates dates and document together",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External publication updates dates and document together: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.issue_date).to.eql('2026-10-04T00:00:00Z'); pm.expect(b.expiry_date).to.eql('2027-10-04T00:00:00Z'); pm.expect(b.certificate_file).to.contain('external-certificates/'); pm.expect(b.certificate_file).not.to.eql(JSON.parse(pm.collectionVariables.get('externalBefore')).certificate_file);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Resolve original external historical document",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history/{{externalId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Resolve original external historical document: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('externalURL',pm.response.json().url);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Download unmodified external R2 PDF",
+              "request": {
+                "method": "GET",
+                "url": "{{externalURL}}",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Download unmodified external R2 PDF: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const bytes=Buffer.from(pm.response.stream); const CryptoJS=require('crypto-js');",
+                      "pm.expect(bytes.length).to.eql(596); pm.expect(CryptoJS.SHA256(CryptoJS.lib.WordArray.create(bytes)).toString()).to.eql('3fff9eb666fbd6e108af1b35c63603f26343bf8174c794bb938012bba851d153');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "External document cannot cross certificate boundary",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/history/{{externalId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External document cannot cross certificate boundary: status 404\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "USER combined history access follows staff permissions",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{restrictedSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"USER combined history access follows staff permissions: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "USER historical document access follows staff permissions",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history/{{externalId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{restrictedSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"USER historical document access follows staff permissions: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "CLIENT combined history access follows staff permissions",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"CLIENT combined history access follows staff permissions: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "CLIENT historical document access follows staff permissions",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history/{{externalId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"CLIENT historical document access follows staff permissions: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Anonymous combined history access follows staff permissions",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Anonymous combined history access follows staff permissions: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Anonymous historical document access follows staff permissions",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history/{{externalId}}/file",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Anonymous historical document access follows staff permissions: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "External preserves image/png and permits unsigned competent person",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "image/png",
+                      "src": "tests/regression/fixtures/signature-sample.png"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{externalAdminApproval}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{mgUnsigned}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External preserves image/png and permits unsigned competent person: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.state).to.eql('COMPLETED'); pm.expect(b.document_number).to.eql(''); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('mgUnsigned')); pm.expect(b.snapshot.signer).not.to.have.property('signature');",
+                      "pm.expect(b.content_type).to.eql('image/png'); pm.expect(b.document_sha256).to.eql('b78f3e50d62a1ca7648f31ed2e842499f5830e3fa009ab91fcebdf6a10919658'); pm.expect(b.document_size).to.eql(325); pm.collectionVariables.set('externalImageId',b.issuance_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Resolve image/png from immutable history",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history/{{externalImageId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Resolve image/png from immutable history: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('externalImageURL',pm.response.json().url);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Read original image/png bytes from R2",
+              "request": {
+                "method": "GET",
+                "url": "{{externalImageURL}}",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Read original image/png bytes from R2: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const bytes=Buffer.from(pm.response.stream),CryptoJS=require('crypto-js'); pm.expect(bytes.length).to.eql(325); pm.expect(pm.response.headers.get('Content-Type')).to.eql('image/png'); pm.expect(CryptoJS.SHA256(CryptoJS.lib.WordArray.create(bytes)).toString()).to.eql('b78f3e50d62a1ca7648f31ed2e842499f5830e3fa009ab91fcebdf6a10919658');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "External preserves image/jpeg and permits unsigned competent person",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "image/jpeg",
+                      "src": "tests/regression/fixtures/signature-replacement.jpg"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{mgUnsigned}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External preserves image/jpeg and permits unsigned competent person: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.state).to.eql('COMPLETED'); pm.expect(b.document_number).to.eql(''); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('mgUnsigned')); pm.expect(b.snapshot.signer).not.to.have.property('signature');",
+                      "pm.expect(b.content_type).to.eql('image/jpeg'); pm.expect(b.document_sha256).to.eql('f35082429eceedad95cd8a6a786785b24d4e4ff7719a3719bad16ac24b7864b0'); pm.expect(b.document_size).to.eql(2808); pm.collectionVariables.set('externalImageId',b.issuance_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Resolve image/jpeg from immutable history",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history/{{externalImageId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Resolve image/jpeg from immutable history: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('externalImageURL',pm.response.json().url);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Read original image/jpeg bytes from R2",
+              "request": {
+                "method": "GET",
+                "url": "{{externalImageURL}}",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Read original image/jpeg bytes from R2: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const bytes=Buffer.from(pm.response.stream),CryptoJS=require('crypto-js'); pm.expect(bytes.length).to.eql(2808); pm.expect(pm.response.headers.get('Content-Type')).to.eql('image/jpeg'); pm.expect(CryptoJS.SHA256(CryptoJS.lib.WordArray.create(bytes)).toString()).to.eql('f35082429eceedad95cd8a6a786785b24d4e4ff7719a3719bad16ac24b7864b0');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "External preserves image/webp and permits unsigned competent person",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "image/webp",
+                      "src": "tests/regression/fixtures/external-examination.webp"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{mgUnsigned}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External preserves image/webp and permits unsigned competent person: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.state).to.eql('COMPLETED'); pm.expect(b.document_number).to.eql(''); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('mgUnsigned')); pm.expect(b.snapshot.signer).not.to.have.property('signature');",
+                      "pm.expect(b.content_type).to.eql('image/webp'); pm.expect(b.document_sha256).to.eql('c90cff659645a312a28804965f3dbc34061338f7234ff5d6ddb2c57e9eadec15'); pm.expect(b.document_size).to.eql(42); pm.collectionVariables.set('externalImageId',b.issuance_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Resolve image/webp from immutable history",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history/{{externalImageId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Resolve image/webp from immutable history: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('externalImageURL',pm.response.json().url);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Read original image/webp bytes from R2",
+              "request": {
+                "method": "GET",
+                "url": "{{externalImageURL}}",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Read original image/webp bytes from R2: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const bytes=Buffer.from(pm.response.stream),CryptoJS=require('crypto-js'); pm.expect(bytes.length).to.eql(42); pm.expect(pm.response.headers.get('Content-Type')).to.eql('image/webp'); pm.expect(CryptoJS.SHA256(CryptoJS.lib.WordArray.create(bytes)).toString()).to.eql('c90cff659645a312a28804965f3dbc34061338f7234ff5d6ddb2c57e9eadec15');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Change unsigned profile after completed external renewal",
+              "request": {
+                "method": "PUT",
+                "url": "{{baseUrl}}/competent-person/{{mgUnsigned}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"full_name\": \"Future unsigned examiner {{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"Future organization\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": true\n}"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Change unsigned profile after completed external renewal: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Combined history has each generated external and legacy document once",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Combined history has each generated external and legacy document once: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(),rows=b.data; pm.expect(b.meta.total).to.eql(7); pm.expect(rows).to.have.length(7); pm.expect(new Set(rows.map(r=>r.history_id)).size).to.eql(7); pm.expect(rows.filter(r=>r.source==='GENERATED')).to.have.length(2); pm.expect(rows.filter(r=>r.source==='EXTERNAL')).to.have.length(4); const old=rows.find(r=>r.source==='LEGACY'); pm.expect(old.snapshot_available).to.eql(false); pm.expect(old.issue_date).to.eql(null); pm.expect(old.expiry_date).to.eql(null); pm.expect(old.signer_name).to.eql(''); pm.collectionVariables.set('legacyHistoryId',old.history_id);",
+                      "rows.filter(r=>r.source==='EXTERNAL').forEach(r=>{pm.expect(r.snapshot_available).to.eql(true); pm.expect(r.signer_name).not.to.contain('Future'); pm.expect(r.document_number).to.eql(''); pm.expect(r).not.to.have.property('file_key');});",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Combined history first page",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history?page=1&limit=1",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Combined history first page: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.data).to.have.length(1); pm.expect(b.meta.total).to.eql(7); pm.collectionVariables.set('externalHistoryFirstId',b.data[0].history_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Combined history next page is different",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history?page=2&limit=1",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Combined history next page is different: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.data).to.have.length(1); pm.expect(b.data[0].history_id).not.to.eql(pm.collectionVariables.get('externalHistoryFirstId'));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Resolve retained legacy document",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/history/{{legacyHistoryId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Resolve retained legacy document: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('legacyHistoryURL',pm.response.json().url);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Legacy document remains original after renewed publications",
+              "request": {
+                "method": "GET",
+                "url": "{{legacyHistoryURL}}",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Legacy document remains original after renewed publications: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const bytes=Buffer.from(pm.response.stream); const CryptoJS=require('crypto-js');",
+                      "pm.expect(bytes.length).to.eql(596); pm.expect(CryptoJS.SHA256(CryptoJS.lib.WordArray.create(bytes)).toString()).to.eql('3fff9eb666fbd6e108af1b35c63603f26343bf8174c794bb938012bba851d153');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Earlier external document remains original after other renewals",
+              "request": {
+                "method": "GET",
+                "url": "{{externalURL}}",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Earlier external document remains original after other renewals: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const bytes=Buffer.from(pm.response.stream); const CryptoJS=require('crypto-js');",
+                      "pm.expect(bytes.length).to.eql(596); pm.expect(CryptoJS.SHA256(CryptoJS.lib.WordArray.create(bytes)).toString()).to.eql('3fff9eb666fbd6e108af1b35c63603f26343bf8174c794bb938012bba851d153');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "disableCookies": true
+              }
+            },
+            {
+              "name": "Earlier generated PDF remains unchanged after external renewals",
+              "request": {
+                "method": "GET",
+                "url": "{{issuedDocumentURL}}",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"First issued PDF remains readable after later renewal: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.expect(Buffer.from(pm.response.stream).toString('base64')).to.eql(pm.collectionVariables.get('issuedPDFBytes'));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External Issuance fixture: Create non-expiring preview test",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/test-type",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"test_name\": \"Non-expiring preview {{runSuffix}}\",\n  \"requires_renewal\": false,\n  \"validity_duration\": null,\n  \"description\": \"No expiry preview\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Create non-expiring preview test: status 201\", () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) {",
+                      "pm.collectionVariables.set('previewNonexpiringTestId',pm.response.json().test_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External Issuance fixture: Create non-expiring preview certificate",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"test_id\": \"{{previewNonexpiringTestId}}\",\n  \"certificate_name\": \"Non-expiring preview {{runSuffix}}\",\n  \"issue_date\": \"2026-10-04T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"PMS\",\n  \"imca_ref\": \"D018\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"\",\n  \"competency_category_ids\": []\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Create non-expiring preview certificate: status 201\", () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) {",
+                      "pm.collectionVariables.set('previewNonexpiringCertificateId',pm.response.json().certificate_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External non-expiring test rejects imposed expiry",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{competent_person_id}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": "2027-10-04"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External non-expiring test rejects imposed expiry: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "ADMIN uploads non-expiring certificate without saved competent signature",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}/external-renewal",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "contentType": "application/pdf",
+                      "src": "tests/regression/fixtures/sample-certificate.pdf"
+                    },
+                    {
+                      "key": "approval_id",
+                      "type": "text",
+                      "value": "{{$guid}}"
+                    },
+                    {
+                      "key": "competent_person_id",
+                      "type": "text",
+                      "value": "{{mgUnsigned}}"
+                    },
+                    {
+                      "key": "issue_date",
+                      "type": "text",
+                      "value": "2026-10-04"
+                    },
+                    {
+                      "key": "expiry_date",
+                      "type": "text",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"ADMIN uploads non-expiring certificate without saved competent signature: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.state).to.eql('COMPLETED'); pm.expect(b.expiry_date).to.eql(''); pm.expect(b.document_number).to.eql(''); pm.expect(b.snapshot.validity_period).to.eql('No expiry');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External non-expiring publication clears expiry",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"External non-expiring publication clears expiry: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.expect(pm.response.json().expiry_date).to.eql(null);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External Issuance cleanup: Delete non-expiring preview certificate",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Delete non-expiring preview certificate: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External Issuance cleanup: Delete non-expiring preview test",
               "request": {
                 "method": "DELETE",
                 "url": "{{baseUrl}}/test-type/{{previewNonexpiringTestId}}",

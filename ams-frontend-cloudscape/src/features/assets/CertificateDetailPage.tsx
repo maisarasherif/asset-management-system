@@ -1,5 +1,4 @@
 import {
-  Alert,
   Box,
   Button,
   ColumnLayout,
@@ -9,37 +8,31 @@ import {
   Header,
   SpaceBetween,
   StatusIndicator,
-  Table,
+  SegmentedControl,
   type SelectProps,
-  type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { renewExternalCertificate, getCertificateIssuance } from "../../lib/api/certificate-issuance";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   getAsset,
   getCertificate,
   getCertificateDownloadUrl,
-  getCertificateUploadDownloadUrl,
   getComponent,
   listActiveCompetentPersons,
-  listCertificateUploads,
   listTestTypes,
-  patchCertificate,
-  uploadCertificateFile,
 } from "../../lib/api/ams";
 import { ApiError } from "../../lib/api/client";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { CertificateIssuanceHistory } from "./CertificateIssuanceHistory";
 import { GeneratedCertificateSigner } from "./GeneratedCertificateSigner";
 import { Select } from "../../components/shared/OptimizedSelect";
-import { TableCellText } from "../../components/shared/TableCells";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type {
   Asset,
   Certificate,
-  CertificateUploadAudit,
   ComponentRecord,
   CompetentPerson,
   TestType,
@@ -47,10 +40,8 @@ import type {
 import { certificateStatusType } from "../../utils/status";
 import {
   formatDate,
-  formatDateTime,
   humanizeEnum,
   toDateInputValue,
-  toIsoDate,
 } from "../../utils/format";
 import {
   CERTIFICATE_FILE_MAX_LABEL,
@@ -91,11 +82,14 @@ export function CertificateDetailPage() {
   const { assetId, componentId, certificateId } = useParams();
   const { isAdmin } = useAuth();
   const { error, success } = useFlashbar();
+  const approvalId = useRef<string | null>(null);
+  const [generatedIssuing, setGeneratedIssuing] = useState(false);
+  const [renewalSource,setRenewalSource] = useState("GENERATED");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedCompetentPersonId, setSelectedCompetentPersonId] =
     useState("");
-  const [renewalIssueDate, setRenewalIssueDate] = useState("");
-  const [renewalExpiryDate, setRenewalExpiryDate] = useState("");
+  const [renewalIssueDate, setRenewalIssueDate] = useState<string | null>(null);
+  const [renewalExpiryDate, setRenewalExpiryDate] = useState<string | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
 
   const assetQuery = useQuery({
@@ -121,12 +115,6 @@ export function CertificateDetailPage() {
     queryFn: listTestTypes,
   });
 
-  const uploadsQuery = useQuery({
-    queryKey: ["uploads", certificateId],
-    queryFn: async () => (await listCertificateUploads(certificateId!)).data,
-    enabled: Boolean(certificateId),
-  });
-
   const competentPersonsQuery = useQuery({
     queryKey: ["competent-persons", "active"],
     queryFn: listActiveCompetentPersons,
@@ -144,10 +132,11 @@ export function CertificateDetailPage() {
     ) ?? null;
   const selectedTypeRequiresExpiry = testTypeRequiresExpiry(selectedTestType);
   const renewalIssueDateValue =
-    renewalIssueDate || toDateInputValue(certificateQuery.data?.issue_date);
+    renewalIssueDate ?? toDateInputValue(certificateQuery.data?.issue_date);
   const renewalExpiryDateValue =
-    renewalExpiryDate || toDateInputValue(certificateQuery.data?.expiry_date);
+    renewalExpiryDate ?? toDateInputValue(certificateQuery.data?.expiry_date);
   const handleFileChange = (file: File | null) => {
+    approvalId.current = null;
     if (isCertificateFileTooLarge(file)) {
       setSelectedFile(null);
       setFileInputKey((current) => current + 1);
@@ -192,31 +181,30 @@ export function CertificateDetailPage() {
       }
       if (
         selectedTypeRequiresExpiry &&
-        new Date(renewalExpiryDateValue).getTime() <
+        new Date(renewalExpiryDateValue).getTime() <=
         new Date(renewalIssueDateValue).getTime()
       ) {
-        throw new Error("Expiry date must be on or after the issue date.");
+        throw new Error("Expiry date must be after the issue date.");
       }
 
-      const uploadResponse = await uploadCertificateFile(
-        certificateId,
-        selectedFile,
-        selectedCompetentPersonId,
-      );
-      await patchCertificate(certificateId, {
-        issue_date: toIsoDate(renewalIssueDateValue),
-        ...(selectedTypeRequiresExpiry ? { expiry_date: toIsoDate(renewalExpiryDateValue) } : {}),
-      });
+      approvalId.current ??= crypto.randomUUID();
+      let uploadResponse = await renewExternalCertificate(certificateId, selectedFile, selectedCompetentPersonId, renewalIssueDateValue, selectedTypeRequiresExpiry ? renewalExpiryDateValue : "", approvalId.current);
+      for (let check=0; check<30 && ["APPROVED","PROCESSING"].includes(uploadResponse.state); check++) {
+        await new Promise(resolve => window.setTimeout(resolve,2000));
+        uploadResponse = await getCertificateIssuance(certificateId,uploadResponse.issuance_id);
+      }
+      if (uploadResponse.state !== "COMPLETED") throw new Error("Renewal approval saved. Check issuance history; the current certificate is unchanged until completion.");
       return uploadResponse;
     },
     onSuccess: async () => {
+      approvalId.current = null;
       setSelectedFile(null);
       setSelectedCompetentPersonId("");
-      setRenewalIssueDate("");
-      setRenewalExpiryDate("");
+      setRenewalIssueDate(null);
+      setRenewalExpiryDate(null);
       setFileInputKey((current) => current + 1);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["uploads", certificateId] }),
+        queryClient.invalidateQueries({ queryKey: ["issuances", certificateId] }),
         queryClient.invalidateQueries({
           queryKey: ["certificate", certificateId],
         }),
@@ -224,6 +212,7 @@ export function CertificateDetailPage() {
           queryKey: ["certificates", componentId],
         }),
         queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["asset-dashboard", assetId] }),
       ]);
       success(
         "Certificate renewed",
@@ -231,23 +220,13 @@ export function CertificateDetailPage() {
       );
     },
     onError: (mutationError: Error) => {
+      void queryClient.invalidateQueries({ queryKey: ["issuances", certificateId] });
       error(
         "Upload failed",
         mutationError instanceof ApiError && mutationError.status === 413
           ? certificateFileTooLargeMessage()
           : mutationError.message,
       );
-    },
-  });
-
-  const uploadViewMutation = useMutation({
-    mutationFn: async (uploadId: string) =>
-      getCertificateUploadDownloadUrl(certificateId!, uploadId),
-    onSuccess: (response) => {
-      window.open(response.url, "_blank", "noopener,noreferrer");
-    },
-    onError: (mutationError: Error) => {
-      error("View failed", mutationError.message);
     },
   });
 
@@ -304,77 +283,6 @@ export function CertificateDetailPage() {
       (option) => option.value === selectedCompetentPersonId,
     ) ?? null;
 
-  const uploadColumns: TableProps<CertificateUploadAudit>["columnDefinitions"] =
-    [
-      {
-        id: "file",
-        header: "File",
-        width: "28%",
-        minWidth: 240,
-        cell: (item) => (
-          <TableCellText title={item.file_name}>{item.file_name}</TableCellText>
-        ),
-      },
-      {
-        id: "uploadedBy",
-        header: "Uploaded by",
-        width: "18%",
-        minWidth: 170,
-        cell: (item) => (
-          <TableCellText title={item.uploaded_by_name || "Unknown"}>
-            {item.uploaded_by_name || "Unknown"}
-          </TableCellText>
-        ),
-      },
-      {
-        id: "competentPerson",
-        header: "Competent Person",
-        width: "18%",
-        minWidth: 180,
-        cell: (item) => (
-          <TableCellText title={item.competent_person_name || "Not recorded"}>
-            {item.competent_person_name || "Not recorded"}
-          </TableCellText>
-        ),
-      },
-      {
-        id: "competencyCategory",
-        header: "Competency category",
-        width: "20%",
-        minWidth: 200,
-        cell: (item) => (
-          <TableCellText
-            title={item.competency_category_name || "Not recorded"}
-          >
-            {item.competency_category_name || "Not recorded"}
-          </TableCellText>
-        ),
-      },
-      {
-        id: "uploadedAt",
-        header: "Uploaded at",
-        width: 190,
-        minWidth: 180,
-        cell: (item) => formatDateTime(item.uploaded_at),
-      },
-      {
-        id: "view",
-        header: "View",
-        width: 120,
-        minWidth: 120,
-        cell: (item) => (
-          <span className="upload-history-view-action">
-            <Button
-              loading={uploadViewMutation.isPending}
-              onClick={() => uploadViewMutation.mutate(item.uuid)}
-            >
-              View
-            </Button>
-          </span>
-        ),
-      },
-    ];
-
   return renderCertificateDetailPage({
     asset: assetQuery.data,
     assetId,
@@ -390,9 +298,10 @@ export function CertificateDetailPage() {
     locationPath: `${location.pathname}${location.search}`,
     navigate,
     onDownload: () => downloadMutation.mutate(),
-    onExpiryDateChange: setRenewalExpiryDate,
+    onExpiryDateChange: value => { approvalId.current = null; setRenewalExpiryDate(value); },
     onFileChange: handleFileChange,
     onIssueDateChange: (nextIssueDate) => {
+      approvalId.current = null;
       setRenewalIssueDate(nextIssueDate);
       setRenewalExpiryDate(
         nextIssueDate && selectedTestType && selectedTypeRequiresExpiry
@@ -403,8 +312,7 @@ export function CertificateDetailPage() {
       );
     },
     onRenew: () => uploadMutation.mutate(),
-    onSelectedCompetentPersonChange: setSelectedCompetentPersonId,
-    onViewUpload: (uploadId) => uploadViewMutation.mutate(uploadId),
+    onSelectedCompetentPersonChange: value => { approvalId.current = null; setSelectedCompetentPersonId(value); },
     renewalExpiryDateValue,
     renewalIssueDateValue,
     selectedCompetentPerson,
@@ -414,17 +322,20 @@ export function CertificateDetailPage() {
     selectedTestType,
     selectedTypeRequiresExpiry,
     testTypeName,
-    uploadColumns,
     uploadPending: uploadMutation.isPending,
-    uploadViewPending: uploadViewMutation.isPending,
-    uploads: uploadsQuery.data || [],
-    uploadsError: uploadsQuery.isError,
-    uploadsLoading: uploadsQuery.isLoading,
     fileInputKey,
+    renewalSource,
+    onRenewalSourceChange: setRenewalSource,
+    generatedIssuing,
+    onGeneratedIssuingChange: setGeneratedIssuing,
   });
 }
 
 interface CertificateDetailPageViewProps {
+  generatedIssuing: boolean;
+  onGeneratedIssuingChange: (issuing: boolean) => void;
+  renewalSource: string;
+  onRenewalSourceChange: (value:string)=>void;
   asset: Asset;
   assetId: string;
   certificate: Certificate;
@@ -445,7 +356,6 @@ interface CertificateDetailPageViewProps {
   onIssueDateChange: (value: string) => void;
   onRenew: () => void;
   onSelectedCompetentPersonChange: (value: string) => void;
-  onViewUpload: (uploadId: string) => void;
   renewalExpiryDateValue: string;
   renewalIssueDateValue: string;
   selectedCompetentPerson: CompetentPerson | null;
@@ -455,15 +365,14 @@ interface CertificateDetailPageViewProps {
   selectedTestType: TestType | null;
   selectedTypeRequiresExpiry: boolean;
   testTypeName: string;
-  uploadColumns: TableProps<CertificateUploadAudit>["columnDefinitions"];
   uploadPending: boolean;
-  uploadViewPending: boolean;
-  uploads: CertificateUploadAudit[];
-  uploadsError: boolean;
-  uploadsLoading: boolean;
 }
 
 function renderCertificateDetailPage({
+  generatedIssuing,
+  onGeneratedIssuingChange,
+  renewalSource,
+  onRenewalSourceChange,
   asset,
   assetId,
   certificate,
@@ -484,7 +393,6 @@ function renderCertificateDetailPage({
   onIssueDateChange,
   onRenew,
   onSelectedCompetentPersonChange,
-  onViewUpload,
   renewalExpiryDateValue,
   renewalIssueDateValue,
   selectedCompetentPerson,
@@ -494,12 +402,7 @@ function renderCertificateDetailPage({
   selectedTestType,
   selectedTypeRequiresExpiry,
   testTypeName,
-  uploadColumns,
   uploadPending,
-  uploadViewPending,
-  uploads,
-  uploadsError,
-  uploadsLoading,
 }: CertificateDetailPageViewProps) {
   return (
     <ContentLayout
@@ -607,11 +510,13 @@ function renderCertificateDetailPage({
           </Container>
         </ColumnLayout>
 
-        {isAdmin ? (
-          <GeneratedCertificateSigner key={certificateId} certificateId={certificateId} issueDate={toDateInputValue(certificate.issue_date)} expiryDate={toDateInputValue(certificate.expiry_date)} validityMonths={selectedTestType?.validity_duration ?? null} requiresRenewal={selectedTypeRequiresExpiry} />
+        {isAdmin ? <SegmentedControl label="Renewal document source" selectedId={renewalSource} onChange={({detail})=>onRenewalSourceChange(detail.selectedId)} options={[{id:"GENERATED",text:"Generate examination certificate",disabled:uploadPending || generatedIssuing},{id:"EXTERNAL",text:"Upload external document",disabled:uploadPending || generatedIssuing}]} /> : null}
+
+        {isAdmin && renewalSource === "GENERATED" ? (
+          <GeneratedCertificateSigner key={certificateId} certificateId={certificateId} onIssuingChange={onGeneratedIssuingChange} issueDate={toDateInputValue(certificate.issue_date)} expiryDate={toDateInputValue(certificate.expiry_date)} validityMonths={selectedTestType?.validity_duration ?? null} requiresRenewal={selectedTypeRequiresExpiry} />
         ) : null}
 
-        {isAdmin ? (
+        {isAdmin && renewalSource === "EXTERNAL" ? (
           <Container
             header={<Header variant="h2">{selectedTypeRequiresExpiry ? "Renew/change certificate" : "Upload/change certificate"}</Header>}
           >
@@ -621,6 +526,7 @@ function renderCertificateDetailPage({
                 {CERTIFICATE_FILE_MAX_LABEL}.
               </Box>
               <input
+                disabled={uploadPending}
                 key={fileInputKey}
                 aria-label="Certificate renewal file"
                 className="file-input"
@@ -637,6 +543,7 @@ function renderCertificateDetailPage({
               <ColumnLayout columns={2}>
                 <FormField label="Issue date">
                   <input
+                    disabled={uploadPending}
                     aria-label="Certificate renewal issue date"
                     className="app-native-input"
                     value={renewalIssueDateValue}
@@ -654,7 +561,8 @@ function renderCertificateDetailPage({
                     label="Expiry date"
                   >
                     <input
-                      aria-label="Certificate renewal expiry date"
+                      disabled={uploadPending}
+                    aria-label="Certificate renewal expiry date"
                       className="app-native-input"
                       value={renewalExpiryDateValue}
                       type="date"
@@ -669,6 +577,7 @@ function renderCertificateDetailPage({
               </ColumnLayout>
               <FormField label="Competent Person">
                 <Select
+                  disabled={uploadPending}
                   options={competentPersonOptions}
                   placeholder="Select competent person"
                   selectedOption={selectedCompetentPersonOption}
@@ -691,6 +600,7 @@ function renderCertificateDetailPage({
               <SpaceBetween direction="horizontal" size="xs">
                 <Button
                   disabled={
+                    uploadPending ||
                     !selectedFile ||
                     !selectedCompetentPersonId ||
                     !renewalIssueDateValue ||
@@ -710,42 +620,6 @@ function renderCertificateDetailPage({
 
         <CertificateIssuanceHistory key={certificateId} certificateId={certificateId} />
 
-        <Container header={<Header variant="h2">Upload history</Header>}>
-          {uploadsError ? (
-            <Alert type="warning">Upload history could not be loaded.</Alert>
-          ) : (
-            <Table
-              columnDefinitions={uploadColumns.map((column) =>
-                column.id === "view"
-                  ? {
-                      ...column,
-                      cell: (item: CertificateUploadAudit) => (
-                        <span className="upload-history-view-action">
-                          <Button
-                            loading={uploadViewPending}
-                            onClick={() => onViewUpload(item.uuid)}
-                          >
-                            View
-                          </Button>
-                        </span>
-                      ),
-                    }
-                  : column,
-              )}
-              empty={
-                <Box color="text-body-secondary">
-                  No uploads recorded for this certificate.
-                </Box>
-              }
-              items={uploads}
-              loading={uploadsLoading}
-              loadingText="Loading upload history"
-              trackBy="file_key"
-              variant="embedded"
-              wrapLines={false}
-            />
-          )}
-        </Container>
       </SpaceBetween>
     </ContentLayout>
   );

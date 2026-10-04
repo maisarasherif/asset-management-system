@@ -828,6 +828,15 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		// Compatibility file-only uploads publish their current file and audit together.
+		// Renewal dates and approved snapshots belong to the external-renewal endpoint.
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin upload publication"})
+			return
+		}
+		defer tx.Rollback(context.Background())
+		queries = db.New(tx)
 		rows, err := queries.UpdateCertificateFile(ctx, db.UpdateCertificateFileParams{
 			CertificateFile: key,
 			CertificateID:   certificateID,
@@ -856,6 +865,11 @@ func UploadCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		if rows == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+			return
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish uploaded certificate"})
 			return
 		}
 
