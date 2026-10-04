@@ -72,7 +72,7 @@ Other feature-specific and mocked specs are opt-in through `E2E_SPECS`. The whol
 
 ### Step 8 final certificate regression and timing evidence
 
-Prepared 4 October 2026 on `certgen`. Step 7 remains verified across run.2zwEuQ (192 Go passes, no failures/skips; Newman passed) and run.Xnlhcs (four dedicated browser journeys passed). **Step 8 implementation is ready; its live gate and final timing/PDF evidence are pending.** Earlier passes do not verify the new hardening change.
+Prepared 4 October 2026 on `certgen`. Step 7 remains verified across run.2zwEuQ (192 Go passes, no failures/skips; Newman passed) and run.Xnlhcs (four dedicated browser journeys passed). **Step 8 automated coverage and timing evidence are verified across the returned VPS runs. Final PDF inspection found an empty continuation heading. Its renderer correction and dedicated regression checks are prepared; focused live verification, review of the corrected long PDF and final sign-off remain pending.** The latest evidence entries below combine run.47x15g, the subsequent 17-of-18 browser profile, the corrected HR/Admin rerun run.VEpZ2d and supplemental run.5mSUXv. This is combined evidence, not a claimed single all-green run.
 
 Recovery and abandonment from issuance history now invalidate the preview panel's saved-approval status. Failed approvals remain observable without continuous polling. A completed or abandoned approval clears its previous PDF review, confirmation and failure message; abandonment displays its retained number and terminal state. Go adds an HTTP status-contract case for recovered/abandoned records, Newman adds two status requests, and Playwright exercises both transitions without reloading the certificate page. No PDF template, schema, numbering or permission changes were made.
 
@@ -893,3 +893,70 @@ bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 Return the two browser results, cleanup summary, exit status and evidence path. Step 8 remains pending this correction's live verification, timing evidence and final PDF feedback. The preceding entry's command can summarize the retained run.47x15g certificate timings without rerunning requests. Suggested commit: `test(hr-admin): align overview expiry fixtures with Dubai dates`.
+
+### Step 8 automated coverage verified — run.VEpZ2d
+
+Evidence received 5 October 2026: **both HR/Admin browser journeys passed in 1.0m**, ADMIN 33.5s and USER/VIEWER 24.4s. This verifies the Dubai-calendar fixture correction. Storage cleanup deleted 0 journaled objects; database ams_e2e_20261004205021 was dropped; exit status 0. Evidence directory: `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.VEpZ2d`. Go/Newman were intentionally not rerun for this fixture-only correction.
+
+Combined Step 8 automated evidence: run.47x15g passed **193 Go tests, 0 failed/skipped**, and Newman; the subsequent full browser profile passed **17 of 18**, including all four dedicated certificate journeys; run.VEpZ2d passes the corrected HR/Admin ADMIN journey and repeats the USER/VIEWER pass; run.5mSUXv passed all **three supplemental CertificateDetailPage mock cases**. Thus all 18 selected browser cases have passing evidence across these runs, not in a single all-green invocation. The 17-of-18 run's evidence path/cleanup/exit summary and detailed Newman assertion totals were not supplied. Earlier interrupted report-hosting runs remain recorded as failed/interrupted rather than relabelled successful.
+
+No further Go/Newman/browser rerun is required solely to record these results. **Step 8 is not yet complete: observed certificate timing evidence and final own/competent/long-text/recovered PDF feedback remain outstanding.** Summarize the retained run.47x15g artifacts using the command above; this reads existing logs/JSON and does not repeat application requests. Return its printed timing table or JSON and final PDF feedback.
+
+This update records evidence only. Dedicated files `ams-server/generated_renewal_certificates_integration_test.go`, `api/generated-renewal-certificates.postman_collection.json`, and `e2e/generated-renewal-certificates.spec.ts`, shared Go/system API/whole-app baselines and the isolated runner need no edits. Failure report hosting and cleanup remain enabled. Codex did not execute live suites, commit/push or synchronize the VPS. The proposed application-wide UTC policy has only been assessed; this result verifies the current Dubai-calendar contract and does not change it. Suggested documentation commit: `docs(certificates): record passing final regression coverage`.
+
+### Step 8 timing evidence received — run.47x15g
+
+The user summarized retained run.47x15g artifacts on Fedora and supplied all four operations in both layers. Evidence: `.vps-test-run/run.47x15g/certificate-latency-summary.json`. The printed output reports 46 successful request samples (17 browser, 29 Newman); controlled faults are excluded. Percentiles use nearest rank. These are observed functional VPS/R2 request timings, not a load benchmark or latency acceptance threshold. Retry samples include completed idempotent retries as well as recovery; different layers remain separate.
+
+| Layer | Operation | Samples | p50 ms | p95 ms | Max ms |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Browser | External renewal | 2 | 602 | 651 | 651 |
+| Browser | Generated issuance | 2 | 808 | 836 | 836 |
+| Browser | Generated preview | 10 | 202 | 233 | 233 |
+| Browser | Retry | 3 | 547 | 781 | 781 |
+| Newman | External renewal | 7 | 587 | 715 | 715 |
+| Newman | Generated issuance | 5 | 731 | 863 | 863 |
+| Newman | Generated preview | 12 | 186 | 258 | 258 |
+| Newman | Retry | 5 | 183 | 710 | 710 |
+
+No operation/layer samples are missing. Minimum values were not included in the pasted table and are not inferred. Together with the preceding combined automated evidence, the timing requirement is satisfied; **final own/competent/long-text/recovered PDF feedback is the only remaining Step 8 item**. No regression rerun is needed solely to record these timings. This update changes documentation only; dedicated Go/Newman/Playwright files, shared Go/system API/whole-app baselines and the runner need no edits. No live suites, commits/pushes or VPS synchronization were performed by Codex. Suggested commit: `docs(certificates): record final regression and latency evidence`.
+
+### Step 8 PDF review started — available local examples
+
+On 5 October 2026, Codex reviewed six existing Downloads PDFs: `examination-preview4.pdf`, `approved-own-examination-preview4.pdf`, `issued-own-examination4.pdf`, `approved-competent-examination-preview4.pdf`, `issued-competent-examination4.pdf`, and `examination-preview-long2.pdf`. These files were downloaded on 4 October between 13:05 and 14:38 local time; no claim is made that they came from the final regression run. The long sample has three pages; the other five have one. All eight pages were rendered with Poppler and visually inspected, with PDF text/image inspection supplementing the visual check. Original PDFs were not altered or re-exported.
+
+The approved logo/rule/title spacing, centered title, dates, equipment/component fields, validity, test/IMCA details, signer/date/signature block, footer and page numbering are consistent in these examples. Removed fields are absent. Accented, Greek and Cyrillic test text renders legibly. Extracted text has no characters outside page bounds; no clipping/overlap was observed. The own-account pair and competent-person pair have matching extracted text except document number; their embedded image stream hashes and positions also match. Own preview `PMS-CE-261004-002-MS1-XX` becomes `...-01`; competent preview becomes `...-02`. These are synthetic test signatures and fixture values, not customer examinations.
+
+One cosmetic observation remains in the older long sample: page 3 shows an empty `REMARKS (continued)` label before Measurements. The trailing newline in the 60-line test remarks produces a final blank paragraph that moves to the next page. All 60 nonempty observations are present, the measurements/signature are readable and the footer is clear. No renderer or template change has been made in this review. Check the latest long attachment before deciding whether this cosmetic detail needs correction.
+
+`recovered-issued-examination.pdf` was not found locally. Its real stored-byte/hash preservation passed the dedicated recovery journey, but its visual inspection remains open. Supply that report attachment and the latest `examination-preview-long.pdf` from a passing certificate journey to finish the outstanding review; if the supplied own/competent pairs differ from the current examples, supply those pairs too. Step 8 is not yet complete. This review changes evidence documentation only; dedicated/shared tests and runner need no edits. No live suites, commits/pushes or VPS synchronization were performed by Codex.
+
+### Step 8 remaining PDFs inspected — 5 October 2026
+
+The user supplied `C:/Users/maisa/Downloads/1examination-preview-long.pdf` (three pages, SHA-256 `857b137af8ec3aa8c149b9fcde05fe2572824c14147d8f56bcf5f933f77d6f69`) and `C:/Users/maisa/Downloads/recovered-issued-examination.pdf` (one page, SHA-256 `7cd9b48e11d8e2d394d34297aa36146d6ea93fc20ca747eebbca0c6ef200ae6a`). All four pages were rendered with Poppler at 110 DPI and visually inspected; text extraction supplemented the review. Original PDFs were not modified. No specific run ID was supplied with these attachments, so their hashes identify the reviewed copies without inferring run provenance.
+
+The recovered document is visually satisfactory: number `PMS-CE-261004-002-R1-01`, issue/signer date 04 Oct 2026, expiry 04 Oct 2027, 12-month validity, D018, `Saved recovery details`, original organization `Porto Marine`, legible synthetic signature/stamp and approved footer. `Changed after approval` is absent, matching the passed recovery journey's approved-snapshot preservation. The attached PDF alone does not prove storage-byte identity; the previously passed real R2 hash/byte assertions supply that evidence. No clipped or overlapping text was observed, and extracted text stays within page bounds.
+
+The new long document uses `PMS-CE-261004-004-MS1-XX` consistently across all three preview pages. All 60 nonempty remarks remain present (17 on page 1, 43 on page 2); measurements and the signer block are readable on page 3. Headers, dates/validity, signature image, footer and page numbering remain consistent. The same cosmetic issue is confirmed: page 3 starts with `REMARKS (continued)` but no nonempty remarks beneath it, because the test's terminal newline adds a blank paragraph after the last observation. No data loss or additional functional failure was found.
+
+Final PDF inspection is now complete, including the recovered document. **The cosmetic continuation-heading disposition and final feature sign-off remain open; Step 8 is not marked complete.** No further attachments are required for the current review. No renderer, template, dedicated Go/Newman/Playwright files, shared Go/system API/whole-app baselines or runner changes were made. No additional live suites, commits/pushes or VPS synchronization were performed by Codex. This is a documentation-only review update, with diff whitespace checked.
+
+
+### Step 8 empty continuation heading corrected — live verification pending
+
+The user requested removal of the empty Remarks (continued) heading on 5 October 2026. The renderer counted a terminal blank paragraph as a line and paginated it after the last observation. Field rendering now discards only trailing whitespace-only lines before pagination, preserving leading/interior paragraph breaks and the approved snapshot's original text. Stored historical PDF bytes remain unchanged. The approved layout, schema, document numbering, template version, fonts and signature handling are unchanged.
+
+Dedicated Go renderer coverage compares short/long text with LF, CRLF and whitespace-only endings against an unpadded control, and separately protects interior paragraph breaks. The feature Go HTTP/R2 integration case also verifies PDF equality, preserved snapshot whitespace and token validation. Newman adds four requests (400 total), covering clean/padded long previews and token validation. The existing Playwright signer journey performs clean/padded previews through the real UI, asserts PDF equality and unchanged snapshot whitespace, validates the padded token and attaches the corrected examination-preview-long.pdf. All four dedicated browser journeys remain selected; no test is skipped.
+
+Static verification passed: Go compile-only for the renderer and integration packages, go vet, strict dedicated-spec TypeScript, discovery of four browser journeys, collection SDK/JSON parsing and syntax checks of all 404 embedded scripts, runner Bash syntax and diff whitespace. No test bodies or live application/storage requests were executed by Codex. The shared Go harness, system API smoke and whole-app browser baseline were reviewed and need no edits because this change introduces no API or persistence contract. The isolated runner already registers the dedicated suites and retains PDF evidence; it needs no change. Automatic failed-report hosting and scoped cleanup remain enabled.
+
+After reviewing/publishing/updating the VPS checkout yourself, run as ams_test_runner from the Fedora repo root:
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/generated-renewal-certificates.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Return the actual Go/Newman/Playwright results, cleanup/database/exit summary and evidence path, plus the new examination-preview-long.pdf from the passing browser report. Verify there is no empty Remarks (continued) heading before Measurements and that all 60 observations, measurements, signer block and page numbering remain readable. Previous automated/timing evidence stays recorded for the previous renderer; it does not substitute for this correction's live gates. A broader 18-case browser rerun is not required solely for this field-rendering fix. Step 8 remains open until these focused gates and updated PDF review pass. Changes are uncommitted/unpushed; no VPS synchronization was performed. Suggested commit: `fix(certificates): prevent empty PDF continuation headings`.

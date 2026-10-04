@@ -204,6 +204,50 @@ func TestExaminationPDFUnicodeTransparencyPaginationAndMissingGlyph(t *testing.T
 	}
 }
 
+func TestExaminationPDFTrailingBlankLinesPreserveContentAndPagination(t *testing.T) {
+	signature := signatureImageFixture(t, "png")
+	snapshot := Snapshot{SchemaVersion: SnapshotVersion, TemplateVersion: TemplateVersion,
+		IssueDate: "2026-10-04", ExpiryDate: "2027-10-04", ValidityPeriod: "12 months",
+		EquipmentName: "Dive system", ComponentName: "Pressure Gauge", ComponentDisplayID: "042",
+		SerialNumber: "PG-123", Location: "Warehouse", TestName: "Pressure test",
+		TestDescription: "Signer selection", IMCARef: "D018", IMCAD018: "Signer selection",
+		Measurements: "Applied pressure: 10 bar", Signer: EligibleSigner{FullName: "José Marin", Organization: "Porto Marine"}}
+	renderer := PDFRenderer{}
+	for _, remarks := range []string{
+		"First paragraph\n\nSecond paragraph",
+		strings.TrimSuffix(strings.Repeat("A recorded pressure observation with readable continuation.\n", 60), "\n"),
+	} {
+		snapshot.Remarks = remarks
+		baseline, err := renderer.Render(context.Background(), snapshot, DocumentNumber(snapshot, "XX"), signature)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, suffix := range []string{"\n", "\n\n", "\r\n\r\n", "\n \t\n"} {
+			padded := snapshot
+			padded.Remarks += suffix
+			padded.Measurements += suffix
+			before := padded
+			actual, err := renderer.Render(context.Background(), padded, DocumentNumber(padded, "XX"), signature)
+			if err != nil || !bytes.Equal(actual, baseline) {
+				t.Fatalf("trailing blanks %q changed rendered content or pagination: %v", suffix, err)
+			}
+			if padded.Remarks != before.Remarks || padded.Measurements != before.Measurements {
+				t.Fatal("rendering changed the approved text")
+			}
+		}
+	}
+	snapshot.Remarks = "First paragraph\n\nSecond paragraph"
+	withParagraphBreak, err := renderer.Render(context.Background(), snapshot, DocumentNumber(snapshot, "XX"), signature)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot.Remarks = "First paragraph\nSecond paragraph"
+	withoutParagraphBreak, err := renderer.Render(context.Background(), snapshot, DocumentNumber(snapshot, "XX"), signature)
+	if err != nil || bytes.Equal(withParagraphBreak, withoutParagraphBreak) {
+		t.Fatal("intentional blank lines between paragraphs were lost", err)
+	}
+}
+
 func TestApprovedPreviewIdentityAllowsExpiryButPreservesSecurity(t *testing.T) {
 	secret := []byte("approved-identity-secret")
 	actor, certificate := uuid.New(), uuid.New()

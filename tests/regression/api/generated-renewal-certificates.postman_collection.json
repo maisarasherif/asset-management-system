@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Generated renewal certificates - generation, external renewal and history",
-    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal. Super-admin competent-person signature management, ordinary-admin category assignment/clearing, private image version history, direct role/field bypasses, restricted/unrestricted signer eligibility, and status changes after selection. Stateless gopdf PDF previews, XX numbering, private signed snapshots, account/certificate/purpose bindings, changed sources and eligibility, role gates, non-expiring tests, and no publication before approval. Real token expiry is covered in Go through the HTTP endpoint. Approved synchronous generated issuance, duplicate approval identity, per-component/date sequences, atomic publication, real issued PDF integrity and immutable stored history, own ADMIN issuance, role/cross-certificate gates, and non-expiring publication. Fault injection and concurrent allocation are exercised by dedicated Go integration tests. Atomic external renewal preserves original PDF/JPEG/PNG/WEBP bytes, supports unsigned eligible competent people, saved-approval replay, strict input and 10MB limits, existing upload role gates, combined paginated generated/external/Legacy history, and no fabricated legacy dates/signers. Real fault/concurrency coverage belongs to the dedicated Go file.",
+    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal. Super-admin competent-person signature management, ordinary-admin category assignment/clearing, private image version history, direct role/field bypasses, restricted/unrestricted signer eligibility, and status changes after selection. Stateless gopdf PDF previews, XX numbering, private signed snapshots, account/certificate/purpose bindings, changed sources and eligibility, role gates, non-expiring tests, and no publication before approval. Real token expiry is covered in Go through the HTTP endpoint. Approved synchronous generated issuance, duplicate approval identity, per-component/date sequences, atomic publication, real issued PDF integrity and immutable stored history, own ADMIN issuance, role/cross-certificate gates, and non-expiring publication. Fault injection and concurrent allocation are exercised by dedicated Go integration tests. Atomic external renewal preserves original PDF/JPEG/PNG/WEBP bytes, supports unsigned eligible competent people, saved-approval replay, strict input and 10MB limits, existing upload role gates, combined paginated generated/external/Legacy history, and no fabricated legacy dates/signers. Real fault/concurrency coverage belongs to the dedicated Go file. Trailing LF/CRLF/whitespace-only blank paragraphs preserve reviewed text and validate normally while matching the unpadded PDF, preventing empty continuation headings.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -7108,6 +7108,179 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test(\"Refreshed preview validates: status 204\", () => pm.response.to.have.status(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Prepare long preview without trailing blank lines",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"A recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\",\n  \"measurements\": \"Applied pressure: 10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Prepare long preview without trailing blank lines: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); const input=JSON.parse(pm.request.body.raw);",
+                      "pm.expect(Buffer.from(b.pdf_base64,'base64').subarray(0,5).toString()).to.eql('%PDF-');",
+                      "pm.test('Reviewed text retains entered whitespace', () => { const normalize=value=>value.split(String.fromCharCode(13,10)).join(String.fromCharCode(10)); pm.expect(b.snapshot.remarks).to.eql(normalize(input.remarks)); pm.expect(b.snapshot.measurements).to.eql(normalize(input.measurements)); });",
+                      "pm.collectionVariables.set('trailingBlankBaselinePDF',b.pdf_base64);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Trailing blank lines preserve long preview PDF",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"A recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\n \\t\\n\\n\",\n  \"measurements\": \"Applied pressure: 10 bar\\n \\t\\n\\n\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Trailing blank lines preserve long preview PDF: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); const input=JSON.parse(pm.request.body.raw);",
+                      "pm.expect(Buffer.from(b.pdf_base64,'base64').subarray(0,5).toString()).to.eql('%PDF-');",
+                      "pm.test('Reviewed text retains entered whitespace', () => { const normalize=value=>value.split(String.fromCharCode(13,10)).join(String.fromCharCode(10)); pm.expect(b.snapshot.remarks).to.eql(normalize(input.remarks)); pm.expect(b.snapshot.measurements).to.eql(normalize(input.measurements)); });",
+                      "pm.test('Trailing blank paragraphs add no PDF headings or content shifts', () => { const baseline=pm.collectionVariables.get('trailingBlankBaselinePDF'); pm.expect(baseline).to.be.a('string').and.not.empty; pm.expect(b.pdf_base64 === baseline, 'rendered PDF matches unpadded control').to.eql(true); });",
+                      "pm.collectionVariables.set('trailingBlankPreviewToken',b.preview_token);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "CRLF trailing blank lines preserve long preview PDF",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"A recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\nA recorded pressure observation with readable continuation.\\r\\n\\r\\n\",\n  \"measurements\": \"Applied pressure: 10 bar\\r\\n\\r\\n\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"CRLF trailing blank lines preserve long preview PDF: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); const input=JSON.parse(pm.request.body.raw);",
+                      "pm.expect(Buffer.from(b.pdf_base64,'base64').subarray(0,5).toString()).to.eql('%PDF-');",
+                      "pm.test('Reviewed text retains entered whitespace', () => { const normalize=value=>value.split(String.fromCharCode(13,10)).join(String.fromCharCode(10)); pm.expect(b.snapshot.remarks).to.eql(normalize(input.remarks)); pm.expect(b.snapshot.measurements).to.eql(normalize(input.measurements)); });",
+                      "pm.test('Trailing blank paragraphs add no PDF headings or content shifts', () => { const baseline=pm.collectionVariables.get('trailingBlankBaselinePDF'); pm.expect(baseline).to.be.a('string').and.not.empty; pm.expect(b.pdf_base64 === baseline, 'rendered PDF matches unpadded control').to.eql(true); });",
+                      "pm.collectionVariables.set('trailingBlankPreviewToken',b.preview_token);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Preview with trailing blank lines validates",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview/validate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{trailingBlankPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Preview with trailing blank lines validates: status 204', () => pm.response.to.have.status(204));",
+                      "pm.collectionVariables.unset('trailingBlankBaselinePDF'); pm.collectionVariables.unset('trailingBlankPreviewToken');"
                     ]
                   }
                 }

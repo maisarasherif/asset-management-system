@@ -141,6 +141,11 @@ func (r *certificatePDF) section(title string) {
 }
 func (r *certificatePDF) field(label, value string) {
 	lines := r.lines(value, pdfWidth-20, 10, false)
+	// A trailing blank paragraph must not open a new page just to repeat the
+	// continuation label. Keep leading and interior paragraph breaks intact.
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
 	if len(lines) == 0 {
 		lines = []string{"—"}
 	}

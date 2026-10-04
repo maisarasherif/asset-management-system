@@ -214,6 +214,27 @@ func TestGeneratedRenewalPreviewHTTPPDFTokenAndRoleBoundaries(t *testing.T) {
 	if !bytes.HasPrefix(response.PDF, []byte("%PDF-")) || !strings.HasSuffix(response.Number, "-XX") || response.Snapshot.Signer.FullName != "José Preview Examiner" || response.Snapshot.TemplateVersion != issuance.TemplateVersion {
 		t.Fatal("preview document incomplete")
 	}
+	longRemarks := strings.TrimSuffix(strings.Repeat("A recorded pressure observation with readable continuation.\n", 60), "\n")
+	longInput := map[string]any{"signer_id": person, "issue_date": "2026-10-04", "remarks": longRemarks, "measurements": "Applied pressure: 10 bar"}
+	var cleanLong issuance.PreviewResponse
+	if err := json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path, longInput, http.StatusOK), &cleanLong); err != nil {
+		t.Fatal(err)
+	}
+	for _, suffix := range []string{"\n", "\r\n\r\n", "\n \t\n"} {
+		longInput["remarks"] = longRemarks + suffix
+		longInput["measurements"] = "Applied pressure: 10 bar" + suffix
+		var padded issuance.PreviewResponse
+		if err := json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path, longInput, http.StatusOK), &padded); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(padded.PDF, cleanLong.PDF) || padded.Number != cleanLong.Number {
+			t.Fatalf("trailing blanks %q changed preview PDF content or pagination", suffix)
+		}
+		if padded.Snapshot.Remarks != strings.ReplaceAll(longRemarks+suffix, "\r\n", "\n") || padded.Snapshot.Measurements != strings.ReplaceAll("Applied pressure: 10 bar"+suffix, "\r\n", "\n") {
+			t.Fatal("preview discarded approved trailing whitespace")
+		}
+		performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", map[string]any{"preview_token": padded.Token}, http.StatusNoContent)
+	}
 	tokenInput := map[string]any{"preview_token": response.Token}
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/validate", tokenInput, http.StatusNoContent)
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/certificate/"+second+"/generated-preview/validate", tokenInput, http.StatusBadRequest)
@@ -294,9 +315,9 @@ func TestGeneratedRenewalPreviewHTTPPDFTokenAndRoleBoundaries(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(directory, "examination-preview.pdf"), response.PDF, 0600); err != nil {
 			t.Fatal(err)
 		}
-		input["remarks"] = strings.Repeat("Long examination remarks with continuation and readable text.\n", 60)
+		// Retain the trailing-blank regression example for final visual review.
 		var long issuance.PreviewResponse
-		if err := json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path, input, http.StatusOK), &long); err != nil {
+		if err := json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path, longInput, http.StatusOK), &long); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(directory, "examination-preview-long.pdf"), long.PDF, 0600); err != nil {
