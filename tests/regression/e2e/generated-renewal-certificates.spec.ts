@@ -150,6 +150,13 @@ test("external renewal publishes dates and original bytes in one request and pre
     }
     for (const width of [320,768,1024,1440]) {
       await page.setViewportSize({ width,height:900 });
+      // Cloudscape opens the mobile navigation drawer on the first narrow
+      // viewport and hides the main page until the user closes it.
+      const closeNavigation = page.getByRole("button", { name: "Close primary navigation", exact: true });
+      if (width < 1101 && await closeNavigation.isVisible()) {
+        await closeNavigation.click();
+        await expect(page.getByRole("button", { name: "Open primary navigation", exact: true })).toBeVisible();
+      }
       await expect(page.getByLabel("Certificate renewal file")).toBeVisible();
       await expect(historyRegion.getByRole("table")).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width+1);
