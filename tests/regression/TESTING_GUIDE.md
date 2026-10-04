@@ -766,3 +766,19 @@ bash tests/regression/run-vps-isolated-tests.sh
 Verify all Go/Newman/Playwright gates, storage cleanup, dropped isolated database and exit 0. Return actual pass/fail/skip counts, Newman assertions, four browser results and the printed run evidence path. Inspect the recovery PDF attachment and history actions. A storage-backed skip does not satisfy the gate. There is no new PDF layout change in Step 7.
 
 Suggested commit: `feat(certificates): add approved issuance recovery and abandonment`
+
+### Step 7 first VPS gate — shared signer fixture correction
+
+The user supplied run.2zwEuQ on 4 October 2026: **192 Go tests passed, 0 failed/skipped; Newman passed; Playwright passed 3 of 4 journeys**. The new saved-approval recovery journey passed (40.7s), external renewal/history passed (18.5s), and own signing-profile coverage passed (13.0s). SUPER_ADMIN signer management failed because its unrestricted-certificate assertion expected only its two newly signed fixtures, while an additional active signed competent person from the earlier recovery journey remains in the shared disposable database. Competent profiles have no delete API and remain until database cleanup; unrestricted eligibility correctly spans all active, complete, signed people across active categories.
+
+The focused Playwright spec now captures existing unrestricted signer IDs before saving this test's signing images. It verifies all five newly created unsigned fixtures are absent at that point, then expects exactly the baseline plus its eligible and other-category signed people. Restricted-certificate and own-ADMIN assertions remain exact. This fixes the shared-state assumption without relaxing inactive/unsigned/incomplete exclusions or changing production eligibility. Run all four journeys together on rerun, so the same fixture interaction is exercised.
+
+Static checks passed: strict feature-spec TypeScript, discovery of all four journeys, runner Bash syntax and diff whitespace. No live suites were run by Codex. The dedicated Go/Newman files and shared Go/API/whole-app baselines were reviewed and need no changes for this browser assertion correction. The runner was reviewed and remains unchanged; feature selection, scoped cleanup and automatic failed-report hosting remain enabled. Cleanup in the supplied run deleted 69 journaled objects and dropped ams_e2e_20261004170552; exit 130 followed Ctrl+C stopping report hosting. Newman assertion totals were not supplied. Step 7 verification remains pending the browser rerun; retain the passed Go/Newman evidence.
+
+After reviewing/publishing and updating the VPS checkout yourself, run as ams_test_runner from the Fedora repo root:
+
+```bash
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Changes remain uncommitted/unpushed. Suggested commit: `test(certificates): account for existing unrestricted signer fixtures`.

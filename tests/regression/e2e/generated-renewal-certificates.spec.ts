@@ -416,6 +416,14 @@ test("SUPER_ADMIN manages signers and approves stored certificates; ADMIN issues
     const unrestrictedAPI = `${api}/certificate/${unrestricted.certificate_id}`;
     const personAPI = `${api}/competent-person/${eligible.competent_person_id}/signing-profile`;
     const adminAPI = `${api}/user/${admin.user_id}/signing-profile`;
+    // Unrestricted certificates include eligible people retained by earlier tests.
+    // Capture that shared baseline before this test saves any signing images.
+    const baselineChoices = await page.request.get(`${unrestrictedAPI}/generated-signers`);
+    expect(baselineChoices.status(), await baselineChoices.text()).toBe(200);
+    const baselineSignerIds: string[] = (await baselineChoices.json()).map((row: { signer_id: string }) => row.signer_id);
+    for (const person of [eligible, unsigned, inactive, wrongCategory, blank]) {
+      expect(baselineSignerIds, "this test's unsigned fixtures must not be eligible yet").not.toContain(person.competent_person_id);
+    }
     // Populate excluded people too: inactivity/category, rather than a missing
     // image, must be the reason they are absent from the generated dropdown.
     for (const person of [inactive, wrongCategory, blank]) {
@@ -488,7 +496,7 @@ test("SUPER_ADMIN manages signers and approves stored certificates; ADMIN issues
     expect((await eligibleResponse.json()).map((row: { signer_id: string }) => row.signer_id)).toEqual([eligible.competent_person_id]);
     const unrestrictedChoices = await page.request.get(`${unrestrictedAPI}/generated-signers`);
     expect(unrestrictedChoices.status()).toBe(200);
-    expect((await unrestrictedChoices.json()).map((row: { signer_id: string }) => row.signer_id).sort()).toEqual([eligible.competent_person_id, wrongCategory.competent_person_id].sort());
+    expect((await unrestrictedChoices.json()).map((row: { signer_id: string }) => row.signer_id).sort()).toEqual([...baselineSignerIds, eligible.competent_person_id, wrongCategory.competent_person_id].sort());
     expect((await page.request.post(`${unrestrictedAPI}/generated-signer`, { data: { signer_id: wrongCategory.competent_person_id } })).status()).toBe(200);
     expect((await page.request.post(`${certificateAPI}/generated-signer`, { data: { signer_id: wrongCategory.competent_person_id } })).status()).toBe(400);
 
