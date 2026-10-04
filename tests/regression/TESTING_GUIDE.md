@@ -670,3 +670,18 @@ RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 E2E_SPECS
 ```
 
 Return actual Go pass/fail/skip counts, Newman and Playwright summaries, cleanup, exit status and run IDs. Check generation/upload switching and history labels. On browser failure, inspect the automatically hosted report and Ctrl+C to finish cleanup. No fresh PDF layout approval is needed for this unchanged renderer. Step 7 waits for successful Step 6 verification. Suggested commit: `feat(certificates): renew external documents atomically and unify history`.
+
+### Step 6 first VPS result and PDF popup assertion correction
+
+Evidence received 4 October 2026 from run.u2Zttq: **170 Go passes, 0 failures/skips; Newman passed; Playwright 2 passed, 1 failed (1.6m)**. Generated issuance and own ADMIN signing-profile journeys passed. The external journey timed out waiting for a history PDF popup URL to leave about:blank, while the Playwright log showed navigation to the expected private R2 external object. Its earlier external document retrieval had already returned the original PDF bytes. Legacy popup, responsive checks and ordinary ADMIN non-expiring upload later in that journey were not reached; those paths are not yet verified by this run. Cleanup deleted 55 journaled objects and dropped ams_e2e_20261004145535. Exit 130 followed the user's Ctrl+C to stop the hosted report, rather than a cleanup failure. Detailed Newman counts were not supplied.
+
+The failure is consistent with headless PDF viewer navigation, so the dedicated Playwright fixture now follows the passing generated-document journey: register a browser-context document-request listener before the history button click, match the exact expected object origin/path for each EXTERNAL and LEGACY history ID, and verify the actual requested signed URL returns status 200 and original PDF bytes. Signed query strings may differ between link requests; the object binding stays exact. The popup remains part of the interaction and is closed in finally. This corrects the assertion without depending on PDF viewer URL commitment or increasing the navigation timeout. The VPS rerun must confirm the diagnosis.
+
+Strict feature-spec TypeScript checking, discovery of all three tests, Bash syntax and diff whitespace passed after the correction. No live suite was executed by Codex. Production behavior, dedicated Go/Newman tests, shared Go/API/whole-app baselines, optional mocked UI cases and the isolated runner need no edits for this browser-only fixture change. Automatic failed-report hosting remains enabled. Retain the successful Go/Newman evidence and rerun the focused Playwright journeys as ams_test_runner after reviewing, committing/pushing and synchronizing the correction yourself:
+
+```bash
+cd /home/pms/ams-testing/asset-management-system
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Step 6 verification and the supplemental mocked gate remain pending; Step 7 has not started. Changes remain uncommitted/unpushed. Suggested commit: `test(certificates): verify history PDF requests without waiting for viewer navigation`.

@@ -126,12 +126,27 @@ test("external renewal publishes dates and original bytes in one request and pre
     await expect(historyRegion.getByText("External renewal", { exact: true })).toBeVisible();
     await expect(historyRegion.getByText("Legacy upload", { exact: true })).toBeVisible();
     await expect(historyRegion.getByText("Historical snapshot unavailable", { exact: true })).toBeVisible();
-    for (const name of ["baseline-renewal.pdf", "legacy-examination.pdf"]) {
+    for (const [name, historyID] of [["baseline-renewal.pdf", external.history_id], ["legacy-examination.pdf", old.history_id]]) {
+      const historyLink = await browserRequest.get(`${api}${certificatePath}/history/${historyID}/file`);
+      expect(historyLink.status()).toBe(200);
+      const expectedDocument = new URL((await historyLink.json()).url);
+      const openedDocumentRequest = page.context().waitForEvent("request", outgoing => {
+        const url = new URL(outgoing.url());
+        return url.origin === expectedDocument.origin && url.pathname === expectedDocument.pathname;
+      });
       const popupEvent = page.waitForEvent("popup");
       await historyRegion.getByRole("row").filter({ has: page.getByRole("cell", { name, exact: true }) }).getByRole("button", { name: "View uploaded document" }).click();
       const popup = await popupEvent;
-      await expect(popup).toHaveURL(/external-certificates|certificates\//);
-      await popup.close();
+      try {
+        // Headless PDF viewers may leave the tab at about:blank. Check the actual
+        // document request; fresh signed URLs may differ only in their query.
+        const openedDocumentURL = (await openedDocumentRequest).url();
+        const openedDocument = await request.get(openedDocumentURL);
+        expect(openedDocument.status()).toBe(200);
+        expect(await openedDocument.body()).toEqual(pdf);
+      } finally {
+        await popup.close();
+      }
     }
     for (const width of [320,768,1024,1440]) {
       await page.setViewportSize({ width,height:900 });
