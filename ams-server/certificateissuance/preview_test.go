@@ -203,3 +203,39 @@ func TestExaminationPDFUnicodeTransparencyPaginationAndMissingGlyph(t *testing.T
 		t.Fatal("cancelled render succeeded", err)
 	}
 }
+
+func TestApprovedPreviewIdentityAllowsExpiryButPreservesSecurity(t *testing.T) {
+	secret := []byte("approved-identity-secret")
+	actor, certificate := uuid.New(), uuid.New()
+	now := time.Now().Truncate(time.Second)
+	snapshot := Snapshot{SchemaVersion: SnapshotVersion, TemplateVersion: TemplateVersion, CertificateID: certificate}
+	raw, err := SignPreview(secret, actor, snapshot, now.Add(-31*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyPreview(secret, raw, actor, certificate, now); !errors.Is(err, ErrPreviewExpired) {
+		t.Fatal(err)
+	}
+	claims, err := verifyPreview(secret, raw, actor, certificate, now, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifyPreview(secret, raw, uuid.New(), certificate, now, true); !errors.Is(err, ErrPreviewToken) {
+		t.Fatal("expired identity crossed accounts", err)
+	}
+	key, _ := previewKey(secret)
+	for _, mutate := range []func(*PreviewClaims){
+		func(c *PreviewClaims) { c.Issuer = "wrong" }, func(c *PreviewClaims) { c.Audience = jwt.ClaimStrings{"login"} }, func(c *PreviewClaims) { c.Purpose = "login" },
+		func(c *PreviewClaims) { c.ExpiresAt = nil }, func(c *PreviewClaims) { c.IssuedAt = jwt.NewNumericDate(now.Add(time.Hour)) },
+	} {
+		changed := claims
+		mutate(&changed)
+		token, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, changed).SignedString(key)
+		if _, err := verifyPreview(secret, token, actor, certificate, now, true); !errors.Is(err, ErrPreviewToken) {
+			t.Fatal("approved identity bypassed security", err)
+		}
+	}
+	if _, err := verifyPreview(secret, raw[:len(raw)-7]+"forged!", actor, certificate, now, true); !errors.Is(err, ErrPreviewToken) {
+		t.Fatal("tampered expired identity accepted", err)
+	}
+}

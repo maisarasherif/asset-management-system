@@ -10,6 +10,7 @@ import { GeneratedCertificatePreview } from "./GeneratedCertificatePreview";
 export function GeneratedCertificateSigner({ certificateId, issueDate, expiryDate, validityMonths, requiresRenewal }: { certificateId: string; issueDate: string; expiryDate: string; validityMonths: number | null; requiresRenewal: boolean }) {
   const { session } = useAuth();
   const superAdmin = session?.role === "SUPER_ADMIN";
+  const [issuing, setIssuing] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const choices = useQuery({ queryKey: ["generated-signers", session?.userId, certificateId], queryFn: () => listGeneratedSigners(certificateId) });
   const selected = superAdmin ? choices.data?.find((person) => person.signer_id === selectedId) : choices.data?.[0];
@@ -24,7 +25,7 @@ export function GeneratedCertificateSigner({ certificateId, issueDate, expiryDat
         {choices.data?.length === 0 ? <Alert type="info">{superAdmin ? "No eligible competent person has a saved signature for this certificate. Check their active status, competency category, and signature in Administration." : "Your signing profile is not eligible for this certificate. Save your signature in Account and ask a super admin to assign an active category permitted by this certificate."}</Alert> : null}
         {superAdmin && Boolean(choices.data?.length) ? (
           <FormField label="Generated certificate competent person">
-            <Select ariaLabel="Generated certificate competent person" placeholder="Choose a generated certificate signer" selectedOption={selected ? { value: selected.signer_id, label: selected.full_name } : null}
+            <Select disabled={issuing} ariaLabel="Generated certificate competent person" placeholder="Choose a generated certificate signer" selectedOption={selected ? { value: selected.signer_id, label: selected.full_name } : null}
               options={(choices.data ?? []).map((person) => ({ value: person.signer_id, label: person.full_name, description: `${person.organization} — ${person.competency_category_name}` }))}
               onChange={({ detail }) => setSelectedId(detail.selectedOption.value ?? "")} />
           </FormField>
@@ -37,7 +38,7 @@ export function GeneratedCertificateSigner({ certificateId, issueDate, expiryDat
             <Box>{confirmed.competency_category_name}</Box>
             <SignatureImagePreview key={confirmed.signature.signature_id} queryKey={["generated-signer-image", session?.userId, confirmed.owner_kind, confirmed.signer_id, confirmed.signature.signature_id]}
               loadImage={() => confirmed.owner_kind === "ACCOUNT" ? getOwnSignatureImage(confirmed.signature.signature_id) : getCompetentSignatureImage(confirmed.signer_id, confirmed.signature.signature_id)} />
-            <GeneratedCertificatePreview key={`${confirmed.signer_id}:${confirmed.signature.signature_id}:${confirmed.full_name}:${confirmed.organization}:${issueDate}:${expiryDate}`} certificateId={certificateId} signerId={confirmed.signer_id} issueDate={issueDate} expiryDate={expiryDate} validityMonths={validityMonths} requiresRenewal={requiresRenewal} />
+            <GeneratedCertificatePreview key={`${confirmed.signer_id}:${confirmed.signature.signature_id}:${confirmed.full_name}:${confirmed.organization}:${issueDate}:${expiryDate}`} onIssuingChange={setIssuing} certificateId={certificateId} signerId={confirmed.signer_id} issueDate={issueDate} expiryDate={expiryDate} validityMonths={validityMonths} requiresRenewal={requiresRenewal} />
           </>
         ) : null}
       </SpaceBetween>

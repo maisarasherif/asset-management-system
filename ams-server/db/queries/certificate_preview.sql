@@ -1,6 +1,6 @@
 -- name: GetCertificatePreviewSource :one
 SELECT c.certificate_id, c.component_id, c.test_id,
-       c.updated_at AS certificate_updated_at, c.issue_date AS current_issue_date,
+       c.renewal_version, c.updated_at AS certificate_updated_at, c.issue_date AS current_issue_date,
        c.expiry_date AS current_expiry_date, c.certificate_file AS current_file,
        c.certificate_name, c.imca_ref, c.imca_d018,
        p.display_id AS component_display_id, p.name AS component_name,

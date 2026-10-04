@@ -115,12 +115,48 @@ type Certificate struct {
 	ComponentID             uuid.UUID  `json:"component_id"`
 	TestID                  uuid.UUID  `json:"test_id"`
 	TemplateComponentTestID *uuid.UUID `json:"template_component_test_id"`
+	RenewalVersion          int64      `json:"renewal_version"`
 }
 
 type CertificateCompetencyCategory struct {
 	CertificateID        uuid.UUID `json:"certificate_id"`
 	CompetencyCategoryID uuid.UUID `json:"competency_category_id"`
 	CreatedAt            time.Time `json:"created_at"`
+}
+
+type CertificateIssuance struct {
+	IssuanceID     uuid.UUID   `json:"issuance_id"`
+	ApprovalID     uuid.UUID   `json:"approval_id"`
+	CertificateID  uuid.UUID   `json:"certificate_id"`
+	CertificateRef *uuid.UUID  `json:"certificate_ref"`
+	ComponentID    uuid.UUID   `json:"component_id"`
+	Source         string      `json:"source"`
+	ActorID        uuid.UUID   `json:"actor_id"`
+	ActorRef       *uuid.UUID  `json:"actor_ref"`
+	SignatureID    *uuid.UUID  `json:"signature_id"`
+	DocumentNumber pgtype.Text `json:"document_number"`
+	Sequence       pgtype.Int8 `json:"sequence"`
+	IssueDate      pgtype.Date `json:"issue_date"`
+	ExpiryDate     pgtype.Date `json:"expiry_date"`
+	Snapshot       []byte      `json:"snapshot"`
+	BaseVersion    int64       `json:"base_version"`
+	State          string      `json:"state"`
+	FileKey        string      `json:"file_key"`
+	DocumentSha256 string      `json:"document_sha256"`
+	DocumentSize   int64       `json:"document_size"`
+	AttemptID      *uuid.UUID  `json:"attempt_id"`
+	LeaseUntil     *time.Time  `json:"lease_until"`
+	FailureCode    string      `json:"failure_code"`
+	CleanupState   string      `json:"cleanup_state"`
+	ApprovedAt     time.Time   `json:"approved_at"`
+	CompletedAt    *time.Time  `json:"completed_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
+}
+
+type CertificateNumberCounter struct {
+	ComponentID  uuid.UUID   `json:"component_id"`
+	IssueDate    pgtype.Date `json:"issue_date"`
+	LastSequence int64       `json:"last_sequence"`
 }
 
 type CertificateSignatureVersion struct {

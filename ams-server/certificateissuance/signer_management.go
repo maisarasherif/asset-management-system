@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 )
 
@@ -43,7 +42,7 @@ type EligibleSigner struct {
 }
 
 type SignerManagement struct {
-	Pool  *pgxpool.Pool
+	Pool  SigningDatabase
 	Store SignatureStore
 }
 

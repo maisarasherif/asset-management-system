@@ -118,6 +118,12 @@ func SignPreview(secret []byte, actor uuid.UUID, snapshot Snapshot, now time.Tim
 }
 
 func VerifyPreview(secret []byte, raw string, actor, certificate uuid.UUID, now time.Time) (PreviewClaims, error) {
+	return verifyPreview(secret, raw, actor, certificate, now, false)
+}
+
+// An already approved identity remains usable after preview expiry, but only after
+// signature, account, certificate, purpose, and timestamp checks.
+func verifyPreview(secret []byte, raw string, actor, certificate uuid.UUID, now time.Time, approved bool) (PreviewClaims, error) {
 	var claims PreviewClaims
 	if len(raw) == 0 || len(raw) > 128*1024 {
 		return claims, ErrPreviewToken
@@ -126,15 +132,18 @@ func VerifyPreview(secret []byte, raw string, actor, certificate uuid.UUID, now 
 	if err != nil {
 		return claims, err
 	}
-	token, err := jwt.ParseWithClaims(raw, &claims, func(*jwt.Token) (any, error) { return key, nil },
-		jwt.WithValidMethods([]string{"HS256"}), jwt.WithIssuer(previewIssuer), jwt.WithAudience(previewAudience),
-		jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithTimeFunc(func() time.Time { return now }))
+	options := []jwt.ParserOption{jwt.WithValidMethods([]string{"HS256"}), jwt.WithIssuer(previewIssuer), jwt.WithAudience(previewAudience), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithTimeFunc(func() time.Time { return now })}
+	if approved {
+		options = append(options, jwt.WithoutClaimsValidation())
+	}
+	token, err := jwt.ParseWithClaims(raw, &claims, func(*jwt.Token) (any, error) { return key, nil }, options...)
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		return PreviewClaims{}, ErrPreviewExpired
 	}
 	if err != nil || !token.Valid || claims.Purpose != "certificate-preview" || claims.Subject != actor.String() || claims.ID == "" ||
 		claims.Snapshot.CertificateID != certificate || claims.Snapshot.SchemaVersion != SnapshotVersion || claims.Snapshot.TemplateVersion != TemplateVersion ||
-		claims.IssuedAt == nil || claims.NotBefore == nil || claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time) != PreviewTTL {
+		claims.Issuer != previewIssuer || len(claims.Audience) != 1 || claims.Audience[0] != previewAudience ||
+		claims.IssuedAt == nil || claims.NotBefore == nil || claims.ExpiresAt == nil || claims.IssuedAt.Time.After(now) || claims.NotBefore.Time.After(now) || claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time) != PreviewTTL {
 		return PreviewClaims{}, ErrPreviewToken
 	}
 	return claims, nil

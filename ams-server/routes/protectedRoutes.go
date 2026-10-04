@@ -135,6 +135,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	account.POST("/certificate/:certificate_id/generated-signer", controller.ResolveGeneratedSigner(pool))
 	account.POST("/certificate/:certificate_id/generated-preview", controller.PrepareCertificatePreview(pool))
 	account.POST("/certificate/:certificate_id/generated-preview/validate", controller.ValidateCertificatePreview(pool))
+	account.POST("/certificate/:certificate_id/generated-issuance", controller.ApproveGeneratedCertificate(pool))
 	account.POST("/logout", controller.LogoutUser(pool))
 
 	platformAdmin := router.Group("/v1/platform")
@@ -176,6 +177,9 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	protected.GET("/certificates/report", controller.GetCertificatesReportPDF(pool))
 	protected.GET("/certificate/:certificate_id/file", controller.GetCertificateFile(pool))
 	protected.GET("/certificate/:certificate_id/uploads", controller.GetCertificateUploadAudit(pool))
+	protected.GET("/certificate/:certificate_id/issuances", controller.GetCertificateIssuances(pool))
+	protected.GET("/certificate/:certificate_id/issuances/:issuance_id", controller.GetCertificateIssuance(pool))
+	protected.GET("/certificate/:certificate_id/issuances/:issuance_id/file", controller.GetCertificateIssuanceFile(pool))
 	protected.GET("/certificate/:certificate_id/uploads/:upload_id/file", controller.GetCertificateUploadFile(pool))
 
 	// Main Category Routes

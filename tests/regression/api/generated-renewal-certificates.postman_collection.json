@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Generated renewal certificates - signing, eligibility, and PDF preview",
-    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal. Super-admin competent-person signature management, ordinary-admin category assignment/clearing, private image version history, direct role/field bypasses, restricted/unrestricted signer eligibility, and status changes after selection. Stateless gopdf PDF previews, XX numbering, private signed snapshots, account/certificate/purpose bindings, changed sources and eligibility, role gates, non-expiring tests, and no publication before approval. Real token expiry is covered in Go through the HTTP endpoint.",
+    "name": "Generated renewal certificates - signing, preview, and approved issuance",
+    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal. Super-admin competent-person signature management, ordinary-admin category assignment/clearing, private image version history, direct role/field bypasses, restricted/unrestricted signer eligibility, and status changes after selection. Stateless gopdf PDF previews, XX numbering, private signed snapshots, account/certificate/purpose bindings, changed sources and eligibility, role gates, non-expiring tests, and no publication before approval. Real token expiry is covered in Go through the HTTP endpoint. Approved synchronous generated issuance, duplicate approval identity, per-component/date sequences, atomic publication, real issued PDF integrity and immutable stored history, own ADMIN issuance, role/cross-certificate gates, and non-expiring publication. Fault injection and concurrent allocation are exercised by dedicated Go integration tests.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -1063,7 +1063,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organization\": \"  Porto Marine — Inspection  \"\n}"
+              "raw": "{\n  \"organization\": \"  Porto Marine \u2014 Inspection  \"\n}"
             }
           },
           "event": [
@@ -1074,7 +1074,7 @@
                 "exec": [
                   "pm.test('Save own signing organization: status 200', () => pm.response.to.have.status(200));",
                   "if (pm.response.code === 200) {",
-                  "pm.expect(pm.response.json().organization).to.eql('Porto Marine — Inspection');",
+                  "pm.expect(pm.response.json().organization).to.eql('Porto Marine \u2014 Inspection');",
                   "}"
                 ]
               }
@@ -1105,7 +1105,7 @@
                 "exec": [
                   "pm.test('Read persisted signing organization: status 200', () => pm.response.to.have.status(200));",
                   "if (pm.response.code === 200) {",
-                  "pm.expect(pm.response.json().organization).to.eql('Porto Marine — Inspection');",
+                  "pm.expect(pm.response.json().organization).to.eql('Porto Marine \u2014 Inspection');",
                   "}"
                 ]
               }
@@ -1318,7 +1318,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organization\": \"界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界\"\n}"
+              "raw": "{\n  \"organization\": \"\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\"\n}"
             }
           },
           "event": [
@@ -2139,7 +2139,7 @@
                   "pm.test('Replacement is current after reload: status 200', () => pm.response.to.have.status(200));",
                   "if (pm.response.code === 200) {",
                   "pm.expect(pm.response.json().signature.signature_id).to.eql(pm.collectionVariables.get('signatureSecondId'));",
-                  "pm.expect(pm.response.json().organization).to.eql('Porto Marine — Inspection');",
+                  "pm.expect(pm.response.json().organization).to.eql('Porto Marine \u2014 Inspection');",
                   "pm.expect(pm.response.json().competency_category_id).to.eql(null);",
                   "}"
                 ]
@@ -4854,7 +4854,7 @@
                 "exec": [
                   "pm.test(\"Assign active signing category to ordinary admin: status 200\", () => pm.response.to.have.status(200));",
                   "if (pm.response.code === 200) {",
-                  "const body=pm.response.json(); pm.expect(body.competency_category_id).to.eql(pm.collectionVariables.get('competency_category_id')); pm.expect(body.organization).to.eql('Porto Marine — Inspection'); pm.expect(body.signature.signature_id).to.eql(pm.collectionVariables.get('signatureSecondId'));",
+                  "const body=pm.response.json(); pm.expect(body.competency_category_id).to.eql(pm.collectionVariables.get('competency_category_id')); pm.expect(body.organization).to.eql('Porto Marine \u2014 Inspection'); pm.expect(body.signature.signature_id).to.eql(pm.collectionVariables.get('signatureSecondId'));",
                   "}"
                 ]
               }
@@ -6017,7 +6017,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
                 }
               },
               "event": [
@@ -6033,7 +6033,7 @@
                       "pm.expect(Buffer.from(b.pdf_base64,'base64').subarray(0,5).toString()).to.eql('%PDF-');",
                       "pm.expect(b.document_number).to.match(/^PMS-CE-261004-.+-XX$/);",
                       "pm.expect(b.snapshot.issue_date).to.eql('2026-10-04'); pm.expect(b.snapshot.expiry_date).to.eql('2027-10-04');",
-                      "pm.expect(b.snapshot.remarks).to.eql('Examiné — Ω Ж\\nSecond line'); pm.expect(b.snapshot.measurements).to.eql('10 bar');",
+                      "pm.expect(b.snapshot.remarks).to.eql('Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line'); pm.expect(b.snapshot.measurements).to.eql('10 bar');",
                       "pm.expect(b.snapshot.signer.owner_kind).to.eql('COMPETENT_PERSON'); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('competent_person_id'));",
                       "pm.expect(b.snapshot.schema_version).to.eql(1); pm.expect(b.snapshot.template_version).to.eql('pms-examination-a4-v3');",
                       "const claims=JSON.parse(Buffer.from(b.preview_token.split('.')[1],'base64').toString()); pm.expect(claims.exp-claims.iat).to.eql(1800); pm.expect(claims.purpose).to.eql('certificate-preview');",
@@ -6295,7 +6295,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-02-30\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-02-30\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
                 }
               },
               "event": [
@@ -6333,7 +6333,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"expiry_date\": \"2026-10-03\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"expiry_date\": \"2026-10-03\"\n}"
                 }
               },
               "event": [
@@ -6409,7 +6409,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Unsupported emoji 🚀\",\n  \"measurements\": \"10 bar\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Unsupported emoji \ud83d\ude80\",\n  \"measurements\": \"10 bar\"\n}"
                 }
               },
               "event": [
@@ -6448,7 +6448,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"\\u0000\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"\\u0000\"\n}"
                 }
               },
               "event": [
@@ -6486,7 +6486,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"snapshot\": {}\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"snapshot\": {}\n}"
                 }
               },
               "event": [
@@ -6524,7 +6524,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"document_number\": \"forged\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"document_number\": \"forged\"\n}"
                 }
               },
               "event": [
@@ -6562,7 +6562,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{mgWrong}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{mgWrong}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
                 }
               },
               "event": [
@@ -6600,7 +6600,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
                 }
               },
               "event": [
@@ -6638,7 +6638,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
                 }
               },
               "event": [
@@ -6714,7 +6714,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
                 }
               },
               "event": [
@@ -7030,7 +7030,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\"\n}"
                 }
               },
               "event": [
@@ -7046,7 +7046,7 @@
                       "pm.expect(Buffer.from(b.pdf_base64,'base64').subarray(0,5).toString()).to.eql('%PDF-');",
                       "pm.expect(b.document_number).to.match(/^PMS-CE-261004-.+-XX$/);",
                       "pm.expect(b.snapshot.issue_date).to.eql('2026-10-04'); pm.expect(b.snapshot.expiry_date).to.eql('2027-10-04');",
-                      "pm.expect(b.snapshot.remarks).to.eql('Examiné — Ω Ж\\nSecond line'); pm.expect(b.snapshot.measurements).to.eql('10 bar');",
+                      "pm.expect(b.snapshot.remarks).to.eql('Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line'); pm.expect(b.snapshot.measurements).to.eql('10 bar');",
                       "pm.expect(b.snapshot.signer.owner_kind).to.eql('COMPETENT_PERSON'); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('competent_person_id'));",
                       "pm.expect(b.snapshot.schema_version).to.eql(1); pm.expect(b.snapshot.template_version).to.eql('pms-examination-a4-v3');",
                       "const claims=JSON.parse(Buffer.from(b.preview_token.split('.')[1],'base64').toString()); pm.expect(claims.exp-claims.iat).to.eql(1800); pm.expect(claims.purpose).to.eql('certificate-preview');",
@@ -7304,7 +7304,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examiné — Ω Ж\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"expiry_date\": \"2027-10-04\"\n}"
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Examin\u00e9 \u2014 \u03a9 \u0416\\nSecond line\",\n  \"measurements\": \"10 bar\",\n  \"expiry_date\": \"2027-10-04\"\n}"
                 }
               },
               "event": [
@@ -7764,6 +7764,1234 @@
                   "}"
                 ]
               }
+            }
+          ]
+        },
+        {
+          "name": "Approved generated issuance and immutable stored history",
+          "item": [
+            {
+              "name": "Stale selected signer cannot allocate approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{generatedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Stale selected signer cannot allocate approval: status 409\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Unapproved rejected request leaves issuance history empty",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/issuances",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Unapproved rejected request leaves issuance history empty: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.expect(pm.response.json().data).to.eql([]);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Restore competent person for approved issuance",
+              "request": {
+                "method": "PUT",
+                "url": "{{baseUrl}}/competent-person/{{competent_person_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"full_name\": \"Certificate Reviewer management-{{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"Newman\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": true\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Restore competent person for approved issuance: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Review fresh generated certificate before approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Approved examination \\u2014 \\u03a9\",\n  \"measurements\": \"10 bar\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Review fresh generated certificate before approval: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.collectionVariables.set('issuedPreviewToken',b.preview_token); pm.collectionVariables.set('issuedPreviewSnapshot',JSON.stringify(b.snapshot)); pm.collectionVariables.set('expectedIssuedNumber',b.document_number.replace(/-XX$/, '-01')); pm.expect(b.snapshot.template_version).to.eql('pms-examination-a4-v3');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "USER cannot approve another account review",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{restrictedSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{issuedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"USER cannot approve another account review: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "CLIENT cannot approve another account review",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{issuedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"CLIENT cannot approve another account review: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Anonymous cannot approve another account review",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "noauth"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{issuedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Anonymous cannot approve another account review: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Other ADMIN cannot approve another account review",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{issuedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Other ADMIN cannot approve another account review: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Approval rejects forged printed number",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{issuedPreviewToken}}\",\n  \"document_number\": \"FORGED\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Approval rejects forged printed number: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Approval rejects tampered token",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{issuedPreviewToken}}forged\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Approval rejects tampered token: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Approval rejects cross-certificate review",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{issuedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Approval rejects cross-certificate review: status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Approve and publish examination certificate",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{issuedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Approve and publish examination certificate: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.state).to.eql('COMPLETED'); pm.expect(b.document_number).to.eql(pm.collectionVariables.get('expectedIssuedNumber')); pm.expect(b.snapshot).to.deep.eql(JSON.parse(pm.collectionVariables.get('issuedPreviewSnapshot'))); pm.expect(b.document_sha256).to.match(/^[a-f0-9]{64}$/); pm.expect(b.document_size).to.be.above(0); pm.expect(b).not.to.have.property('file_key'); pm.collectionVariables.set('issuedResult',JSON.stringify(b)); pm.collectionVariables.set('issuedId',b.issuance_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Duplicate approval returns identical completed issuance",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{issuedPreviewToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Duplicate approval returns identical completed issuance: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.expect(pm.response.json()).to.deep.eql(JSON.parse(pm.collectionVariables.get('issuedResult')));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Published certificate dates and document appear together",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Published certificate dates and document appear together: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.issue_date).to.eql('2026-10-04T00:00:00Z'); pm.expect(b.expiry_date).to.eql('2027-10-04T00:00:00Z'); pm.expect(b.certificate_file.startsWith(pm.variables.get('testStoragePrefix'))).to.eql(true); pm.collectionVariables.set('issuedCurrentKey',b.certificate_file);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Published issuance history contains one immutable snapshot",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/issuances",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Published issuance history contains one immutable snapshot: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.data).to.have.length(1); pm.expect(b.meta.total).to.eql(1); pm.expect(b.data[0]).to.deep.eql(JSON.parse(pm.collectionVariables.get('issuedResult'))); pm.expect(b.data[0]).not.to.have.property('file_key');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Completed issuance document has a private download link",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/issuances/{{issuedId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Completed issuance document has a private download link: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('issuedDocumentURL',pm.response.json().url);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Download actual issued R2 PDF and verify digest",
+              "request": {
+                "method": "GET",
+                "url": "{{issuedDocumentURL}}",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Download actual issued R2 PDF and verify digest: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const bytes=Buffer.from(pm.response.stream); const expected=JSON.parse(pm.collectionVariables.get('issuedResult')); pm.expect(bytes.subarray(0,5).toString()).to.eql('%PDF-'); pm.expect(bytes.length).to.eql(expected.document_size); const CryptoJS=require('crypto-js'); pm.expect(CryptoJS.SHA256(CryptoJS.lib.WordArray.create(bytes)).toString()).to.eql(expected.document_sha256); pm.collectionVariables.set('issuedPDFBytes',bytes.toString('base64'));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Historical document cannot cross certificates",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{mgUnrestrictedCertificateId}}/issuances/{{issuedId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Historical document cannot cross certificates: status 404\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "CLIENT cannot read staff issuance history",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/issuances",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"CLIENT cannot read staff issuance history: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "CLIENT cannot read staff issued document",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/issuances/{{issuedId}}/file",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{clientSignerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"CLIENT cannot read staff issued document: status 403\", () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Anonymous cannot read staff issuance history",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/issuances",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Anonymous cannot read staff issuance history: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Anonymous cannot read staff issued document",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/issuances/{{issuedId}}/file",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Anonymous cannot read staff issued document: status 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Replace competent signature after completed issuance",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/competent-person/{{competent_person_id}}/signing-profile/signature",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": "tests/regression/fixtures/signature-sample.png"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.response.to.have.status(200);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Historical saved PDF remains byte-identical after signature replacement",
+              "request": {
+                "method": "GET",
+                "url": "{{issuedDocumentURL}}",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Historical saved PDF remains byte-identical after signature replacement: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.expect(Buffer.from(pm.response.stream).toString('base64')).to.eql(pm.collectionVariables.get('issuedPDFBytes'));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Prepare own ADMIN approval from its own details",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"issue_date\": \"2026-10-04\",\n  \"remarks\": \"Own admin issuance\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Prepare own ADMIN approval from its own details: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('signerUserId')); pm.expect(b.snapshot.signer.owner_kind).to.eql('ACCOUNT'); pm.collectionVariables.set('ownIssuedToken',b.preview_token);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Own ADMIN approves second component-date sequence",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{ownIssuedToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Own ADMIN approves second component-date sequence: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.state).to.eql('COMPLETED'); pm.expect(b.document_number).to.eql(pm.collectionVariables.get('expectedIssuedNumber').replace(/-01$/,'-02')); pm.expect(b.snapshot.signer.signer_id).to.eql(pm.collectionVariables.get('signerUserId'));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Own ADMIN duplicate approval preserves sequence",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{signerToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{ownIssuedToken}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Own ADMIN duplicate approval preserves sequence: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.expect(pm.response.json().document_number).to.match(/-02$/);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Both completed issuances retain independent history",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{certificate_id}}/issuances",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Both completed issuances retain independent history: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.data).to.have.length(2); pm.expect(b.data.map(x=>x.document_number).sort()).to.deep.eql([pm.collectionVariables.get('expectedIssuedNumber'),pm.collectionVariables.get('expectedIssuedNumber').replace(/-01$/,'-02')].sort());",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "First issued PDF remains readable after later renewal",
+              "request": {
+                "method": "GET",
+                "url": "{{issuedDocumentURL}}",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"First issued PDF remains readable after later renewal: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.expect(Buffer.from(pm.response.stream).toString('base64')).to.eql(pm.collectionVariables.get('issuedPDFBytes'));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Issuance fixture: Create non-expiring preview test",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/test-type",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"test_name\": \"Non-expiring preview {{runSuffix}}\",\n  \"requires_renewal\": false,\n  \"validity_duration\": null,\n  \"description\": \"No expiry preview\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Create non-expiring preview test: status 201\", () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) {",
+                      "pm.collectionVariables.set('previewNonexpiringTestId',pm.response.json().test_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Issuance fixture: Create non-expiring preview certificate",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"component_id\": \"{{component_id}}\",\n  \"test_id\": \"{{previewNonexpiringTestId}}\",\n  \"certificate_name\": \"Non-expiring preview {{runSuffix}}\",\n  \"issue_date\": \"2026-10-04T00:00:00Z\",\n  \"certificate_file\": \"\",\n  \"issuing_authority\": \"PMS\",\n  \"imca_ref\": \"D018\",\n  \"imca_d018\": \"\",\n  \"maintenance_notes\": \"\",\n  \"competency_category_ids\": []\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Create non-expiring preview certificate: status 201\", () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) {",
+                      "pm.collectionVariables.set('previewNonexpiringCertificateId',pm.response.json().certificate_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Prepare non-expiring approval",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}/generated-preview",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signer_id\": \"{{competent_person_id}}\",\n  \"issue_date\": \"2026-10-04\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Prepare non-expiring approval: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.collectionVariables.set('nonExpiryApproval',pm.response.json().preview_token);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Approve non-expiring certificate with shared component sequence",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}/generated-issuance",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"preview_token\": \"{{nonExpiryApproval}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Approve non-expiring certificate with shared component sequence: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "const b=pm.response.json(); pm.expect(b.state).to.eql('COMPLETED'); pm.expect(b.expiry_date).to.eql(''); pm.expect(b.document_number).to.match(/-03$/); pm.expect(b.snapshot.validity_period).to.eql('No expiry');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Non-expiring publication clears certificate expiry",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Non-expiring publication clears certificate expiry: status 200\", () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "pm.expect(pm.response.json().expiry_date).to.eql(null);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Issuance cleanup: Delete non-expiring preview certificate",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/certificate/{{previewNonexpiringCertificateId}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Delete non-expiring preview certificate: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Issuance cleanup: Delete non-expiring preview test",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/test-type/{{previewNonexpiringTestId}}",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{adminToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Delete non-expiring preview test: status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
             }
           ]
         },

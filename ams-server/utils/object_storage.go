@@ -23,6 +23,14 @@ func PrepareObjectKey(key string) (string, error) {
 }
 
 func UploadPreparedBytes(ctx context.Context, key, contentType string, data []byte) error {
+	return uploadPreparedBytes(ctx, key, contentType, data, false)
+}
+
+// UploadImmutablePreparedBytes uses conditional creation so retries cannot overwrite a document.
+func UploadImmutablePreparedBytes(ctx context.Context, key, contentType string, data []byte) error {
+	return uploadPreparedBytes(ctx, key, contentType, data, true)
+}
+func uploadPreparedBytes(ctx context.Context, key, contentType string, data []byte, immutable bool) error {
 	if !validPreparedObjectKey(key) {
 		return errors.New("invalid object key")
 	}
@@ -43,10 +51,14 @@ func UploadPreparedBytes(ctx context.Context, key, contentType string, data []by
 	if err != nil {
 		return err
 	}
-	_, err = newS3Client(config).PutObject(ctx, &s3.PutObjectInput{
+	input := &s3.PutObjectInput{
 		Bucket: aws.String(config.bucket), Key: aws.String(key), Body: bytes.NewReader(data),
 		ContentType: aws.String(contentType), ContentLength: aws.Int64(int64(len(data))),
-	})
+	}
+	if immutable {
+		input.IfNoneMatch = aws.String("*")
+	}
+	_, err = newS3Client(config).PutObject(ctx, input)
 	if err != nil {
 		return fmt.Errorf("store object: %w", err)
 	}

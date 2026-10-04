@@ -3,11 +3,13 @@ package main_test
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -18,9 +20,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	issuance "github.com/maisarasherif/asset-management-system/ams-server/certificateissuance"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
@@ -982,5 +987,585 @@ func TestGeneratedRenewalCompetentSignatureFailuresAndRevokedActorCannotPublish(
 	var failed int
 	if err := h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_signature_versions WHERE owner_id=$1 AND storage_state='FAILED'", person).Scan(&failed); err != nil || failed != 3 {
 		t.Fatal("failed competent uploads lost persistent references")
+	}
+}
+
+// Step 5 uses deterministic fault injection against the real disposable database.
+// All live R2 writes are exercised separately by the HTTP/UI/API gates.
+type issuanceMemoryDocuments struct {
+	mu           sync.Mutex
+	objects      map[string][]byte
+	failPut      bool
+	uncertainPut bool
+	failRead     bool
+	afterPut     func()
+	puts         int
+}
+
+func (s *issuanceMemoryDocuments) PrepareKey(id, cert uuid.UUID) (string, error) {
+	return "controlled-issued/" + cert.String() + "/" + id.String() + ".pdf", nil
+}
+func (s *issuanceMemoryDocuments) Put(_ context.Context, key string, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.puts++
+	if s.failPut {
+		return errors.New("controlled PUT failure")
+	}
+	if _, exists := s.objects[key]; exists {
+		return errors.New("immutable document exists")
+	}
+	s.objects[key] = bytes.Clone(data)
+	if s.afterPut != nil {
+		s.afterPut()
+	}
+	if s.uncertainPut {
+		return errors.New("controlled lost PUT acknowledgment")
+	}
+	return nil
+}
+func (s *issuanceMemoryDocuments) Read(_ context.Context, key string) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failRead {
+		return nil, errors.New("controlled GET failure")
+	}
+	data, exists := s.objects[key]
+	if !exists {
+		return nil, issuance.ErrDocumentMissing
+	}
+	return bytes.Clone(data), nil
+}
+
+type issuanceRecordingRenderer struct {
+	before    func()
+	failure   error
+	snapshot  issuance.Snapshot
+	number    string
+	signature []byte
+	calls     int
+}
+
+func (r *issuanceRecordingRenderer) Render(_ context.Context, snapshot issuance.Snapshot, number string, signature []byte) ([]byte, error) {
+	r.calls++
+	r.snapshot = snapshot
+	r.number = number
+	r.signature = bytes.Clone(signature)
+	if r.before != nil {
+		r.before()
+	}
+	data, _ := json.Marshal(snapshot)
+	return append([]byte("%PDF-controlled-final "+number+"\n"), data...), r.failure
+}
+func generatedIssuanceFixture(t *testing.T, h *integrationHarness) (issuance.Issuances, uuid.UUID, uuid.UUID, issuance.PreviewInput, *issuanceMemoryDocuments) {
+	t.Helper()
+	ctx := context.Background()
+	actor := signingActor(t, h)
+	component, testID := createComponentFixture(t, h, "Issued Pressure Gauge")
+	cert := uuid.MustParse(stringField(t, createCertificate(t, h, certificatePayload(component, testID, 101)), "certificate_id"))
+	person := signingPerson(t, h, "Issued Examiner", signingCategory(t, h, "ISSUED", true), true)
+	signatures := &signingMemoryStore{objects: map[string][]byte{}}
+	manager := issuance.SignerManagement{Pool: h.pool, Store: signatures}
+	if _, err := manager.ReplacePersonSignature(ctx, actor, person, bytes.NewReader(signingImage(t, false))); err != nil {
+		t.Fatal(err)
+	}
+	previews := issuance.Previews{Management: manager, Secret: []byte(os.Getenv("SECRET_KEY")), Renderer: previewControlledRenderer{}}
+	documents := &issuanceMemoryDocuments{objects: map[string][]byte{}}
+	service := issuance.Issuances{Pool: h.pool, Previews: previews, Documents: documents}
+	return service, actor, cert, issuance.PreviewInput{SignerID: &person, IssueDate: "2026-10-04", Remarks: "Reviewed examination", Measurements: "10 bar"}, documents
+}
+func assertCertificateUnchanged(t *testing.T, h *integrationHarness, id uuid.UUID, expected []byte) {
+	t.Helper()
+	row, err := db.New(h.pool).GetCertificateByID(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(row)
+	if !bytes.Equal(data, expected) {
+		t.Fatal("failed approval changed the current certificate")
+	}
+}
+func TestGeneratedRenewalApprovedFailuresRetainNumberAndImmutableDocument(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, input, documents := generatedIssuanceFixture(t, h)
+	preview, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+	originalJSON, _ := json.Marshal(original)
+	renderer := &issuanceRecordingRenderer{failure: errors.New("controlled render failure")}
+	service.Previews.Renderer = renderer
+	failed, err := service.Approve(ctx, actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) || failed.State != "FAILED" || !strings.HasSuffix(failed.Number, "-01") {
+		t.Fatal(failed, err)
+	}
+	assertCertificateUnchanged(t, h, cert, originalJSON)
+	renderer.failure = nil
+	documents.failPut = true
+	again, err := service.Approve(ctx, actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) || again.ID != failed.ID || again.Number != failed.Number {
+		t.Fatal("retry allocated another identity/number", again, err)
+	}
+	assertCertificateUnchanged(t, h, cert, originalJSON)
+	documents.failPut = false
+	documents.uncertainPut = true
+	uncertain, err := service.Approve(ctx, actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) || uncertain.ID != failed.ID {
+		t.Fatal(uncertain, err)
+	}
+	assertCertificateUnchanged(t, h, cert, originalJSON)
+	renders, puts := renderer.calls, documents.puts
+	// A change after approval must not alter its as-reviewed content/signature.
+	if _, err := h.pool.Exec(ctx, "UPDATE competent_persons SET full_name='Future signer' WHERE competent_person_id=$1", *input.SignerID); err != nil {
+		t.Fatal(err)
+	}
+	documents.uncertainPut = false
+	// Persisted approval identity survives review-token expiry; an unapproved expired token is rejected in a separate test.
+	var expiredClaims issuance.PreviewClaims
+	mac := hmac.New(sha256.New, service.Previews.Secret)
+	mac.Write([]byte("AMS/generated-certificate-preview/v1"))
+	key := mac.Sum(nil)
+	if _, err := jwt.ParseWithClaims(preview.Token, &expiredClaims, func(*jwt.Token) (any, error) { return key, nil }); err != nil {
+		t.Fatal(err)
+	}
+	expiredClaims.IssuedAt = jwt.NewNumericDate(time.Now().Add(-31 * time.Minute))
+	expiredClaims.NotBefore = expiredClaims.IssuedAt
+	expiredClaims.ExpiresAt = jwt.NewNumericDate(expiredClaims.IssuedAt.Time.Add(issuance.PreviewTTL))
+	expiredToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, expiredClaims).SignedString(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed, err := service.Approve(ctx, actor, cert, expiredToken)
+	if err != nil || completed.State != "COMPLETED" || completed.ID != failed.ID || completed.Number != failed.Number {
+		t.Fatal(completed, err)
+	}
+	if renderer.calls != renders || documents.puts != puts {
+		t.Fatal("retry regenerated/overwrote an existing PDF")
+	}
+	a, _ := json.Marshal(preview.Snapshot)
+	b, _ := json.Marshal(renderer.snapshot)
+	if !bytes.Equal(a, b) || renderer.number != completed.Number {
+		t.Fatal("final render differed from reviewed snapshot beyond number")
+	}
+	row, err := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: completed.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, _ := documents.Read(ctx, row.FileKey)
+	digest := sha256.Sum256(saved)
+	if hex.EncodeToString(digest[:]) != completed.SHA256 || int64(len(saved)) != completed.Size {
+		t.Fatal("document integrity metadata incorrect")
+	}
+	current, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+	if current.CertificateFile != row.FileKey || current.IssueDate.Format("2006-01-02") != input.IssueDate {
+		t.Fatal("publication incomplete")
+	}
+	duplicate, err := service.Approve(ctx, actor, cert, preview.Token)
+	if err != nil || duplicate.ID != completed.ID || documents.puts != puts {
+		t.Fatal("duplicate changed completed issuance", duplicate, err)
+	}
+	var count, sequence int64
+	if err := h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_issuances").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.pool.QueryRow(ctx, "SELECT last_sequence FROM certificate_number_counters").Scan(&sequence); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || sequence != 1 {
+		t.Fatal("duplicate approval consumed a sequence", count, sequence)
+	}
+	for _, sql := range []string{"UPDATE certificate_issuances SET snapshot='{}' WHERE issuance_id=$1", "UPDATE certificate_issuances SET document_sha256=repeat('a',64) WHERE issuance_id=$1", "UPDATE certificate_issuances SET document_number='forged' WHERE issuance_id=$1", "UPDATE certificate_issuances SET state='FAILED' WHERE issuance_id=$1"} {
+		if _, err := h.pool.Exec(ctx, sql, completed.ID); err == nil {
+			t.Fatal("immutable completed content changed", sql)
+		}
+	}
+}
+func TestGeneratedRenewalApprovalPublicationRollbackAndStaleFence(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, input, documents := generatedIssuanceFixture(t, h)
+	preview, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+	originalJSON, _ := json.Marshal(original)
+	renderer := &issuanceRecordingRenderer{}
+	service.Previews.Renderer = renderer
+	// Fail after the certificate UPDATE but before completion, forcing the whole publication transaction to roll back.
+	_, err = h.pool.Exec(ctx, `CREATE FUNCTION reject_test_completion() RETURNS TRIGGER AS $$ BEGIN IF NEW.state='COMPLETED' THEN RAISE EXCEPTION 'controlled completion failure'; END IF; RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TRIGGER reject_test_completion BEFORE UPDATE ON certificate_issuances FOR EACH ROW EXECUTE FUNCTION reject_test_completion();`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.pool.Exec(context.Background(), "DROP TRIGGER IF EXISTS reject_test_completion ON certificate_issuances; DROP FUNCTION IF EXISTS reject_test_completion();")
+	failed, err := service.Approve(ctx, actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) || failed.State != "FAILED" {
+		t.Fatal(failed, err)
+	}
+	assertCertificateUnchanged(t, h, cert, originalJSON)
+	if _, err := h.pool.Exec(ctx, "DROP TRIGGER reject_test_completion ON certificate_issuances"); err != nil {
+		t.Fatal(err)
+	}
+	documents.failRead = true
+	if _, err := service.Approve(ctx, actor, cert, preview.Token); !errors.Is(err, issuance.ErrIssuanceFailed) {
+		t.Fatal("read failure was ignored", err)
+	}
+	documents.failRead = false
+	// A newer legacy update increments the publication fence too.
+	if _, err := h.pool.Exec(ctx, "UPDATE certificates SET certificate_file='newer-document',updated_at=NOW() WHERE certificate_id=$1", cert); err != nil {
+		t.Fatal(err)
+	}
+	fenced, err := service.Approve(ctx, actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceConflict) || fenced.ID != failed.ID {
+		t.Fatal("old approved work overwrote a newer document", fenced, err)
+	}
+	current, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+	if current.CertificateFile != "newer-document" {
+		t.Fatal("publication fence failed")
+	}
+	newer, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := service.Approve(ctx, actor, cert, newer.Token)
+	if err != nil || !strings.HasSuffix(issued.Number, "-02") {
+		t.Fatal("failed approval number was reused", issued, err)
+	}
+	var historyCount int64
+	h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_issuances WHERE certificate_id=$1", cert).Scan(&historyCount)
+	if historyCount != 2 {
+		t.Fatal("failed approval audit disappeared")
+	}
+}
+func TestGeneratedRenewalConcurrentDuplicateAndComponentDateAllocation(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, input, documents := generatedIssuanceFixture(t, h)
+	preview, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, release := make(chan struct{}), make(chan struct{})
+	renderer := &issuanceRecordingRenderer{before: func() { close(started); <-release }}
+	service.Previews.Renderer = renderer
+	type outcome struct {
+		result issuance.Issuance
+		err    error
+	}
+	first := make(chan outcome, 1)
+	go func() { result, err := service.Approve(ctx, actor, cert, preview.Token); first <- outcome{result, err} }()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("approval did not reach rendering")
+	}
+	duplicate, err := service.Approve(ctx, actor, cert, preview.Token)
+	if err != nil || duplicate.State != "PROCESSING" || !strings.HasSuffix(duplicate.Number, "-01") {
+		close(release)
+		t.Fatal(duplicate, err)
+	}
+	close(release)
+	done := <-first
+	if done.err != nil || done.result.ID != duplicate.ID || done.result.State != "COMPLETED" || documents.puts != 1 {
+		t.Fatal("concurrent duplicate processed twice", done)
+	}
+	// Different tests/certificates for one component share a date counter; a new date starts at 01.
+	base, _ := db.New(h.pool).GetCertificateByID(ctx, cert)
+	service.Previews.Renderer = previewControlledRenderer{}
+	previews := make([]issuance.PreviewResponse, 4)
+	ids := make([]uuid.UUID, 4)
+	for i := range ids {
+		ids[i] = uuid.MustParse(stringField(t, createCertificate(t, h, certificatePayload(base.ComponentID.String(), base.TestID.String(), 110+i)), "certificate_id"))
+		previews[i], err = service.Previews.Prepare(ctx, actor, ids[i], input)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	outcomes := make(chan outcome, 4)
+	for i := range ids {
+		go func(i int) {
+			result, err := service.Approve(ctx, actor, ids[i], previews[i].Token)
+			outcomes <- outcome{result, err}
+		}(i)
+	}
+	numbers := map[string]bool{}
+	for range ids {
+		got := <-outcomes
+		if got.err != nil || got.result.State != "COMPLETED" || numbers[got.result.Number] {
+			t.Fatal("nonunique concurrent number", got)
+		}
+		numbers[got.result.Number] = true
+	}
+	for i := 2; i <= 5; i++ {
+		number := issuance.DocumentNumber(preview.Snapshot, fmt.Sprintf("%02d", i))
+		if !numbers[number] {
+			t.Fatal("counter gap or duplicate", numbers)
+		}
+	}
+	input.IssueDate = "2026-10-05"
+	nextDay, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := service.Approve(ctx, actor, cert, nextDay.Token)
+	if err != nil || !strings.HasSuffix(next.Number, "-01") {
+		t.Fatal("date counter was global", next, err)
+	}
+}
+func TestGeneratedRenewalApprovalRejectsStaleAndExpiredBeforeAllocation(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, input, _ := generatedIssuanceFixture(t, h)
+	preview, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := issuance.SignPreview(service.Previews.Secret, actor, preview.Snapshot, time.Now().Add(-31*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Approve(ctx, actor, cert, old); !errors.Is(err, issuance.ErrPreviewExpired) {
+		t.Fatal("expired unapproved preview accepted", err)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE components SET name=name||' changed' WHERE component_id=$1", preview.Snapshot.ComponentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Approve(ctx, actor, cert, preview.Token); !errors.Is(err, issuance.ErrPreviewChanged) {
+		t.Fatal("stale approval accepted", err)
+	}
+	var approvals, counters int64
+	h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_issuances").Scan(&approvals)
+	h.pool.QueryRow(ctx, "SELECT count(*) FROM certificate_number_counters").Scan(&counters)
+	if approvals != 0 || counters != 0 {
+		t.Fatal("invalid previews consumed numbers")
+	}
+}
+func TestGeneratedRenewalApprovalHTTPStoredHistoryAndRoleBoundaries(t *testing.T) {
+	h := setupIntegrationTest(t)
+	requireStorageIntegrationEnv(t)
+	ctx := context.Background()
+	component, testID := createComponentFixture(t, h, "Final Pressure Gauge")
+	cert := stringField(t, createCertificate(t, h, certificatePayload(component, testID, 120)), "certificate_id")
+	other := stringField(t, createCertificate(t, h, certificatePayload(component, testID, 121)), "certificate_id")
+	category := signingCategory(t, h, "FINAL_HTTP", true)
+	person := signingPerson(t, h, "Final Examiner", category, true)
+	performMultipartRequest(t, h.router, h.adminToken, "/v1/competent-person/"+person.String()+"/signing-profile/signature", "file", "signature.jpg", signingImage(t, true), nil, 200)
+	path := "/v1/certificate/" + cert
+	var preview issuance.PreviewResponse
+	json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-preview", map[string]any{"signer_id": person, "issue_date": "2026-10-04", "remarks": "Final examination — Ω"}, 200), &preview)
+	input := map[string]any{"preview_token": preview.Token}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/certificate/"+other+"/generated-issuance", input, 400)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-issuance", map[string]any{"preview_token": preview.Token, "document_number": "FORGED"}, 400)
+	for _, role := range []string{"USER", "CLIENT", "ADMIN", "SUPER_ADMIN"} {
+		token := createIntegrationUserToken(t, h.pool, "Issue", role, "issue-"+role+"@example.com", "issue-password", role)
+		status := 403
+		if role == "ADMIN" || role == "SUPER_ADMIN" {
+			status = 400
+		}
+		performJSONRequest(t, h.router, token, http.MethodPost, path+"/generated-issuance", input, status)
+		if role == "CLIENT" {
+			performJSONRequest(t, h.router, token, http.MethodGet, path+"/issuances", nil, 403)
+		}
+	}
+	var issued issuance.Issuance
+	json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-issuance", input, 200), &issued)
+	if issued.State != "COMPLETED" || !strings.HasSuffix(issued.Number, "-01") || issued.Size <= 0 {
+		t.Fatal(issued)
+	}
+	var duplicate issuance.Issuance
+	json.Unmarshal(performJSONRequest(t, h.router, h.adminToken, http.MethodPost, path+"/generated-issuance", input, 200), &duplicate)
+	if duplicate.ID != issued.ID || duplicate.Number != issued.Number {
+		t.Fatal("HTTP duplicate allocated again")
+	}
+	statusBody := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, path+"/issuances/"+issued.ID.String(), nil, 200))
+	assertField(t, statusBody, "state", "COMPLETED")
+	assertField(t, statusBody, "document_number", issued.Number)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/certificate/"+other+"/issuances/"+issued.ID.String(), nil, 404)
+	history := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, path+"/issuances", nil, 200))
+	if len(history["data"].([]any)) != 1 {
+		t.Fatal("history incomplete")
+	}
+	link := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, path+"/issuances/"+issued.ID.String()+"/file", nil, 200))
+	response, err := http.Get(stringField(t, link, "url"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	document, err := io.ReadAll(response.Body)
+	if err != nil || response.StatusCode != 200 || !bytes.HasPrefix(document, []byte("%PDF-")) {
+		t.Fatal("issued R2 document unavailable", err)
+	}
+	digest := sha256.Sum256(document)
+	if hex.EncodeToString(digest[:]) != issued.SHA256 || int64(len(document)) != issued.Size {
+		t.Fatal("stored historical document digest mismatch")
+	}
+	originalDocument := bytes.Clone(document)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/certificate/"+other+"/issuances/"+issued.ID.String()+"/file", nil, 404)
+	// Replace the profile image and change current source labels; history must return the old stored PDF.
+	performMultipartRequest(t, h.router, h.adminToken, "/v1/competent-person/"+person.String()+"/signing-profile/signature", "file", "replacement.png", signingImage(t, false), nil, 200)
+	if _, err := h.pool.Exec(ctx, "UPDATE components SET name='Future component name' WHERE component_id=$1", uuid.MustParse(component)); err != nil {
+		t.Fatal(err)
+	}
+	row, err := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: uuid.MustParse(cert), IssuanceID: issued.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := (issuance.R2Documents{}).Put(ctx, row.FileKey, []byte("%PDF-forged overwrite")); err == nil {
+		t.Fatal("R2 accepted overwrite of issued object")
+	}
+	retained, err := issuance.R2Documents{}.Read(ctx, row.FileKey)
+	if err != nil || !bytes.Equal(originalDocument, retained) {
+		t.Fatal("profile/source changes altered issued history", err)
+	}
+	current, _ := db.New(h.pool).GetCertificateByID(ctx, uuid.MustParse(cert))
+	if current.CertificateFile != row.FileKey {
+		t.Fatal("current document was not published")
+	}
+	journal, err := os.ReadFile(os.Getenv("AMS_TEST_STORAGE_MANIFEST"))
+	if err != nil || !strings.HasPrefix(row.FileKey, os.Getenv("AMS_TEST_STORAGE_PREFIX")) || !bytes.Contains(journal, []byte(row.FileKey+"\n")) {
+		t.Fatal("issued PDF escaped cleanup journal")
+	}
+	if directory := os.Getenv("AMS_CERTIFICATE_PREVIEW_EVIDENCE_DIR"); directory != "" {
+		if err := os.MkdirAll(directory, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, "approved-examination-preview.pdf"), preview.PDF, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, "issued-examination.pdf"), document, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Ordinary ADMIN issuance is bound to its own account; non-expiring publication stores NULL expiry.
+	ownToken := createIntegrationUserToken(t, h.pool, "Own", "Issuer", "own-issuer@example.com", "issue-password", "ADMIN")
+	own := mustGetIntegrationUserByEmail(t, h.pool, "own-issuer@example.com")
+	management := issuance.SignerManagement{Pool: h.pool, Store: issuance.R2Signatures{}}
+	if _, err := management.AssignCategory(ctx, signingActor(t, h), own.UserID, &category); err != nil {
+		t.Fatal(err)
+	}
+	performMultipartRequest(t, h.router, ownToken, "/v1/account/signing-profile/signature", "file", "own.png", signingImage(t, false), nil, 200)
+	if _, err := h.pool.Exec(ctx, "UPDATE test_types SET requires_renewal=FALSE,validity_duration=NULL WHERE test_id=$1", uuid.MustParse(testID)); err != nil {
+		t.Fatal(err)
+	}
+	var ownPreview issuance.PreviewResponse
+	json.Unmarshal(performJSONRequest(t, h.router, ownToken, http.MethodPost, "/v1/certificate/"+other+"/generated-preview", map[string]any{"issue_date": "2026-10-04"}, 200), &ownPreview)
+	ownIssued := decodeObject(t, performJSONRequest(t, h.router, ownToken, http.MethodPost, "/v1/certificate/"+other+"/generated-issuance", map[string]any{"preview_token": ownPreview.Token}, 200))
+	assertField(t, ownIssued, "expiry_date", "")
+	assertField(t, ownIssued["snapshot"].(map[string]any)["signer"].(map[string]any), "signer_id", own.UserID.String())
+	nonExpiring, _ := db.New(h.pool).GetCertificateByID(ctx, uuid.MustParse(other))
+	if nonExpiring.ExpiryDate != nil {
+		t.Fatal("non-expiring issuance retained old expiry")
+	}
+}
+
+func TestGeneratedRenewalPublicationFencesChangesDuringRendering(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, input, _ := generatedIssuanceFixture(t, h)
+	preview, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renderer := &issuanceRecordingRenderer{before: func() {
+		if _, err := h.pool.Exec(ctx, "UPDATE certificates SET certificate_file='newer-during-render',updated_at=NOW() WHERE certificate_id=$1", cert); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	service.Previews.Renderer = renderer
+	failed, err := service.Approve(ctx, actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceConflict) || failed.State != "FAILED" {
+		t.Fatal("in-flight old render published", failed, err)
+	}
+	current, err := db.New(h.pool).GetCertificateByID(ctx, cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.CertificateFile != "newer-during-render" {
+		t.Fatal("old render overwrote current file")
+	}
+	stored, err := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: failed.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.DocumentSize <= 0 || stored.DocumentSha256 == "" {
+		t.Fatal("failed rendered approval lost stored document metadata")
+	}
+}
+func TestGeneratedRenewalStoredIntegrityAndProcessingLease(t *testing.T) {
+	h := setupIntegrationTest(t)
+	ctx := context.Background()
+	service, actor, cert, input, documents := generatedIssuanceFixture(t, h)
+	preview, err := service.Previews.Prepare(ctx, actor, cert, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renderer := &issuanceRecordingRenderer{}
+	service.Previews.Renderer = renderer
+	documents.uncertainPut = true
+	failed, err := service.Approve(ctx, actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) {
+		t.Fatal(err)
+	}
+	row, err := db.New(h.pool).GetCertificateIssuance(ctx, db.GetCertificateIssuanceParams{CertificateID: cert, IssuanceID: failed.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, _ := documents.Read(ctx, row.FileKey)
+	documents.objects[row.FileKey] = []byte("%PDF-corrupt stored object")
+	documents.uncertainPut = false
+	renders, puts := renderer.calls, documents.puts
+	corrupt, err := service.Approve(ctx, actor, cert, preview.Token)
+	if !errors.Is(err, issuance.ErrIssuanceFailed) || corrupt.FailureCode != "DOCUMENT_INTEGRITY" || renderer.calls != renders || documents.puts != puts {
+		t.Fatal("corrupt object was overwritten/published", corrupt, err)
+	}
+	documents.objects[row.FileKey] = original
+	if _, err := h.pool.Exec(ctx, "UPDATE certificate_issuances SET state='PROCESSING',attempt_id=$2,lease_until=NOW()+INTERVAL '5 minutes' WHERE issuance_id=$1", row.IssuanceID, uuid.New()); err != nil {
+		t.Fatal(err)
+	}
+	processing, err := service.Approve(ctx, actor, cert, preview.Token)
+	if err != nil || processing.State != "PROCESSING" || documents.puts != puts {
+		t.Fatal("active processor lease was stolen", processing, err)
+	}
+	if _, err := h.pool.Exec(ctx, "UPDATE certificate_issuances SET lease_until=NOW()-INTERVAL '1 second' WHERE issuance_id=$1", row.IssuanceID); err != nil {
+		t.Fatal(err)
+	}
+	completed, err := service.Approve(ctx, actor, cert, preview.Token)
+	if err != nil || completed.State != "COMPLETED" || completed.ID != row.IssuanceID || renderer.calls != renders || documents.puts != puts {
+		t.Fatal("expired lease did not reuse stored PDF", completed, err)
+	}
+}
+
+func TestGeneratedRenewalActorPermissionChangesDuringRendering(t *testing.T) {
+	for _, role := range []string{"USER", "ADMIN"} {
+		t.Run(role, func(t *testing.T) {
+			h := setupIntegrationTest(t)
+			ctx := context.Background()
+			service, actor, cert, input, _ := generatedIssuanceFixture(t, h)
+			preview, err := service.Previews.Prepare(ctx, actor, cert, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			original, err := db.New(h.pool).GetCertificateByID(ctx, cert)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, _ := json.Marshal(original)
+			renderer := &issuanceRecordingRenderer{before: func() {
+				if _, err := h.pool.Exec(ctx, "UPDATE users SET role=$2 WHERE user_id=$1", actor, role); err != nil {
+					t.Fatal(err)
+				}
+			}}
+			service.Previews.Renderer = renderer
+			failed, err := service.Approve(ctx, actor, cert, preview.Token)
+			if !errors.Is(err, issuance.ErrIssuanceFailed) || failed.State != "FAILED" {
+				t.Fatal("revoked issuer published", failed, err)
+			}
+			assertCertificateUnchanged(t, h, cert, before)
+			if _, err := service.Approve(ctx, actor, cert, preview.Token); !errors.Is(err, issuance.ErrIssuerForbidden) {
+				t.Fatal("revoked issuer resumed approval", err)
+			}
+		})
 	}
 }

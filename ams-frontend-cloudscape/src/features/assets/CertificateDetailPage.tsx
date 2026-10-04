@@ -30,6 +30,7 @@ import {
 } from "../../lib/api/ams";
 import { ApiError } from "../../lib/api/client";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
+import { CertificateIssuanceHistory } from "./CertificateIssuanceHistory";
 import { GeneratedCertificateSigner } from "./GeneratedCertificateSigner";
 import { Select } from "../../components/shared/OptimizedSelect";
 import { TableCellText } from "../../components/shared/TableCells";
@@ -706,6 +707,8 @@ function renderCertificateDetailPage({
             </SpaceBetween>
           </Container>
         ) : null}
+
+        <CertificateIssuanceHistory key={certificateId} certificateId={certificateId} />
 
         <Container header={<Header variant="h2">Upload history</Header>}>
           {uploadsError ? (

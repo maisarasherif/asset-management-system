@@ -102,12 +102,13 @@ test("certificate renewal baseline uploads through UI and reads the historical R
   }
 });
 
-test("SUPER_ADMIN manages signatures and categories; generated previews enforce eligibility and stay in memory", async ({ page, request }) => {
+test("SUPER_ADMIN manages signers and approves stored certificates; ADMIN issues only as themselves", async ({ page, request }) => {
   const rootEmail = process.env.PLAYWRIGHT_ADMIN_EMAIL;
   const rootPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD;
   expect(rootEmail).toBeTruthy();
   expect(rootPassword).toBeTruthy();
   expect(process.env.AMS_TEST_STORAGE_PREFIX).toBeTruthy();
+  test.setTimeout(180_000);
   const suffix = `managed-signers-${Date.now()}`;
   const adminEmail = `${suffix}@example.com`;
   const adminPassword = "Managed-signing-test-123!";
@@ -430,9 +431,121 @@ test("SUPER_ADMIN manages signatures and categories; generated previews enforce 
     await expect(signing.getByText(/Your signing profile is not eligible/)).toBeVisible();
     await expect(signing.getByRole("img", { name: "Saved signature or stamp", exact: true })).toHaveCount(0);
     expect((await page.request.post(`${certificateAPI}/generated-signer`, { data: {} })).status()).toBe(400);
-    await page.goto("/administration");
-    await expect(page.getByRole("heading", { name: "Administration", exact: true })).toBeVisible();
-    await expect(management).toHaveCount(0);
+    // Restore real browser time after the deliberate preview-expiry check.
+    await page.clock.setSystemTime(new Date());
+    // Restore eligibility after the preceding category/expiry checks, then approve through the real UI.
+    const restoreForIssue = await request.put(adminAPI, { headers: cleanupHeaders, data: { competency_category_id: allowedCategory.competency_category_id } });
+    expect(restoreForIssue.status()).toBe(200);
+    await page.goto(certificateURL);
+    await expect(previewForm).toBeVisible();
+    await previewForm.getByLabel("Generated certificate issue date", { exact: true }).fill("2026-10-04");
+    await previewForm.getByLabel("Test remarks (optional)", { exact: true }).fill("Approved own examination — Ω");
+    const ownApprovalPreview = page.waitForResponse(response => response.url() === `${certificateAPI}/generated-preview` && response.request().method() === "POST");
+    await previewForm.getByRole("button", { name: "Preview examination certificate", exact: true }).click();
+    const approvedReviewHTTP = await ownApprovalPreview;
+    expect(approvedReviewHTTP.status()).toBe(200);
+    const approvedReview = await approvedReviewHTTP.json();
+    await pdfReview.getByRole("button", { name: "Approve and issue certificate", exact: true }).click();
+    const confirm = page.getByRole("dialog", { name: "Issue examination certificate", exact: true });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole("button", { name: "Back to review", exact: true }).click();
+    expect((await (await page.request.get(`${certificateAPI}/issuances`)).json()).data).toHaveLength(0);
+    for (const width of [320, 768, 1024, 1440]) {
+      await narrow(width);
+      await expect(pdfReview.getByRole("button", { name: "Approve and issue certificate", exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+    }
+    await pdfReview.getByRole("button", { name: "Approve and issue certificate", exact: true }).click();
+    const issueHTTP = page.waitForResponse(response => response.url() === `${certificateAPI}/generated-issuance` && response.request().method() === "POST");
+    await confirm.getByRole("button", { name: "Confirm issuance", exact: true }).click();
+    const issueResponse = await issueHTTP;
+    expect(issueResponse.status(), await issueResponse.text()).toBe(200);
+    const firstIssued = await issueResponse.json();
+    expect(firstIssued.state).toBe("COMPLETED");
+    expect(firstIssued.document_number).toBe(approvedReview.document_number.replace(/-XX$/, "-01"));
+    expect(firstIssued.snapshot).toEqual(approvedReview.snapshot);
+    const historyRegion = page.getByRole("region", { name: "Certificate issuance history", exact: true });
+    await expect(historyRegion.getByRole("cell", { name: firstIssued.document_number, exact: true })).toBeVisible();
+    await expect(page.getByText("Certificate issued", { exact: true })).toBeVisible();
+    const duplicateIssued = await page.request.post(`${certificateAPI}/generated-issuance`, { data: { preview_token: approvedReview.preview_token } });
+    expect(duplicateIssued.status()).toBe(200);
+    expect(await duplicateIssued.json()).toEqual(firstIssued);
+    const currentIssued = await (await page.request.get(certificateAPI)).json();
+    expect(currentIssued.issue_date).toBe("2026-10-04T00:00:00Z");
+    expect(currentIssued.expiry_date).toBe("2027-10-04T00:00:00Z");
+    expect(currentIssued.certificate_file.startsWith(process.env.AMS_TEST_STORAGE_PREFIX)).toBe(true);
+    const ownPDFLink = await page.request.get(`${certificateAPI}/issuances/${firstIssued.issuance_id}/file`);
+    expect(ownPDFLink.status()).toBe(200);
+    const ownDocumentURL = (await ownPDFLink.json()).url;
+    const ownDocument = await request.get(ownDocumentURL);
+    expect(ownDocument.status()).toBe(200);
+    const ownDocumentBytes = await ownDocument.body();
+    expect(ownDocumentBytes.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(createHash("sha256").update(ownDocumentBytes).digest("hex")).toBe(firstIssued.document_sha256);
+    await test.info().attach("approved-own-examination-preview.pdf", { body: Buffer.from(approvedReview.pdf_base64, "base64"), contentType: "application/pdf" });
+    await test.info().attach("issued-own-examination.pdf", { body: ownDocumentBytes, contentType: "application/pdf" });
+    const issuedObjectPath = new URL(ownDocumentURL).pathname;
+    const openedDocumentRequest = page.context().waitForEvent("request", browserRequest => {
+      try { return new URL(browserRequest.url()).pathname === issuedObjectPath; } catch { return false; }
+    });
+    const popup = page.waitForEvent("popup");
+    await historyRegion.getByRole("button", { name: "View issued PDF", exact: true }).click();
+    const documentTab = await popup;
+    // Fresh signed URLs can differ in their query string, and headless PDF viewers vary.
+    expect(new URL((await openedDocumentRequest).url()).pathname).toBe(issuedObjectPath);
+    await documentTab.close();
+    await page.reload();
+    await expect(historyRegion.getByRole("cell", { name: firstIssued.document_number, exact: true })).toBeVisible();
+    // The owner may replace their signature without altering the issued document.
+    await page.goto("/account");
+    await page.locator('input[type="file"]').setInputFiles({ name: "future-signature.jpg", mimeType: "image/jpeg", buffer: signatureJPEG });
+    await page.getByRole("button", { name: "Save signature", exact: true }).click();
+    await expect(page.getByRole("img", { name: "Saved signature or stamp", exact: true })).toHaveJSProperty("naturalWidth", 160);
+    expect(await (await request.get(ownDocumentURL)).body()).toEqual(ownDocumentBytes);
+    await page.getByRole("button", { name: "Sign out", exact: true }).click({ timeout: 10_000 });
+    await expect(page).toHaveURL(/\/login$/);
+    await loginUI(rootEmail!, rootPassword!);
+    cleanupHeaders = undefined; // Browser cookie authentication now owns cleanup.
+    await page.goto(certificateURL);
+    await select("Generated certificate competent person", eligible.full_name);
+    await expect(previewForm).toBeVisible();
+    await previewForm.getByLabel("Generated certificate issue date", { exact: true }).fill("2026-10-04");
+    await previewForm.getByLabel("Test remarks (optional)", { exact: true }).fill("Approved competent-person examination");
+    const rootPreviewPromise = page.waitForResponse(response => response.url() === `${certificateAPI}/generated-preview` && response.request().method() === "POST");
+    await previewForm.getByRole("button", { name: "Preview examination certificate", exact: true }).click();
+    const rootPreviewHTTP = await rootPreviewPromise;
+    expect(rootPreviewHTTP.status()).toBe(200);
+    const rootReviewed = await rootPreviewHTTP.json();
+    await pdfReview.getByRole("button", { name: "Approve and issue certificate", exact: true }).click();
+    const rootIssuePromise = page.waitForResponse(response => response.url() === `${certificateAPI}/generated-issuance` && response.request().method() === "POST");
+    await confirm.getByRole("button", { name: "Confirm issuance", exact: true }).click();
+    const rootIssueHTTP = await rootIssuePromise;
+    expect(rootIssueHTTP.status(), await rootIssueHTTP.text()).toBe(200);
+    const rootIssued = await rootIssueHTTP.json();
+    expect(rootIssued.document_number).toBe(firstIssued.document_number.replace(/-01$/, "-02"));
+    expect(rootIssued.snapshot.signer.owner_kind).toBe("COMPETENT_PERSON");
+    expect(rootIssued.snapshot.signer.signer_id).toBe(eligible.competent_person_id);
+    await expect(historyRegion.getByRole("cell", { name: rootIssued.document_number, exact: true })).toBeVisible();
+    await expect(historyRegion.getByRole("button", { name: "View issued PDF", exact: true })).toHaveCount(2);
+    expect(await (await request.get(ownDocumentURL)).body()).toEqual(ownDocumentBytes);
+    const rootDocumentLink = await page.request.get(`${certificateAPI}/issuances/${rootIssued.issuance_id}/file`);
+    expect(rootDocumentLink.status()).toBe(200);
+    const rootDocument = await request.get((await rootDocumentLink.json()).url);
+    expect(rootDocument.status()).toBe(200);
+    const rootBytes = await rootDocument.body();
+    expect(createHash("sha256").update(rootBytes).digest("hex")).toBe(rootIssued.document_sha256);
+    await test.info().attach("approved-competent-examination-preview.pdf", { body: Buffer.from(rootReviewed.pdf_base64, "base64"), contentType: "application/pdf" });
+    await test.info().attach("issued-competent-examination.pdf", { body: rootBytes, contentType: "application/pdf" });
+    // Direct browser requests cannot override the number or approve a stale reviewed source.
+    expect((await page.request.post(`${certificateAPI}/generated-issuance`, { data: { preview_token: rootReviewed.preview_token, document_number: "FORGED" } })).status()).toBe(400);
+    const staleReviewResponse = await page.request.post(`${certificateAPI}/generated-preview`, { data: { signer_id: eligible.competent_person_id, issue_date: "2026-10-04" } });
+    expect(staleReviewResponse.status()).toBe(200);
+    const staleToken = (await staleReviewResponse.json()).preview_token;
+    expect((await page.request.put(`${api}/competent-person/${eligible.competent_person_id}`, { data: { ...personInput, organization: "Updated after review" } })).status()).toBe(200);
+    expect((await page.request.post(`${certificateAPI}/generated-issuance`, { data: { preview_token: staleToken } })).status()).toBe(409);
+    expect((await (await page.request.get(`${certificateAPI}/issuances`)).json()).data).toHaveLength(2);
+
+
   } catch (error) {
     testBodyFailed = true;
     throw error;

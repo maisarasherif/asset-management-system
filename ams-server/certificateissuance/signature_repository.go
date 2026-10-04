@@ -7,11 +7,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 )
 
-type PostgresSignatures struct{ Pool *pgxpool.Pool }
+type SigningDatabase interface {
+	db.DBTX
+	Begin(context.Context) (pgx.Tx, error)
+}
+
+type PostgresSignatures struct{ Pool SigningDatabase }
 
 func (r PostgresSignatures) Profile(ctx context.Context, id uuid.UUID) (SigningProfile, error) {
 	row, err := db.New(r.Pool).GetAccountSigningProfile(ctx, id)
