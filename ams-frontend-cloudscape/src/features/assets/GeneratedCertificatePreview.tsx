@@ -123,23 +123,26 @@ export function GeneratedCertificatePreview({ certificateId, signerId, issueDate
     <section aria-label="Generated certificate preview">
       <SpaceBetween direction="vertical" size="m">
         <Box color="text-body-secondary">Review the examination certificate before issuance. Equipment, component, test references, and signing details are filled automatically.</Box>
-        <fieldset disabled={issuing || processing} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><legend style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>Examination details</legend><ColumnLayout columns={2}>
-          <FormField label="Generated certificate issue date">
-            <input type="date" className="app-native-input" aria-label="Generated certificate issue date" value={issue} onChange={(event) => {
-              discard(); setIssue(event.target.value);
-              if (requiresRenewal && validityMonths) setExpiry(addMonths(event.target.value, validityMonths));
-            }} />
-          </FormField>
-          {requiresRenewal ? <FormField label="Generated certificate expiry date" description="Filled from the test validity period; adjust if needed.">
-            <input type="date" className="app-native-input" aria-label="Generated certificate expiry date" value={expiry} onChange={(event) => { discard(); setExpiry(event.target.value); }} />
-          </FormField> : <Box>This test has no expiry date.</Box>}
-        </ColumnLayout>
-        <FormField label="Test remarks (optional)" description="Up to 4000 characters. Line breaks are preserved." errorText={[...remarks].length > 4000 ? "Use at most 4000 characters." : undefined}>
-          <Textarea ariaLabel="Test remarks (optional)" value={remarks} rows={3} onChange={({ detail }) => { discard(); setRemarks(detail.value); }} />
-        </FormField>
-        <FormField label="Measurements (optional)" description="Up to 4000 characters." errorText={[...measurements].length > 4000 ? "Use at most 4000 characters." : undefined}>
-          <Textarea ariaLabel="Measurements (optional)" value={measurements} rows={3} onChange={({ detail }) => { discard(); setMeasurements(detail.value); }} />
-        </FormField>
+        <fieldset aria-label="Examination details" disabled={issuing || processing} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <SpaceBetween direction="vertical" size="m">
+            <ColumnLayout columns={2}>
+              <FormField label="Generated certificate issue date">
+                <input type="date" className="app-native-input" aria-label="Generated certificate issue date" value={issue} onChange={(event) => {
+                  discard(); setIssue(event.target.value);
+                  if (requiresRenewal && validityMonths) setExpiry(addMonths(event.target.value, validityMonths));
+                }} />
+              </FormField>
+              {requiresRenewal ? <FormField label="Generated certificate expiry date" description="Filled from the test validity period; adjust if needed.">
+                <input type="date" className="app-native-input" aria-label="Generated certificate expiry date" value={expiry} onChange={(event) => { discard(); setExpiry(event.target.value); }} />
+              </FormField> : <Box>This test has no expiry date.</Box>}
+            </ColumnLayout>
+            <FormField label="Test remarks (optional)" description="Up to 4000 characters. Line breaks are preserved." errorText={[...remarks].length > 4000 ? "Use at most 4000 characters." : undefined}>
+              <Textarea ariaLabel="Test remarks (optional)" value={remarks} rows={3} onChange={({ detail }) => { discard(); setRemarks(detail.value); }} />
+            </FormField>
+            <FormField label="Measurements (optional)" description="Up to 4000 characters." errorText={[...measurements].length > 4000 ? "Use at most 4000 characters." : undefined}>
+              <Textarea ariaLabel="Measurements (optional)" value={measurements} rows={3} onChange={({ detail }) => { discard(); setMeasurements(detail.value); }} />
+            </FormField>
+          </SpaceBetween>
         </fieldset>
         {approved?.state === "ABANDONED" ? <Alert type="info">Approval {approved.document_number} was abandoned. Its reserved number remains in history. Prepare a new preview to issue a certificate.</Alert> : approved && approved.state !== "COMPLETED" ? <Alert type={approved.state === "FAILED" ? "warning" : "info"}>Approval saved as {approved.document_number}. The current certificate is unchanged. Check issuance history for status.</Alert> : null}
         {status.isError && processing ? <Alert type="warning" action={<Button onClick={() => void status.refetch()}>Check issuance status</Button>}>Could not check the saved approval. Its number is retained; issuance history is available after reload.</Alert> : null}

@@ -450,7 +450,7 @@ test("SUPER_ADMIN manages signers and approves stored certificates; ADMIN issues
     cleanup.push(`/test-type/${noExpiryType.test_id}`);
     const allowedCategory = await post("/competency-category", { category_code: suffix, category_name: suffix, description: "Allowed signer", active: true }, "competency_category_id");
     const otherCategory = await post("/competency-category", { category_code: `other-${suffix}`, category_name: `Other ${suffix}`, description: "Other signer", active: true }, "competency_category_id");
-    const personInput = { full_name: `Eligible ${suffix}`, person_type: "Internal", organization: "Porto Marine", competency_category_id: allowedCategory.competency_category_id, active: true };
+    const personInput = { full_name: `Eligible ${suffix}`, person_type: "Internal", organization: "SYNERGY INNOVATIVE DIVING EQUIPMENT TRADING LLC", competency_category_id: allowedCategory.competency_category_id, active: true };
     const eligible = await post("/competent-person", personInput, "competent_person_id");
     const unsigned = await post("/competent-person", { ...personInput, full_name: `Unsigned ${suffix}` }, "competent_person_id");
     const inactive = await post("/competent-person", { ...personInput, full_name: `Inactive ${suffix}`, active: false }, "competent_person_id");
@@ -563,6 +563,25 @@ test("SUPER_ADMIN manages signers and approves stored certificates; ADMIN issues
 
     const previewForm = signing.getByRole("region", { name: "Generated certificate preview", exact: true });
     const pdfReview = signing.getByRole("region", { name: "Examination certificate PDF review", exact: true });
+    const expectExaminationFormSpacing = async () => {
+      const details = previewForm.getByRole("group", { name: "Examination details", exact: true });
+      await expect(details).toBeVisible();
+      // Keep the accessible group name without a leaking hidden legend over the date.
+      await expect(previewForm.getByText("Examination details", { exact: true })).toBeHidden();
+      const label = details.getByText("Generated certificate issue date", { exact: true });
+      const issue = details.getByLabel("Generated certificate issue date", { exact: true });
+      const expiry = details.getByLabel("Generated certificate expiry date", { exact: true });
+      await expect(label).toBeVisible();
+      await expect(issue).toBeVisible();
+      await expect(expiry).toBeVisible();
+      const labelBox = (await label.boundingBox())!, issueBox = (await issue.boundingBox())!, expiryBox = (await expiry.boundingBox())!;
+      expect(issueBox.y - (labelBox.y + labelBox.height), "issue date label must clear its input").toBeGreaterThanOrEqual(3);
+      const remarksLabel = (await details.getByText("Test remarks (optional)", { exact: true }).boundingBox())!;
+      expect(remarksLabel.y - Math.max(issueBox.y + issueBox.height, expiryBox.y + expiryBox.height), "space below date fields").toBeGreaterThanOrEqual(12);
+      const remarksBox = (await details.getByLabel("Test remarks (optional)", { exact: true }).boundingBox())!;
+      const measurementsLabel = (await details.getByText("Measurements (optional)", { exact: true }).boundingBox())!;
+      expect(measurementsLabel.y - (remarksBox.y + remarksBox.height), "space between optional fields").toBeGreaterThanOrEqual(12);
+    };
     await previewForm.getByLabel("Generated certificate issue date", { exact: true }).fill("2026-10-04");
     await expect(previewForm.getByLabel("Generated certificate expiry date", { exact: true })).toHaveValue("2027-10-04");
     await previewForm.getByLabel("Test remarks (optional)", { exact: true }).fill("Examiné — Ω Ж\nSecond line");
@@ -579,6 +598,7 @@ test("SUPER_ADMIN manages signers and approves stored certificates; ADMIN issues
       await expect(pdfReview).toBeVisible();
       expect(data.document_number).toMatch(/^PMS-CE-261004-.+-XX$/);
       expect(data.snapshot.signer.signer_id).toBe(eligible.competent_person_id);
+      expect(data.snapshot.signer.organization).toBe(personInput.organization);
       expect(data.snapshot.expiry_date).toBe("2027-10-04");
       expect(data.snapshot.template_version).toBe("pms-examination-a4-v3");
       expect(Buffer.from(data.pdf_base64, "base64").subarray(0, 5).toString()).toBe("%PDF-");
@@ -596,6 +616,7 @@ test("SUPER_ADMIN manages signers and approves stored certificates; ADMIN issues
     expect((await page.request.post(`${unrestrictedAPI}/generated-preview/validate`, { data: { preview_token: reviewed.preview_token } })).status()).toBe(400);
     for (const width of [320, 768, 1024, 1440]) {
       await narrow(width);
+      await expectExaminationFormSpacing();
       await expect(iframe).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
     }

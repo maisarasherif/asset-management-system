@@ -2,6 +2,7 @@ package certificateissuance
 
 import (
 	"bytes"
+	"compress/zlib"
 	"context"
 	"errors"
 	"fmt"
@@ -9,7 +10,9 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -245,6 +248,65 @@ func TestExaminationPDFTrailingBlankLinesPreserveContentAndPagination(t *testing
 	withoutParagraphBreak, err := renderer.Render(context.Background(), snapshot, DocumentNumber(snapshot, "XX"), signature)
 	if err != nil || bytes.Equal(withParagraphBreak, withoutParagraphBreak) {
 		t.Fatal("intentional blank lines between paragraphs were lost", err)
+	}
+}
+
+func TestExaminationPDFSignerDateHasBottomPaddingWhenDetailsWrap(t *testing.T) {
+	// Inspect the real rendered PDF content, rather than reusing the renderer's
+	// height formula. PDF coordinates increase upward from the page bottom.
+	streams := regexp.MustCompile(`(?s)stream\r?\n(.*?)\r?\nendstream`)
+	border := regexp.MustCompile(`40\.00 ([0-9.]+) 515\.00 ([0-9.]+) re S`)
+	leftBodyText := regexp.MustCompile(`BT\s+50\.00 ([0-9.]+) TD\s+/F[0-9]+ 10 Tf`)
+	for _, fixture := range []struct{ name, organization, remarks string }{
+		{"SYNERGY", "Porto Marine", ""},
+		{"SYNERGY", "SYNERGY INNOVATIVE DIVING EQUIPMENT TRADING LLC", ""},
+		{strings.Repeat("Examiner ", 8), strings.Repeat("Inspection organization ", 6), ""},
+		{"SYNERGY", "SYNERGY INNOVATIVE DIVING EQUIPMENT TRADING LLC", strings.Repeat("A recorded pressure observation.\n", 60)},
+	} {
+		t.Run(fmt.Sprintf("%d-%d-%d", len(fixture.name), len(fixture.organization), len(fixture.remarks)), func(t *testing.T) {
+			snapshot := Snapshot{SchemaVersion: SnapshotVersion, TemplateVersion: TemplateVersion,
+				IssueDate: "2026-10-06", EquipmentName: "Dive system", ComponentName: "Pressure Gauge",
+				ComponentDisplayID: "042", TestName: "Pressure test", Remarks: fixture.remarks,
+				Signer: EligibleSigner{FullName: fixture.name, Organization: fixture.organization}}
+			output, err := (PDFRenderer{}).Render(context.Background(), snapshot, DocumentNumber(snapshot, "XX"), signatureImageFixture(t, "png"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, stream := range streams.FindAllSubmatch(output, -1) {
+				reader, err := zlib.NewReader(bytes.NewReader(stream[1]))
+				if err != nil { // Images and other streams need not be zlib content.
+					continue
+				}
+				content, readErr := io.ReadAll(reader)
+				reader.Close()
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				box := border.FindSubmatchIndex(content)
+				if box == nil {
+					continue
+				}
+				bottom, err := strconv.ParseFloat(string(content[box[2]:box[3]]), 64)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// The last left-column body text after this outline is the date;
+				// the signature label and footer use different x/size positions.
+				values := leftBodyText.FindAllSubmatch(content[box[1]:], -1)
+				if len(values) < 3 {
+					t.Fatal("signer name, organization or date missing from its page")
+				}
+				baseline, err := strconv.ParseFloat(string(values[len(values)-1][1]), 64)
+				if err != nil || baseline-bottom < 12 {
+					t.Fatalf("date baseline %.2f touches border %.2f; need 10pt padding plus descender room: %v", baseline, bottom, err)
+				}
+				found = true
+			}
+			if !found {
+				t.Fatal("rendered PDF has no complete signer outline/date block")
+			}
+		})
 	}
 }
 

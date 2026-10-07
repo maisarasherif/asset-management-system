@@ -984,3 +984,26 @@ The user supplied `C:/Users/maisa/Downloads/step 8/examination-preview-long.pdf`
 **All eight implementation steps and agreed verification are complete.** The final cosmetic finding is resolved, and prior own/competent preview/issued and recovered-document visual reviews remain valid. No further regression rerun or PDF attachment is required solely to record this result. Application-wide UTC policy remains a separate assessed proposal, not an implemented change. Completion here verifies the feature; deployment/merging is not claimed.
 
 This update records evidence only. Dedicated Go (`ams-server/generated_renewal_certificates_integration_test.go` plus renderer `certificateissuance/preview_test.go`), Newman (`api/generated-renewal-certificates.postman_collection.json`) and Playwright (`e2e/generated-renewal-certificates.spec.ts`) coverage needs no further edits. Shared `ams-server/integration_regression_test.go`, `api/system-api-smoke.postman_collection.json` and `e2e/whole-app-regression.spec.ts` need no changes for this result or the final renderer fix. The runner already includes the dedicated suites and retains evidence, so no runner change is required. Automatic failed-report hosting and scoped cleanup remain enabled. Codex did not run live suites, commit/push or synchronize the VPS; evidence documentation remains uncommitted for the user's review. Suggested documentation commit: `docs(certificates): mark final regression and PDF review complete`.
+
+### Post-deployment visual fixes — 6 October 2026 (VPS verification pending)
+
+The production screenshots showed a leaking `Examination details` legend over the generated issue-date label, and a competent-person PDF outline touching the date when organization text wraps. The form now labels its disabled fieldset with `aria-label` and uses Cloudscape vertical spacing between dates and optional fields. The renderer accounts for the entire date cell plus 10 points of bottom padding after all wrapped name/organization lines. Existing issued PDF objects are not regenerated; the same snapshot/template contract is retained so saved approvals remain recoverable.
+
+Dedicated coverage was updated in all three layers:
+
+- `ams-server/certificateissuance/preview_test.go`: inspect the actual compressed PDF page content and assert that the signer date baseline clears its border by at least 12 points (10 points plus descender room), for short and wrapped names/organizations and multipage remarks. The supplied earlier long PDF measured only 9.31 points on its short signer block; the old wrapped-block formula leaves still less space.
+- `api/generated-renewal-certificates.postman_collection.json`: maintain the long organization fixture consistently through status changes and assert the original organization/date in ordinary and multipage preview snapshots. API assertions do not claim to measure PDF geometry.
+- `e2e/generated-renewal-certificates.spec.ts`: assert an accessible examination group, no visible leaking legend, clear date labels and spacing between fields at 320/768/1024/1440px. Use a wrapped organization in the real signer journey, retaining ordinary/long and issued PDF attachments.
+
+Local checks passed: renderer Go compile-only (no test bodies), app and dedicated browser-spec TypeScript checks, collection SDK/JSON validation and syntax checking of all 404 scripts (400 requests), and diff whitespace. No live Go/Newman/Playwright suites, application servers or production changes were run by Codex. The shared `ams-server/integration_regression_test.go`, `api/system-api-smoke.postman_collection.json` and `e2e/whole-app-regression.spec.ts` need no changes because these fixes introduce no API/persistence/route contract. The runner was reviewed and remains unchanged: it already discovers the renderer test and selects the dedicated collection/spec, retains PDF/report evidence, hosts failed reports and cleans only test-owned storage/database resources.
+
+After reviewing, committing/pushing and updating the isolated testing checkout yourself, run as ams_test_runner from `/home/pms/ams-testing/asset-management-system`:
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/generated-renewal-certificates.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/generated-renewal-certificates.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Return the actual summary/evidence path and the new `examination-preview.pdf` and `examination-preview-long.pdf` report attachments for visual review. Check the form labels on desktop/mobile and padding below DATE with the long organization. The prior 194-Go/three-layer passing run verifies the earlier revision only. After this correction passes isolated verification, normal production deployment remains `ams deploy`; no new database migration or external deployment-tool update is needed. Nothing committed, pushed or synchronized by Codex. Suggested commit: `fix(certificates): correct date field overlap and signer PDF padding`.

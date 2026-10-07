@@ -271,7 +271,9 @@ func (PDFRenderer) Render(ctx context.Context, s Snapshot, number string, signat
 	// Keep the signer metadata and proportionally scaled image on one page.
 	nameLines := r.lines(s.Signer.FullName, 237, 10, false)
 	orgLines := r.lines(s.Signer.Organization, 237, 10, false)
-	height := math.Max(112, 74+float64(len(nameLines)+len(orgLines))*15)
+	// The date cell ends 76 points below the top, plus the wrapped name/org
+	// lines. Leave 10 points below that cell even when either value wraps.
+	height := math.Max(112, 86+float64(len(nameLines)+len(orgLines))*15)
 	if height+40 > pdfBottom-r.bodyTop {
 		return nil, ErrPreviewInput
 	}

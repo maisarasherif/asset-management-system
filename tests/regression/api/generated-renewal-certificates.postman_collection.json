@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Generated renewal certificates - generation, external renewal and history",
-    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal. Super-admin competent-person signature management, ordinary-admin category assignment/clearing, private image version history, direct role/field bypasses, restricted/unrestricted signer eligibility, and status changes after selection. Stateless gopdf PDF previews, XX numbering, private signed snapshots, account/certificate/purpose bindings, changed sources and eligibility, role gates, non-expiring tests, and no publication before approval. Real token expiry is covered in Go through the HTTP endpoint. Approved synchronous generated issuance, duplicate approval identity, per-component/date sequences, atomic publication, real issued PDF integrity and immutable stored history, own ADMIN issuance, role/cross-certificate gates, and non-expiring publication. Fault injection and concurrent allocation are exercised by dedicated Go integration tests. Atomic external renewal preserves original PDF/JPEG/PNG/WEBP bytes, supports unsigned eligible competent people, saved-approval replay, strict input and 10MB limits, existing upload role gates, combined paginated generated/external/Legacy history, and no fabricated legacy dates/signers. Real fault/concurrency coverage belongs to the dedicated Go file. Trailing LF/CRLF/whitespace-only blank paragraphs preserve reviewed text and validate normally while matching the unpadded PDF, preventing empty continuation headings.",
+    "description": "Real external renewal baseline plus own ADMIN signing-profile CRUD, bounded PNG/JPEG normalization, private R2 reads, immutable replacement history, ownership/category bypass prevention, and role gates. Fixtures are created here; R2 cleanup belongs to the runner journal. Super-admin competent-person signature management, ordinary-admin category assignment/clearing, private image version history, direct role/field bypasses, restricted/unrestricted signer eligibility, and status changes after selection. Stateless gopdf PDF previews, XX numbering, private signed snapshots, account/certificate/purpose bindings, changed sources and eligibility, role gates, non-expiring tests, and no publication before approval. Real token expiry is covered in Go through the HTTP endpoint. Approved synchronous generated issuance, duplicate approval identity, per-component/date sequences, atomic publication, real issued PDF integrity and immutable stored history, own ADMIN issuance, role/cross-certificate gates, and non-expiring publication. Fault injection and concurrent allocation are exercised by dedicated Go integration tests. Atomic external renewal preserves original PDF/JPEG/PNG/WEBP bytes, supports unsigned eligible competent people, saved-approval replay, strict input and 10MB limits, existing upload role gates, combined paginated generated/external/Legacy history, and no fabricated legacy dates/signers. Real fault/concurrency coverage belongs to the dedicated Go file. Trailing LF/CRLF/whitespace-only blank paragraphs preserve reviewed text and validate normally while matching the unpadded PDF, preventing empty continuation headings. Wrapped competent-person organizations are exercised in ordinary and multipage previews; date/border geometry is asserted by the dedicated Go renderer test and browser form spacing is checked at four widths.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -2638,7 +2638,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"full_name\": \"Certificate Reviewer management-{{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"Newman\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": true\n}"
+              "raw": "{\n  \"full_name\": \"Certificate Reviewer management-{{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"SYNERGY INNOVATIVE DIVING EQUIPMENT TRADING LLC\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": true\n}"
             },
             "url": "{{baseUrl}}/competent-person",
             "auth": {
@@ -6046,6 +6046,7 @@
                       "pm.test(\"Prepare stateless competent person PDF preview: status 200\", () => pm.response.to.have.status(200));",
                       "if (pm.response.code === 200) {",
                       "const b=pm.response.json();",
+                      "pm.test('Wrapped signing organization and date are preserved in the PDF snapshot', () => { pm.expect(b.snapshot.signer.organization).to.eql('SYNERGY INNOVATIVE DIVING EQUIPMENT TRADING LLC'); pm.expect(b.snapshot.issue_date).to.eql('2026-10-04'); pm.expect(Buffer.from(b.pdf_base64, 'base64').subarray(0, 5).toString()).to.eql('%PDF-'); });",
                       "pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store');",
                       "pm.expect(Buffer.from(b.pdf_base64,'base64').subarray(0,5).toString()).to.eql('%PDF-');",
                       "pm.expect(b.document_number).to.match(/^PMS-CE-261004-.+-XX$/);",
@@ -7148,6 +7149,7 @@
                       "pm.test(\"Prepare long preview without trailing blank lines: status 200\", () => pm.response.to.have.status(200));",
                       "if (pm.response.code === 200) {",
                       "const b=pm.response.json(); const input=JSON.parse(pm.request.body.raw);",
+                      "pm.test('Wrapped signing organization and date are preserved in the PDF snapshot', () => { pm.expect(b.snapshot.signer.organization).to.eql('SYNERGY INNOVATIVE DIVING EQUIPMENT TRADING LLC'); pm.expect(b.snapshot.issue_date).to.eql('2026-10-04'); pm.expect(Buffer.from(b.pdf_base64, 'base64').subarray(0, 5).toString()).to.eql('%PDF-'); });",
                       "pm.expect(Buffer.from(b.pdf_base64,'base64').subarray(0,5).toString()).to.eql('%PDF-');",
                       "pm.test('Reviewed text retains entered whitespace', () => { const normalize=value=>value.split(String.fromCharCode(13,10)).join(String.fromCharCode(10)); pm.expect(b.snapshot.remarks).to.eql(normalize(input.remarks)); pm.expect(b.snapshot.measurements).to.eql(normalize(input.measurements)); });",
                       "pm.collectionVariables.set('trailingBlankBaselinePDF',b.pdf_base64);",
@@ -7804,7 +7806,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"full_name\": \"Certificate Reviewer management-{{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"Newman\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": false\n}"
+              "raw": "{\n  \"full_name\": \"Certificate Reviewer management-{{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"SYNERGY INNOVATIVE DIVING EQUIPMENT TRADING LLC\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": false\n}"
             }
           },
           "event": [
@@ -8052,7 +8054,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"full_name\": \"Certificate Reviewer management-{{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"Newman\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": true\n}"
+                  "raw": "{\n  \"full_name\": \"Certificate Reviewer management-{{runSuffix}}\",\n  \"person_type\": \"Internal\",\n  \"organization\": \"SYNERGY INNOVATIVE DIVING EQUIPMENT TRADING LLC\",\n  \"competency_category_id\": \"{{competency_category_id}}\",\n  \"active\": true\n}"
                 }
               },
               "event": [
