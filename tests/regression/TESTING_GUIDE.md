@@ -545,6 +545,16 @@ E2E_SPECS='../tests/regression/e2e/hr-admin-product.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
+**Second VPS handoff passed on 19 November 2026.** All 6 Playwright tests
+passed in 1.7 minutes, with 0 failures and 0 skips. Coverage included renewal
+in UTC, Dubai, and New York, New York summer and winter offsets, dashboard
+refresh across UAE midnight and on tab return, and role-specific actions.
+The run selected Playwright only. Storage cleanup passed with 0 journaled
+objects deleted, the runner dropped `ams_e2e_20261119090405`, and exit status
+was `0`. The handoff targeted `863bb9b`.
+
+VPS evidence is in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.keFMoO`.
+
 **3. Broader maintained regression**
 
 ```bash
@@ -553,8 +563,15 @@ NEWMAN_COLLECTIONS='' E2E_SPECS='' E2E_PROFILE=default \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-Record the revision, pass/fail/skip counts, assertion failures, run directory,
-storage cleanup, database drop, and exit status for each invocation.
+**Final VPS regression passed on 19 November 2026.** Go reported 200 passed,
+0 failed and 0 skipped. Newman passed. All 12 Playwright tests passed in
+4.5 minutes, covering 6 HR/Admin journeys, 4 generated-certificate journeys
+and 2 whole-app journeys. All three planned VPS handoffs are complete.
+
+The runner deleted 75 journaled storage objects, dropped the isolated database
+`ams_e2e_20261119091040`, and exited with status `0`. The VPS evidence
+directory is `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.YTs6Tv`,
+including the certificate request timings in `certificate-latency-summary.json`.
 
 ## Result report and completion gate
 
