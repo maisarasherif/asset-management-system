@@ -51,12 +51,11 @@ async function loginApi(request: APIRequestContext) {
   return body.token;
 }
 
-async function getJson<T>(request: APIRequestContext, token: string, path: string) {
+async function getJson<T>(request: APIRequestContext, path: string, token?: string) {
   const response = await request.get(`${API_BASE_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
-
-  expect(response.ok()).toBeTruthy();
+  await expect(response, `GET ${path}`).toBeOK();
   return (await response.json()) as T;
 }
 
@@ -348,8 +347,8 @@ test.describe("HR/Admin product E2E", () => {
     const token = await loginApi(setupRequest);
     const originalConfig = await getJson<NotificationConfiguration>(
       setupRequest,
-      token,
-      "/hr-admin/notification-configuration"
+      "/hr-admin/notification-configuration",
+      token
     );
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const personName = `PW HR Person ${suffix}`;
@@ -628,7 +627,7 @@ test.describe("HR/Admin product E2E", () => {
           }
         }
         const overview = await getJson<{ groups: { subject_type: string; expired_count: number }[] }>(
-          api, token, "/hr-admin/overview");
+          api, "/hr-admin/overview", token);
         const before = overview.groups.find(group => group.subject_type === "VEHICLE")!.expired_count;
         const page = await context.newPage();
         await loginStaff(page, ADMIN_EMAIL!, ADMIN_PASSWORD!);
@@ -681,8 +680,9 @@ test.describe("HR/Admin product E2E", () => {
         await renew.click();
         await expect(expiry).toHaveValue("19/11/2099");
         await dialog.getByRole("button", { name: "Cancel" }).click();
-        const history = await getJson<{version_number:number; document_file:string; is_current:boolean}[]>(
-          api, token, "/hr-admin/compliance-records/" + response.record.record_id + "/versions");
+        // Signing in through the UI replaces the admin's fixture token. Use the browser's current cookie.
+        const history = await getJson<{ version_number: number; document_file: string; is_current: boolean }[]>(
+          page.request, `/hr-admin/compliance-records/${response.record.record_id}/versions`);
         expect(history.map(v => [v.version_number, v.is_current, v.document_file])).toEqual([
           [2, true, "existing-document.pdf"], [1, false, "existing-document.pdf"],
         ]);

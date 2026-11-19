@@ -500,6 +500,10 @@ E2E_SPECS='../tests/regression/e2e/hr-admin-product.spec.ts --grep @dashboard-br
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
+**First VPS handoff result, 19 November 2026.** The operator reported 200 Go tests passed, 0 failed, and 0 skipped. Newman and Playwright both passed. Storage cleanup deleted 24 journaled objects, the runner dropped `ams_e2e_20261119081731`, and the process exited with status `0`.
+
+Remote evidence is in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.WwDXCS`. The handoff targeted `hr-db` at `3407eff`. The supplied summary omitted the checked-out revision, suite selectors, Newman assertion count, and Playwright test count.
+
 **2. Complete HR/Admin regression, including quick renewal and timezones**
 
 ```bash
@@ -513,6 +517,15 @@ Inspect the desktop and mobile `vehicle-dashboard` attachments in the
 Playwright report. The browser journeys use UTC, Asia/Dubai and America/New_York.
 The New York case also supplies two historical event timestamps for its
 summer/winter display assertions.
+
+**Second VPS handoff, first attempt.** Playwright reported 3 passed and 3 failed.
+All three timezone cases saved the renewal and reopened its expiry date, then
+failed on the version-history GET. The test reused the setup token after a
+second admin login replaced it. The corrected test reads history using the
+browser session cookie. Repeat the full command above to verify version
+history and the subsequent event-time and daylight-saving assertions.
+The supplied excerpt did not include the run directory, Go or Newman totals,
+cleanup results, or process exit status.
 
 **3. Broader maintained regression**
 
