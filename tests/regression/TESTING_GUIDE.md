@@ -527,6 +527,24 @@ history and the subsequent event-time and daylight-saving assertions.
 The supplied excerpt did not include the run directory, Go or Newman totals,
 cleanup results, or process exit status.
 
+**Second VPS handoff, second attempt.** Playwright reported 5 passed and 1 failed.
+Dubai and New York passed, including both New York daylight-saving cases. UTC
+passed renewal, document dates and version history before the vehicle Updated
+timestamp assertion failed. A local formatter check reproduced the mismatch
+for the reported instant: the Node runner expected `8:53 AM GMT+0` and
+Chromium rendered `8:53 AM GMT`. The corrected assertion formats the API
+instant in Chromium with an explicit expected timezone and matches the full
+displayed timestamp. The supplied excerpt included only Playwright results.
+
+To verify the assertion change across all six HR/Admin browser tests on the
+VPS, use the following command before the broader three-layer run.
+
+```bash
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='../tests/regression/e2e/hr-admin-product.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
 **3. Broader maintained regression**
 
 ```bash

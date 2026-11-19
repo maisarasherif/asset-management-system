@@ -691,9 +691,17 @@ test.describe("HR/Admin product E2E", () => {
         await page.setViewportSize({ width: 1584, height: 992 });
         await page.goto("/hr-admin/vehicles");
         const vehicleRow = page.getByRole("row").filter({ hasText: plate });
-        const formatEvent = new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric",
-          month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "shortOffset" });
-        await expect(vehicleRow.getByText(formatEvent.format(new Date(vehicle.updated_at)))).toBeVisible();
+        async function expectUpdatedAt(instant: string) {
+          // Pin the expected zone explicitly. Node and Chromium can spell a zero offset differently.
+          const expected = await page.evaluate(({ instant, zone }) =>
+            new Intl.DateTimeFormat("en-US", {
+              timeZone: zone, year: "numeric", month: "short", day: "numeric",
+              hour: "numeric", minute: "2-digit", timeZoneName: "shortOffset",
+            }).format(new Date(instant)), { instant, zone });
+          await expect(vehicleRow).toBeVisible();
+          await expect(vehicleRow.getByText(expected, { exact: true })).toBeVisible();
+        }
+        await expectUpdatedAt(vehicle.updated_at);
         if (zone === "America/New_York") {
           // Supplemental presentation fixtures cover both DST offsets independently of the VPS run date.
           for (const instant of ["2026-07-19T10:00:00Z", "2026-11-19T10:00:00Z"]) {
@@ -705,7 +713,7 @@ test.describe("HR/Admin product E2E", () => {
               await route.fulfill({ response, json: body });
             }, { times: 1 });
             await page.reload();
-            await expect(vehicleRow.getByText(formatEvent.format(new Date(instant)))).toBeVisible();
+            await expectUpdatedAt(instant);
           }
         }
       } finally {
