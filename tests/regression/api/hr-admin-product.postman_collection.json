@@ -1124,6 +1124,31 @@
           ]
         },
         {
+          "name": "Search persons with filtered total",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/persons?search=POSTMAN-HRP-{{runSuffix}}&page=1&limit=1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Search persons with filtered total\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const result = pm.response.json();",
+                  "  pm.expect(result.meta.total).to.eql(1);",
+                  "  pm.expect(result.data).to.have.lengthOf(1);",
+                  "  pm.expect(result.data[0].person_id).to.eql(pm.collectionVariables.get('hr_person_id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create HR/Admin Vehicle",
           "request": {
             "method": "POST",
@@ -1200,6 +1225,31 @@
                   "const vehicle = body.data.find((item) => item.vehicle_id === pm.collectionVariables.get('hr_vehicle_id'));",
                   "pm.expect(vehicle).to.exist;",
                   "pm.expect(vehicle.model).to.eql('Hiace GL');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search vehicles with filtered total",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/vehicles?search=POSTMAN-VEH-{{runSuffix}}&page=1&limit=1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Search vehicles with filtered total\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const result = pm.response.json();",
+                  "  pm.expect(result.meta.total).to.eql(1);",
+                  "  pm.expect(result.data).to.have.lengthOf(1);",
+                  "  pm.expect(result.data[0].vehicle_id).to.eql(pm.collectionVariables.get('hr_vehicle_id'));",
+                  "});"
                 ]
               }
             }
@@ -1283,6 +1333,31 @@
                   "pm.expect(company).to.exist;",
                   "pm.expect(company.company_kind).to.eql('OFFICE');",
                   "pm.expect(company.location).to.eql('Abu Dhabi');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search companies with filtered total",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/companies?search=POSTMAN-HRC-{{runSuffix}}&page=1&limit=1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Search companies with filtered total\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const result = pm.response.json();",
+                  "  pm.expect(result.meta.total).to.eql(1);",
+                  "  pm.expect(result.data).to.have.lengthOf(1);",
+                  "  pm.expect(result.data[0].company_id).to.eql(pm.collectionVariables.get('hr_company_id'));",
+                  "});"
                 ]
               }
             }
@@ -1476,7 +1551,7 @@
             "url": "{{baseUrl}}/hr-admin/compliance-records",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"subject_type\": \"PERSON\",\n  \"subject_id\": \"{{hr_person_id}}\",\n  \"record_type_id\": \"{{hr_record_type_id}}\",\n  \"issue_date\": \"2026-01-01T00:00:00Z\",\n  \"expiry_date\": \"2028-01-01T00:00:00Z\",\n  \"document_file\": \"postman-visa-v1.pdf\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"Initial version\"\n}"
+              "raw": "{\n  \"subject_type\": \"PERSON\",\n  \"subject_id\": \"{{hr_person_id}}\",\n  \"record_type_id\": \"{{hr_record_type_id}}\",\n  \"issue_date\": \"2001-01-01T00:00:00Z\",\n  \"expiry_date\": \"2001-11-18T18:30:00-04:00\",\n  \"document_file\": \"postman-visa-v1.pdf\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"Initial version\"\n}"
             }
           },
           "event": [
@@ -1514,6 +1589,105 @@
                   "pm.expect(record).to.exist;",
                   "pm.expect(record.subject_type).to.eql('PERSON');",
                   "pm.expect(record.type_name).to.eql(pm.variables.replaceIn('Postman Visa {{runSuffix}}'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read dashboard totals before renewal",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/overview"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Read dashboard totals before renewal\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const { groups, refresh_after_ms } = pm.response.json();",
+                  "  pm.expect(groups.map(g => g.subject_type)).to.have.members(['PERSON','VEHICLE','COMPANY']);",
+                  "  pm.expect(groups.every(g => g.subject_count > 0)).to.be.true;",
+                  "  pm.expect(refresh_after_ms).to.be.within(1,86400000);",
+                  "  const count = groups.find(g => g.subject_type === 'PERSON').expired_count;",
+                  "  pm.expect(count).to.be.above(0);",
+                  "  pm.collectionVariables.set('hr_expired_before', count);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read one subject and its historic expiry",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-records?subject_type=PERSON&subject_id={{hr_person_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Read one subject and its historic expiry\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const {data,meta} = pm.response.json();",
+                  "  pm.expect(meta.total).to.eql(1);",
+                  "  pm.expect(data[0].expiry_status).to.eql('EXPIRED');",
+                  "  pm.expect(data[0].created_at.endsWith('Z')).to.be.true;",
+                  "  pm.expect(new Date(data[0].expiry_date).toISOString()).to.eql('2001-11-18T22:30:00.000Z');",
+                  "  pm.expect(data[0].document_file).to.eql('postman-visa-v1.pdf');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Subject filter cannot mix groups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-records?subject_type=PERSON&subject_id={{hr_vehicle_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Subject filter cannot mix groups\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data).to.deep.eql([]);",
+                  "  pm.expect(pm.response.json().meta.total).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject partial subject filter",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-records?subject_type=VEHICLE"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Reject partial subject filter\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
                 ]
               }
             }
@@ -1680,6 +1854,41 @@
           ]
         },
         {
+          "name": "Upload replacement HR/Admin document",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-record-documents",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "tests/regression/fixtures/sample-certificate.pdf",
+                  "contentType": "application/pdf"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Replacement evidence is stored under the isolated run prefix', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const key = pm.response.json().document_file;",
+                  "  pm.expect(key).to.include(pm.environment.get('testStoragePrefix'));",
+                  "  pm.collectionVariables.set('hr_replacement_file', key);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Renew HR/Admin Compliance Record",
           "request": {
             "method": "POST",
@@ -1692,7 +1901,7 @@
             "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_record_id}}/versions",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"issue_date\": \"2028-01-01T00:00:00Z\",\n  \"expiry_date\": \"2030-01-01T00:00:00Z\",\n  \"document_file\": \"postman-visa-v2.pdf\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"Renewed version\"\n}"
+              "raw": "{\n  \"issue_date\": \"2028-01-01T00:00:00Z\",\n  \"expiry_date\": \"2030-01-01T00:00:00Z\",\n  \"document_file\": \"{{hr_replacement_file}}\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"Renewed version\"\n}"
             }
           },
           "event": [
@@ -1704,6 +1913,86 @@
                   "pm.response.to.have.status(201);",
                   "const body = pm.response.json();",
                   "pm.expect(body.version_number).to.eql(2);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Renewal refreshes overview expired count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/overview"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Renewal refreshes overview expired count\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const person = pm.response.json().groups.find(g => g.subject_type === 'PERSON');",
+                  "  pm.expect(person.expired_count).to.eql(Number(pm.collectionVariables.get('hr_expired_before')) - 1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Renew early and retain existing document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_record_id}}/versions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"issue_date\": \"2030-01-01T00:00:00Z\",\n  \"expiry_date\": \"2099-11-19T00:00:00Z\",\n  \"document_file\": \"{{hr_replacement_file}}\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"Renewed version\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Early renewal retains the current document', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(pm.response.json().version_number).to.eql(3);",
+                  "  pm.expect(pm.response.json().document_file).to.eql(pm.collectionVariables.get('hr_replacement_file'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reload renewed subject file",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-records?subject_type=PERSON&subject_id={{hr_person_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Reload renewed subject file\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const row = pm.response.json().data[0];",
+                  "  pm.expect(row.expiry_status).to.eql('OK');",
+                  "  pm.expect(new Date(row.expiry_date).toISOString()).to.eql('2099-11-19T00:00:00.000Z');",
+                  "  pm.expect(row.document_file).to.eql(pm.collectionVariables.get('hr_replacement_file'));",
+                  "});"
                 ]
               }
             }
@@ -1725,7 +2014,11 @@
                   "pm.response.to.have.status(200);",
                   "const body = pm.response.json();",
                   "pm.expect(body).to.be.an('array');",
-                  "pm.expect(body.length).to.be.at.least(2);"
+                  "pm.expect(body.length).to.be.at.least(2);",
+                  "pm.test('All versions retained, one current', () => {",
+                  "  pm.expect(body.map(v => v.document_file)).to.deep.eql([pm.collectionVariables.get('hr_replacement_file'), pm.collectionVariables.get('hr_replacement_file'), 'postman-visa-v1.pdf']);",
+                  "  pm.expect(body.filter(v => v.is_current)).to.have.lengthOf(1);",
+                  "});"
                 ]
               }
             }

@@ -129,11 +129,18 @@ func (q *Queries) CountComplianceRecordTypes(ctx context.Context) (int64, error)
 }
 
 const countComplianceRecords = `-- name: CountComplianceRecords :one
-SELECT COUNT(*) FROM compliance_records
+SELECT COUNT(*) FROM compliance_records cr
+WHERE ($1::text = '' OR
+       (cr.subject_type = $1 AND cr.subject_id = $2::uuid))
 `
 
-func (q *Queries) CountComplianceRecords(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countComplianceRecords)
+type CountComplianceRecordsParams struct {
+	FilterType string    `json:"filter_type"`
+	FilterID   uuid.UUID `json:"filter_id"`
+}
+
+func (q *Queries) CountComplianceRecords(ctx context.Context, arg CountComplianceRecordsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countComplianceRecords, arg.FilterType, arg.FilterID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -141,10 +148,11 @@ func (q *Queries) CountComplianceRecords(ctx context.Context) (int64, error) {
 
 const countHRAdminCompanies = `-- name: CountHRAdminCompanies :one
 SELECT COUNT(*) FROM hr_admin_companies
+WHERE strpos(lower(concat_ws(' ', display_id, company_code, company_name, company_kind, location)), lower($1::text)) > 0
 `
 
-func (q *Queries) CountHRAdminCompanies(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countHRAdminCompanies)
+func (q *Queries) CountHRAdminCompanies(ctx context.Context, search string) (int64, error) {
+	row := q.db.QueryRow(ctx, countHRAdminCompanies, search)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -152,10 +160,11 @@ func (q *Queries) CountHRAdminCompanies(ctx context.Context) (int64, error) {
 
 const countHRAdminPersons = `-- name: CountHRAdminPersons :one
 SELECT COUNT(*) FROM hr_admin_persons
+WHERE strpos(lower(concat_ws(' ', display_id, person_code, full_name, department, role_title)), lower($1::text)) > 0
 `
 
-func (q *Queries) CountHRAdminPersons(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countHRAdminPersons)
+func (q *Queries) CountHRAdminPersons(ctx context.Context, search string) (int64, error) {
+	row := q.db.QueryRow(ctx, countHRAdminPersons, search)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -163,10 +172,11 @@ func (q *Queries) CountHRAdminPersons(ctx context.Context) (int64, error) {
 
 const countHRAdminVehicles = `-- name: CountHRAdminVehicles :one
 SELECT COUNT(*) FROM hr_admin_vehicles
+WHERE strpos(lower(concat_ws(' ', display_id, plate_number, make, model)), lower($1::text)) > 0
 `
 
-func (q *Queries) CountHRAdminVehicles(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countHRAdminVehicles)
+func (q *Queries) CountHRAdminVehicles(ctx context.Context, search string) (int64, error) {
+	row := q.db.QueryRow(ctx, countHRAdminVehicles, search)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -805,6 +815,15 @@ SELECT
     crt.display_id AS record_type_display_id,
     crt.type_name,
     crt.renewal_behavior,
+    crt.requires_document,
+    crt.default_validity_months,
+    COALESCE(p.status, v.status, c.status, 'ARCHIVED')::text AS subject_status,
+    CASE
+        WHEN cr.status = 'ARCHIVED' THEN 'ARCHIVED'
+        WHEN crv.expiry_date IS NULL AND crt.renewal_behavior = 'ONE_TIME' THEN 'NO_EXPIRY'
+        WHEN crv.expiry_date IS NULL THEN 'MISSING_EXPIRY'
+        ELSE COALESCE(rs.queue_status, 'UNTRACKED')
+    END::text AS expiry_status,
     cr.status,
     cr.archive_reason,
     cr.archived_at,
@@ -825,43 +844,57 @@ LEFT JOIN compliance_record_versions crv ON crv.record_id = cr.record_id AND crv
 LEFT JOIN hr_admin_persons p ON cr.subject_type = 'PERSON' AND p.person_id = cr.subject_id
 LEFT JOIN hr_admin_vehicles v ON cr.subject_type = 'VEHICLE' AND v.vehicle_id = cr.subject_id
 LEFT JOIN hr_admin_companies c ON cr.subject_type = 'COMPANY' AND c.company_id = cr.subject_id
-ORDER BY cr.created_at DESC
-LIMIT $1 OFFSET $2
+LEFT JOIN hr_admin_renewal_status rs ON rs.record_id = cr.record_id
+WHERE ($1::text = '' OR
+       (cr.subject_type = $1 AND cr.subject_id = $2::uuid))
+ORDER BY cr.created_at DESC, cr.record_id
+LIMIT $4 OFFSET $3
 `
 
 type GetComplianceRecordsPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	FilterType string    `json:"filter_type"`
+	FilterID   uuid.UUID `json:"filter_id"`
+	PageOffset int32     `json:"page_offset"`
+	PageLimit  int32     `json:"page_limit"`
 }
 
 type GetComplianceRecordsPaginatedRow struct {
-	RecordID            uuid.UUID   `json:"record_id"`
-	DisplayID           string      `json:"display_id"`
-	SubjectType         string      `json:"subject_type"`
-	SubjectID           uuid.UUID   `json:"subject_id"`
-	SubjectName         string      `json:"subject_name"`
-	RecordTypeID        uuid.UUID   `json:"record_type_id"`
-	RecordTypeDisplayID string      `json:"record_type_display_id"`
-	TypeName            string      `json:"type_name"`
-	RenewalBehavior     string      `json:"renewal_behavior"`
-	Status              string      `json:"status"`
-	ArchiveReason       string      `json:"archive_reason"`
-	ArchivedAt          *time.Time  `json:"archived_at"`
-	ArchivedBy          *uuid.UUID  `json:"archived_by"`
-	VersionID           *uuid.UUID  `json:"version_id"`
-	VersionDisplayID    pgtype.Text `json:"version_display_id"`
-	VersionNumber       pgtype.Int4 `json:"version_number"`
-	IssueDate           *time.Time  `json:"issue_date"`
-	ExpiryDate          *time.Time  `json:"expiry_date"`
-	DocumentFile        pgtype.Text `json:"document_file"`
-	IssuingAuthority    pgtype.Text `json:"issuing_authority"`
-	Notes               pgtype.Text `json:"notes"`
-	CreatedAt           time.Time   `json:"created_at"`
-	UpdatedAt           time.Time   `json:"updated_at"`
+	RecordID              uuid.UUID   `json:"record_id"`
+	DisplayID             string      `json:"display_id"`
+	SubjectType           string      `json:"subject_type"`
+	SubjectID             uuid.UUID   `json:"subject_id"`
+	SubjectName           string      `json:"subject_name"`
+	RecordTypeID          uuid.UUID   `json:"record_type_id"`
+	RecordTypeDisplayID   string      `json:"record_type_display_id"`
+	TypeName              string      `json:"type_name"`
+	RenewalBehavior       string      `json:"renewal_behavior"`
+	RequiresDocument      bool        `json:"requires_document"`
+	DefaultValidityMonths pgtype.Int4 `json:"default_validity_months"`
+	SubjectStatus         string      `json:"subject_status"`
+	ExpiryStatus          string      `json:"expiry_status"`
+	Status                string      `json:"status"`
+	ArchiveReason         string      `json:"archive_reason"`
+	ArchivedAt            *time.Time  `json:"archived_at"`
+	ArchivedBy            *uuid.UUID  `json:"archived_by"`
+	VersionID             *uuid.UUID  `json:"version_id"`
+	VersionDisplayID      pgtype.Text `json:"version_display_id"`
+	VersionNumber         pgtype.Int4 `json:"version_number"`
+	IssueDate             *time.Time  `json:"issue_date"`
+	ExpiryDate            *time.Time  `json:"expiry_date"`
+	DocumentFile          pgtype.Text `json:"document_file"`
+	IssuingAuthority      pgtype.Text `json:"issuing_authority"`
+	Notes                 pgtype.Text `json:"notes"`
+	CreatedAt             time.Time   `json:"created_at"`
+	UpdatedAt             time.Time   `json:"updated_at"`
 }
 
 func (q *Queries) GetComplianceRecordsPaginated(ctx context.Context, arg GetComplianceRecordsPaginatedParams) ([]GetComplianceRecordsPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getComplianceRecordsPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getComplianceRecordsPaginated,
+		arg.FilterType,
+		arg.FilterID,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -879,6 +912,10 @@ func (q *Queries) GetComplianceRecordsPaginated(ctx context.Context, arg GetComp
 			&i.RecordTypeDisplayID,
 			&i.TypeName,
 			&i.RenewalBehavior,
+			&i.RequiresDocument,
+			&i.DefaultValidityMonths,
+			&i.SubjectStatus,
+			&i.ExpiryStatus,
 			&i.Status,
 			&i.ArchiveReason,
 			&i.ArchivedAt,
@@ -1092,17 +1129,19 @@ SELECT
     created_at,
     updated_at
 FROM hr_admin_companies
-ORDER BY created_at DESC
-LIMIT $1 OFFSET $2
+WHERE strpos(lower(concat_ws(' ', display_id, company_code, company_name, company_kind, location)), lower($1::text)) > 0
+ORDER BY created_at DESC, company_id
+LIMIT $3 OFFSET $2
 `
 
 type GetHRAdminCompaniesPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Search     string `json:"search"`
+	PageOffset int32  `json:"page_offset"`
+	PageLimit  int32  `json:"page_limit"`
 }
 
 func (q *Queries) GetHRAdminCompaniesPaginated(ctx context.Context, arg GetHRAdminCompaniesPaginatedParams) ([]HrAdminCompany, error) {
-	rows, err := q.db.Query(ctx, getHRAdminCompaniesPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getHRAdminCompaniesPaginated, arg.Search, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1213,6 +1252,47 @@ func (q *Queries) GetHRAdminDepartments(ctx context.Context) ([]HrAdminDepartmen
 	return items, nil
 }
 
+const getHRAdminOverview = `-- name: GetHRAdminOverview :many
+WITH totals AS (
+    SELECT 'PERSON'::text AS subject_type, COUNT(*) AS subject_count FROM hr_admin_persons
+    UNION ALL SELECT 'VEHICLE', COUNT(*) FROM hr_admin_vehicles
+    UNION ALL SELECT 'COMPANY', COUNT(*) FROM hr_admin_companies
+), expired AS (
+    SELECT subject_type, COUNT(*) AS record_count
+    FROM hr_admin_renewal_status WHERE queue_status = 'EXPIRED'
+    GROUP BY subject_type
+)
+SELECT totals.subject_type, totals.subject_count::bigint AS subject_count,
+       COALESCE(expired.record_count, 0)::bigint AS expired_count
+FROM totals LEFT JOIN expired USING (subject_type)
+`
+
+type GetHRAdminOverviewRow struct {
+	SubjectType  string `json:"subject_type"`
+	SubjectCount int64  `json:"subject_count"`
+	ExpiredCount int64  `json:"expired_count"`
+}
+
+func (q *Queries) GetHRAdminOverview(ctx context.Context) ([]GetHRAdminOverviewRow, error) {
+	rows, err := q.db.Query(ctx, getHRAdminOverview)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetHRAdminOverviewRow
+	for rows.Next() {
+		var i GetHRAdminOverviewRow
+		if err := rows.Scan(&i.SubjectType, &i.SubjectCount, &i.ExpiredCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getHRAdminPersonByID = `-- name: GetHRAdminPersonByID :one
 SELECT
     person_id,
@@ -1267,17 +1347,19 @@ SELECT
     created_at,
     updated_at
 FROM hr_admin_persons
-ORDER BY created_at DESC
-LIMIT $1 OFFSET $2
+WHERE strpos(lower(concat_ws(' ', display_id, person_code, full_name, department, role_title)), lower($1::text)) > 0
+ORDER BY created_at DESC, person_id
+LIMIT $3 OFFSET $2
 `
 
 type GetHRAdminPersonsPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Search     string `json:"search"`
+	PageOffset int32  `json:"page_offset"`
+	PageLimit  int32  `json:"page_limit"`
 }
 
 func (q *Queries) GetHRAdminPersonsPaginated(ctx context.Context, arg GetHRAdminPersonsPaginatedParams) ([]HrAdminPerson, error) {
-	rows, err := q.db.Query(ctx, getHRAdminPersonsPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getHRAdminPersonsPaginated, arg.Search, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1310,77 +1392,7 @@ func (q *Queries) GetHRAdminPersonsPaginated(ctx context.Context, arg GetHRAdmin
 }
 
 const getHRAdminRenewalQueue = `-- name: GetHRAdminRenewalQueue :many
-WITH queue_base AS (
-    SELECT
-        cr.record_id,
-        cr.display_id AS record_display_id,
-        cr.subject_type,
-        cr.subject_id,
-        (CASE
-            WHEN cr.subject_type = 'PERSON' THEN COALESCE(p.full_name, '')
-            WHEN cr.subject_type = 'VEHICLE' THEN COALESCE(v.plate_number, '')
-            WHEN cr.subject_type = 'COMPANY' THEN COALESCE(c.company_name, '')
-            ELSE ''
-        END)::text AS subject_name,
-        crt.record_type_id,
-        crt.type_name,
-        crv.version_id,
-        crv.expiry_date,
-        (CASE
-            WHEN CARDINALITY(crt.reminder_policy_days) > 0 THEN crt.reminder_policy_days
-            ELSE COALESCE(pnc.default_reminder_days, ARRAY[30, 7, 1]::int[])
-        END)::int[] AS effective_reminder_days,
-        (CASE
-            WHEN CARDINALITY(crt.reminder_policy_days) > 0 THEN 'RECORD_TYPE'
-            ELSE 'PRODUCT_DEFAULT'
-        END)::text AS reminder_policy_source,
-        ((crv.expiry_date AT TIME ZONE 'Asia/Dubai')::date - (NOW() AT TIME ZONE 'Asia/Dubai')::date)::int AS days_until_expiry
-    FROM compliance_records cr
-    JOIN compliance_record_types crt ON crt.record_type_id = cr.record_type_id
-    JOIN compliance_record_versions crv ON crv.record_id = cr.record_id AND crv.is_current
-    LEFT JOIN product_notification_configurations pnc ON pnc.product_key = 'HR_ADMIN'
-    LEFT JOIN hr_admin_persons p ON cr.subject_type = 'PERSON' AND p.person_id = cr.subject_id
-    LEFT JOIN hr_admin_vehicles v ON cr.subject_type = 'VEHICLE' AND v.vehicle_id = cr.subject_id
-    LEFT JOIN hr_admin_companies c ON cr.subject_type = 'COMPANY' AND c.company_id = cr.subject_id
-    WHERE cr.status = 'ACTIVE'
-      AND crt.active = TRUE
-      AND crt.renewal_behavior = 'RENEWABLE'
-      AND crv.expiry_date IS NOT NULL
-      AND (
-        (cr.subject_type = 'PERSON' AND p.status = 'ACTIVE')
-        OR (cr.subject_type = 'VEHICLE' AND v.status = 'ACTIVE')
-        OR (cr.subject_type = 'COMPANY' AND c.status = 'ACTIVE')
-      )
-),
-queue_classified AS (
-    SELECT
-        queue_base.record_id, queue_base.record_display_id, queue_base.subject_type, queue_base.subject_id, queue_base.subject_name, queue_base.record_type_id, queue_base.type_name, queue_base.version_id, queue_base.expiry_date, queue_base.effective_reminder_days, queue_base.reminder_policy_source, queue_base.days_until_expiry,
-        COALESCE((SELECT MAX(day) FROM UNNEST(queue_base.effective_reminder_days) AS day), 0)::int AS max_reminder_days,
-        (CASE
-            WHEN queue_base.days_until_expiry < 0 THEN 'EXPIRED'
-            WHEN queue_base.days_until_expiry = ANY(queue_base.effective_reminder_days) THEN 'DUE_NOW'
-            WHEN queue_base.days_until_expiry >= 0
-              AND queue_base.days_until_expiry <= COALESCE((SELECT MAX(day) FROM UNNEST(queue_base.effective_reminder_days) AS day), 0) THEN 'UPCOMING'
-            ELSE 'OK'
-        END)::text AS queue_status
-    FROM queue_base
-)
-SELECT
-    record_id,
-    record_display_id,
-    subject_type,
-    subject_id,
-    subject_name,
-    record_type_id,
-    type_name,
-    version_id,
-    expiry_date,
-    days_until_expiry,
-    queue_status,
-    effective_reminder_days,
-    reminder_policy_source,
-    max_reminder_days
-FROM queue_classified
+SELECT record_id, record_display_id, subject_type, subject_id, subject_name, record_type_id, type_name, version_id, expiry_date, days_until_expiry, queue_status, effective_reminder_days, reminder_policy_source, max_reminder_days FROM hr_admin_renewal_status
 ORDER BY
     CASE queue_status
         WHEN 'EXPIRED' THEN 0
@@ -1391,32 +1403,15 @@ ORDER BY
     expiry_date ASC
 `
 
-type GetHRAdminRenewalQueueRow struct {
-	RecordID              uuid.UUID  `json:"record_id"`
-	RecordDisplayID       string     `json:"record_display_id"`
-	SubjectType           string     `json:"subject_type"`
-	SubjectID             uuid.UUID  `json:"subject_id"`
-	SubjectName           string     `json:"subject_name"`
-	RecordTypeID          uuid.UUID  `json:"record_type_id"`
-	TypeName              string     `json:"type_name"`
-	VersionID             uuid.UUID  `json:"version_id"`
-	ExpiryDate            *time.Time `json:"expiry_date"`
-	DaysUntilExpiry       int32      `json:"days_until_expiry"`
-	QueueStatus           string     `json:"queue_status"`
-	EffectiveReminderDays []int32    `json:"effective_reminder_days"`
-	ReminderPolicySource  string     `json:"reminder_policy_source"`
-	MaxReminderDays       int32      `json:"max_reminder_days"`
-}
-
-func (q *Queries) GetHRAdminRenewalQueue(ctx context.Context) ([]GetHRAdminRenewalQueueRow, error) {
+func (q *Queries) GetHRAdminRenewalQueue(ctx context.Context) ([]HrAdminRenewalStatus, error) {
 	rows, err := q.db.Query(ctx, getHRAdminRenewalQueue)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetHRAdminRenewalQueueRow
+	var items []HrAdminRenewalStatus
 	for rows.Next() {
-		var i GetHRAdminRenewalQueueRow
+		var i HrAdminRenewalStatus
 		if err := rows.Scan(
 			&i.RecordID,
 			&i.RecordDisplayID,
@@ -1497,17 +1492,19 @@ SELECT
     created_at,
     updated_at
 FROM hr_admin_vehicles
-ORDER BY created_at DESC
-LIMIT $1 OFFSET $2
+WHERE strpos(lower(concat_ws(' ', display_id, plate_number, make, model)), lower($1::text)) > 0
+ORDER BY created_at DESC, vehicle_id
+LIMIT $3 OFFSET $2
 `
 
 type GetHRAdminVehiclesPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Search     string `json:"search"`
+	PageOffset int32  `json:"page_offset"`
+	PageLimit  int32  `json:"page_limit"`
 }
 
 func (q *Queries) GetHRAdminVehiclesPaginated(ctx context.Context, arg GetHRAdminVehiclesPaginatedParams) ([]HrAdminVehicle, error) {
-	rows, err := q.db.Query(ctx, getHRAdminVehiclesPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getHRAdminVehiclesPaginated, arg.Search, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}

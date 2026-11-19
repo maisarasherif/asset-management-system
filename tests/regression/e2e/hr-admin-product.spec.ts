@@ -341,7 +341,7 @@ test.describe("HR/Admin product E2E", () => {
     "Set PLAYWRIGHT_ADMIN_EMAIL and PLAYWRIGHT_ADMIN_PASSWORD to run E2E tests."
   );
 
-  test("admin completes the HR/Admin product journey without AMS asset context", async ({
+  test("@dashboard-browse admin completes the HR/Admin product journey without AMS asset context", async ({
     page,
   }) => {
     const setupRequest = await playwrightRequest.newContext();
@@ -406,19 +406,28 @@ test.describe("HR/Admin product E2E", () => {
 
       await page.goto("/hr-admin");
       await expect(page.getByRole("heading", { name: "HR/Admin overview" })).toBeVisible();
-      await expect(page.getByText(overviewPersonName)).toBeVisible();
-      await expect(page.getByText(overviewRecordType.type_name)).toBeVisible();
-      const overviewRow = page.getByRole("row").filter({
-        has: page.getByRole("cell", { name: overviewRecordType.type_name, exact: true }),
-      });
-      await expect(overviewRow.getByText("45 days left", { exact: true })).toBeVisible();
-      await expect(overviewRow.getByText("Record type: 45, 15, 5 days", { exact: true })).toBeVisible();
+      const personsPanel = page.getByRole("button", { name: /^Persons \(/ });
+      await expect(personsPanel).toHaveAttribute("aria-pressed", "false");
+      await personsPanel.focus();
+      await page.keyboard.press("Enter");
+      await page.getByLabel("Find a person").fill(overviewPersonName);
+      await page.getByRole("row").filter({ hasText: overviewPersonName }).click();
+      const overviewRow = page.getByRole("row").filter({ hasText: overviewRecordType.type_name });
       await expect(overviewRow.getByText("Due now", { exact: true })).toBeVisible();
+      await expect(overviewRow.getByRole("button", { name: "Renew" })).toBeVisible();
+      await page.getByRole("button", { name: /^Vehicles \(/ }).hover();
+      await expect(personsPanel).toHaveAttribute("aria-pressed", "true");
+      await expect(overviewRow).toBeVisible();
 
       const assetRequestsBeforeHRAdmin = assetRequests;
       await createPersonThroughUi(page, suffix);
       await createVehicleThroughUi(page, suffix);
       const companyName = await createCompanyThroughUi(page, suffix);
+      await page.goto("/hr-admin");
+      await page.getByRole("button", { name: /^Companies \(/ }).click();
+      await page.getByLabel("Find a company").fill(companyName);
+      await page.getByRole("row").filter({ hasText: companyName }).click();
+      await expect(page.getByText("This subject has no compliance records.")).toBeVisible();
       const personRecordType = await createRecordTypeThroughUi(page, suffix);
 
       await createRecordThroughUi(
@@ -475,6 +484,17 @@ test.describe("HR/Admin product E2E", () => {
       await archiveCompanyDialog.getByRole("button", { name: "Archive company" }).click();
       await expect(page.getByText("Company archived")).toBeVisible();
 
+      await page.goto("/hr-admin");
+      await page.getByRole("button", { name: /^Companies \(/ }).click();
+      await page.getByLabel("Find a company").fill(companyName);
+      await page.getByRole("row").filter({ hasText: companyName }).click();
+      const companyRecord = page.getByRole("row").filter({ hasText: companyRecordType.type_name });
+      await expect(companyRecord).toContainText("No expiry");
+      await expect(companyRecord.getByRole("button", { name: "Renew" })).toHaveCount(0);
+      await page.getByLabel("Find a company").fill("no-such-company-" + suffix);
+      await expect(page.getByText("No matching subjects.")).toBeVisible();
+      await expect(companyRecord).toHaveCount(0);
+
       await page.goto("/hr-admin/records");
       await openRowActions(page, personRecordType);
       await page.getByText("Archive", { exact: true }).click();
@@ -524,6 +544,176 @@ test.describe("HR/Admin product E2E", () => {
       await setupRequest.dispose();
     }
   });
+
+  test("@dashboard-browse refreshes an open subject on the server's business-day deadline and on tab return", async ({ browser }) => {
+    const api = await playwrightRequest.newContext();
+    const context = await browser.newContext({ timezoneId: "America/New_York", locale: "en-US" });
+    try {
+      const token = await loginApi(api);
+      const plate = "CLK-" + Date.now();
+      const vehicle = await postJson<{ vehicle_id: string }>(api, token, "/hr-admin/vehicles", { plate_number: plate });
+      const type = await createRecordType(api, token, "VEHICLE", "Clock " + plate, "RENEWABLE");
+      await postJson(api, token, "/hr-admin/compliance-records", {
+        subject_type: "VEHICLE", subject_id: vehicle.vehicle_id, record_type_id: type.record_type_id,
+        expiry_date: "2001-11-18T18:30:00-04:00",
+      });
+      const page = await context.newPage();
+      await loginStaff(page, ADMIN_EMAIL!, ADMIN_PASSWORD!);
+      await page.clock.install();
+      // Shorten only the server's scheduling hint. Counts, statuses and dates still come from PostgreSQL.
+      await page.route("**/v1/hr-admin/overview", async route => {
+        const response = await route.fetch();
+        await route.fulfill({ response, json: { ...await response.json(), refresh_after_ms: 120_000 } });
+      }, { times: 1 });
+      await page.goto("/hr-admin");
+      await page.getByRole("button", { name: /^Vehicles \(/ }).click();
+      await page.getByLabel("Find a plate or vehicle").fill(plate);
+      await page.getByRole("row").filter({ hasText: plate }).click();
+      const row = page.getByRole("row").filter({ hasText: type.type_name });
+      await expect(row.getByText("19 Nov 2001")).toBeVisible();
+      async function expectRefresh(trigger: () => Promise<void>) {
+        await Promise.all([
+          page.waitForResponse(r => r.url().endsWith("/hr-admin/overview") && r.ok()),
+          page.waitForResponse(r => r.url().includes("/compliance-records?") && r.url().includes(vehicle.vehicle_id) && r.ok()),
+          trigger(),
+        ]);
+        await expect(row.getByText("Expired")).toBeVisible();
+      }
+      await expectRefresh(() => page.clock.fastForward(121_000));
+      // Chromium headless does not consistently mark background tabs hidden.
+      await expectRefresh(() => page.evaluate(() => {
+        document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
+      }));
+    } finally {
+      await context.close();
+      await api.dispose();
+    }
+  });
+
+  for (const zone of ["UTC", "Asia/Dubai", "America/New_York"]) {
+    test("dashboard calendar dates and quick renewal in " + zone, async ({ browser }, testInfo) => {
+      const api = await playwrightRequest.newContext();
+      const mobile = zone === "Asia/Dubai";
+      const context = await browser.newContext({
+        locale: "en-US", timezoneId: zone, hasTouch: mobile, reducedMotion: "reduce",
+        viewport: mobile ? { width: 390, height: 844 } : { width: 1584, height: 992 },
+      });
+      try {
+        const token = await loginApi(api);
+        const suffix = String(Date.now());
+        const plate = "DB-" + suffix;
+        const vehicle = await postJson<{ vehicle_id: string; updated_at: string }>(api, token, "/hr-admin/vehicles", {
+          plate_number: plate, make: "Toyota", model: "Hilux", vehicle_year: 2024,
+        });
+        const kind = await createRecordType(api, token, "VEHICLE", "Dashboard registration " + suffix, "RENEWABLE");
+        const response = await postJson<{ record: { record_id: string } }>(api, token, "/hr-admin/compliance-records", {
+          subject_type: "VEHICLE", subject_id: vehicle.vehicle_id, record_type_id: kind.record_type_id,
+          issue_date: "2000-11-18T22:30:00Z", expiry_date: "2001-11-18T18:30:00-04:00",
+          document_file: "existing-document.pdf",
+        });
+        for (const [name, behavior] of [
+          ["Motor insurance", "RENEWABLE"], ["Vehicle handover", "ONE_TIME"], ["Previous permit", "RENEWABLE"],
+        ] as const) {
+          const type = await createRecordType(api, token, "VEHICLE", name + " " + suffix, behavior);
+          const created = await postJson<{ record: { record_id: string } }>(api, token, "/hr-admin/compliance-records", {
+            subject_type: "VEHICLE", subject_id: vehicle.vehicle_id, record_type_id: type.record_type_id,
+            issue_date: "2000-01-01T00:00:00Z",
+            expiry_date: behavior === "RENEWABLE" ? isoDateOffset(7, new Date()) : null,
+          });
+          if (name === "Previous permit") {
+            const archived = await api.patch(API_BASE_URL + "/hr-admin/compliance-records/" + created.record.record_id + "/archive", {
+              headers: { Authorization: "Bearer " + token }, data: { archive_reason: "Replaced permit" },
+            });
+            expect(archived.status()).toBe(200);
+          }
+        }
+        const overview = await getJson<{ groups: { subject_type: string; expired_count: number }[] }>(
+          api, token, "/hr-admin/overview");
+        const before = overview.groups.find(group => group.subject_type === "VEHICLE")!.expired_count;
+        const page = await context.newPage();
+        await loginStaff(page, ADMIN_EMAIL!, ADMIN_PASSWORD!);
+        await page.goto("/hr-admin");
+        const groupButtons = page.getByRole("group", { name: "Subject groups" }).getByRole("button");
+        await expect(groupButtons).toHaveCount(3);
+        const widths = await groupButtons.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().width));
+        expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(2);
+        const vehicles = page.getByRole("button", { name: /^Vehicles \(/ });
+        if (mobile) await vehicles.tap();
+        else { await vehicles.focus(); await page.keyboard.press("Space"); }
+        await page.getByLabel("Find a plate or vehicle").fill(plate);
+        await page.getByRole("row").filter({ hasText: plate }).click();
+        const row = page.getByRole("row").filter({ hasText: kind.type_name });
+        await expect(row.getByText("Expired", { exact: true })).toBeVisible();
+        await expect(row.getByRole("cell", { name: "19 Nov 2001" })).toBeVisible();
+        await expect(page.getByRole("row").filter({ hasText: "Motor insurance " + suffix }).getByRole("button", { name: "Renew" })).toBeVisible();
+        for (const name of ["Vehicle handover", "Previous permit"]) {
+          const inactiveRow = page.getByRole("row").filter({ hasText: name + " " + suffix });
+          await expect(inactiveRow).toBeVisible();
+          await expect(inactiveRow.getByRole("button", { name: "Renew" })).toHaveCount(0);
+        }
+        await testInfo.attach("vehicle-dashboard", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+        const renew = row.getByRole("button", { name: "Renew" });
+        await renew.click();
+        const dialog = page.getByRole("dialog", { name: /Add version for/ });
+        await expect(dialog.getByLabel("Issue date", { exact: true })).toHaveValue("19/11/2000");
+        const expiry = dialog.getByLabel("Expiry date", { exact: true });
+        await expect(expiry).toHaveValue("19/11/2001");
+        await dialog.getByRole("button", { name: "Cancel" }).click();
+        await expect(row.getByText("Expired")).toBeVisible();
+        await renew.click();
+        await expiry.fill("18/11/2000");
+        await dialog.getByRole("button", { name: "Add version" }).click();
+        await expect(dialog.getByText("Expiry date must be after issue date.")).toBeVisible();
+        await expiry.fill("19/11/2099");
+        if (zone === "UTC") {
+          await page.route("**/compliance-records/" + response.record.record_id + "/versions", route =>
+            route.fulfill({ status: 503, json: { error: "Renewal service temporarily unavailable" } }), { times: 1 });
+          await dialog.getByRole("button", { name: "Add version" }).click();
+          await expect(dialog.getByText("Renewal service temporarily unavailable")).toBeVisible();
+          await expect(expiry).toHaveValue("19/11/2099");
+        }
+        await dialog.getByRole("button", { name: "Add version" }).click();
+        await expect(dialog).toHaveCount(0);
+        await expect(row.getByText("Valid", { exact: true })).toBeVisible();
+        await expect(row.getByRole("cell", { name: "19 Nov 2099" })).toBeVisible();
+        await expect(vehicles).toContainText(String(before - 1) + " expired");
+        await expect(page.getByRole("row").filter({ hasText: plate }).getByRole("radio")).toBeChecked();
+        await renew.click();
+        await expect(expiry).toHaveValue("19/11/2099");
+        await dialog.getByRole("button", { name: "Cancel" }).click();
+        const history = await getJson<{version_number:number; document_file:string; is_current:boolean}[]>(
+          api, token, "/hr-admin/compliance-records/" + response.record.record_id + "/versions");
+        expect(history.map(v => [v.version_number, v.is_current, v.document_file])).toEqual([
+          [2, true, "existing-document.pdf"], [1, false, "existing-document.pdf"],
+        ]);
+
+        // The desktop subject list shows the event timestamp from the real API.
+        await page.setViewportSize({ width: 1584, height: 992 });
+        await page.goto("/hr-admin/vehicles");
+        const vehicleRow = page.getByRole("row").filter({ hasText: plate });
+        const formatEvent = new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric",
+          month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "shortOffset" });
+        await expect(vehicleRow.getByText(formatEvent.format(new Date(vehicle.updated_at)))).toBeVisible();
+        if (zone === "America/New_York") {
+          // Supplemental presentation fixtures cover both DST offsets independently of the VPS run date.
+          for (const instant of ["2026-07-19T10:00:00Z", "2026-11-19T10:00:00Z"]) {
+            await page.route("**/v1/hr-admin/vehicles?**", async route => {
+              const response = await route.fetch();
+              const body = await response.json();
+              const v = body.data.find((item: {vehicle_id: string}) => item.vehicle_id === vehicle.vehicle_id);
+              v.updated_at = instant;
+              await route.fulfill({ response, json: body });
+            }, { times: 1 });
+            await page.reload();
+            await expect(vehicleRow.getByText(formatEvent.format(new Date(instant)))).toBeVisible();
+          }
+        }
+      } finally {
+        await context.close();
+        await api.dispose();
+      }
+    });
+  }
 
   test("HR/Admin USER and VIEWER see only their scoped product actions", async ({
     browser,
@@ -599,6 +789,14 @@ test.describe("HR/Admin product E2E", () => {
         const page = await context.newPage();
 
         await loginStaff(page, account.email, account.password);
+        await page.goto("/hr-admin");
+        await page.getByRole("button", { name: /^Persons \(/ }).click();
+        await page.getByLabel("Find a person").fill(personName);
+        await page.getByRole("row").filter({ hasText: personName }).click();
+        const selectedRecord = page.getByRole("row").filter({ hasText: recordType.type_name });
+        await expect(selectedRecord).toBeVisible();
+        await expect(selectedRecord.getByRole("button", { name: "Renew" })).toHaveCount(account === user ? 1 : 0);
+
         await page.goto("/hr-admin/record-types");
         await expect(page).toHaveURL(/\/hr-admin$/);
         await expect(page.getByRole("heading", { name: "Record Types" })).toHaveCount(0);

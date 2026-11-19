@@ -25,7 +25,8 @@ import type {
   NotificationStatus,
   NotificationTier,
 } from "../../types/ams";
-import { formatDateTime, humanizeEnum } from "../../utils/format";
+import { formatEventTime } from "./hrAdminDates";
+import { humanizeEnum } from "../../utils/format";
 
 function statusBadge(status: NotificationStatus) {
   const color = status === "SENT" ? "green" : status === "FAILED" ? "red" : "blue";
@@ -99,7 +100,7 @@ export function HRAdminSchedulerPage() {
       header: "Recorded",
       width: 190,
       minWidth: 180,
-      cell: (item) => formatDateTime(item.sent_at),
+      cell: (item) => formatEventTime(item.sent_at),
       sortingField: "sent_at",
     },
     {
@@ -157,7 +158,7 @@ export function HRAdminSchedulerPage() {
       header: "Failed",
       width: 190,
       minWidth: 180,
-      cell: (item) => formatDateTime(item.failed_at),
+      cell: (item) => formatEventTime(item.failed_at),
       sortingField: "failed_at",
     },
     {

@@ -483,6 +483,48 @@ Remote Fedora is the feature's agreed test target. A configured Windows host can
 
 Run from the repository root. Use Git Bash rather than `C:\Windows\system32\bash.exe` (WSL), with required tools on PATH. If `python3` resolves to the Windows Store alias, use a temporary shim/PATH entry for a real Python executable. Apply the same database/storage isolation locally.
 
+## HR/Admin dashboard on `hr-db`
+
+Run these gates on the remote Fedora test checkout at the intended revision as
+`ams_test_runner`. The three HR/Admin suites are already registered. Migration
+`000055_hr_admin_renewal_status` installs the shared expiry view and date
+function. The isolated runner applies it and journals the replacement document
+uploaded by the Newman collection.
+
+**1. Directory browsing, document dates, and refresh across UAE midnight**
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/hr-admin-product.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/hr-admin-product.spec.ts --grep @dashboard-browse' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+**2. Complete HR/Admin regression, including quick renewal and timezones**
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/hr-admin-product.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/hr-admin-product.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Inspect the desktop and mobile `vehicle-dashboard` attachments in the
+Playwright report. The browser journeys use UTC, Asia/Dubai and America/New_York.
+The New York case also supplies two historical event timestamps for its
+summer/winter display assertions.
+
+**3. Broader maintained regression**
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='' E2E_SPECS='' E2E_PROFILE=default \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Record the revision, pass/fail/skip counts, assertion failures, run directory,
+storage cleanup, database drop, and exit status for each invocation.
+
 ## Result report and completion gate
 
 After each feature step, record:

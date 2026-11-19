@@ -68,7 +68,7 @@ func HRAdminComplianceReminderClickUpPayload(subjectName, recordTypeName, record
 		subjectName,
 		recordTypeName,
 		recordDisplayID,
-		expiryDate.In(certificateNotificationLocation).Format("2006-01-02"),
+		DubaiDocumentDate(expiryDate),
 	)
 
 	return clickUpTask{
@@ -169,7 +169,7 @@ func processHRAdminReminderCandidates(ctx context.Context, pool *pgxpool.Pool, r
 }
 
 func notifyHRAdminComplianceReminder(ctx context.Context, pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx], candidate hrAdminReminderCandidate, expiry time.Time, tier string) {
-	expiryStr := expiry.In(certificateNotificationLocation).Format("2006-01-02")
+	expiryStr := DubaiDocumentDate(expiry)
 	emailRecipients := strings.TrimSpace(candidate.EmailRecipients)
 	clickUpListID := strings.TrimSpace(candidate.ClickupListID)
 
@@ -272,7 +272,7 @@ func enqueueHRAdminReminderClickUp(parent context.Context, pool *pgxpool.Pool, r
 	ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 	defer cancel()
 
-	expiryStr := expiry.In(certificateNotificationLocation).Format("2006-01-02")
+	expiryStr := DubaiDocumentDate(expiry)
 	key := buildHRAdminReminderIdempotencyKey(candidate.RecordID.String(), expiryStr, tier, NotificationChannelClickUp)
 	tx, err := pool.Begin(ctx)
 	if err != nil {

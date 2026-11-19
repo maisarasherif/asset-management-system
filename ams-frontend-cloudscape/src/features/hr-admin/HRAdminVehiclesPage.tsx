@@ -28,7 +28,8 @@ import {
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { HRAdminVehicle, HRAdminVehicleInput } from "../../types/ams";
-import { formatDateTime, humanizeEnum } from "../../utils/format";
+import { formatEventTime } from "./hrAdminDates";
+import { humanizeEnum } from "../../utils/format";
 
 type VehicleEditor =
   | {
@@ -413,7 +414,7 @@ export function HRAdminVehiclesPage() {
         header: "Updated",
         width: 180,
         minWidth: 170,
-        cell: (item) => formatDateTime(item.updated_at),
+        cell: (item) => formatEventTime(item.updated_at),
       },
       {
         id: "actions",

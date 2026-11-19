@@ -30,7 +30,8 @@ import {
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { HRAdminCompany, HRAdminCompanyInput, HRAdminCompanyKind } from "../../types/ams";
-import { formatDateTime, humanizeEnum } from "../../utils/format";
+import { formatEventTime } from "./hrAdminDates";
+import { humanizeEnum } from "../../utils/format";
 
 const companyKindOptions: SelectProps.Option[] = [
   "LEGAL_ENTITY",
@@ -415,7 +416,7 @@ export function HRAdminCompaniesPage() {
         header: "Updated",
         width: 180,
         minWidth: 170,
-        cell: (item) => formatDateTime(item.updated_at),
+        cell: (item) => formatEventTime(item.updated_at),
       },
       {
         id: "actions",

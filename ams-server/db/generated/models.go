@@ -361,6 +361,23 @@ type HrAdminPerson struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
+type HrAdminRenewalStatus struct {
+	RecordID              uuid.UUID  `json:"record_id"`
+	RecordDisplayID       string     `json:"record_display_id"`
+	SubjectType           string     `json:"subject_type"`
+	SubjectID             uuid.UUID  `json:"subject_id"`
+	SubjectName           string     `json:"subject_name"`
+	RecordTypeID          uuid.UUID  `json:"record_type_id"`
+	TypeName              string     `json:"type_name"`
+	VersionID             uuid.UUID  `json:"version_id"`
+	ExpiryDate            *time.Time `json:"expiry_date"`
+	DaysUntilExpiry       int32      `json:"days_until_expiry"`
+	QueueStatus           string     `json:"queue_status"`
+	EffectiveReminderDays []int32    `json:"effective_reminder_days"`
+	ReminderPolicySource  string     `json:"reminder_policy_source"`
+	MaxReminderDays       int32      `json:"max_reminder_days"`
+}
+
 type HrAdminVehicle struct {
 	VehicleID     uuid.UUID   `json:"vehicle_id"`
 	DisplayID     string      `json:"display_id"`

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -80,7 +81,7 @@ func validateComplianceVersionInput(recordType db.ComplianceRecordType, issueDat
 	if recordType.RequiresDocument && documentFile == "" {
 		return errors.New("document file is required for this compliance record type")
 	}
-	if issueDate != nil && expiryDate != nil && !expiryDate.After(*issueDate) {
+	if issueDate != nil && expiryDate != nil && utils.DubaiDocumentDate(*expiryDate) <= utils.DubaiDocumentDate(*issueDate) {
 		return errors.New("expiry date must be after issue date")
 	}
 	return nil
@@ -124,12 +125,13 @@ func GetHRAdminPersons(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
-		people, err := queries.GetHRAdminPersonsPaginated(ctx, db.GetHRAdminPersonsPaginatedParams{Limit: limit, Offset: offset})
+		search := strings.TrimSpace(c.Query("search"))
+		people, err := queries.GetHRAdminPersonsPaginated(ctx, db.GetHRAdminPersonsPaginatedParams{Search: search, PageLimit: limit, PageOffset: offset})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch HR/Admin persons"})
 			return
 		}
-		total, err := queries.CountHRAdminPersons(ctx)
+		total, err := queries.CountHRAdminPersons(ctx, search)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count HR/Admin persons"})
 			return
@@ -280,12 +282,13 @@ func GetHRAdminVehicles(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
-		vehicles, err := queries.GetHRAdminVehiclesPaginated(ctx, db.GetHRAdminVehiclesPaginatedParams{Limit: limit, Offset: offset})
+		search := strings.TrimSpace(c.Query("search"))
+		vehicles, err := queries.GetHRAdminVehiclesPaginated(ctx, db.GetHRAdminVehiclesPaginatedParams{Search: search, PageLimit: limit, PageOffset: offset})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch HR/Admin vehicles"})
 			return
 		}
-		total, err := queries.CountHRAdminVehicles(ctx)
+		total, err := queries.CountHRAdminVehicles(ctx, search)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count HR/Admin vehicles"})
 			return
@@ -405,12 +408,13 @@ func GetHRAdminCompanies(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
-		companies, err := queries.GetHRAdminCompaniesPaginated(ctx, db.GetHRAdminCompaniesPaginatedParams{Limit: limit, Offset: offset})
+		search := strings.TrimSpace(c.Query("search"))
+		companies, err := queries.GetHRAdminCompaniesPaginated(ctx, db.GetHRAdminCompaniesPaginatedParams{Search: search, PageLimit: limit, PageOffset: offset})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch HR/Admin companies"})
 			return
 		}
-		total, err := queries.CountHRAdminCompanies(ctx)
+		total, err := queries.CountHRAdminCompanies(ctx, search)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count HR/Admin companies"})
 			return
@@ -637,17 +641,48 @@ func GetComplianceRecords(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
-		records, err := queries.GetComplianceRecordsPaginated(ctx, db.GetComplianceRecordsPaginatedParams{Limit: limit, Offset: offset})
+		filters := c.Request.URL.Query()
+		subjectType := filters.Get("subject_type")
+		filterID := uuid.Nil
+		if filters.Has("subject_type") || filters.Has("subject_id") {
+			id, err := uuid.Parse(filters.Get("subject_id"))
+			if err != nil || (subjectType != "PERSON" && subjectType != "VEHICLE" && subjectType != "COMPANY") {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "provide both a valid subject_type and subject_id"})
+				return
+			}
+			filterID = id
+		}
+		records, err := queries.GetComplianceRecordsPaginated(ctx, db.GetComplianceRecordsPaginatedParams{FilterType: subjectType, FilterID: filterID, PageLimit: limit, PageOffset: offset})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch compliance records"})
 			return
 		}
-		total, err := queries.CountComplianceRecords(ctx)
+		total, err := queries.CountComplianceRecords(ctx, db.CountComplianceRecordsParams{FilterType: subjectType, FilterID: filterID})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count compliance records"})
 			return
 		}
 		c.JSON(http.StatusOK, dto.PaginatedResponse{Data: records, Meta: utils.BuildMeta(query, total)})
+	}
+}
+
+func GetHRAdminOverview(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		// Dubai midnight is 20:00 UTC. Send a duration so viewer clock skew
+		// cannot postpone the next business-day refresh.
+		now := time.Now().UTC()
+		next := time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, time.UTC)
+		if !next.After(now) {
+			next = next.AddDate(0, 0, 1)
+		}
+		groups, err := db.New(pool).GetHRAdminOverview(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load HR/Admin overview"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"groups": groups, "refresh_after_ms": max(int64(1), time.Until(next).Milliseconds())})
 	}
 }
 

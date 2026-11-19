@@ -51,6 +51,8 @@ import type {
   HRAdminPerson,
   HRAdminPersonInput,
   HRAdminRenewalQueueItem,
+  HRAdminOverviewGroup,
+  HRAdminSubjectType,
   HRAdminSchedulerRunResponse,
   HRAdminVehicle,
   HRAdminVehicleInput,
@@ -161,8 +163,8 @@ export function updatePassword(payload: UpdatePasswordInput) {
   });
 }
 
-export function listHRAdminPersons(page = 1, limit = 100) {
-  return apiRequest<PaginatedResponse<HRAdminPerson>>(`/v1/hr-admin/persons?page=${page}&limit=${limit}`);
+export function listHRAdminPersons(page = 1, limit = 100, search = "") {
+  return apiRequest<PaginatedResponse<HRAdminPerson>>(`/v1/hr-admin/persons?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
 }
 
 export function listHRAdminDepartments() {
@@ -190,8 +192,8 @@ export function archiveHRAdminPerson(personId: string, archiveReason: string) {
   });
 }
 
-export function listHRAdminVehicles(page = 1, limit = 100) {
-  return apiRequest<PaginatedResponse<HRAdminVehicle>>(`/v1/hr-admin/vehicles?page=${page}&limit=${limit}`);
+export function listHRAdminVehicles(page = 1, limit = 100, search = "") {
+  return apiRequest<PaginatedResponse<HRAdminVehicle>>(`/v1/hr-admin/vehicles?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
 }
 
 export function createHRAdminVehicle(payload: HRAdminVehicleInput) {
@@ -215,8 +217,8 @@ export function archiveHRAdminVehicle(vehicleId: string, archiveReason: string) 
   });
 }
 
-export function listHRAdminCompanies(page = 1, limit = 100) {
-  return apiRequest<PaginatedResponse<HRAdminCompany>>(`/v1/hr-admin/companies?page=${page}&limit=${limit}`);
+export function listHRAdminCompanies(page = 1, limit = 100, search = "") {
+  return apiRequest<PaginatedResponse<HRAdminCompany>>(`/v1/hr-admin/companies?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
 }
 
 export function createHRAdminCompany(payload: HRAdminCompanyInput) {
@@ -275,9 +277,18 @@ export function listHRAdminRenewalQueue() {
   return apiRequest<HRAdminRenewalQueueItem[]>("/v1/hr-admin/renewal-queue");
 }
 
-export function listComplianceRecords(page = 1, limit = 100) {
+export function getHRAdminOverview() {
+  return apiRequest<{ groups: HRAdminOverviewGroup[]; refresh_after_ms: number }>("/v1/hr-admin/overview");
+}
+
+export function listComplianceRecords(page = 1, limit = 100, subject?: { type: HRAdminSubjectType; id: string }) {
+  const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (subject) {
+    query.set("subject_type", subject.type);
+    query.set("subject_id", subject.id);
+  }
   return apiRequest<PaginatedResponse<ComplianceRecord>>(
-    `/v1/hr-admin/compliance-records?page=${page}&limit=${limit}`
+    `/v1/hr-admin/compliance-records?${query}`
   );
 }
 

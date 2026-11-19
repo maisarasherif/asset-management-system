@@ -1,7 +1,9 @@
 package main_test
 
 import (
+	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -12,6 +14,7 @@ func TestHRAdminProductAccessAndComplianceRecordVersionFlow(t *testing.T) {
 	hrViewerToken := createIntegrationUserToken(t, h.pool, "HR", "Viewer", "hr-viewer@example.com", "viewer-password", "USER")
 	hrViewer := mustGetIntegrationUserByEmail(t, h.pool, "hr-viewer@example.com")
 
+	performJSONRequest(t, h.router, hrViewerToken, http.MethodGet, "/v1/hr-admin/overview", nil, http.StatusForbidden)
 	performJSONRequest(t, h.router, hrViewerToken, http.MethodGet, "/v1/hr-admin/persons?page=1&limit=20", nil, http.StatusForbidden)
 
 	body := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/platform/product-access", map[string]any{
@@ -37,6 +40,7 @@ func TestHRAdminProductAccessAndComplianceRecordVersionFlow(t *testing.T) {
 		t.Fatalf("expected AMS and HR/Admin product entries, got %#v", productList)
 	}
 
+	performJSONRequest(t, h.router, hrViewerToken, http.MethodGet, "/v1/hr-admin/overview", nil, http.StatusOK)
 	performJSONRequest(t, h.router, hrViewerToken, http.MethodGet, "/v1/hr-admin/persons?page=1&limit=20", nil, http.StatusOK)
 	performJSONRequest(t, h.router, hrViewerToken, http.MethodPost, "/v1/hr-admin/persons", map[string]any{
 		"full_name": "Blocked Viewer",
@@ -660,4 +664,99 @@ func createComplianceRecord(t *testing.T, h *integrationHarness, payload map[str
 	currentVersion := unwrapEmbeddedObject(recordResponse, "current_version")
 	assertField(t, currentVersion, "version_number", float64(1))
 	return recordID
+}
+
+func TestHRAdminOverviewExpiryBoundaryAndDirectory(t *testing.T) {
+	h := setupIntegrationTest(t)
+	// This legacy instant's document date is 19 November in Dubai.
+	const expiry = "2026-11-18T22:30:00Z"
+	for _, test := range []struct {
+		now  string
+		days int
+	}{
+		{"2026-11-19T19:59:59.999999Z", 0}, {"2026-11-19T20:00:00Z", -1},
+	} {
+		var days int
+		err := h.pool.QueryRow(context.Background(), "SELECT hr_admin_days_until_expiry($1::text::timestamptz, $2::text::timestamptz)", expiry, test.now).Scan(&days)
+		if err != nil || days != test.days {
+			t.Fatalf("days at %s: got %d, want %d, err %v", test.now, days, test.days, err)
+		}
+	}
+	get := func(path string) map[string]any {
+		return decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/hr-admin/"+path, nil, http.StatusOK))
+	}
+	group := func(kind string) map[string]any {
+		groups := get("overview")["groups"].([]any)
+		if len(groups) != 3 {
+			t.Fatalf("expected three groups, got %v", groups)
+		}
+		for _, raw := range groups {
+			row := raw.(map[string]any)
+			if row["subject_type"] == kind {
+				return row
+			}
+		}
+		t.Fatalf("missing group %s", kind)
+		return nil
+	}
+	active := createHRAdminVehicle(t, h, "DB-FLEET-01")
+	archived := createHRAdminVehicle(t, h, "DB-FLEET-02")
+	createHRAdminVehicle(t, h, "OTHER-03")
+	kind := createComplianceRecordType(t, h, map[string]any{"subject_type": "VEHICLE", "type_name": "Fleet registration", "renewal_behavior": "RENEWABLE", "active": true})
+	add := func(id string) string {
+		return createComplianceRecord(t, h, map[string]any{"subject_type": "VEHICLE", "subject_id": id, "record_type_id": kind,
+			"issue_date": "2000-01-01T00:00:00Z", "expiry_date": "2001-11-18T22:30:00Z", "document_file": "registry/original.pdf"})
+	}
+	record := add(active)
+	add(archived)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/hr-admin/vehicles/"+archived+"/archive", map[string]any{"archive_reason": "Retired from fleet"}, http.StatusOK)
+	assertField(t, group("VEHICLE"), "subject_count", 3)
+	assertField(t, group("VEHICLE"), "expired_count", 1)
+	assertField(t, group("PERSON"), "subject_count", 0)
+	first := get("vehicles?search=db-fleet&limit=1&page=1")
+	second := get("vehicles?search=db-fleet&limit=1&page=2")
+	assertField(t, first["meta"].(map[string]any), "total", 2)
+	if first["data"].([]any)[0].(map[string]any)["vehicle_id"] == second["data"].([]any)[0].(map[string]any)["vehicle_id"] {
+		t.Fatal("duplicate subject across pages")
+	}
+	assertField(t, get("vehicles")["meta"].(map[string]any), "total", 3)
+	records := "compliance-records?subject_type=VEHICLE&subject_id=" + active
+	rows := get(records)
+	assertField(t, rows["meta"].(map[string]any), "total", 1)
+	row := rows["data"].([]any)[0].(map[string]any)
+	assertField(t, row, "record_id", record)
+	assertField(t, row, "expiry_status", "EXPIRED")
+	if !strings.HasSuffix(stringField(t, row, "created_at"), "Z") {
+		t.Fatal("expected UTC event timestamp")
+	}
+	for _, query := range []string{"subject_type=", "subject_id=", "subject_type=VEHICLE", "subject_id=" + active, "subject_type=OTHER&subject_id=" + active, "subject_type=PERSON&subject_id=invalid"} {
+		performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/hr-admin/compliance-records?"+query, nil, http.StatusBadRequest)
+	}
+	assertField(t, get("compliance-records?subject_type=PERSON&subject_id=" + active)["meta"].(map[string]any), "total", 0)
+	versions := "/v1/hr-admin/compliance-records/" + record + "/versions"
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, versions, map[string]any{
+		"issue_date": "2026-11-18T21:30:00Z", "expiry_date": "2026-11-19T10:00:00Z",
+	}, http.StatusBadRequest)
+	for _, version := range []struct {
+		expiry, document string
+		number           int
+	}{
+		{"2098-01-01T00:00:00Z", "registry/original.pdf", 2},
+		{"2099-01-01T00:00:00Z", "registry/replacement.pdf", 3},
+	} {
+		saved := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, versions, map[string]any{
+			"issue_date": "2090-01-01T00:00:00Z", "expiry_date": version.expiry, "document_file": version.document,
+		}, http.StatusCreated))
+		assertField(t, saved, "version_number", version.number)
+		assertField(t, saved, "document_file", version.document)
+		assertField(t, group("VEHICLE"), "expired_count", 0)
+		assertField(t, get(records)["data"].([]any)[0].(map[string]any), "expiry_status", "OK")
+	}
+	history := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, versions, nil, http.StatusOK))
+	if len(history) != 3 {
+		t.Fatalf("incomplete history: %v", history)
+	}
+	for i, v := range history {
+		assertField(t, v, "is_current", i == 0)
+	}
 }

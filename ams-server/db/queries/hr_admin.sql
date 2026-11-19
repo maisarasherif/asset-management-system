@@ -38,11 +38,13 @@ SELECT
     created_at,
     updated_at
 FROM hr_admin_persons
-ORDER BY created_at DESC
-LIMIT $1 OFFSET $2;
+WHERE strpos(lower(concat_ws(' ', display_id, person_code, full_name, department, role_title)), lower(sqlc.arg(search)::text)) > 0
+ORDER BY created_at DESC, person_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountHRAdminPersons :one
-SELECT COUNT(*) FROM hr_admin_persons;
+SELECT COUNT(*) FROM hr_admin_persons
+WHERE strpos(lower(concat_ws(' ', display_id, person_code, full_name, department, role_title)), lower(sqlc.arg(search)::text)) > 0;
 
 -- name: GetHRAdminPersonByID :one
 SELECT
@@ -124,11 +126,13 @@ SELECT
     created_at,
     updated_at
 FROM hr_admin_vehicles
-ORDER BY created_at DESC
-LIMIT $1 OFFSET $2;
+WHERE strpos(lower(concat_ws(' ', display_id, plate_number, make, model)), lower(sqlc.arg(search)::text)) > 0
+ORDER BY created_at DESC, vehicle_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountHRAdminVehicles :one
-SELECT COUNT(*) FROM hr_admin_vehicles;
+SELECT COUNT(*) FROM hr_admin_vehicles
+WHERE strpos(lower(concat_ws(' ', display_id, plate_number, make, model)), lower(sqlc.arg(search)::text)) > 0;
 
 -- name: GetHRAdminVehicleByID :one
 SELECT
@@ -210,11 +214,13 @@ SELECT
     created_at,
     updated_at
 FROM hr_admin_companies
-ORDER BY created_at DESC
-LIMIT $1 OFFSET $2;
+WHERE strpos(lower(concat_ws(' ', display_id, company_code, company_name, company_kind, location)), lower(sqlc.arg(search)::text)) > 0
+ORDER BY created_at DESC, company_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountHRAdminCompanies :one
-SELECT COUNT(*) FROM hr_admin_companies;
+SELECT COUNT(*) FROM hr_admin_companies
+WHERE strpos(lower(concat_ws(' ', display_id, company_code, company_name, company_kind, location)), lower(sqlc.arg(search)::text)) > 0;
 
 -- name: GetHRAdminCompanyByID :one
 SELECT
@@ -387,6 +393,15 @@ SELECT
     crt.display_id AS record_type_display_id,
     crt.type_name,
     crt.renewal_behavior,
+    crt.requires_document,
+    crt.default_validity_months,
+    COALESCE(p.status, v.status, c.status, 'ARCHIVED')::text AS subject_status,
+    CASE
+        WHEN cr.status = 'ARCHIVED' THEN 'ARCHIVED'
+        WHEN crv.expiry_date IS NULL AND crt.renewal_behavior = 'ONE_TIME' THEN 'NO_EXPIRY'
+        WHEN crv.expiry_date IS NULL THEN 'MISSING_EXPIRY'
+        ELSE COALESCE(rs.queue_status, 'UNTRACKED')
+    END::text AS expiry_status,
     cr.status,
     cr.archive_reason,
     cr.archived_at,
@@ -407,11 +422,16 @@ LEFT JOIN compliance_record_versions crv ON crv.record_id = cr.record_id AND crv
 LEFT JOIN hr_admin_persons p ON cr.subject_type = 'PERSON' AND p.person_id = cr.subject_id
 LEFT JOIN hr_admin_vehicles v ON cr.subject_type = 'VEHICLE' AND v.vehicle_id = cr.subject_id
 LEFT JOIN hr_admin_companies c ON cr.subject_type = 'COMPANY' AND c.company_id = cr.subject_id
-ORDER BY cr.created_at DESC
-LIMIT $1 OFFSET $2;
+LEFT JOIN hr_admin_renewal_status rs ON rs.record_id = cr.record_id
+WHERE (sqlc.arg(filter_type)::text = '' OR
+       (cr.subject_type = sqlc.arg(filter_type) AND cr.subject_id = sqlc.arg(filter_id)::uuid))
+ORDER BY cr.created_at DESC, cr.record_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountComplianceRecords :one
-SELECT COUNT(*) FROM compliance_records;
+SELECT COUNT(*) FROM compliance_records cr
+WHERE (sqlc.arg(filter_type)::text = '' OR
+       (cr.subject_type = sqlc.arg(filter_type) AND cr.subject_id = sqlc.arg(filter_id)::uuid));
 
 -- name: GetComplianceRecordByID :one
 SELECT
@@ -535,77 +555,7 @@ WHERE record_id = $1
 ORDER BY version_number DESC;
 
 -- name: GetHRAdminRenewalQueue :many
-WITH queue_base AS (
-    SELECT
-        cr.record_id,
-        cr.display_id AS record_display_id,
-        cr.subject_type,
-        cr.subject_id,
-        (CASE
-            WHEN cr.subject_type = 'PERSON' THEN COALESCE(p.full_name, '')
-            WHEN cr.subject_type = 'VEHICLE' THEN COALESCE(v.plate_number, '')
-            WHEN cr.subject_type = 'COMPANY' THEN COALESCE(c.company_name, '')
-            ELSE ''
-        END)::text AS subject_name,
-        crt.record_type_id,
-        crt.type_name,
-        crv.version_id,
-        crv.expiry_date,
-        (CASE
-            WHEN CARDINALITY(crt.reminder_policy_days) > 0 THEN crt.reminder_policy_days
-            ELSE COALESCE(pnc.default_reminder_days, ARRAY[30, 7, 1]::int[])
-        END)::int[] AS effective_reminder_days,
-        (CASE
-            WHEN CARDINALITY(crt.reminder_policy_days) > 0 THEN 'RECORD_TYPE'
-            ELSE 'PRODUCT_DEFAULT'
-        END)::text AS reminder_policy_source,
-        ((crv.expiry_date AT TIME ZONE 'Asia/Dubai')::date - (NOW() AT TIME ZONE 'Asia/Dubai')::date)::int AS days_until_expiry
-    FROM compliance_records cr
-    JOIN compliance_record_types crt ON crt.record_type_id = cr.record_type_id
-    JOIN compliance_record_versions crv ON crv.record_id = cr.record_id AND crv.is_current
-    LEFT JOIN product_notification_configurations pnc ON pnc.product_key = 'HR_ADMIN'
-    LEFT JOIN hr_admin_persons p ON cr.subject_type = 'PERSON' AND p.person_id = cr.subject_id
-    LEFT JOIN hr_admin_vehicles v ON cr.subject_type = 'VEHICLE' AND v.vehicle_id = cr.subject_id
-    LEFT JOIN hr_admin_companies c ON cr.subject_type = 'COMPANY' AND c.company_id = cr.subject_id
-    WHERE cr.status = 'ACTIVE'
-      AND crt.active = TRUE
-      AND crt.renewal_behavior = 'RENEWABLE'
-      AND crv.expiry_date IS NOT NULL
-      AND (
-        (cr.subject_type = 'PERSON' AND p.status = 'ACTIVE')
-        OR (cr.subject_type = 'VEHICLE' AND v.status = 'ACTIVE')
-        OR (cr.subject_type = 'COMPANY' AND c.status = 'ACTIVE')
-      )
-),
-queue_classified AS (
-    SELECT
-        queue_base.*,
-        COALESCE((SELECT MAX(day) FROM UNNEST(queue_base.effective_reminder_days) AS day), 0)::int AS max_reminder_days,
-        (CASE
-            WHEN queue_base.days_until_expiry < 0 THEN 'EXPIRED'
-            WHEN queue_base.days_until_expiry = ANY(queue_base.effective_reminder_days) THEN 'DUE_NOW'
-            WHEN queue_base.days_until_expiry >= 0
-              AND queue_base.days_until_expiry <= COALESCE((SELECT MAX(day) FROM UNNEST(queue_base.effective_reminder_days) AS day), 0) THEN 'UPCOMING'
-            ELSE 'OK'
-        END)::text AS queue_status
-    FROM queue_base
-)
-SELECT
-    record_id,
-    record_display_id,
-    subject_type,
-    subject_id,
-    subject_name,
-    record_type_id,
-    type_name,
-    version_id,
-    expiry_date,
-    days_until_expiry,
-    queue_status,
-    effective_reminder_days,
-    reminder_policy_source,
-    max_reminder_days
-FROM queue_classified
+SELECT * FROM hr_admin_renewal_status
 ORDER BY
     CASE queue_status
         WHEN 'EXPIRED' THEN 0
@@ -689,3 +639,17 @@ WHERE cr.record_id = $1
     OR (cr.subject_type = 'COMPANY' AND c.status = 'ACTIVE')
   )
 ORDER BY crv.expiry_date ASC, cr.created_at ASC;
+
+-- name: GetHRAdminOverview :many
+WITH totals AS (
+    SELECT 'PERSON'::text AS subject_type, COUNT(*) AS subject_count FROM hr_admin_persons
+    UNION ALL SELECT 'VEHICLE', COUNT(*) FROM hr_admin_vehicles
+    UNION ALL SELECT 'COMPANY', COUNT(*) FROM hr_admin_companies
+), expired AS (
+    SELECT subject_type, COUNT(*) AS record_count
+    FROM hr_admin_renewal_status WHERE queue_status = 'EXPIRED'
+    GROUP BY subject_type
+)
+SELECT totals.subject_type, totals.subject_count::bigint AS subject_count,
+       COALESCE(expired.record_count, 0)::bigint AS expired_count
+FROM totals LEFT JOIN expired USING (subject_type);

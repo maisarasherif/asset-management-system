@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	controllers "github.com/maisarasherif/asset-management-system/ams-server/controllers"
+	databases "github.com/maisarasherif/asset-management-system/ams-server/database"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
 	"github.com/maisarasherif/asset-management-system/ams-server/logger"
 	"github.com/maisarasherif/asset-management-system/ams-server/routes"
@@ -1871,7 +1872,7 @@ func setupIntegrationTest(t *testing.T) *integrationHarness {
 	logger.Init()
 	gin.SetMode(gin.TestMode)
 
-	pool, err := pgxpool.New(context.Background(), dsn)
+	pool, err := databases.OpenPool(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("failed to connect to postgres: %v", err)
 	}

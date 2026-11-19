@@ -164,7 +164,17 @@ export interface ComplianceRecordTypeInput {
   description: string;
 }
 
+export interface HRAdminOverviewGroup {
+  subject_type: HRAdminSubjectType;
+  subject_count: number;
+  expired_count: number;
+}
+
 export interface ComplianceRecord {
+  expiry_status: HRAdminRenewalQueueStatus | "ARCHIVED" | "NO_EXPIRY" | "MISSING_EXPIRY" | "UNTRACKED";
+  subject_status: HRAdminSubjectStatus;
+  requires_document: boolean;
+  default_validity_months: ComplianceRecordType["default_validity_months"];
   record_id: string;
   display_id: string;
   subject_type: HRAdminSubjectType;

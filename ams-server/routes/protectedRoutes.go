@@ -251,6 +251,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	hrRead.GET("/vehicles", controller.GetHRAdminVehicles(pool))
 	hrRead.GET("/companies", controller.GetHRAdminCompanies(pool))
 	hrRead.GET("/compliance-record-types", controller.GetComplianceRecordTypes(pool))
+	hrRead.GET("/overview", controller.GetHRAdminOverview(pool))
 	hrRead.GET("/renewal-queue", controller.GetHRAdminRenewalQueue(pool))
 	hrRead.GET("/compliance-records", controller.GetComplianceRecords(pool))
 	hrRead.GET("/compliance-records/:record_id/file", controller.GetComplianceRecordFile(pool))

@@ -126,7 +126,7 @@ func notifyExpiring(ctx context.Context, pool *pgxpool.Pool, riverClient *river.
 		return
 	}
 
-	expiryStr := formatCertificateExpiryDate(*cert.ExpiryDate)
+	expiryStr := DubaiDocumentDate(*cert.ExpiryDate)
 	if riverClient == nil {
 		recordCertificateNotificationConfigFailure(ctx, pool, cert, tier, expiryStr, NotificationChannelEmail, "River client is not configured")
 		recordCertificateNotificationConfigFailure(ctx, pool, cert, tier, expiryStr, NotificationChannelClickUp, "River client is not configured")
@@ -400,7 +400,8 @@ func buildIdempotencyKey(certID, expiryDate, tier, channel string) string {
 	return fmt.Sprintf("cert-expiry:%s:%s:%s:%s", certID, expiryDate, tier, channel)
 }
 
-func formatCertificateExpiryDate(expiry time.Time) string {
+// DubaiDocumentDate returns the calendar date used for document validity and reminders.
+func DubaiDocumentDate(expiry time.Time) string {
 	return expiry.In(certificateNotificationLocation).Format("2006-01-02")
 }
 
