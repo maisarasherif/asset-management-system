@@ -482,7 +482,8 @@ test.describe("HR/Admin product E2E", () => {
       await archiveCompanyDialog.getByLabel("Archive reason").fill("Company no longer used by test");
       await archiveCompanyDialog.getByRole("button", { name: "Archive company" }).click();
       await expect(archiveCompanyDialog.getByText(/Linked active compliance records: 1/)).toBeVisible();
-      await archiveCompanyDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await archiveCompanyDialog.getByRole("button", { name: "Keep company", exact: true }).click();
+      await expect(archiveCompanyDialog).toHaveCount(0);
 
       await page.goto("/hr-admin/records");
       await openRowActions(page, companyRecordType.type_name);
@@ -508,6 +509,7 @@ test.describe("HR/Admin product E2E", () => {
       };
       const originalViewport = page.viewportSize();
       await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole("button", { name: "Close primary navigation", exact: true }).click();
       await openPermanentDelete(companyName);
       await expect(deleteDialog.getByText(companyName, { exact: true })).toBeVisible();
       await expect(deleteButton).toBeDisabled();

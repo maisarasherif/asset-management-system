@@ -616,6 +616,25 @@ downloadable until the final version reference is removed and River purges
 the storage object. Playwright covers both blocking messages, cancellation
 and permanent deletion of a compliance record followed by its company.
 
+**First VPS browser run.** Five HR/Admin Playwright tests passed. The admin
+journey confirmed that an active linked record blocks company archiving, then
+timed out looking for a Cancel button. The archive dialog calls this action
+**Keep company**. The corrected locator verifies the dialog closes before
+continuing the archive and deletion flow. The test also closes primary
+navigation after resizing to mobile so it can reach the archived company
+row. All six corrected tests passed locally in 1.5 minutes against fresh
+PostgreSQL with migration 56 applied. The supplied VPS log ends at the HTML
+report and does not include cleanup results or an evidence directory.
+
+Repeat the focused browser gate against the corrected spec before running
+the default regression in step 3.
+
+```bash
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='../tests/regression/e2e/hr-admin-product.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
 Deploy the backend and frontend together using the migration-first
 `ams deploy` on `hr-db`. Migration 56 adds the deletion audit and upload
 ownership tables. Uploaded files registered to HR/Admin are eligible for
