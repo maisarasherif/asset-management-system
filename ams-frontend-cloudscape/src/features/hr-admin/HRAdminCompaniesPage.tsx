@@ -31,6 +31,7 @@ import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { HRAdminCompany, HRAdminCompanyInput, HRAdminCompanyKind } from "../../types/ams";
 import { formatEventTime } from "./hrAdminDates";
+import { PermanentDeleteModal, type PermanentDeleteTarget } from "./PermanentDeleteModal";
 import { humanizeEnum } from "../../utils/format";
 
 const companyKindOptions: SelectProps.Option[] = [
@@ -195,7 +196,7 @@ function ArchiveCompanyModal({
     >
       <SpaceBetween size="l">
         <Alert type="warning">
-          Archived companies stay visible for history, but HR/Admin renewal work will ignore their records.
+          Archive this company’s active compliance records first. Archived records remain available for history.
         </Alert>
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="Archive reason" constraintText="Required">
@@ -222,6 +223,7 @@ export function HRAdminCompaniesPage() {
   const [compactTable, setCompactTable] = useState(() => isCompactViewport());
   const [editor, setEditor] = useState<CompanyEditor>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PermanentDeleteTarget | null>(null);
   const [modalError, setModalError] = useState("");
 
   const companiesQuery = useQuery({
@@ -270,7 +272,7 @@ export function HRAdminCompaniesPage() {
       setArchiveTarget(null);
       setModalError("");
       success("Company archived", "Renewal work will ignore this company while retaining history.");
-      void invalidateCompanies();
+      void queryClient.invalidateQueries({ queryKey: ["hr-admin"] });
     },
     onError: (mutationError: Error) => {
       setModalError(mutationError.message);
@@ -345,6 +347,19 @@ export function HRAdminCompaniesPage() {
         return <Button onClick={() => editCompany(item)}>Edit</Button>;
       }
 
+      if (canArchive && item.status === "ARCHIVED") {
+        return (
+          <ButtonDropdown
+            ariaLabel={`Actions for ${item.company_name}`}
+            expandToViewport
+            items={[{ id: "permanent-delete", text: "Permanently delete" }]}
+            onItemClick={() => setDeleteTarget({ id: item.company_id, displayId: item.display_id, label: item.company_name })}
+          >
+            Actions
+          </ButtonDropdown>
+        );
+      }
+
       return <Box color="text-body-secondary">View only</Box>;
     };
 
@@ -360,7 +375,7 @@ export function HRAdminCompaniesPage() {
               <br />
               {[item.company_code, humanizeEnum(item.company_kind)].filter(Boolean).join(" | ") ||
                 item.display_id}
-              {canWrite && item.status === "ACTIVE" ? (
+              {canArchive || (canWrite && item.status === "ACTIVE") ? (
                 <div className="hr-admin-persons__compact-actions">{rowActions(item)}</div>
               ) : null}
             </TableCellText>
@@ -561,6 +576,7 @@ export function HRAdminCompaniesPage() {
         }}
         onSubmit={archiveCompany}
       />
+      {deleteTarget && <PermanentDeleteModal kind="COMPANY" target={deleteTarget} onDismiss={() => setDeleteTarget(null)} />}
     </ContentLayout>
   );
 }

@@ -34,6 +34,7 @@ import type { ComplianceRecord } from "../../types/ams";
 import { humanizeEnum } from "../../utils/format";
 
 import { formatDocumentDate } from "./hrAdminDates";
+import { PermanentDeleteModal, type PermanentDeleteTarget } from "./PermanentDeleteModal";
 import { RecordEditorModal } from "./RecordEditorModal";
 import { expiryLabels, pgTextValue, renewalDraft, type RecordEditor } from "./hrAdminRegistry";
 
@@ -133,6 +134,7 @@ export function HRAdminRecordsPage() {
   const [compactTable, setCompactTable] = useState(() => isCompactViewport());
   const [editor, setEditor] = useState<RecordEditor>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PermanentDeleteTarget | null>(null);
   const [modalError, setModalError] = useState("");
 
   const recordsQuery = useQuery({
@@ -170,9 +172,6 @@ export function HRAdminRecordsPage() {
     return () => mediaQuery.removeEventListener("change", syncTableMode);
   }, []);
 
-  const invalidateRecords = () =>
-    queryClient.invalidateQueries({ queryKey: ["hr-admin", "compliance-records"] });
-
   const archiveRecordMutation = useMutation({
     mutationFn: (target: NonNullable<ArchiveTarget>) =>
       archiveComplianceRecord(target.id, target.reason.trim()),
@@ -180,7 +179,7 @@ export function HRAdminRecordsPage() {
       setArchiveTarget(null);
       setModalError("");
       success("Compliance record archived", "Renewal reminders will ignore this record.");
-      void invalidateRecords();
+      void queryClient.invalidateQueries({ queryKey: ["hr-admin"] });
     },
     onError: (mutationError: Error) => {
       setModalError(mutationError.message);
@@ -246,6 +245,7 @@ export function HRAdminRecordsPage() {
         ...(documentFile ? [{ id: "document", text: "Open document" }] : []),
         ...(canWrite && item.status === "ACTIVE" ? [{ id: "renew", text: "Add version" }] : []),
         ...(canArchive && item.status === "ACTIVE" ? [{ id: "archive", text: "Archive" }] : []),
+        ...(canArchive && item.status === "ARCHIVED" ? [{ id: "permanent-delete", text: "Permanently delete" }] : []),
       ];
 
       if (items.length === 0) {
@@ -264,6 +264,12 @@ export function HRAdminRecordsPage() {
             }
             if (detail.id === "renew") {
               renewRecord(item);
+              return;
+            }
+            if (detail.id === "permanent-delete") {
+              setDeleteTarget({
+                id: item.record_id, displayId: item.display_id, label: `${item.type_name} for ${item.subject_name || item.subject_id}`,
+              });
               return;
             }
             archiveRecordRow(item);
@@ -538,6 +544,7 @@ export function HRAdminRecordsPage() {
         }}
         onSubmit={archiveRecord}
       />
+      {deleteTarget && <PermanentDeleteModal kind="COMPLIANCE_RECORD" target={deleteTarget} onDismiss={() => setDeleteTarget(null)} />}
     </ContentLayout>
   );
 }

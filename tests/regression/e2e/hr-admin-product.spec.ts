@@ -481,18 +481,67 @@ test.describe("HR/Admin product E2E", () => {
       await expect(archiveCompanyDialog).toBeVisible();
       await archiveCompanyDialog.getByLabel("Archive reason").fill("Company no longer used by test");
       await archiveCompanyDialog.getByRole("button", { name: "Archive company" }).click();
+      await expect(archiveCompanyDialog.getByText(/Linked active compliance records: 1/)).toBeVisible();
+      await archiveCompanyDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+
+      await page.goto("/hr-admin/records");
+      await openRowActions(page, companyRecordType.type_name);
+      await page.getByText("Archive", { exact: true }).click();
+      const archiveLinkedRecord = page.getByRole("dialog", { name: /Archive/ });
+      await archiveLinkedRecord.getByLabel("Archive reason").fill("Company record retired");
+      await archiveLinkedRecord.getByRole("button", { name: "Archive record" }).click();
+      await expect(page.getByText("Compliance record archived")).toBeVisible();
+
+      await page.goto("/hr-admin/companies");
+      await openRowActions(page, companyName);
+      await page.getByText("Archive", { exact: true }).click();
+      await archiveCompanyDialog.getByLabel("Archive reason").fill("Company no longer used by test");
+      await archiveCompanyDialog.getByRole("button", { name: "Archive company" }).click();
       await expect(page.getByText("Company archived")).toBeVisible();
+
+      const deleteDialog = page.getByRole("dialog", { name: "Permanently delete?" });
+      const deleteButton = deleteDialog.getByRole("button", { name: "Permanently delete", exact: true });
+      const openPermanentDelete = async (row: string) => {
+        await openRowActions(page, row);
+        await page.getByText("Permanently delete", { exact: true }).click();
+        await expect(deleteDialog).toBeVisible();
+      };
+      const originalViewport = page.viewportSize();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await openPermanentDelete(companyName);
+      await expect(deleteDialog.getByText(companyName, { exact: true })).toBeVisible();
+      await expect(deleteButton).toBeDisabled();
+      await deleteDialog.getByLabel("Deletion reason").fill("Remove isolated fixture");
+      await deleteButton.click();
+      await expect(deleteDialog.getByText(/Linked compliance records: 1/)).toBeVisible();
+      await deleteDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      if (originalViewport) await page.setViewportSize(originalViewport);
 
       await page.goto("/hr-admin");
       await page.getByRole("button", { name: /^Companies \(/ }).click();
       await page.getByLabel("Find a company").fill(companyName);
       await page.getByRole("row").filter({ hasText: companyName }).click();
       const companyRecord = page.getByRole("row").filter({ hasText: companyRecordType.type_name });
-      await expect(companyRecord).toContainText("No expiry");
+      await expect(companyRecord).toContainText("Archived");
       await expect(companyRecord.getByRole("button", { name: "Renew" })).toHaveCount(0);
       await page.getByLabel("Find a company").fill("no-such-company-" + suffix);
       await expect(page.getByText("No matching subjects.")).toBeVisible();
       await expect(companyRecord).toHaveCount(0);
+
+      await page.goto("/hr-admin/records");
+      await openPermanentDelete(companyRecordType.type_name);
+      await deleteDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(page.getByRole("row").filter({ hasText: companyRecordType.type_name })).toBeVisible();
+      await openPermanentDelete(companyRecordType.type_name);
+      await deleteDialog.getByLabel("Deletion reason").fill("Remove retired test record");
+      await deleteButton.click();
+      await expect(page.getByRole("row").filter({ hasText: companyRecordType.type_name })).toHaveCount(0);
+
+      await page.goto("/hr-admin/companies");
+      await openPermanentDelete(companyName);
+      await deleteDialog.getByLabel("Deletion reason").fill("Remove retired test company");
+      await deleteButton.click();
+      await expect(page.getByRole("row").filter({ hasText: companyName })).toHaveCount(0);
 
       await page.goto("/hr-admin/records");
       await openRowActions(page, personRecordType);

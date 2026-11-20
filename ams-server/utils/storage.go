@@ -128,14 +128,28 @@ func UploadFile(ctx context.Context, file multipart.File, header *multipart.File
 	if header == nil {
 		return "", errors.New("file header is required")
 	}
+	return uploadFileWithKey(ctx, file, header, certificateObjectKey(header.Header.Get("Content-Type")))
+}
 
+const hrAdminDocumentPrefix = "hr-admin/compliance/"
+
+func UploadHRAdminDocument(ctx context.Context, file multipart.File, header *multipart.FileHeader) (string, error) {
+	key := hrAdminDocumentPrefix + uuid.NewString() + storageExtension(header.Header.Get("Content-Type"))
+	return uploadFileWithKey(ctx, file, header, key)
+}
+
+func IsHRAdminDocumentKey(key string) bool {
+	prefix, _, _ := testStorageScope()
+	return strings.HasPrefix(strings.TrimPrefix(key, prefix), hrAdminDocumentPrefix)
+}
+
+func uploadFileWithKey(ctx context.Context, file multipart.File, header *multipart.FileHeader, key string) (string, error) {
 	config, err := loadStorageConfig()
 	if err != nil {
 		return "", err
 	}
 	client := newS3Client(config)
 	contentType := header.Header.Get("Content-Type")
-	key := certificateObjectKey(contentType)
 	key, err = journalTestStorageObject(key)
 	if err != nil {
 		return "", err

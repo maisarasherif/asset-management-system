@@ -1830,7 +1830,8 @@
                   "pm.response.to.have.status(201);",
                   "const body = pm.response.json();",
                   "pm.expect(body.record.record_id).to.be.a('string');",
-                  "pm.expect(body.current_version.version_number).to.eql(1);"
+                  "pm.expect(body.current_version.version_number).to.eql(1);",
+                  "pm.collectionVariables.set('hr_company_record_id', body.record.record_id);"
                 ]
               }
             }
@@ -2049,7 +2050,7 @@
             "url": "{{baseUrl}}/hr-admin/compliance-records",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"subject_type\": \"VEHICLE\",\n  \"subject_id\": \"{{hr_vehicle_id}}\",\n  \"record_type_id\": \"{{hr_vehicle_record_type_id}}\",\n  \"issue_date\": \"2000-01-01T00:00:00Z\",\n  \"expiry_date\": \"{{hr_vehicle_soon_expiry}}\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"Vehicle registration before archive\"\n}"
+              "raw": "{\n  \"subject_type\": \"VEHICLE\",\n  \"subject_id\": \"{{hr_vehicle_id}}\",\n  \"record_type_id\": \"{{hr_vehicle_record_type_id}}\",\n  \"issue_date\": \"2000-01-01T00:00:00Z\",\n  \"expiry_date\": \"{{hr_vehicle_soon_expiry}}\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"Vehicle registration before archive\",\n  \"document_file\": \"{{hr_replacement_file}}\"\n}"
             }
           },
           "event": [
@@ -2187,6 +2188,91 @@
           ]
         },
         {
+          "name": "Active linked record blocks vehicle archive",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/vehicles/{{hr_vehicle_id}}/archive",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archive_reason\": \"Isolated regression fixture retired\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(409);",
+                  "pm.expect(pm.response.json().linked_record_count).to.eql(1);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Active vehicle cannot be permanently deleted",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/vehicles/{{hr_vehicle_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(409);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archive linked vehicle record",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_vehicle_record_id}}/archive",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archive_reason\": \"Isolated regression fixture retired\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Archive HR/Admin Vehicle",
           "request": {
             "method": "PATCH",
@@ -2271,6 +2357,63 @@
           ]
         },
         {
+          "name": "Active one-time record blocks company archive",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/companies/{{hr_company_id}}/archive",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archive_reason\": \"Isolated regression fixture retired\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(409);",
+                  "pm.expect(pm.response.json().linked_record_count).to.eql(1);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archive linked one-time company record",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_company_record_id}}/archive",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archive_reason\": \"Isolated regression fixture retired\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Archive HR/Admin Company",
           "request": {
             "method": "PATCH",
@@ -2323,6 +2466,419 @@
                   "pm.response.to.have.status(400);",
                   "const body = pm.response.json();",
                   "pm.expect(body.error).to.eql('company is archived');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archive person with an archived record",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/persons/{{hr_person_id}}/archive",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archive_reason\": \"Isolated regression fixture retired\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archived record blocks permanent subject deletion",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/persons/{{hr_person_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(409);",
+                  "pm.expect(pm.response.json().linked_record_count).to.eql(1);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Viewer cannot permanently delete an archived record",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hr_viewer_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_record_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "User cannot permanently delete an archived subject",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hr_user_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/vehicles/{{hr_vehicle_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Permanent deletion requires a reason",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_record_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"  \"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(400);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Permanently delete archived person record and preserve its shared upload",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_record_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const result = pm.response.json();",
+                  "pm.expect(result.queued_document_count).to.eql(0);",
+                  "pm.expect(result.retained_legacy_document_count).to.eql(1);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deleted record has no versions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_record_id}}/versions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.expect(pm.response.json()).to.eql([]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Shared upload remains downloadable through the archived vehicle record",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_vehicle_record_id}}/file"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const url = pm.response.json().url;",
+                  "pm.collectionVariables.set('hr_shared_document_url', url);",
+                  "pm.sendRequest(url, (err, response) => {",
+                  "  pm.test('Shared document bytes remain available', () => {",
+                  "    pm.expect(err).to.be.null;",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Permanently delete archived vehicle record and queue final shared upload purge",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_vehicle_record_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.expect(pm.response.json().queued_document_count).to.eql(1);",
+                  "const url = pm.collectionVariables.get('hr_shared_document_url');",
+                  "function check(attempt) {",
+                  "  pm.sendRequest(url, (err, response) => {",
+                  "    if (!err && response.code === 200 && attempt < 30) { setTimeout(() => check(attempt + 1), 1000); return; }",
+                  "    pm.test('Unreferenced managed upload is physically deleted', () => {",
+                  "      pm.expect(err).to.be.null;",
+                  "      pm.expect(response.code).to.eql(404);",
+                  "    });",
+                  "  });",
+                  "}",
+                  "check(0);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Permanently delete archived company record",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/compliance-records/{{hr_company_record_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Permanently delete archived person",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/persons/{{hr_person_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Permanently delete archived vehicle",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/vehicles/{{hr_vehicle_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Permanently delete archived company",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/companies/{{hr_company_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A repeated permanent delete finds no subject",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/hr-admin/companies/{{hr_company_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Remove isolated regression fixture\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(404);"
                 ]
               }
             }

@@ -280,7 +280,7 @@ func TestHRAdminComplianceValidationAndArchiveEdges(t *testing.T) {
 		"requires_document": false,
 		"active":            true,
 	})
-	createComplianceRecord(t, h, map[string]any{
+	companyRecordID := createComplianceRecord(t, h, map[string]any{
 		"subject_type":      "COMPANY",
 		"subject_id":        companyID,
 		"record_type_id":    companyTypeID,
@@ -299,10 +299,10 @@ func TestHRAdminComplianceValidationAndArchiveEdges(t *testing.T) {
 		"active":                  true,
 	})
 
-	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/hr-admin/persons/"+personID+"/archive", map[string]any{
-		"archive_reason": "No longer company responsibility",
-	}, http.StatusOK)
-
+	// Preserve coverage for a legacy archived subject with an active linked record.
+	if _, err := h.pool.Exec(context.Background(), "UPDATE hr_admin_persons SET status = 'ARCHIVED' WHERE person_id = $1", personID); err != nil {
+		t.Fatal(err)
+	}
 	archivedPersonRenewal := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/hr-admin/compliance-records/"+recordID+"/versions", map[string]any{
 		"issue_date":    now.AddDate(2, 0, 0),
 		"expiry_date":   now.AddDate(4, 0, 0),
@@ -322,6 +322,8 @@ func TestHRAdminComplianceValidationAndArchiveEdges(t *testing.T) {
 	}, http.StatusBadRequest))
 	assertField(t, archivedVehicleRecord, "error", "vehicle is archived")
 
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/hr-admin/compliance-records/"+companyRecordID+"/archive",
+		map[string]any{"archive_reason": "Company no longer used"}, http.StatusOK)
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/hr-admin/companies/"+companyID+"/archive", map[string]any{
 		"archive_reason": "Company no longer used",
 	}, http.StatusOK)
@@ -332,6 +334,59 @@ func TestHRAdminComplianceValidationAndArchiveEdges(t *testing.T) {
 		"issue_date":     now,
 	}, http.StatusBadRequest))
 	assertField(t, archivedCompanyRecord, "error", "company is archived")
+}
+
+func TestHRAdminPermanentDeletionAndArchiveGuards(t *testing.T) {
+	h := setupIntegrationTest(t)
+	const root = "/v1/hr-admin/"
+	const deletionReason = "Remove duplicate test entry"
+	reason := map[string]any{"reason": deletionReason}
+	archive := map[string]any{"archive_reason": "Retired from use"}
+	user := createIntegrationUserToken(t, h.pool, "HR", "Writer", "delete-writer@example.com", "writer-password", "USER")
+	writer := mustGetIntegrationUserByEmail(t, h.pool, "delete-writer@example.com")
+	grantHRAdminProductAccess(t, h, writer.UserID.String(), "USER")
+	for _, subject := range []struct{ kind, path, id string }{
+		{"PERSON", "persons", createHRAdminPerson(t, h, "DELETE-PERSON", "Deletion Person")},
+		{"VEHICLE", "vehicles", createHRAdminVehicle(t, h, "DELETE-VEHICLE")},
+		{"COMPANY", "companies", createHRAdminCompany(t, h, "DELETE-COMPANY", "Deletion Company")},
+	} {
+		subjectPath := root + subject.path + "/" + subject.id
+		typeID := createComplianceRecordType(t, h, map[string]any{
+			"subject_type": subject.kind, "type_name": "Deletion evidence", "renewal_behavior": "RENEWABLE", "active": true,
+		})
+		record := createComplianceRecord(t, h, map[string]any{
+			"subject_type": subject.kind, "subject_id": subject.id, "record_type_id": typeID,
+			"expiry_date": "2098-01-01T00:00:00Z", "document_file": "certificate-files/unknown-legacy-owner.pdf",
+		})
+		recordPath := root + "compliance-records/" + record
+		performJSONRequest(t, h.router, h.adminToken, http.MethodPost, recordPath+"/versions", map[string]any{
+			"expiry_date": "2099-01-01T00:00:00Z", "document_file": "certificate-files/unknown-legacy-owner.pdf",
+		}, http.StatusCreated)
+		performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, subjectPath, reason, http.StatusConflict)
+		performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, recordPath, reason, http.StatusConflict)
+		blockedArchive := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, subjectPath+"/archive", archive, http.StatusConflict))
+		assertField(t, blockedArchive, "linked_record_count", 1)
+		performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, recordPath+"/archive", archive, http.StatusOK)
+		performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, subjectPath+"/archive", archive, http.StatusOK)
+		blockedDelete := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, subjectPath, reason, http.StatusConflict))
+		assertField(t, blockedDelete, "linked_record_count", 1)
+		performJSONRequest(t, h.router, user, http.MethodDelete, subjectPath, reason, http.StatusForbidden)
+		performJSONRequest(t, h.router, user, http.MethodDelete, recordPath, reason, http.StatusForbidden)
+		performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, recordPath, map[string]any{"reason": "   "}, http.StatusBadRequest)
+		deleted := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, recordPath, reason, http.StatusOK))
+		assertField(t, deleted, "queued_document_count", 0)
+		assertField(t, deleted, "retained_legacy_document_count", 1)
+		if versions := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, recordPath+"/versions", nil, http.StatusOK)); len(versions) != 0 {
+			t.Fatal("deleted record versions remain")
+		}
+		performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, subjectPath, reason, http.StatusOK)
+		performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, subjectPath, reason, http.StatusNotFound)
+	}
+	var count int
+	err := h.pool.QueryRow(context.Background(), "SELECT count(*) FROM hr_admin_deletion_audit WHERE reason = $1 AND deleted_by IS NOT NULL AND display_id <> ''", deletionReason).Scan(&count)
+	if err != nil || count != 6 {
+		t.Fatalf("expected six audited deletions, got %d: %v", count, err)
+	}
 }
 
 func TestHRAdminRenewalQueueUsesSchedulerEligibilityRules(t *testing.T) {
@@ -420,9 +475,10 @@ func TestHRAdminRenewalQueueUsesSchedulerEligibilityRules(t *testing.T) {
 		"issue_date":     issueDate,
 		"expiry_date":    dateAtOffset(30),
 	})
-	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/hr-admin/vehicles/"+archivedVehicleID+"/archive", map[string]any{
-		"archive_reason": "Vehicle sold",
-	}, http.StatusOK)
+	// Archived subjects from before the lifecycle guard still exist in production.
+	if _, err := h.pool.Exec(context.Background(), "UPDATE hr_admin_vehicles SET status = 'ARCHIVED' WHERE vehicle_id = $1", archivedVehicleID); err != nil {
+		t.Fatal(err)
+	}
 
 	queue := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/hr-admin/renewal-queue", nil, http.StatusOK))
 	defaultPolicyItem := findByStringField(t, queue, "record_id", defaultPolicyRecordID)
@@ -536,9 +592,10 @@ func TestHRAdminReminderSchedulerUsesPolicyAndSkipsArchivedSubjects(t *testing.T
 		"issue_date":     issueDate,
 		"expiry_date":    outsideWindowExpiry,
 	})
-	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/hr-admin/vehicles/"+archivedVehicleID+"/archive", map[string]any{
-		"archive_reason": "Vehicle sold",
-	}, http.StatusOK)
+	// Archived subjects from before the lifecycle guard still exist in production.
+	if _, err := h.pool.Exec(context.Background(), "UPDATE hr_admin_vehicles SET status = 'ARCHIVED' WHERE vehicle_id = $1", archivedVehicleID); err != nil {
+		t.Fatal(err)
+	}
 
 	archivedRecordPersonID := createHRAdminPerson(t, h, "HRP-REM-002", "Archived Record Person")
 	archivedRecordID := createComplianceRecord(t, h, map[string]any{
@@ -708,7 +765,9 @@ func TestHRAdminOverviewExpiryBoundaryAndDirectory(t *testing.T) {
 			"issue_date": "2000-01-01T00:00:00Z", "expiry_date": "2001-11-18T22:30:00Z", "document_file": "registry/original.pdf"})
 	}
 	record := add(active)
-	add(archived)
+	archivedRecord := add(archived)
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/hr-admin/compliance-records/"+archivedRecord+"/archive",
+		map[string]any{"archive_reason": "Retired from fleet"}, http.StatusOK)
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/hr-admin/vehicles/"+archived+"/archive", map[string]any{"archive_reason": "Retired from fleet"}, http.StatusOK)
 	assertField(t, group("VEHICLE"), "subject_count", 3)
 	assertField(t, group("VEHICLE"), "expired_count", 1)

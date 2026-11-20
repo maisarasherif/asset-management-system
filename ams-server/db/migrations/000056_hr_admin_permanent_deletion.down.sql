@@ -1,0 +1,3 @@
+DROP INDEX idx_compliance_record_versions_document;
+DROP TABLE hr_admin_document_uploads;
+DROP TABLE hr_admin_deletion_audit;

@@ -75,12 +75,14 @@ func StartRiver(ctx context.Context, pool *pgxpool.Pool) (*river.Client[pgx.Tx],
 	river.AddWorker(workers, &PasswordResetEmailWorker{})
 	river.AddWorker(workers, &NotificationEmailWorker{pool: pool})
 	river.AddWorker(workers, &NotificationClickUpWorker{pool: pool})
+	river.AddWorker(workers, &HRAdminDocumentPurgeWorker{pool: pool})
 
 	client, err := river.NewClient(driver, &river.Config{
 		Logger:      riverLogger(),
 		MaxAttempts: 5,
 		Queues: map[string]river.QueueConfig{
-			PasswordResetQueue: {MaxWorkers: 2},
+			PasswordResetQueue:        {MaxWorkers: 2},
+			HRAdminDocumentPurgeQueue: {MaxWorkers: 2},
 		},
 		Workers: workers,
 	})

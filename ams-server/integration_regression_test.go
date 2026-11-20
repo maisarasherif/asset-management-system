@@ -1904,6 +1904,8 @@ TRUNCATE TABLE
   notification_deliveries,
   product_notification_configurations,
   product_access,
+  hr_admin_deletion_audit,
+  hr_admin_document_uploads,
   compliance_record_versions,
   compliance_records,
   compliance_record_types,

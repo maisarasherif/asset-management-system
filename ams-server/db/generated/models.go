@@ -337,6 +337,16 @@ type HrAdminCompany struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
+type HrAdminDeletionAudit struct {
+	DeletionID int64     `json:"deletion_id"`
+	ItemType   string    `json:"item_type"`
+	ItemID     uuid.UUID `json:"item_id"`
+	DisplayID  string    `json:"display_id"`
+	DeletedBy  uuid.UUID `json:"deleted_by"`
+	Reason     string    `json:"reason"`
+	DeletedAt  time.Time `json:"deleted_at"`
+}
+
 type HrAdminDepartment struct {
 	DepartmentID   uuid.UUID `json:"department_id"`
 	DepartmentName string    `json:"department_name"`
@@ -344,6 +354,12 @@ type HrAdminDepartment struct {
 	Active         bool      `json:"active"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type HrAdminDocumentUpload struct {
+	ObjectKey        string     `json:"object_key"`
+	PurgeRequestedAt *time.Time `json:"purge_requested_at"`
+	PurgedAt         *time.Time `json:"purged_at"`
 }
 
 type HrAdminPerson struct {

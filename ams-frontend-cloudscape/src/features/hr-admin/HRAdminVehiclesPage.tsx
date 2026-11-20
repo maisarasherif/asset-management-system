@@ -29,6 +29,7 @@ import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { HRAdminVehicle, HRAdminVehicleInput } from "../../types/ams";
 import { formatEventTime } from "./hrAdminDates";
+import { PermanentDeleteModal, type PermanentDeleteTarget } from "./PermanentDeleteModal";
 import { humanizeEnum } from "../../utils/format";
 
 type VehicleEditor =
@@ -190,7 +191,7 @@ function ArchiveVehicleModal({
     >
       <SpaceBetween size="l">
         <Alert type="warning">
-          Archived vehicles stay visible for history, but HR/Admin renewal work will ignore their records.
+          Archive this vehicle’s active compliance records first. Archived records remain available for history.
         </Alert>
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="Archive reason" constraintText="Required">
@@ -217,6 +218,7 @@ export function HRAdminVehiclesPage() {
   const [compactTable, setCompactTable] = useState(() => isCompactViewport());
   const [editor, setEditor] = useState<VehicleEditor>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PermanentDeleteTarget | null>(null);
   const [modalError, setModalError] = useState("");
 
   const vehiclesQuery = useQuery({
@@ -265,7 +267,7 @@ export function HRAdminVehiclesPage() {
       setArchiveTarget(null);
       setModalError("");
       success("Vehicle archived", "Renewal work will ignore this vehicle while retaining history.");
-      void invalidateVehicles();
+      void queryClient.invalidateQueries({ queryKey: ["hr-admin"] });
     },
     onError: (mutationError: Error) => {
       setModalError(mutationError.message);
@@ -340,6 +342,19 @@ export function HRAdminVehiclesPage() {
         return <Button onClick={() => editVehicle(item)}>Edit</Button>;
       }
 
+      if (canArchive && item.status === "ARCHIVED") {
+        return (
+          <ButtonDropdown
+            ariaLabel={`Actions for ${item.plate_number}`}
+            expandToViewport
+            items={[{ id: "permanent-delete", text: "Permanently delete" }]}
+            onItemClick={() => setDeleteTarget({ id: item.vehicle_id, displayId: item.display_id, label: item.plate_number })}
+          >
+            Actions
+          </ButtonDropdown>
+        );
+      }
+
       return <Box color="text-body-secondary">View only</Box>;
     };
 
@@ -354,7 +369,7 @@ export function HRAdminVehiclesPage() {
               <strong>{item.plate_number}</strong>
               <br />
               {[item.make, item.model].filter(Boolean).join(" ") || item.display_id}
-              {canWrite && item.status === "ACTIVE" ? (
+              {canArchive || (canWrite && item.status === "ACTIVE") ? (
                 <div className="hr-admin-persons__compact-actions">{rowActions(item)}</div>
               ) : null}
             </TableCellText>
@@ -566,6 +581,7 @@ export function HRAdminVehiclesPage() {
         }}
         onSubmit={archiveVehicle}
       />
+      {deleteTarget && <PermanentDeleteModal kind="VEHICLE" target={deleteTarget} onDismiss={() => setDeleteTarget(null)} />}
     </ContentLayout>
   );
 }

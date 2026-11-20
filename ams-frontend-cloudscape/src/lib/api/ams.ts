@@ -316,6 +316,26 @@ export function archiveComplianceRecord(recordId: string, archiveReason: string)
   });
 }
 
+const hrAdminDeletionPaths = {
+  PERSON: "persons",
+  VEHICLE: "vehicles",
+  COMPANY: "companies",
+  COMPLIANCE_RECORD: "compliance-records",
+} as const;
+
+export type HRAdminDeletableKind = keyof typeof hrAdminDeletionPaths;
+
+export function permanentlyDeleteHRAdminItem(kind: HRAdminDeletableKind, id: string, reason: string) {
+  return apiRequest<{
+    message: string;
+    queued_document_count?: number;
+    retained_legacy_document_count?: number;
+  }>(`/v1/hr-admin/${hrAdminDeletionPaths[kind]}/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export function uploadComplianceRecordDocument(file: File) {
   const formData = new FormData();
   formData.append("file", file);

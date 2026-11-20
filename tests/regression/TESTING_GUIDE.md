@@ -604,6 +604,25 @@ using the updated deployment Makefile on `hr-db`. In the production overview,
 compare the chart's red counts with the photo panels, open a group, and clear
 the selection to verify the full-width view.
 
+## HR/Admin archive and permanent deletion
+
+Run the focused HR/Admin three-layer command in step 2, then the default
+regression in step 3. The isolated runner applies migration 56 before the
+suites run. Go covers Persons, Vehicles, Companies and Compliance Records,
+including active-link archive conflicts, archived-link deletion conflicts,
+role and reason checks, version removal and the deletion audit. Newman
+checks the same lifecycle rules and verifies that a shared managed file is
+downloadable until the final version reference is removed and River purges
+the storage object. Playwright covers both blocking messages, cancellation
+and permanent deletion of a compliance record followed by its company.
+
+Deploy the backend and frontend together using the migration-first
+`ams deploy` on `hr-db`. Migration 56 adds the deletion audit and upload
+ownership tables. Uploaded files registered to HR/Admin are eligible for
+queued cleanup after the last reference is deleted. Historical attachment
+keys lack upload ownership and are retained in storage. River records
+cleanup attempts under the `hr_admin_documents` queue.
+
 ## Result report and completion gate
 
 After each feature step, record:

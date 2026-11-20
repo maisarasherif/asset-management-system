@@ -87,34 +87,13 @@ func validateComplianceVersionInput(recordType db.ComplianceRecordType, issueDat
 	return nil
 }
 
-func validateHRAdminSubject(ctx context.Context, queries *db.Queries, subjectType string, subjectID uuid.UUID, requireActive bool) error {
-	switch subjectType {
-	case "PERSON":
-		person, err := queries.GetHRAdminPersonByID(ctx, subjectID)
-		if err != nil {
-			return err
-		}
-		if requireActive && person.Status != "ACTIVE" {
-			return errors.New("person is archived")
-		}
-	case "VEHICLE":
-		vehicle, err := queries.GetHRAdminVehicleByID(ctx, subjectID)
-		if err != nil {
-			return err
-		}
-		if requireActive && vehicle.Status != "ACTIVE" {
-			return errors.New("vehicle is archived")
-		}
-	case "COMPANY":
-		company, err := queries.GetHRAdminCompanyByID(ctx, subjectID)
-		if err != nil {
-			return err
-		}
-		if requireActive && company.Status != "ACTIVE" {
-			return errors.New("company is archived")
-		}
-	default:
-		return errors.New("invalid subject type")
+func validateActiveHRAdminSubject(ctx context.Context, queries *db.Queries, subjectType string, subjectID uuid.UUID) error {
+	_, status, err := lockHRAdminSubject(ctx, queries, subjectType, subjectID)
+	if err != nil {
+		return err
+	}
+	if status != "ACTIVE" {
+		return errors.New(strings.ToLower(subjectType) + " is archived")
 	}
 	return nil
 }
@@ -242,40 +221,6 @@ func UpdateHRAdminPerson(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-func ArchiveHRAdminPerson(pool *pgxpool.Pool) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		personID, ok := utils.ParseUUIDParam(c, "person_id")
-		if !ok {
-			return
-		}
-		var input dto.ArchiveInput
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
-			return
-		}
-		if err := validate.Struct(input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
-			return
-		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-		defer cancel()
-		rows, err := db.New(pool).ArchiveHRAdminPerson(ctx, db.ArchiveHRAdminPersonParams{
-			PersonID:      personID,
-			ArchiveReason: input.ArchiveReason,
-			ArchivedBy:    actorUUID(c),
-		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to archive HR/Admin person"})
-			return
-		}
-		if rows == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "active HR/Admin person not found"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"message": "HR/Admin person archived successfully"})
-	}
-}
-
 func GetHRAdminVehicles(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -368,40 +313,6 @@ func UpdateHRAdminVehicle(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-func ArchiveHRAdminVehicle(pool *pgxpool.Pool) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		vehicleID, ok := utils.ParseUUIDParam(c, "vehicle_id")
-		if !ok {
-			return
-		}
-		var input dto.ArchiveInput
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
-			return
-		}
-		if err := validate.Struct(input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
-			return
-		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-		defer cancel()
-		rows, err := db.New(pool).ArchiveHRAdminVehicle(ctx, db.ArchiveHRAdminVehicleParams{
-			VehicleID:     vehicleID,
-			ArchiveReason: input.ArchiveReason,
-			ArchivedBy:    actorUUID(c),
-		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to archive HR/Admin vehicle"})
-			return
-		}
-		if rows == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "active HR/Admin vehicle not found"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"message": "HR/Admin vehicle archived successfully"})
-	}
-}
-
 func GetHRAdminCompanies(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -491,40 +402,6 @@ func UpdateHRAdminCompany(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "HR/Admin company updated successfully"})
-	}
-}
-
-func ArchiveHRAdminCompany(pool *pgxpool.Pool) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		companyID, ok := utils.ParseUUIDParam(c, "company_id")
-		if !ok {
-			return
-		}
-		var input dto.ArchiveInput
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
-			return
-		}
-		if err := validate.Struct(input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": err.Error()})
-			return
-		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-		defer cancel()
-		rows, err := db.New(pool).ArchiveHRAdminCompany(ctx, db.ArchiveHRAdminCompanyParams{
-			CompanyID:     companyID,
-			ArchiveReason: input.ArchiveReason,
-			ArchivedBy:    actorUUID(c),
-		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to archive HR/Admin company"})
-			return
-		}
-		if rows == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "active HR/Admin company not found"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"message": "HR/Admin company archived successfully"})
 	}
 }
 
@@ -750,7 +627,7 @@ func CreateComplianceRecord(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx
 			c.JSON(http.StatusBadRequest, gin.H{"error": "subject type does not match compliance record type"})
 			return
 		}
-		if err := validateHRAdminSubject(ctx, queries, input.SubjectType, subjectID, true); err != nil {
+		if err := validateActiveHRAdminSubject(ctx, queries, input.SubjectType, subjectID); err != nil {
 			if err == pgx.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "compliance subject not found"})
 				return
@@ -760,6 +637,9 @@ func CreateComplianceRecord(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx
 		}
 		if err := validateComplianceVersionInput(recordType, input.IssueDate, input.ExpiryDate, input.DocumentFile); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !checkHRAdminDocumentForAttachment(c, ctx, queries, input.DocumentFile) {
 			return
 		}
 
@@ -823,7 +703,7 @@ func RenewComplianceRecord(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]
 		defer tx.Rollback(ctx)
 		queries := db.New(tx)
 
-		record, err := queries.GetComplianceRecordByID(ctx, recordID)
+		record, err := queries.LockComplianceRecord(ctx, recordID)
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "compliance record not found"})
@@ -841,12 +721,15 @@ func RenewComplianceRecord(pool *pgxpool.Pool, riverClient *river.Client[pgx.Tx]
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch compliance record type"})
 			return
 		}
-		if err := validateHRAdminSubject(ctx, queries, record.SubjectType, record.SubjectID, true); err != nil {
+		if err := validateActiveHRAdminSubject(ctx, queries, record.SubjectType, record.SubjectID); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		if err := validateComplianceVersionInput(recordType, input.IssueDate, input.ExpiryDate, input.DocumentFile); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !checkHRAdminDocumentForAttachment(c, ctx, queries, input.DocumentFile) {
 			return
 		}
 
@@ -916,10 +799,16 @@ func UploadComplianceRecordDocument(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		key, err := utils.UploadFile(ctx, file, header)
+		key, err := utils.UploadHRAdminDocument(ctx, file, header)
 		if err != nil {
 			logger.Log.Error().Err(err).Msg("failed to upload HR/Admin compliance record document")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload file"})
+			return
+		}
+
+		if err := db.New(pool).RegisterHRAdminDocument(ctx, key); err != nil {
+			logger.Log.Error().Err(err).Str("file_key", key).Msg("failed to register HR/Admin document upload")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register document upload"})
 			return
 		}
 

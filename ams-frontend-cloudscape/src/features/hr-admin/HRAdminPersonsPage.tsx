@@ -31,6 +31,7 @@ import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { HRAdminDepartment, HRAdminPerson, HRAdminPersonInput } from "../../types/ams";
 import { formatEventTime } from "./hrAdminDates";
+import { PermanentDeleteModal, type PermanentDeleteTarget } from "./PermanentDeleteModal";
 import { humanizeEnum } from "../../utils/format";
 
 type PersonEditor =
@@ -189,7 +190,7 @@ function ArchivePersonModal({
     >
       <SpaceBetween size="l">
         <Alert type="warning">
-          Archived persons stay visible for history, but HR/Admin renewal work will ignore their records.
+          Archive this person’s active compliance records first. Archived records remain available for history.
         </Alert>
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="Archive reason" constraintText="Required">
@@ -216,6 +217,7 @@ export function HRAdminPersonsPage() {
   const [compactTable, setCompactTable] = useState(() => isCompactViewport());
   const [editor, setEditor] = useState<PersonEditor>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PermanentDeleteTarget | null>(null);
   const [modalError, setModalError] = useState("");
 
   const peopleQuery = useQuery({
@@ -268,7 +270,7 @@ export function HRAdminPersonsPage() {
       setArchiveTarget(null);
       setModalError("");
       success("Person archived", "Renewal work will ignore this person while retaining history.");
-      void invalidatePersons();
+      void queryClient.invalidateQueries({ queryKey: ["hr-admin"] });
     },
     onError: (mutationError: Error) => {
       setModalError(mutationError.message);
@@ -337,6 +339,19 @@ export function HRAdminPersonsPage() {
         return <Button onClick={() => editPerson(item)}>Edit</Button>;
       }
 
+      if (canArchive && item.status === "ARCHIVED") {
+        return (
+          <ButtonDropdown
+            ariaLabel={`Actions for ${item.full_name}`}
+            expandToViewport
+            items={[{ id: "permanent-delete", text: "Permanently delete" }]}
+            onItemClick={() => setDeleteTarget({ id: item.person_id, displayId: item.display_id, label: item.full_name })}
+          >
+            Actions
+          </ButtonDropdown>
+        );
+      }
+
       return <Box color="text-body-secondary">View only</Box>;
     };
 
@@ -351,7 +366,7 @@ export function HRAdminPersonsPage() {
               <strong>{item.full_name}</strong>
               <br />
               {item.person_code || item.display_id}
-              {canWrite && item.status === "ACTIVE" ? (
+              {canArchive || (canWrite && item.status === "ACTIVE") ? (
                 <div className="hr-admin-persons__compact-actions">{rowActions(item)}</div>
               ) : null}
             </TableCellText>
@@ -560,6 +575,7 @@ export function HRAdminPersonsPage() {
         }}
         onSubmit={archivePerson}
       />
+      {deleteTarget && <PermanentDeleteModal kind="PERSON" target={deleteTarget} onDismiss={() => setDeleteTarget(null)} />}
     </ContentLayout>
   );
 }
