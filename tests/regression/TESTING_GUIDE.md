@@ -635,6 +635,21 @@ E2E_SPECS='../tests/regression/e2e/hr-admin-product.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
+**Focused VPS browser rerun passed on 20 November 2026.** All 6 HR/Admin
+Playwright tests passed in 2.0 minutes at the `a65216f` handoff. Go and
+Newman were outside this rerun. Storage cleanup passed with 0 journaled
+objects deleted, the runner dropped `ams_e2e_20261120075150`, and the exit
+status was `0`. Evidence is in
+`/home/pms/ams-testing/asset-management-system/.vps-test-run/run.2robg2`.
+
+**Broader VPS gate passed on 20 November 2026.** Go reported 201 passed,
+0 failed and 0 skipped. Newman passed, including the HR/Admin shared-upload
+retention and final purge checks. All 12 Playwright tests passed in 5.0 minutes.
+The runner deleted 75 journaled storage objects, dropped the isolated database
+`ams_e2e_20261120075655`, and exited with status `0`. VPS evidence is in
+`/home/pms/ams-testing/asset-management-system/.vps-test-run/run.eix7Vf`,
+including certificate timings in `certificate-latency-summary.json`.
+
 Deploy the backend and frontend together using the migration-first
 `ams deploy` on `hr-db`. Migration 56 adds the deletion audit and upload
 ownership tables. Uploaded files registered to HR/Admin are eligible for
