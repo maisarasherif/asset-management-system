@@ -36,6 +36,33 @@ func (q *Queries) AssignAccountSigningCategory(ctx context.Context, arg AssignAc
 	return result.RowsAffected(), nil
 }
 
+const countEligibleCompetentSigners = `-- name: CountEligibleCompetentSigners :one
+SELECT COUNT(*)
+FROM competent_persons cp
+JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
+JOIN competent_person_signing_profiles p ON p.competent_person_id = cp.competent_person_id
+JOIN certificate_signature_versions s ON s.signature_id = p.current_signature_id
+  AND s.owner_id = cp.competent_person_id AND s.owner_kind = 'COMPETENT_PERSON' AND s.storage_state = 'STORED'
+WHERE cp.active = TRUE AND cc.active = TRUE
+  AND btrim(cp.full_name, U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000') <> ''
+  AND btrim(cp.organization, U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000') <> ''
+  AND (NOT EXISTS (SELECT 1 FROM certificate_competency_categories ccc WHERE ccc.certificate_id = $1)
+    OR EXISTS (SELECT 1 FROM certificate_competency_categories ccc WHERE ccc.certificate_id = $1 AND ccc.competency_category_id = cp.competency_category_id))
+  AND strpos(lower(concat_ws(' ', cp.full_name, cp.organization, cc.category_name)), lower($2::text)) > 0
+`
+
+type CountEligibleCompetentSignersParams struct {
+	CertificateID uuid.UUID `json:"certificate_id"`
+	SearchText    string    `json:"search_text"`
+}
+
+func (q *Queries) CountEligibleCompetentSigners(ctx context.Context, arg CountEligibleCompetentSignersParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countEligibleCompetentSigners, arg.CertificateID, arg.SearchText)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCompetentSignatureVersion = `-- name: CreateCompetentSignatureVersion :exec
 INSERT INTO certificate_signature_versions
     (signature_id, owner_kind, owner_id, competent_person_id, file_key, sha256,
@@ -220,11 +247,21 @@ JOIN competent_person_signing_profiles p ON p.competent_person_id = cp.competent
 JOIN certificate_signature_versions s ON s.signature_id = p.current_signature_id
   AND s.owner_id = cp.competent_person_id AND s.owner_kind = 'COMPETENT_PERSON' AND s.storage_state = 'STORED'
 WHERE cp.active = TRUE AND cc.active = TRUE
-  AND btrim(cp.full_name) <> '' AND btrim(cp.organization) <> ''
+  AND btrim(cp.full_name, U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000') <> ''
+  AND btrim(cp.organization, U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000') <> ''
   AND (NOT EXISTS (SELECT 1 FROM certificate_competency_categories ccc WHERE ccc.certificate_id = $1)
     OR EXISTS (SELECT 1 FROM certificate_competency_categories ccc WHERE ccc.certificate_id = $1 AND ccc.competency_category_id = cp.competency_category_id))
+  AND strpos(lower(concat_ws(' ', cp.full_name, cp.organization, cc.category_name)), lower($2::text)) > 0
 ORDER BY cp.full_name, cp.competent_person_id
+LIMIT $4 OFFSET $3
 `
+
+type ListEligibleCompetentSignersParams struct {
+	CertificateID uuid.UUID `json:"certificate_id"`
+	SearchText    string    `json:"search_text"`
+	PageOffset    int32     `json:"page_offset"`
+	PageLimit     int32     `json:"page_limit"`
+}
 
 type ListEligibleCompetentSignersRow struct {
 	SignerID             uuid.UUID `json:"signer_id"`
@@ -240,8 +277,13 @@ type ListEligibleCompetentSignersRow struct {
 	CreatedAt            time.Time `json:"created_at"`
 }
 
-func (q *Queries) ListEligibleCompetentSigners(ctx context.Context, certificateID uuid.UUID) ([]ListEligibleCompetentSignersRow, error) {
-	rows, err := q.db.Query(ctx, listEligibleCompetentSigners, certificateID)
+func (q *Queries) ListEligibleCompetentSigners(ctx context.Context, arg ListEligibleCompetentSignersParams) ([]ListEligibleCompetentSignersRow, error) {
+	rows, err := q.db.Query(ctx, listEligibleCompetentSigners,
+		arg.CertificateID,
+		arg.SearchText,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

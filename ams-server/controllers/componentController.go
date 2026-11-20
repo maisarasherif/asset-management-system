@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/maisarasherif/asset-management-system/ams-server/db/generated"
@@ -96,7 +97,16 @@ func GetComponentsByAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterCategory := filters.UUID("category_id")
+		filterKind := filters.Enum("component_kind", "NORMAL", "SELF")
+		if !filters.Valid() {
+			return
+		}
+
 		components, err := queries.GetComponentsByAssetIDPaginated(ctx, db.GetComponentsByAssetIDPaginatedParams{
+			SearchText: search, FilterCategory: filterCategory, FilterKind: filterKind,
 			AssetID:    assetID,
 			PageLimit:  limit,
 			PageOffset: offset,
@@ -106,7 +116,7 @@ func GetComponentsByAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountComponentsByAssetID(ctx, assetID)
+		total, err := queries.CountComponentsByAssetID(ctx, db.CountComponentsByAssetIDParams{SearchText: search, FilterCategory: filterCategory, FilterKind: filterKind, AssetID: assetID})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count components"})
 			return
@@ -430,5 +440,45 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "component updated successfully"})
+	}
+}
+
+func SearchAssetComponentCategories(pool *pgxpool.Pool, client bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
+		if !ok {
+			return
+		}
+		userID := uuid.Nil
+		if client {
+			userID, ok = clientUserID(c)
+			if !ok {
+				return
+			}
+		}
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		if !filters.Valid() {
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		queries := db.New(pool)
+		limit, offset, page := utils.ParsePagination(c)
+		rows, err := queries.SearchAssetComponentCategories(ctx, db.SearchAssetComponentCategoriesParams{
+			AssetID: assetID, ClientUserID: userID, SearchText: search, PageLimit: limit, PageOffset: offset,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load component categories."})
+			return
+		}
+		total, err := queries.CountAssetComponentCategories(ctx, db.CountAssetComponentCategoriesParams{
+			AssetID: assetID, ClientUserID: userID, SearchText: search,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not count component categories."})
+			return
+		}
+		c.JSON(http.StatusOK, dto.PaginatedResponse{Data: rows, Meta: utils.BuildMeta(page, total)})
 	}
 }

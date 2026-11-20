@@ -21,11 +21,17 @@ SELECT
     created_at,
     updated_at
 FROM assets
-ORDER BY created_at DESC
+WHERE strpos(lower(concat_ws(' ', display_id, name, description, location, assigned_project)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_project)::text = '' OR lower(assigned_project) = lower(sqlc.arg(filter_project)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(status) = lower(sqlc.arg(filter_status)))
+ORDER BY created_at DESC, asset_id
 LIMIT $1 OFFSET $2;
 
 -- name: CountAssets :one
-SELECT COUNT(*) FROM assets;
+SELECT COUNT(*) FROM assets
+WHERE strpos(lower(concat_ws(' ', display_id, name, description, location, assigned_project)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_project)::text = '' OR lower(assigned_project) = lower(sqlc.arg(filter_project)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(status) = lower(sqlc.arg(filter_status)));
 
 -- name: GetAssetByID :one
 SELECT

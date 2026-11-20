@@ -53,13 +53,19 @@ SELECT
     assigned_project
 FROM components
 WHERE asset_id = sqlc.arg(asset_id)
-ORDER BY created_at DESC
+  AND strpos(lower(concat_ws(' ', display_id, name, serial_number, manufacturer, model, description)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_category)::uuid = '00000000-0000-0000-0000-000000000000' OR category_id = sqlc.arg(filter_category) OR scope_category_id = sqlc.arg(filter_category))
+  AND (sqlc.arg(filter_kind)::text = '' OR lower(component_kind) = lower(sqlc.arg(filter_kind)))
+ORDER BY created_at DESC, component_id
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountComponentsByAssetID :one
 SELECT COUNT(*)
 FROM components
-WHERE asset_id = $1;
+WHERE asset_id = sqlc.arg(asset_id)
+  AND strpos(lower(concat_ws(' ', display_id, name, serial_number, manufacturer, model, description)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_category)::uuid = '00000000-0000-0000-0000-000000000000' OR category_id = sqlc.arg(filter_category) OR scope_category_id = sqlc.arg(filter_category))
+  AND (sqlc.arg(filter_kind)::text = '' OR lower(component_kind) = lower(sqlc.arg(filter_kind)));
 
 -- name: GetComponentByID :one
 SELECT
@@ -237,3 +243,50 @@ WHERE component_id = sqlc.arg(component_id);
 
 -- name: DeleteComponent :execrows
 DELETE FROM components WHERE component_id = $1;
+
+-- name: SearchAssetComponentCategories :many
+SELECT
+    COALESCE(c.scope_category_id, c.category_id)::uuid AS category_id,
+    min(COALESCE(cat.category_name, ''))::text AS category_name
+FROM components c
+JOIN assets a ON a.asset_id = c.asset_id
+LEFT JOIN catalog_scope_categories scoped ON scoped.scope_category_id = c.scope_category_id
+LEFT JOIN categories cat ON cat.category_id = COALESCE(scoped.category_id, c.category_id)
+WHERE a.asset_id = sqlc.arg(asset_id)
+  AND COALESCE(c.scope_category_id, c.category_id) IS NOT NULL
+  AND strpos(lower(COALESCE(cat.category_name, '')), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(client_user_id)::uuid = '00000000-0000-0000-0000-000000000000' OR EXISTS (
+      SELECT 1
+      FROM projects p
+      JOIN user_project_access upa ON upa.project_id = p.project_id
+      JOIN users u ON u.user_id = upa.user_id
+      WHERE LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+        AND upa.user_id = sqlc.arg(client_user_id)
+        AND upa.status = 'ACTIVE'
+        AND p.status = 'ACTIVE'
+        AND u.status = 'ACTIVE'
+  ))
+GROUP BY COALESCE(c.scope_category_id, c.category_id)
+ORDER BY category_name, COALESCE(c.scope_category_id, c.category_id)
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+
+-- name: CountAssetComponentCategories :one
+SELECT COUNT(DISTINCT COALESCE(c.scope_category_id, c.category_id))
+FROM components c
+JOIN assets a ON a.asset_id = c.asset_id
+LEFT JOIN catalog_scope_categories scoped ON scoped.scope_category_id = c.scope_category_id
+LEFT JOIN categories cat ON cat.category_id = COALESCE(scoped.category_id, c.category_id)
+WHERE a.asset_id = sqlc.arg(asset_id)
+  AND COALESCE(c.scope_category_id, c.category_id) IS NOT NULL
+  AND strpos(lower(COALESCE(cat.category_name, '')), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(client_user_id)::uuid = '00000000-0000-0000-0000-000000000000' OR EXISTS (
+      SELECT 1
+      FROM projects p
+      JOIN user_project_access upa ON upa.project_id = p.project_id
+      JOIN users u ON u.user_id = upa.user_id
+      WHERE LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+        AND upa.user_id = sqlc.arg(client_user_id)
+        AND upa.status = 'ACTIVE'
+        AND p.status = 'ACTIVE'
+        AND u.status = 'ACTIVE'
+  ));

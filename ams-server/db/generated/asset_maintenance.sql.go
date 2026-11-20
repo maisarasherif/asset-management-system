@@ -56,6 +56,28 @@ func (q *Queries) CompleteOpenAssetMaintenanceEvent(ctx context.Context, arg Com
 	return i, err
 }
 
+const countSearchAssetMaintenanceEvents = `-- name: CountSearchAssetMaintenanceEvents :one
+SELECT COUNT(*) FROM asset_maintenance_events
+WHERE asset_id = $1
+  AND ($2::text = '' OR status = $2)
+  AND ($3::text = ''
+    OR strpos(lower(display_id), lower($3)) > 0
+    OR strpos(lower(completion_notes), lower($3)) > 0)
+`
+
+type CountSearchAssetMaintenanceEventsParams struct {
+	AssetID      uuid.UUID `json:"asset_id"`
+	FilterStatus string    `json:"filter_status"`
+	Search       string    `json:"search"`
+}
+
+func (q *Queries) CountSearchAssetMaintenanceEvents(ctx context.Context, arg CountSearchAssetMaintenanceEventsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchAssetMaintenanceEvents, arg.AssetID, arg.FilterStatus, arg.Search)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAssetMaintenanceEvent = `-- name: CreateAssetMaintenanceEvent :one
 INSERT INTO asset_maintenance_events (
     display_id,
@@ -409,6 +431,62 @@ func (q *Queries) MarkAssetMaintenanceRequired(ctx context.Context, assetID uuid
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const searchAssetMaintenanceEvents = `-- name: SearchAssetMaintenanceEvents :many
+SELECT maintenance_event_id, display_id, asset_id, due_at_hours, triggered_at_hours, previous_asset_status, status, completed_at, completion_notes, created_at FROM asset_maintenance_events
+WHERE asset_id = $1
+  AND ($2::text = '' OR status = $2)
+  AND ($3::text = ''
+    OR strpos(lower(display_id), lower($3)) > 0
+    OR strpos(lower(completion_notes), lower($3)) > 0)
+ORDER BY created_at DESC, maintenance_event_id
+LIMIT $5 OFFSET $4
+`
+
+type SearchAssetMaintenanceEventsParams struct {
+	AssetID      uuid.UUID `json:"asset_id"`
+	FilterStatus string    `json:"filter_status"`
+	Search       string    `json:"search"`
+	PageOffset   int32     `json:"page_offset"`
+	PageLimit    int32     `json:"page_limit"`
+}
+
+func (q *Queries) SearchAssetMaintenanceEvents(ctx context.Context, arg SearchAssetMaintenanceEventsParams) ([]AssetMaintenanceEvent, error) {
+	rows, err := q.db.Query(ctx, searchAssetMaintenanceEvents,
+		arg.AssetID,
+		arg.FilterStatus,
+		arg.Search,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AssetMaintenanceEvent
+	for rows.Next() {
+		var i AssetMaintenanceEvent
+		if err := rows.Scan(
+			&i.MaintenanceEventID,
+			&i.DisplayID,
+			&i.AssetID,
+			&i.DueAtHours,
+			&i.TriggeredAtHours,
+			&i.PreviousAssetStatus,
+			&i.Status,
+			&i.CompletedAt,
+			&i.CompletionNotes,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateAssetWorkingHours = `-- name: UpdateAssetWorkingHours :one

@@ -340,3 +340,151 @@ VALUES (
     sqlc.arg(competent_person_id),
     NOW()
 );
+
+-- name: SearchComponentCertificates :many
+SELECT
+    certificate_id,
+    display_id,
+    component_id,
+    certificate_name,
+    issue_date,
+    expiry_date,
+    certificate_file,
+    issuing_authority,
+    status,
+    test_id,
+    imca_ref,
+    imca_d018,
+    maintenance_notes,
+    created_at,
+    updated_at
+FROM certificates
+WHERE component_id = sqlc.arg(component_id)
+  AND strpos(lower(concat_ws(' ', display_id, certificate_name, issuing_authority, imca_ref)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_status)::text = '' OR sqlc.arg(filter_status) = CASE
+      WHEN expiry_date IS NULL THEN COALESCE(NULLIF(status, ''), 'PENDING')
+      WHEN (expiry_date AT TIME ZONE 'UTC')::date < sqlc.arg(as_of)::text::date THEN 'EXPIRED'
+      WHEN (expiry_date AT TIME ZONE 'UTC')::date <= sqlc.arg(as_of)::text::date + 30 THEN 'EXPIRING_SOON'
+      ELSE 'VALID'
+  END)
+  AND (sqlc.arg(filter_test)::uuid = '00000000-0000-0000-0000-000000000000' OR test_id = sqlc.arg(filter_test))
+ORDER BY
+    CASE WHEN sqlc.arg(sort_by_risk)::boolean THEN CASE
+        WHEN expiry_date IS NOT NULL AND (expiry_date AT TIME ZONE 'UTC')::date < sqlc.arg(as_of)::text::date THEN 0
+        WHEN expiry_date IS NOT NULL AND (expiry_date AT TIME ZONE 'UTC')::date <= sqlc.arg(as_of)::text::date + 30 THEN 1
+        WHEN expiry_date IS NULL AND status = 'EXPIRED' THEN 0
+        WHEN expiry_date IS NULL AND status = 'EXPIRING_SOON' THEN 1
+        WHEN expiry_date IS NULL AND COALESCE(NULLIF(status, ''), 'PENDING') = 'PENDING' THEN 2
+        ELSE 3 END
+    END,
+    CASE WHEN sqlc.arg(sort_by_risk)::boolean THEN expiry_date END NULLS LAST,
+    created_at DESC, certificate_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+
+-- name: CountSearchComponentCertificates :one
+SELECT COUNT(*)
+FROM certificates
+WHERE component_id = sqlc.arg(component_id)
+  AND strpos(lower(concat_ws(' ', display_id, certificate_name, issuing_authority, imca_ref)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_status)::text = '' OR sqlc.arg(filter_status) = CASE
+      WHEN expiry_date IS NULL THEN COALESCE(NULLIF(status, ''), 'PENDING')
+      WHEN (expiry_date AT TIME ZONE 'UTC')::date < sqlc.arg(as_of)::text::date THEN 'EXPIRED'
+      WHEN (expiry_date AT TIME ZONE 'UTC')::date <= sqlc.arg(as_of)::text::date + 30 THEN 'EXPIRING_SOON'
+      ELSE 'VALID'
+  END)
+  AND (sqlc.arg(filter_test)::uuid = '00000000-0000-0000-0000-000000000000' OR test_id = sqlc.arg(filter_test));
+
+-- name: SearchCertificatesWithContext :many
+SELECT
+    cert.certificate_id AS certificate_id,
+    cert.display_id AS certificate_display_id,
+    cert.certificate_name,
+    cert.issue_date,
+    cert.expiry_date,
+    cert.status,
+    cert.issuing_authority,
+    cert.test_id AS test_id,
+    cert.imca_ref,
+    cert.imca_d018,
+    cert.maintenance_notes,
+    cert.certificate_file,
+    comp.component_id AS component_id,
+    comp.display_id AS component_display_id,
+    comp.name AS component_name,
+    asset.asset_id AS asset_id,
+    asset.display_id AS asset_display_id,
+    asset.name AS asset_name
+FROM certificates cert
+JOIN components comp ON comp.component_id = cert.component_id
+JOIN assets asset ON asset.asset_id = comp.asset_id
+WHERE strpos(lower(concat_ws(' ', cert.display_id, cert.certificate_name, cert.issuing_authority, cert.imca_ref, comp.name, asset.name)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_status)::text = '' OR sqlc.arg(filter_status) = CASE
+      WHEN cert.expiry_date IS NULL THEN COALESCE(NULLIF(cert.status, ''), 'PENDING')
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date < sqlc.arg(as_of)::text::date THEN 'EXPIRED'
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date <= sqlc.arg(as_of)::text::date + 30 THEN 'EXPIRING_SOON'
+      ELSE 'VALID'
+  END)
+  AND (sqlc.arg(filter_test)::uuid = '00000000-0000-0000-0000-000000000000' OR cert.test_id = sqlc.arg(filter_test))
+  AND (sqlc.arg(filter_asset)::uuid = '00000000-0000-0000-0000-000000000000' OR asset.asset_id = sqlc.arg(filter_asset))
+  AND (sqlc.arg(filter_component)::uuid = '00000000-0000-0000-0000-000000000000' OR comp.component_id = sqlc.arg(filter_component))
+  AND (sqlc.arg(filter_category)::uuid = '00000000-0000-0000-0000-000000000000' OR comp.category_id = sqlc.arg(filter_category) OR comp.scope_category_id = sqlc.arg(filter_category))
+ORDER BY cert.expiry_date ASC, cert.certificate_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+
+-- name: CountSearchCertificatesWithContext :one
+SELECT COUNT(*)
+FROM certificates cert
+JOIN components comp ON comp.component_id = cert.component_id
+JOIN assets asset ON asset.asset_id = comp.asset_id
+WHERE strpos(lower(concat_ws(' ', cert.display_id, cert.certificate_name, cert.issuing_authority, cert.imca_ref, comp.name, asset.name)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_status)::text = '' OR sqlc.arg(filter_status) = CASE
+      WHEN cert.expiry_date IS NULL THEN COALESCE(NULLIF(cert.status, ''), 'PENDING')
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date < sqlc.arg(as_of)::text::date THEN 'EXPIRED'
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date <= sqlc.arg(as_of)::text::date + 30 THEN 'EXPIRING_SOON'
+      ELSE 'VALID'
+  END)
+  AND (sqlc.arg(filter_test)::uuid = '00000000-0000-0000-0000-000000000000' OR cert.test_id = sqlc.arg(filter_test))
+  AND (sqlc.arg(filter_asset)::uuid = '00000000-0000-0000-0000-000000000000' OR asset.asset_id = sqlc.arg(filter_asset))
+  AND (sqlc.arg(filter_component)::uuid = '00000000-0000-0000-0000-000000000000' OR comp.component_id = sqlc.arg(filter_component))
+  AND (sqlc.arg(filter_category)::uuid = '00000000-0000-0000-0000-000000000000' OR comp.category_id = sqlc.arg(filter_category) OR comp.scope_category_id = sqlc.arg(filter_category));
+
+-- name: GetAssetCertificateSummary :one
+WITH scoped_asset AS (
+    SELECT a.asset_id, a.asset_kind
+    FROM assets a
+    WHERE a.asset_id = sqlc.arg(asset_id)
+      AND (sqlc.arg(client_user_id)::uuid = '00000000-0000-0000-0000-000000000000' OR EXISTS (
+          SELECT 1
+          FROM projects p
+          JOIN user_project_access upa ON upa.project_id = p.project_id
+          JOIN users u ON u.user_id = upa.user_id
+          WHERE LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+            AND upa.user_id = sqlc.arg(client_user_id)
+            AND upa.status = 'ACTIVE'
+            AND p.status = 'ACTIVE'
+            AND u.status = 'ACTIVE'
+      ))
+), component_counts AS (
+    SELECT COUNT(*) FILTER (WHERE c.component_kind <> 'SELF')::bigint AS components,
+           COUNT(*)::bigint AS all_components
+    FROM components c JOIN scoped_asset a USING (asset_id)
+), current_certificates AS (
+    SELECT CASE
+        WHEN cert.expiry_date IS NULL THEN COALESCE(NULLIF(cert.status, ''), 'PENDING')
+        WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date < sqlc.arg(as_of)::text::date THEN 'EXPIRED'
+        WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date <= sqlc.arg(as_of)::text::date + 30 THEN 'EXPIRING_SOON'
+        ELSE 'VALID'
+    END AS status
+    FROM scoped_asset a JOIN components c USING (asset_id)
+    JOIN certificates cert USING (component_id)
+)
+SELECT
+    CASE WHEN a.asset_kind = 'SINGLE_EQUIPMENT' THEN 1 ELSE cc.components END::bigint AS component_count,
+    cc.all_components::bigint AS all_components,
+    COUNT(current_certificates.status)::bigint AS certificate_count,
+    COUNT(*) FILTER (WHERE status = 'VALID')::bigint AS valid,
+    COUNT(*) FILTER (WHERE status = 'EXPIRING_SOON')::bigint AS expiring_soon,
+    COUNT(*) FILTER (WHERE status = 'EXPIRED')::bigint AS expired
+FROM scoped_asset a CROSS JOIN component_counts cc
+LEFT JOIN current_certificates ON true
+GROUP BY a.asset_kind, cc.components, cc.all_components;

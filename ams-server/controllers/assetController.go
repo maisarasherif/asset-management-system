@@ -32,7 +32,16 @@ func GetAssets(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterProject := filters.Text("project")
+		filterStatus := filters.Enum("status", "ACTIVE", "INACTIVE", "MAINTENANCE")
+		if !filters.Valid() {
+			return
+		}
+
 		assets, err := queries.GetAllAssetsPaginated(ctx, db.GetAllAssetsPaginatedParams{
+			SearchText: search, FilterProject: filterProject, FilterStatus: filterStatus,
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -41,7 +50,7 @@ func GetAssets(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountAssets(ctx)
+		total, err := queries.CountAssets(ctx, db.CountAssetsParams{SearchText: search, FilterProject: filterProject, FilterStatus: filterStatus})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count assets"})
 			return
@@ -646,6 +655,14 @@ func respondToAssignedProjectError(c *gin.Context, err error) {
 }
 
 func GetAssetRoutineMaintenance(pool *pgxpool.Pool) gin.HandlerFunc {
+	return assetRoutineMaintenance(pool, false)
+}
+
+func SearchAssetRoutineMaintenance(pool *pgxpool.Pool) gin.HandlerFunc {
+	return assetRoutineMaintenance(pool, true)
+}
+
+func assetRoutineMaintenance(pool *pgxpool.Pool, paged bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
 		if !ok {
@@ -666,12 +683,39 @@ func GetAssetRoutineMaintenance(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		events, err := queries.ListAssetMaintenanceEvents(ctx, assetID)
+		var events []db.AssetMaintenanceEvent
+		var err error
+		var total int64
+		limit, offset, page := utils.ParsePagination(c)
+		if paged {
+			filters := utils.ReadListFilters(c)
+			search := filters.Text("search")
+			status := filters.Enum("status", "REQUIRED", "COMPLETED", "CANCELLED")
+			if !filters.Valid() {
+				return
+			}
+			events, err = queries.SearchAssetMaintenanceEvents(ctx, db.SearchAssetMaintenanceEventsParams{
+				AssetID: assetID, Search: search, FilterStatus: status, PageLimit: limit, PageOffset: offset,
+			})
+			if err == nil {
+				total, err = queries.CountSearchAssetMaintenanceEvents(ctx, db.CountSearchAssetMaintenanceEventsParams{
+					AssetID: assetID, Search: search, FilterStatus: status,
+				})
+			}
+		} else {
+			events, err = queries.ListAssetMaintenanceEvents(ctx, assetID)
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch routine maintenance"})
 			return
 		}
-		deliveries, err := queries.GetRoutineMaintenanceNotificationDeliveriesForAsset(ctx, assetID)
+		eventIDs := make([]uuid.UUID, 0, len(events))
+		for _, event := range events {
+			eventIDs = append(eventIDs, event.MaintenanceEventID)
+		}
+		deliveries, err := queries.GetRoutineMaintenanceNotificationDeliveriesForAsset(ctx, db.GetRoutineMaintenanceNotificationDeliveriesForAssetParams{
+			AssetID: assetID, EventIds: eventIDs,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch routine maintenance notifications"})
 			return
@@ -714,6 +758,10 @@ func GetAssetRoutineMaintenance(pool *pgxpool.Pool) gin.HandlerFunc {
 			})
 		}
 
+		if paged {
+			c.JSON(http.StatusOK, dto.PaginatedResponse{Data: response, Meta: utils.BuildMeta(page, total)})
+			return
+		}
 		c.JSON(http.StatusOK, response)
 	}
 }
@@ -970,4 +1018,34 @@ func assetInputKind(input dto.AssetInput) string {
 		return "COMPONENTIZED"
 	}
 	return input.AssetKind
+}
+
+func GetAssetCertificateSummary(pool *pgxpool.Pool, client bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		assetID, ok := utils.ParseUUIDParam(c, "asset_id")
+		if !ok {
+			return
+		}
+		userID := uuid.Nil
+		if client {
+			userID, ok = clientUserID(c)
+			if !ok {
+				return
+			}
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		summary, err := db.New(pool).GetAssetCertificateSummary(ctx, db.GetAssetCertificateSummaryParams{
+			AssetID: assetID, ClientUserID: userID, AsOf: time.Now().Format(time.DateOnly),
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+			return
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load certificate totals."})
+			return
+		}
+		c.JSON(http.StatusOK, summary)
+	}
 }

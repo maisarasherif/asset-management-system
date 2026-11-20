@@ -1,3 +1,4 @@
+import { PagedSelect } from "../../components/shared/PagedSelect";
 import {
   Alert,
   Box,
@@ -21,6 +22,8 @@ import {
   getAsset,
   getComponent,
   listAllCatalogScopeCategories,
+  listCatalogScopeCategories,
+  searchCatalogScopes,
   listCatalogScopes,
   updateComponent,
 } from "../../lib/api/ams";
@@ -189,6 +192,7 @@ export function ComponentFormPage() {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["components", assetId] }),
           queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
+          queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary", assetId] }),
         ]);
         success("Component created", `${createdComponent.name} is ready for certificates.`);
         navigate(`/assets/${assetId}?component=${createdComponent.component_id}`, {
@@ -201,6 +205,7 @@ export function ComponentFormPage() {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["components", assetId] }),
           queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
+          queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary", assetId] }),
           queryClient.invalidateQueries({ queryKey: ["component", componentId] }),
         ]);
         success("Component updated", "The component details have been saved.");
@@ -299,7 +304,6 @@ export function ComponentFormPage() {
   return renderComponentFormPage({
     asset: assetQuery.data,
     assetId,
-    categoryOptions,
     errorMessage,
     form,
     isEditing,
@@ -311,14 +315,12 @@ export function ComponentFormPage() {
     selectedCategoryOption,
     selectedSafetyOption,
     selectedScopeOption,
-    scopeOptions,
   });
 }
 
 interface ComponentFormPageViewProps {
   asset: Asset | undefined;
   assetId: string;
-  categoryOptions: CategorySelectOption[];
   errorMessage: string;
   form: ComponentInput;
   isEditing: boolean;
@@ -330,12 +332,10 @@ interface ComponentFormPageViewProps {
   selectedCategoryOption: CategorySelectOption | null;
   selectedSafetyOption: SelectProps.Option | null;
   selectedScopeOption: SelectProps.Option | null;
-  scopeOptions: SelectProps.Option[];
 }
 
 function renderComponentFormPage({
   asset,
-  categoryOptions,
   errorMessage,
   form,
   isEditing,
@@ -347,7 +347,6 @@ function renderComponentFormPage({
   selectedCategoryOption,
   selectedSafetyOption,
   selectedScopeOption,
-  scopeOptions,
 }: ComponentFormPageViewProps) {
   return (
     <ContentLayout
@@ -382,30 +381,19 @@ function renderComponentFormPage({
 
               <ColumnLayout columns={2}>
                 <FormField label="Catalog scope">
-                  <Select
-                    options={scopeOptions}
-                    placeholder="Select a catalog scope"
-                    selectedOption={selectedScopeOption}
-                    onChange={({ detail }) => onScopeChange(detail.selectedOption.value || "")}
-                  />
+                  <PagedSelect label="Catalog scope" queryKey={["catalog-scopes", "picker"]}
+                    load={(page, search) => searchCatalogScopes({ page, search, limit: 20 })}
+                    getOption={(scope) => ({ label: scope.scope_name, value: scope.scope_id })}
+                    selected={selectedScopeOption} onSelect={(option) => onScopeChange(option?.value ?? "")} />
                 </FormField>
                 <FormField label="Category">
-                  <Select
-                    filteringType="auto"
-                    filteringAriaLabel="Filter categories"
-                    filteringPlaceholder="Find category"
-                    options={categoryOptions}
-                    placeholder="Select a category"
-                    selectedOption={selectedCategoryOption}
-                    virtualScroll
-                    onChange={({ detail }) => {
-                      const selectedOption = detail.selectedOption as CategorySelectOption;
-                      return onFormChange({
-                        category_id: String(selectedOption.categoryId || ""),
-                        scope_category_id: selectedOption.value ?? "",
-                      });
-                    }}
-                  />
+                  <PagedSelect key={selectedScopeOption?.value} label="Category"
+                    queryKey={["catalog-scope-categories", selectedScopeOption?.value, "picker"]}
+                    disabled={!selectedScopeOption?.value}
+                    load={(page, search) => listCatalogScopeCategories(selectedScopeOption!.value!, page, 20, { search })}
+                    getOption={(item) => ({ label: [item.main_category_name, item.category_name].filter(Boolean).join(" > "), value: item.scope_category_id })}
+                    selected={selectedCategoryOption}
+                    onSelect={(_, item) => onFormChange({ category_id: item?.category_id ?? "", scope_category_id: item?.scope_category_id })} />
                 </FormField>
                 <FormField label="Safety critical">
                   <Select

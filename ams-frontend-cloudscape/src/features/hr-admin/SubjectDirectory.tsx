@@ -1,11 +1,14 @@
+import { activeArchived } from "../../components/shared/listFacetOptions";
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
+import { recordFacets } from "./hrAdminFacets";
+import type { ListQuery } from "../../lib/api/list-query";
 import {
   Badge,
   Box,
   Button,
   Container,
   Header,
-  Input,
-  Pagination,
   SpaceBetween,
   StatusIndicator,
   Table,
@@ -33,9 +36,9 @@ interface Subject {
 }
 
 const pageSize = 10;
-async function loadDirectory(type: HRAdminSubjectType, page: number, search: string) {
+async function loadDirectory(type: HRAdminSubjectType, page: number, filters: ListQuery) {
   if (type === "PERSON") {
-    const { data, meta } = await listHRAdminPersons(page, pageSize, search);
+    const { data, meta } = await listHRAdminPersons(page, pageSize, filters);
     return {
       meta,
       items: data.map((p) => ({
@@ -47,7 +50,7 @@ async function loadDirectory(type: HRAdminSubjectType, page: number, search: str
     };
   }
   if (type === "VEHICLE") {
-    const { data, meta } = await listHRAdminVehicles(page, pageSize, search);
+    const { data, meta } = await listHRAdminVehicles(page, pageSize, filters);
     return {
       meta,
       items: data.map((v) => ({
@@ -58,7 +61,7 @@ async function loadDirectory(type: HRAdminSubjectType, page: number, search: str
       })),
     };
   }
-  const { data, meta } = await listHRAdminCompanies(page, pageSize, search);
+  const { data, meta } = await listHRAdminCompanies(page, pageSize, filters);
   return {
     meta,
     items: data.map((c) => ({
@@ -90,11 +93,11 @@ function SubjectRecords({
   type: HRAdminSubjectType;
   canWrite: boolean;
 }) {
-  const [page, setPage] = useState(1);
+  const controls = useListControls(`subject-records.${subject.id}`, ["status", "expiry_status"], pageSize);
   const [editor, setEditor] = useState<RecordEditor>(null);
   const records = useQuery({
-    queryKey: ["hr-admin", "compliance-records", type, subject.id, page],
-    queryFn: () => listComplianceRecords(page, pageSize, { type, id: subject.id }),
+    queryKey: ["hr-admin", "compliance-records", type, subject.id, controls.query],
+    queryFn: () => listComplianceRecords(controls.page, pageSize, { type, id: subject.id }, controls.query),
     refetchOnWindowFocus: "always",
     refetchOnMount: "always",
   });
@@ -123,16 +126,8 @@ function SubjectRecords({
           loading={records.isLoading}
           loadingText="Loading compliance records"
           empty="This subject has no compliance records."
-          pagination={
-            records.data &&
-            records.data.meta.total_pages > 1 && (
-              <Pagination
-                currentPageIndex={page}
-                pagesCount={records.data.meta.total_pages}
-                onChange={({ detail }) => setPage(detail.currentPageIndex)}
-              />
-            )
-          }
+          filter={<ListFilters controls={controls} label="Search subject records" facets={recordFacets.slice(1)} />}
+          pagination={<ListPagination controls={controls} meta={records.data?.meta} />}
           columnDefinitions={[
             { id: "type", header: "Record type", cell: (r) => r.type_name },
             {
@@ -176,11 +171,29 @@ const searchLabels = { PERSON: "Find a person", VEHICLE: "Find a plate or vehicl
 
 export function SubjectDirectory({ type, canWrite }: { type: HRAdminSubjectType; canWrite: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const list = useListControls(type.toLowerCase(), ["status"], pageSize);
+  const controls = {
+    ...list,
+    onSearch: (value: string) => {
+      setSelectedId(null);
+      list.onSearch(value);
+    },
+    setFilters: (filters: Record<string, string>) => {
+      setSelectedId(null);
+      list.setFilters(filters);
+    },
+    setPage: (page: number, replace = false) => {
+      setSelectedId(null);
+      list.setPage(page, replace);
+    },
+    clear: () => {
+      setSelectedId(null);
+      list.clear();
+    },
+  };
   const directory = useQuery({
-    queryKey: ["hr-admin", subjectGroups[type].toLowerCase(), "directory", page, search.trim()],
-    queryFn: () => loadDirectory(type, page, search.trim()),
+    queryKey: ["hr-admin", subjectGroups[type].toLowerCase(), "directory", controls.query],
+    queryFn: () => loadDirectory(type, controls.page, controls.query),
     refetchOnWindowFocus: "always",
     refetchOnMount: "always",
   });
@@ -196,17 +209,7 @@ export function SubjectDirectory({ type, canWrite }: { type: HRAdminSubjectType;
         }
       >
         <SpaceBetween size="s">
-          <Input
-            type="search"
-            ariaLabel={searchLabels[type]}
-            placeholder={searchLabels[type]}
-            value={search}
-            onChange={({ detail }) => {
-              setSearch(detail.value);
-              setPage(1);
-              setSelectedId(null);
-            }}
-          />
+          <ListFilters controls={controls} label={searchLabels[type]} facets={[{ key: "status", label: "Subject status", options: activeArchived }]} />
           {directory.isError ? (
             <PageError description="Could not load the directory." onRetry={() => void directory.refetch()} />
           ) : (
@@ -222,20 +225,8 @@ export function SubjectDirectory({ type, canWrite }: { type: HRAdminSubjectType;
               items={items}
               loading={directory.isLoading}
               loadingText="Loading subjects"
-              empty={search ? "No matching subjects." : "No subjects in this group."}
-              pagination={
-                directory.data &&
-                directory.data.meta.total_pages > 1 && (
-                  <Pagination
-                    currentPageIndex={page}
-                    pagesCount={directory.data.meta.total_pages}
-                    onChange={({ detail }) => {
-                      setPage(detail.currentPageIndex);
-                      setSelectedId(null);
-                    }}
-                  />
-                )
-              }
+              empty={controls.hasCriteria ? "No matching subjects." : "No subjects in this group."}
+              pagination={<ListPagination controls={controls} meta={directory.data?.meta} />}
               columnDefinitions={[
                 {
                   id: "subject",

@@ -1,17 +1,31 @@
-import { Alert, Box, Button, Container, FormField, Header, Modal, Pagination, SpaceBetween, StatusIndicator, Table } from "@cloudscape-design/components";
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
+import { Alert, Box, Button, Container, FormField, Header, Modal, SpaceBetween, StatusIndicator, Table } from "@cloudscape-design/components";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { getCertificateHistoryDocument, listCertificateHistory, recoverCertificateIssuance, type CertificateHistory, type IssuanceRecoveryAction } from "../../lib/api/certificate-issuance";
 import { formatDate, formatDateTime, humanizeEnum } from "../../utils/format";
 
+const historyFacets = [
+  { key: "source", label: "Source", options: [
+    { value: "GENERATED", label: "Generated" }, { value: "EXTERNAL", label: "External" },
+    { value: "LEGACY", label: "Legacy" },
+  ] },
+  { key: "state", label: "State", options: [
+    { value: "APPROVED", label: "Approved" }, { value: "PROCESSING", label: "Processing" },
+    { value: "COMPLETED", label: "Completed" }, { value: "FAILED", label: "Failed" },
+    { value: "ABANDONED", label: "Abandoned" }, { value: "LEGACY", label: "Legacy" },
+  ] },
+];
+
 export function CertificateIssuanceHistory({ certificateId }: { certificateId: string }) {
-  const [page, setPage] = useState(1);
+  const controls = useListControls("history", ["source", "state"]);
   const [opening, setOpening] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [confirmation, setConfirmation] = useState<CertificateHistory | null>(null);
   const queryClient = useQueryClient();
-  const history = useQuery({ queryKey: ["issuances", certificateId, page], queryFn: () => listCertificateHistory(certificateId, page) });
+  const history = useQuery({ queryKey: ["issuances", certificateId, controls.query], queryFn: () => listCertificateHistory(certificateId, controls.page, controls.query) });
   const openDocument = async (id: string) => {
     // Open synchronously to avoid popup blockers after the signed URL request.
     const tab = window.open("about:blank", "_blank");
@@ -40,7 +54,7 @@ export function CertificateIssuanceHistory({ certificateId }: { certificateId: s
         queryClient.invalidateQueries({ queryKey: ["certificate", certificateId] }),
         queryClient.invalidateQueries({ queryKey: ["certificates"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
-        queryClient.invalidateQueries({ queryKey: ["asset-dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary"] }),
       ]);
       setBusy(""); setConfirmation(null);
     }
@@ -52,7 +66,8 @@ export function CertificateIssuanceHistory({ certificateId }: { certificateId: s
         {history.isError ? <Alert type="error" action={<Button onClick={() => void history.refetch()}>Retry issuance history</Button>}>{history.error.message}</Alert> : null}
         <Table items={history.data?.data ?? []} trackBy="history_id" loading={history.isPending} loadingText="Loading issuance history" wrapLines
           empty={<Box>No issued or approved certificates recorded.</Box>}
-          pagination={<Pagination currentPageIndex={page} pagesCount={Math.max(1, Math.ceil((history.data?.meta.total ?? 0) / 20))} onChange={({ detail }) => setPage(detail.currentPageIndex)} />}
+          filter={<ListFilters controls={controls} label="Search issuance history" facets={historyFacets} />}
+          pagination={<ListPagination controls={controls} meta={history.data?.meta} />}
           columnDefinitions={[
             { id: "source", header: "Source", cell: item => item.source === "LEGACY" ? "Legacy upload" : item.source === "EXTERNAL" ? "External renewal" : "Generated certificate" },
             { id: "number", header: "Document / file", cell: item => item.document_number || item.file_name },

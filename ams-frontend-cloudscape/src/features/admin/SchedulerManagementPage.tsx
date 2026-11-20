@@ -1,3 +1,5 @@
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
 import {
   Alert,
   Badge,
@@ -13,8 +15,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TableCellText } from "../../components/shared/TableCells";
 import {
-  listAllCertificateNotificationFailures,
-  listAllCertificateNotificationTasks,
+  listCertificateNotificationFailures,
+  listCertificateNotificationTasks,
   runCertificateExpiryScheduler,
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
@@ -78,17 +80,31 @@ function copyableKey(key: string) {
   );
 }
 
+const channelFacet = { key: "channel", label: "Channel", options: [
+  { value: "EMAIL", label: "Email" }, { value: "CLICKUP", label: "ClickUp" },
+] };
+const statusFacet = { key: "status", label: "Status", options: [
+  { value: "PENDING", label: "Pending" }, { value: "SENT", label: "Sent" },
+  { value: "FAILED", label: "Failed" },
+] };
+const sourceFacet = { key: "source_type", label: "Source", options: [
+  { value: "certificate_expiry", label: "Certificate expiry" },
+  { value: "routine_maintenance", label: "Routine maintenance" },
+] };
+
 export function SchedulerManagementPage() {
   const queryClient = useQueryClient();
   const { error, success } = useFlashbar();
 
+  const tasksControls = useListControls("jobs", ["channel", "status", "source_type"]);
   const tasksQuery = useQuery({
-    queryKey: ["certificate-notification-tasks", "all"],
-    queryFn: listAllCertificateNotificationTasks,
+    queryKey: ["certificate-notification-tasks", "all", tasksControls.query],
+    queryFn: () => listCertificateNotificationTasks(tasksControls.page, tasksControls.query.limit, tasksControls.query),
   });
+  const failuresControls = useListControls("failures", ["channel", "source_type"]);
   const failuresQuery = useQuery({
-    queryKey: ["certificate-notification-failures", "all"],
-    queryFn: listAllCertificateNotificationFailures,
+    queryKey: ["certificate-notification-failures", "all", failuresControls.query],
+    queryFn: () => listCertificateNotificationFailures(failuresControls.page, failuresControls.query.limit, failuresControls.query),
   });
 
   const runMutation = useMutation({
@@ -290,7 +306,7 @@ export function SchedulerManagementPage() {
 
         <Container
           header={
-            <Header counter={`(${tasksQuery.data?.length || 0})`} variant="h2">
+            <Header counter={`(${tasksQuery.data?.meta.total ?? 0})`} variant="h2">
               Job audit
             </Header>
           }
@@ -298,7 +314,9 @@ export function SchedulerManagementPage() {
           <Table
             columnDefinitions={taskColumns}
             empty={<Box color="text-body-secondary">No notification jobs have been recorded.</Box>}
-            items={tasksQuery.data || []}
+            items={tasksQuery.data?.data ?? []}
+            filter={<ListFilters controls={tasksControls} label="Search jobs" facets={[channelFacet, sourceFacet, statusFacet]} />}
+            pagination={<ListPagination controls={tasksControls} meta={tasksQuery.data?.meta} />}
             loading={isInitialLoading}
             loadingText="Loading notification audit"
             trackBy="task_id"
@@ -308,7 +326,7 @@ export function SchedulerManagementPage() {
 
         <Container
           header={
-            <Header counter={`(${failuresQuery.data?.length || 0})`} variant="h2">
+            <Header counter={`(${failuresQuery.data?.meta.total ?? 0})`} variant="h2">
               Failure audit
             </Header>
           }
@@ -316,7 +334,9 @@ export function SchedulerManagementPage() {
           <Table
             columnDefinitions={failureColumns}
             empty={<Box color="text-body-secondary">No failed notification jobs have been recorded.</Box>}
-            items={failuresQuery.data || []}
+            items={failuresQuery.data?.data ?? []}
+            filter={<ListFilters controls={failuresControls} label="Search failures" facets={[channelFacet, sourceFacet]} />}
+            pagination={<ListPagination controls={failuresControls} meta={failuresQuery.data?.meta} />}
             loading={isInitialLoading}
             loadingText="Loading failure audit"
             trackBy="id"

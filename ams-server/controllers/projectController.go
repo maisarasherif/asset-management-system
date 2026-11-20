@@ -230,3 +230,57 @@ func DeleteUserProjectAccess(pool *pgxpool.Pool) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "project access deleted successfully"})
 	}
 }
+
+func SearchProjects(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		limit, offset, page := utils.ParsePagination(c)
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterStatus := filters.Enum("status", "ACTIVE", "ARCHIVED")
+		if !filters.Valid() {
+			return
+		}
+		queries := db.New(pool)
+		rows, err := queries.SearchProjects(ctx, db.SearchProjectsParams{SearchText: search, FilterStatus: filterStatus, PageLimit: limit, PageOffset: offset})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not search this list."})
+			return
+		}
+		total, err := queries.CountSearchProjects(ctx, db.CountSearchProjectsParams{SearchText: search, FilterStatus: filterStatus})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not count matching results."})
+			return
+		}
+		c.JSON(http.StatusOK, dto.PaginatedResponse{Data: rows, Meta: utils.BuildMeta(page, total)})
+	}
+}
+
+func SearchUserProjectAccess(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		limit, offset, page := utils.ParsePagination(c)
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterProject := filters.UUID("project_id")
+		filterUser := filters.UUID("user_id")
+		filterStatus := filters.Enum("status", "ACTIVE", "SUSPENDED")
+		if !filters.Valid() {
+			return
+		}
+		queries := db.New(pool)
+		rows, err := queries.SearchUserProjectAccess(ctx, db.SearchUserProjectAccessParams{SearchText: search, FilterProject: filterProject, FilterUser: filterUser, FilterStatus: filterStatus, PageLimit: limit, PageOffset: offset})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not search this list."})
+			return
+		}
+		total, err := queries.CountSearchUserProjectAccess(ctx, db.CountSearchUserProjectAccessParams{SearchText: search, FilterProject: filterProject, FilterUser: filterUser, FilterStatus: filterStatus})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not count matching results."})
+			return
+		}
+		c.JSON(http.StatusOK, dto.PaginatedResponse{Data: rows, Meta: utils.BuildMeta(page, total)})
+	}
+}

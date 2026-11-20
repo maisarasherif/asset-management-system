@@ -14,10 +14,19 @@ import (
 
 const countAssets = `-- name: CountAssets :one
 SELECT COUNT(*) FROM assets
+WHERE strpos(lower(concat_ws(' ', display_id, name, description, location, assigned_project)), lower($1::text)) > 0
+  AND ($2::text = '' OR lower(assigned_project) = lower($2))
+  AND ($3::text = '' OR lower(status) = lower($3))
 `
 
-func (q *Queries) CountAssets(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countAssets)
+type CountAssetsParams struct {
+	SearchText    string `json:"search_text"`
+	FilterProject string `json:"filter_project"`
+	FilterStatus  string `json:"filter_status"`
+}
+
+func (q *Queries) CountAssets(ctx context.Context, arg CountAssetsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAssets, arg.SearchText, arg.FilterProject, arg.FilterStatus)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -314,13 +323,19 @@ SELECT
     created_at,
     updated_at
 FROM assets
-ORDER BY created_at DESC
+WHERE strpos(lower(concat_ws(' ', display_id, name, description, location, assigned_project)), lower($3::text)) > 0
+  AND ($4::text = '' OR lower(assigned_project) = lower($4))
+  AND ($5::text = '' OR lower(status) = lower($5))
+ORDER BY created_at DESC, asset_id
 LIMIT $1 OFFSET $2
 `
 
 type GetAllAssetsPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit         int32  `json:"limit"`
+	Offset        int32  `json:"offset"`
+	SearchText    string `json:"search_text"`
+	FilterProject string `json:"filter_project"`
+	FilterStatus  string `json:"filter_status"`
 }
 
 type GetAllAssetsPaginatedRow struct {
@@ -347,7 +362,13 @@ type GetAllAssetsPaginatedRow struct {
 }
 
 func (q *Queries) GetAllAssetsPaginated(ctx context.Context, arg GetAllAssetsPaginatedParams) ([]GetAllAssetsPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getAllAssetsPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getAllAssetsPaginated,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchText,
+		arg.FilterProject,
+		arg.FilterStatus,
+	)
 	if err != nil {
 		return nil, err
 	}

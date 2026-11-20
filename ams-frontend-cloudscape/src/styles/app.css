@@ -1865,3 +1865,13 @@ body {
   .hr-subject-panel img { height: 88px; }
   .hr-subject-panel__caption { padding: 6px; font-size: 12px; overflow-wrap: anywhere; }
 }
+.list-filter-facets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+}
+
+.list-filter-facets > * {
+  min-width: min(100%, 152px);
+}

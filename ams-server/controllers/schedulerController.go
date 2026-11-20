@@ -22,7 +22,17 @@ func GetCertificateNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterSource := filters.Enum("source_type", "certificate_expiry", "routine_maintenance", "hr_admin_compliance_expiry")
+		filterChannel := filters.Enum("channel", "EMAIL", "CLICKUP")
+		filterStatus := filters.Enum("status", "PENDING", "SENT", "FAILED")
+		if !filters.Valid() {
+			return
+		}
+
 		tasks, err := queries.GetCertificateNotificationDeliveriesPaginated(ctx, db.GetCertificateNotificationDeliveriesPaginatedParams{
+			SearchText: search, FilterSource: filterSource, FilterChannel: filterChannel, FilterStatus: filterStatus,
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -31,7 +41,7 @@ func GetCertificateNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountCertificateNotificationDeliveries(ctx)
+		total, err := queries.CountCertificateNotificationDeliveries(ctx, db.CountCertificateNotificationDeliveriesParams{SearchText: search, FilterSource: filterSource, FilterChannel: filterChannel, FilterStatus: filterStatus})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificate notification tasks"})
 			return
@@ -84,7 +94,17 @@ func GetHRAdminNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterSource := filters.Enum("source_type", "certificate_expiry", "routine_maintenance", "hr_admin_compliance_expiry")
+		filterChannel := filters.Enum("channel", "EMAIL", "CLICKUP")
+		filterStatus := filters.Enum("status", "PENDING", "SENT", "FAILED")
+		if !filters.Valid() {
+			return
+		}
+
 		tasks, err := queries.GetHRAdminNotificationDeliveriesPaginated(ctx, db.GetHRAdminNotificationDeliveriesPaginatedParams{
+			SearchText: search, FilterSource: filterSource, FilterChannel: filterChannel, FilterStatus: filterStatus,
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -93,7 +113,7 @@ func GetHRAdminNotificationTasks(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountHRAdminNotificationDeliveries(ctx)
+		total, err := queries.CountHRAdminNotificationDeliveries(ctx, db.CountHRAdminNotificationDeliveriesParams{SearchText: search, FilterSource: filterSource, FilterChannel: filterChannel, FilterStatus: filterStatus})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count HR/Admin notification tasks"})
 			return
@@ -146,7 +166,17 @@ func GetCertificateNotificationFailures(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterSource := filters.Enum("source_type", "certificate_expiry", "routine_maintenance", "hr_admin_compliance_expiry")
+		filterChannel := filters.Enum("channel", "EMAIL", "CLICKUP")
+		filterStatus := filters.Enum("status", "PENDING", "SENT", "FAILED")
+		if !filters.Valid() {
+			return
+		}
+
 		failures, err := queries.GetCertificateNotificationDeliveryFailuresPaginated(ctx, db.GetCertificateNotificationDeliveryFailuresPaginatedParams{
+			SearchText: search, FilterSource: filterSource, FilterChannel: filterChannel, FilterStatus: filterStatus,
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -155,7 +185,7 @@ func GetCertificateNotificationFailures(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountCertificateNotificationDeliveryFailures(ctx)
+		total, err := queries.CountCertificateNotificationDeliveryFailures(ctx, db.CountCertificateNotificationDeliveryFailuresParams{SearchText: search, FilterSource: filterSource, FilterChannel: filterChannel, FilterStatus: filterStatus})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificate notification failures"})
 			return
@@ -206,7 +236,17 @@ func GetHRAdminNotificationFailures(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterSource := filters.Enum("source_type", "certificate_expiry", "routine_maintenance", "hr_admin_compliance_expiry")
+		filterChannel := filters.Enum("channel", "EMAIL", "CLICKUP")
+		filterStatus := filters.Enum("status", "PENDING", "SENT", "FAILED")
+		if !filters.Valid() {
+			return
+		}
+
 		failures, err := queries.GetHRAdminNotificationDeliveryFailuresPaginated(ctx, db.GetHRAdminNotificationDeliveryFailuresPaginatedParams{
+			SearchText: search, FilterSource: filterSource, FilterChannel: filterChannel, FilterStatus: filterStatus,
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -215,7 +255,7 @@ func GetHRAdminNotificationFailures(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountHRAdminNotificationDeliveryFailures(ctx)
+		total, err := queries.CountHRAdminNotificationDeliveryFailures(ctx, db.CountHRAdminNotificationDeliveryFailuresParams{SearchText: search, FilterSource: filterSource, FilterChannel: filterChannel, FilterStatus: filterStatus})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count HR/Admin notification failures"})
 			return

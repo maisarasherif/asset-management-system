@@ -11,11 +11,11 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Select } from "../shared/OptimizedSelect";
-import { listAllAssets, listAllClientAssets, logoutRequest } from "../../lib/api/ams";
+import { PagedSelect } from "../shared/PagedSelect";
+import { getAsset, getClientAsset, listAssets, listClientAssets, logoutRequest } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { ProductAccess, ProductKey, Role } from "../../types/ams";
+import type { Asset, ProductAccess, ProductKey, Role } from "../../types/ams";
 
 const TOP_NAV_I18N = {
   searchDismissIconAriaLabel: "Close search",
@@ -254,8 +254,8 @@ export function AppShellLayout() {
   const hrAdminRole = getProductRole("HR_ADMIN");
 
   const assetsQuery = useQuery({
-    queryKey: [isClient ? "client-assets" : "assets", "all"],
-    queryFn: isClient ? listAllClientAssets : listAllAssets,
+    queryKey: [isClient ? "client-assets" : "assets", "first"],
+    queryFn: () => isClient ? listClientAssets(1, 1) : listAssets(1, 1),
     enabled: !isHRAdminRoute,
   });
 
@@ -263,8 +263,8 @@ export function AppShellLayout() {
     if (isHRAdminRoute) {
       return;
     }
-    if (!selectedAssetId && assetsQuery.data && assetsQuery.data.length > 0) {
-      setSelectedAssetId(assetsQuery.data[0].asset_id);
+    if (!selectedAssetId && assetsQuery.data && assetsQuery.data.data.length > 0) {
+      setSelectedAssetId(assetsQuery.data.data[0].asset_id);
     }
   }, [assetsQuery.data, isHRAdminRoute, selectedAssetId, setSelectedAssetId]);
 
@@ -312,17 +312,14 @@ export function AppShellLayout() {
     },
   });
 
-  const assetOptions = useMemo(
-    () =>
-      (assetsQuery.data || []).map((asset) => ({
-        label: `${asset.display_id} - ${asset.name}`,
-        value: asset.asset_id,
-      })),
-    [assetsQuery.data]
-  );
-
-  const selectedAssetOption =
-    assetOptions.find((option) => option.value === selectedAssetId) ?? null;
+  const selectedAsset = useQuery({
+    queryKey: isClient ? ["client-asset", selectedAssetId, "sidebar"] : ["asset", selectedAssetId],
+    queryFn: async () => isClient ? (await getClientAsset(selectedAssetId!, false)).asset : getAsset(selectedAssetId!),
+    enabled: Boolean(!isHRAdminRoute && selectedAssetId),
+  });
+  const firstAsset = assetsQuery.data?.data[0];
+  const assetOption = (asset: Asset) => ({ label: asset.display_id + " - " + asset.name, value: asset.asset_id });
+  const currentAsset = firstAsset?.asset_id === selectedAssetId ? firstAsset : selectedAsset.data;
 
   const navigationGroups = useMemo<NavigationGroup[]>(() => {
     if (isHRAdminRoute) {
@@ -476,16 +473,15 @@ export function AppShellLayout() {
               ) : (
                 <div className="brand-sidebar__asset">
                   <span className="brand-sidebar__asset-label">Current asset</span>
-                  <Select
-                    ariaLabel="Select asset"
-                    disabled={assetsQuery.isLoading || assetOptions.length === 0}
-                    loadingText="Loading assets"
-                    options={assetOptions}
-                    placeholder="Select an asset"
-                    selectedOption={selectedAssetOption}
-                    statusType={assetsQuery.isLoading ? "loading" : "finished"}
-                    onChange={({ detail }) => {
-                      const nextAssetId = detail.selectedOption.value ?? null;
+                  <PagedSelect label="Select asset"
+                    queryKey={[isClient ? "client-assets" : "assets", "picker"]}
+                    load={(page, search) => isClient
+                      ? listClientAssets(page, 20, { search })
+                      : listAssets(page, 20, { search })}
+                    getOption={assetOption}
+                    selected={currentAsset ? assetOption(currentAsset) : null}
+                    onSelect={(option) => {
+                      const nextAssetId = option?.value ?? null;
                       setSelectedAssetId(nextAssetId);
 
                       if (!nextAssetId) return;

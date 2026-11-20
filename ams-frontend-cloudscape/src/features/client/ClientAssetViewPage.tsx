@@ -1,3 +1,8 @@
+import { componentKindFacet } from "../../components/shared/listFacetOptions";
+import { AssetCategoryFilter } from "../../components/shared/AssetComponentFilters";
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
+import { CertificateListFilters } from "../../components/shared/CertificateListFilters";
 import {
   Alert,
   Box,
@@ -9,56 +14,63 @@ import {
   StatusIndicator,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { CertificateDonut } from "../../components/shared/CertificateDonut";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import {
   getClientAsset,
+  getAssetCertificateSummary,
+  listClientAssetCertificates,
+  listClientAssetComponents,
   getClientCertificateDownloadUrl,
 } from "../../lib/api/ams";
-import { countCertificateStatuses } from "../../utils/certificateStatusCounts";
 import { formatDate, formatRenewalDuration, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
+import type { ClientComponent } from "../../types/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
 
 export function ClientAssetViewPage() {
   const navigate = useNavigate();
   const { assetId } = useParams();
   const { error } = useFlashbar();
-  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
+  const [componentSelection, setSelectedComponent] = useState<ClientComponent | null>(null);
+  const selectedComponent = componentSelection?.asset_id === assetId ? componentSelection : null;
+  const selectedComponentId = selectedComponent?.component_id;
 
   const assetQuery = useQuery({
     queryKey: ["client-asset", assetId],
-    queryFn: () => getClientAsset(assetId!),
+    queryFn: () => getClientAsset(assetId!, false, false),
     enabled: Boolean(assetId),
   });
 
-  const selectedComponent = useMemo(
-    () =>
-      assetQuery.data?.components.find((component) => component.component_id === selectedComponentId) ??
-      null,
-    [assetQuery.data?.components, selectedComponentId]
-  );
+  const componentControls = useListControls("components", ["component_kind", "category_id"]);
+  const componentList = useQuery({
+    queryKey: ["client-asset", assetId, "components", componentControls.query],
+    queryFn: () => listClientAssetComponents(assetId!, componentControls.query),
+    enabled: Boolean(assetId),
+  });
+  const components = componentList.data?.data ?? [];
 
-  const certificateItems = useMemo(
-    () =>
-      (assetQuery.data?.certificates || []).filter(
-        (certificate) => certificate.component_id === selectedComponent?.component_id
-      ),
-    [assetQuery.data?.certificates, selectedComponent?.component_id]
-  );
+  const certificateControls = useListControls("certificates", ["status", "test_id"]);
+  const certificateList = useQuery({
+    queryKey: ["client-asset", assetId, selectedComponentId, certificateControls.query],
+    queryFn: () => listClientAssetCertificates(assetId!, { ...certificateControls.query, component_id: selectedComponentId ?? undefined }),
+    enabled: Boolean(assetId && selectedComponentId),
+  });
+  const certificateItems = certificateList.data?.data ?? [];
 
-  const statusCounts = useMemo(
-    () => countCertificateStatuses(assetQuery.data?.certificates || []),
-    [assetQuery.data?.certificates]
-  );
+  const summaryQuery = useQuery({
+    queryKey: ["client-asset", assetId, "summary"],
+    queryFn: () => getAssetCertificateSummary(assetId!, true),
+    enabled: Boolean(assetId),
+  });
 
-  const handleComponentSelect = useCallback((componentId: string) => {
-    setSelectedComponentId((currentComponentId) =>
-      currentComponentId === componentId ? currentComponentId : componentId
-    );
-  }, []);
+  function handleComponentSelect(component: ClientComponent) {
+    if (selectedComponentId === component.component_id) return;
+    setSelectedComponent(component);
+    if (certificateControls.page > 1) certificateControls.setPage(1, true);
+  }
 
   const fileMutation = useMutation({
     mutationFn: (certificateId: string) => getClientCertificateDownloadUrl(certificateId),
@@ -74,24 +86,22 @@ export function ClientAssetViewPage() {
     return <PageError description="The client asset route is incomplete." />;
   }
 
-  if (assetQuery.isLoading) {
+  if (assetQuery.isLoading || summaryQuery.isLoading) {
     return <PageLoading>{"Loading asset certificate data\u2026"}</PageLoading>;
   }
 
-  if (assetQuery.isError || !assetQuery.data) {
+  if (assetQuery.isError || summaryQuery.isError || !assetQuery.data || !summaryQuery.data) {
     return (
       <PageError
         description="This asset could not be loaded, or it is not assigned to your active projects."
-        onRetry={() => void assetQuery.refetch()}
+        onRetry={() => { void assetQuery.refetch(); void summaryQuery.refetch(); }}
       />
     );
   }
 
-  const { asset, components, certificates } = assetQuery.data;
-  const componentCount =
-    asset.asset_kind === "SINGLE_EQUIPMENT"
-      ? 1
-      : components.filter((component) => component.component_kind !== "SELF").length;
+  const { asset } = assetQuery.data;
+  const summary = summaryQuery.data;
+  const componentCount = summary.component_count;
 
   return (
     <ContentLayout
@@ -111,9 +121,9 @@ export function ClientAssetViewPage() {
         <div className="dashboard-top-grid">
           <Container header={<Header variant="h2">Certificate status</Header>}>
             <CertificateDonut
-              expired={statusCounts.expired}
-              expiringSoon={statusCounts.expiringSoon}
-              valid={statusCounts.valid}
+              expired={summary.expired}
+              expiringSoon={summary.expiring_soon}
+              valid={summary.valid}
             />
           </Container>
           <Container header={<Header variant="h2">Asset details</Header>}>
@@ -138,7 +148,7 @@ export function ClientAssetViewPage() {
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Certificates</Box>
-                <Box>{certificates.length}</Box>
+                <Box>{summary.certificate_count}</Box>
               </div>
             </SpaceBetween>
           </Container>
@@ -146,8 +156,13 @@ export function ClientAssetViewPage() {
 
         <div className="client-asset-workspace">
           <div className="client-asset-workspace__components">
-            <Container header={<Header counter={`(${components.length})`} variant="h2">Components</Header>}>
-              {components.length === 0 ? (
+            <Container header={<Header counter={`(${componentList.data?.meta.total ?? 0})`} variant="h2">Components</Header>}>
+              <ListFilters controls={componentControls} label="Search components" facets={[componentKindFacet]}>
+                <AssetCategoryFilter assetId={assetId} controls={componentControls} client />
+              </ListFilters>
+              {componentList.isPending ? <Box>Loading components…</Box> :
+                componentList.isError ? <Alert type="error">Components could not be loaded.</Alert> :
+                components.length === 0 ? (
                 <Box color="text-body-secondary">No components are recorded for this asset.</Box>
               ) : (
                 <div className="client-component-list" role="listbox" aria-label="Components">
@@ -161,7 +176,7 @@ export function ClientAssetViewPage() {
                         className={`client-component-list__item${isSelected ? " is-selected" : ""}`}
                         aria-selected={isSelected}
                         role="option"
-                        onClick={() => handleComponentSelect(component.component_id)}
+                        onClick={() => handleComponentSelect(component)}
                       >
                         <span className="client-component-list__title">{component.name}</span>
                         <span className="client-component-list__grid">
@@ -189,6 +204,7 @@ export function ClientAssetViewPage() {
                   })}
                 </div>
               )}
+              <ListPagination controls={componentControls} meta={componentList.data?.meta} />
             </Container>
           </div>
 
@@ -196,7 +212,7 @@ export function ClientAssetViewPage() {
             <Container
               header={
                 <Header
-                  counter={selectedComponent ? `(${certificateItems.length})` : undefined}
+                  counter={selectedComponent ? `(${certificateList.data?.meta.total ?? 0})` : undefined}
                   description={selectedComponent ? selectedComponent.name : "Select a component from the table."}
                   variant="h2"
                 >
@@ -204,8 +220,13 @@ export function ClientAssetViewPage() {
                 </Header>
               }
             >
+              {selectedComponent && <CertificateListFilters controls={certificateControls} clientAssetId={assetId} />}
               {!selectedComponent ? (
                 <Alert type="info">Select a component to review its certificates.</Alert>
+              ) : certificateList.isPending ? (
+                <Box>Loading certificates…</Box>
+              ) : certificateList.isError ? (
+                <Alert type="error">Certificates could not be loaded.</Alert>
               ) : certificateItems.length === 0 ? (
                 <Box color="text-body-secondary">No certificates are recorded for this component.</Box>
               ) : (
@@ -258,6 +279,7 @@ export function ClientAssetViewPage() {
                   </div>
                 </div>
               )}
+              {selectedComponent && <ListPagination controls={certificateControls} meta={certificateList.data?.meta} />}
             </Container>
           </div>
         </div>

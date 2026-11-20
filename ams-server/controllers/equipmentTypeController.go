@@ -22,16 +22,23 @@ func GetEquipmentTypes(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		if !filters.Valid() {
+			return
+		}
+
 		equipmentTypes, err := queries.GetAllEquipmentTypesPaginated(ctx, db.GetAllEquipmentTypesPaginatedParams{
-			Limit:  limit,
-			Offset: offset,
+			SearchText: search,
+			Limit:      limit,
+			Offset:     offset,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch equipment types"})
 			return
 		}
 
-		total, err := queries.CountEquipmentTypes(ctx)
+		total, err := queries.CountEquipmentTypes(ctx, search)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count equipment types"})
 			return

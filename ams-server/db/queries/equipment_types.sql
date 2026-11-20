@@ -8,11 +8,13 @@ SELECT
     created_at,
     updated_at
 FROM equipment_types
-ORDER BY sort_order ASC, created_at ASC
+WHERE strpos(lower(concat_ws(' ', display_id, equipment_type_name, description)), lower(sqlc.arg(search_text)::text)) > 0
+ORDER BY sort_order ASC, created_at ASC, equipment_type_id
 LIMIT $1 OFFSET $2;
 
 -- name: CountEquipmentTypes :one
-SELECT COUNT(*) FROM equipment_types;
+SELECT COUNT(*) FROM equipment_types
+WHERE strpos(lower(concat_ws(' ', display_id, equipment_type_name, description)), lower(sqlc.arg(search_text)::text)) > 0;
 
 -- name: GetEquipmentTypeByID :one
 SELECT

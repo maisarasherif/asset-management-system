@@ -103,7 +103,16 @@ func GetUsers(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		queries := db.New(pool)
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterRole := filters.Enum("role", "SUPER_ADMIN", "ADMIN", "USER", "CLIENT")
+		filterStatus := filters.Enum("status", "ACTIVE", "SUSPENDED")
+		if !filters.Valid() {
+			return
+		}
+
 		users, err := queries.GetAllUsersPaginated(ctx, db.GetAllUsersPaginatedParams{
+			SearchText: search, FilterRole: filterRole, FilterStatus: filterStatus,
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -112,7 +121,7 @@ func GetUsers(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountUsers(ctx)
+		total, err := queries.CountUsers(ctx, db.CountUsersParams{SearchText: search, FilterRole: filterRole, FilterStatus: filterStatus})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count users"})
 			return
@@ -178,7 +187,15 @@ func GetUserManagementAuditLogs(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterAction := filters.Text("action")
+		if !filters.Valid() {
+			return
+		}
+
 		logs, err := queries.GetUserManagementAuditLogsPaginated(ctx, db.GetUserManagementAuditLogsPaginatedParams{
+			SearchText: search, FilterAction: filterAction,
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -187,7 +204,7 @@ func GetUserManagementAuditLogs(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountUserManagementAuditLogs(ctx)
+		total, err := queries.CountUserManagementAuditLogs(ctx, db.CountUserManagementAuditLogsParams{SearchText: search, FilterAction: filterAction})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count user management audit logs"})
 			return

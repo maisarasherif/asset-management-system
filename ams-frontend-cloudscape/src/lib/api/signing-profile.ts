@@ -1,3 +1,5 @@
+import { listQueryString, type ListQuery } from "./list-query";
+import type { PaginatedResponse } from "../../types/ams";
 import { apiRequest } from "./client";
 
 export interface SignatureVersion {
@@ -83,6 +85,9 @@ export function assignAdminSigningCategory(userId: string, categoryId: string | 
 }
 export function listGeneratedSigners(certificateId: string) {
   return apiRequest<EligibleSigner[]>(`/v1/certificate/${encodeURIComponent(certificateId)}/generated-signers`);
+}
+export function searchGeneratedSigners(certificateId: string, query: ListQuery) {
+  return apiRequest<PaginatedResponse<EligibleSigner>>(`/v1/certificate/${encodeURIComponent(certificateId)}/generated-signers/search?${listQueryString(query)}`);
 }
 export function resolveGeneratedSigner(certificateId: string, signerId: string) {
   return apiRequest<EligibleSigner>(`/v1/certificate/${encodeURIComponent(certificateId)}/generated-signer`, { method: "POST", body: JSON.stringify({ signer_id: signerId }) });

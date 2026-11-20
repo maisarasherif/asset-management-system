@@ -723,6 +723,54 @@ func createComplianceRecord(t *testing.T, h *integrationHarness, payload map[str
 	return recordID
 }
 
+func TestHRAdminListSearchAndFacetsBeforePagination(t *testing.T) {
+	h := setupIntegrationTest(t)
+	get := func(path string, want int) map[string]any {
+		return decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/hr-admin/"+path, nil, want))
+	}
+	vehicle := createHRAdminVehicle(t, h, "LIMIT-TARGET")
+	_, err := h.pool.Exec(context.Background(), `
+		UPDATE hr_admin_vehicles SET make = 'Search Make', updated_at = '2000-01-01' WHERE plate_number = 'LIMIT-TARGET';
+		INSERT INTO hr_admin_vehicles (plate_number)
+		SELECT 'LIMIT-FILLER-' || n FROM generate_series(1, 105) AS n;
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := get("vehicles?limit=100", http.StatusOK)
+	assertField(t, page["meta"].(map[string]any), "total", 106)
+	for _, item := range page["data"].([]any) {
+		if item.(map[string]any)["vehicle_id"] == vehicle {
+			t.Fatal("test fixture must place the match after the unfiltered first 100 rows")
+		}
+	}
+
+	found := get("vehicles?limit=1&search=target&make=search%20make&status=ACTIVE", http.StatusOK)
+	assertField(t, found["meta"].(map[string]any), "total", 1)
+	assertField(t, found["data"].([]any)[0].(map[string]any), "vehicle_id", vehicle)
+	empty := get("vehicles?search=target&status=ARCHIVED", http.StatusOK)
+	assertField(t, empty["meta"].(map[string]any), "total", 0)
+	get("vehicles?status=INVALID", http.StatusBadRequest)
+
+	recordType := createComplianceRecordType(t, h, map[string]any{
+		"subject_type": "VEHICLE", "type_name": "Searchable registration", "renewal_behavior": "RENEWABLE", "active": true,
+	})
+	createComplianceRecordType(t, h, map[string]any{
+		"subject_type": "PERSON", "type_name": "Searchable permit", "renewal_behavior": "RENEWABLE", "active": true,
+	})
+	typePage := get("compliance-record-types?subject_type=VEHICLE&status=ACTIVE&search=Searchable&limit=1", http.StatusOK)
+	assertField(t, typePage["meta"].(map[string]any), "total", 1)
+	assertField(t, typePage["data"].([]any)[0].(map[string]any), "record_type_id", recordType)
+
+	record := createComplianceRecord(t, h, map[string]any{
+		"subject_type": "VEHICLE", "subject_id": vehicle, "record_type_id": recordType,
+		"expiry_date": "2001-11-18T22:30:00Z",
+	})
+	records := get("compliance-records?subject_type=VEHICLE&status=ACTIVE&expiry_status=EXPIRED&limit=1&record_type_id="+recordType, http.StatusOK)
+	assertField(t, records["meta"].(map[string]any), "total", 1)
+	assertField(t, records["data"].([]any)[0].(map[string]any), "record_id", record)
+}
+
 func TestHRAdminOverviewExpiryBoundaryAndDirectory(t *testing.T) {
 	h := setupIntegrationTest(t)
 	// This legacy instant's document date is 19 November in Dubai.
@@ -828,7 +876,7 @@ func TestHRAdminOverviewExpiryBoundaryAndDirectory(t *testing.T) {
 	if !strings.HasSuffix(stringField(t, row, "created_at"), "Z") {
 		t.Fatal("expected UTC event timestamp")
 	}
-	for _, query := range []string{"subject_type=", "subject_id=", "subject_type=VEHICLE", "subject_id=" + active, "subject_type=OTHER&subject_id=" + active, "subject_type=PERSON&subject_id=invalid"} {
+	for _, query := range []string{"subject_type=", "subject_id=", "subject_id=" + active, "subject_type=OTHER&subject_id=" + active, "subject_type=PERSON&subject_id=invalid"} {
 		performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/hr-admin/compliance-records?"+query, nil, http.StatusBadRequest)
 	}
 	assertField(t, get("compliance-records?subject_type=PERSON&subject_id=" + active)["meta"].(map[string]any), "total", 0)

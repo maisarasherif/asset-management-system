@@ -255,12 +255,21 @@ func GetCertificateHistory(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 		limit, offset, query := utils.ParsePagination(c)
-		rows, err := q.GetCertificateHistory(ctx, db.GetCertificateHistoryParams{CertificateID: certificate, PageLimit: limit, PageOffset: offset})
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		source := filters.Enum("source", "GENERATED", "EXTERNAL", "LEGACY")
+		state := filters.Enum("state", "APPROVED", "PROCESSING", "COMPLETED", "FAILED", "ABANDONED", "LEGACY")
+		if !filters.Valid() {
+			return
+		}
+		rows, err := q.GetCertificateHistory(ctx, db.GetCertificateHistoryParams{
+			CertificateID: certificate, SearchText: search, FilterSource: source, FilterState: state, PageLimit: limit, PageOffset: offset,
+		})
 		if err != nil {
 			c.JSON(500, gin.H{"error": "could not load certificate history"})
 			return
 		}
-		total, err := q.CountCertificateHistory(ctx, certificate)
+		total, err := q.CountCertificateHistory(ctx, db.CountCertificateHistoryParams{CertificateID: certificate, SearchText: search, FilterSource: source, FilterState: state})
 		if err != nil {
 			c.JSON(500, gin.H{"error": "could not count history"})
 			return

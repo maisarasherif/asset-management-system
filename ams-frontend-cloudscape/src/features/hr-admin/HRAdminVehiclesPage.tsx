@@ -1,3 +1,6 @@
+import { activeArchived } from "../../components/shared/listFacetOptions";
+import { ListFilters, ListPagination, TextFacet } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
 import {
   Alert,
   Badge,
@@ -15,7 +18,7 @@ import {
   Textarea,
   type TableProps,
 } from "@cloudscape-design/components";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
@@ -214,7 +217,7 @@ export function HRAdminVehiclesPage() {
   const hrRole = getProductRole("HR_ADMIN");
   const canWrite = hrRole === "ADMIN" || hrRole === "USER";
   const canArchive = hrRole === "ADMIN";
-  const [filterText, setFilterText] = useState("");
+  const controls = useListControls("", ["status", "make"]);
   const [compactTable, setCompactTable] = useState(() => isCompactViewport());
   const [editor, setEditor] = useState<VehicleEditor>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>(null);
@@ -222,8 +225,9 @@ export function HRAdminVehiclesPage() {
   const [modalError, setModalError] = useState("");
 
   const vehiclesQuery = useQuery({
-    queryKey: ["hr-admin", "vehicles"],
-    queryFn: () => listHRAdminVehicles(1, 100),
+    queryKey: ["hr-admin", "vehicles", controls.query],
+    queryFn: () => listHRAdminVehicles(controls.page, 20, controls.query),
+    placeholderData: keepPreviousData,
   });
 
   useEffect(() => {
@@ -274,26 +278,7 @@ export function HRAdminVehiclesPage() {
     },
   });
 
-  const vehicles = useMemo(() => vehiclesQuery.data?.data ?? [], [vehiclesQuery.data?.data]);
-  const filteredVehicles = useMemo(() => {
-    const query = filterText.trim().toLowerCase();
-    if (!query) {
-      return vehicles;
-    }
-    return vehicles.filter((vehicle) =>
-      [
-        vehicle.display_id,
-        vehicle.plate_number,
-        vehicle.make,
-        vehicle.model,
-        yearLabel(vehicle.vehicle_year),
-        vehicle.status,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [filterText, vehicles]);
+  const filteredVehicles = vehiclesQuery.data?.data ?? [];
 
   const columns = useMemo<TableProps.ColumnDefinition<HRAdminVehicle>[]>(() => {
     const editVehicle = (item: HRAdminVehicle) => {
@@ -517,12 +502,9 @@ export function HRAdminVehiclesPage() {
         ) : null}
         <Container>
           <SpaceBetween size="m">
-            <Input
-              ariaLabel="Search vehicles"
-              placeholder="Search by plate, make, model, year, or status"
-              value={filterText}
-              onChange={({ detail }) => setFilterText(detail.value)}
-            />
+            <ListFilters controls={controls} label="Search vehicles" facets={[{ key: "status", label: "Status", options: activeArchived }]}>
+                <TextFacet key={controls.filters.make} label="Make" value={controls.filters.make} onApply={(make) => controls.setFilters({ make })} />
+              </ListFilters>
             <Table
               columnDefinitions={columns}
               empty={
@@ -546,15 +528,16 @@ export function HRAdminVehiclesPage() {
                     ) : undefined
                   }
                   description={
-                    filterText
+                    controls.hasCriteria
                       ? "No vehicle records match the current search."
                       : "Create the first vehicle before adding registration, license, or other responsibility records."
                   }
-                  title={filterText ? "No matching vehicles" : "No vehicles yet"}
+                  title={controls.hasCriteria ? "No matching vehicles" : "No vehicles yet"}
                 />
               }
-              header={<Header counter={`(${filteredVehicles.length})`}>Vehicle records</Header>}
+              header={<Header counter={`(${vehiclesQuery.data?.meta.total ?? 0})`}>Vehicle records</Header>}
               items={filteredVehicles}
+              pagination={<ListPagination controls={controls} meta={vehiclesQuery.data?.meta} />}
               trackBy="vehicle_id"
             />
           </SpaceBetween>

@@ -70,6 +70,29 @@ Default Playwright specs:
 
 Other feature-specific and mocked specs are opt-in through `E2E_SPECS`. The whole-app spec covers route health and selected behavior, not every feature workflow. Mocked page tests do not replace real end-to-end feature checks.
 
+### App-wide search and filtering
+
+Go integration tests cover matches beyond the first 100 rows, filtered counts, Dubai expiry status, component and certificate scope, access grants, maintenance, and catalog filters. The HR/Admin and client-certificate Newman collections verify filtered responses and client access revocation. The existing Playwright specs check filter navigation, search text clearing on reload, and client searches against the real stack.
+
+Run the focused gate as the test account from the VPS test checkout:
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/hr-admin-product.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/hr-admin-product.spec.ts ../tests/regression/e2e/client-asset-certificates.spec.ts ../tests/regression/e2e/template-catalog.spec.ts ../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/scheduler-management.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Then run all maintained API collections and the extended browser profile:
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='' E2E_SPECS='' E2E_PROFILE=certificates-final \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+Keep each run's counts, cleanup outcomes, exit status, and evidence path. After both gates pass, use the normal deployment command and smoke-check the HR/Admin, AMS and client lists. The search update uses the existing database schema.
+
 ### Step 8 final certificate regression and timing evidence
 
 Prepared 4 October 2026 on `certgen`. Step 7 remains verified across run.2zwEuQ (192 Go passes, no failures/skips; Newman passed) and run.Xnlhcs (four dedicated browser journeys passed). **Step 8 implementation and verification are complete. run.yNbzjh passed 194 Go tests (0 failures/skips), Newman, all four dedicated Playwright journeys and both cleanup gates after the empty-heading correction. The corrected long PDF has been rendered and inspected successfully. Broader browser coverage retains combined passing evidence across the earlier runs.** The latest evidence entries below combine run.47x15g, the subsequent 17-of-18 browser profile, the corrected HR/Admin rerun run.VEpZ2d and supplemental run.5mSUXv. This is combined evidence, not a claimed single all-green run.

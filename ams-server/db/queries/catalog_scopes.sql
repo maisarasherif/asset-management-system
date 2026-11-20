@@ -196,13 +196,16 @@ SELECT
 FROM catalog_scope_main_categories csmc
 JOIN main_categories mc ON mc.main_category_id = csmc.main_category_id
 WHERE csmc.scope_id = sqlc.arg(scope_id)
-ORDER BY csmc.sort_order ASC, csmc.created_at ASC
+  AND strpos(lower(concat_ws(' ', csmc.display_id, mc.display_id, mc.main_category_name, mc.description)), lower(sqlc.arg(search_text)::text)) > 0
+ORDER BY csmc.sort_order ASC, csmc.created_at ASC, csmc.scope_main_category_id
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountCatalogScopeMainCategories :one
 SELECT COUNT(*)
-FROM catalog_scope_main_categories
-WHERE scope_id = $1;
+FROM catalog_scope_main_categories csmc
+JOIN main_categories mc ON mc.main_category_id = csmc.main_category_id
+WHERE csmc.scope_id = sqlc.arg(scope_id)
+  AND strpos(lower(concat_ws(' ', csmc.display_id, mc.display_id, mc.main_category_name, mc.description)), lower(sqlc.arg(search_text)::text)) > 0;
 
 -- name: GetCatalogScopeMainCategoryByID :one
 SELECT
@@ -303,6 +306,8 @@ FROM catalog_scope_categories csc
 JOIN main_categories mc ON mc.main_category_id = csc.main_category_id
 JOIN categories c ON c.category_id = csc.category_id
 WHERE csc.scope_id = sqlc.arg(scope_id)
+  AND strpos(lower(concat_ws(' ', csc.display_id, c.display_id, c.category_name, mc.main_category_name, csc.description)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_parent)::uuid = '00000000-0000-0000-0000-000000000000' OR csc.main_category_id = sqlc.arg(filter_parent))
 ORDER BY
     (
         SELECT csmc.sort_order
@@ -312,13 +317,17 @@ ORDER BY
         LIMIT 1
     ) ASC NULLS LAST,
     csc.sort_order ASC,
-    csc.created_at ASC
+    csc.created_at ASC, csc.scope_category_id
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountCatalogScopeCategories :one
 SELECT COUNT(*)
-FROM catalog_scope_categories
-WHERE scope_id = $1;
+FROM catalog_scope_categories csc
+JOIN main_categories mc ON mc.main_category_id = csc.main_category_id
+JOIN categories c ON c.category_id = csc.category_id
+WHERE csc.scope_id = sqlc.arg(scope_id)
+  AND strpos(lower(concat_ws(' ', csc.display_id, c.display_id, c.category_name, mc.main_category_name, csc.description)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_parent)::uuid = '00000000-0000-0000-0000-000000000000' OR csc.main_category_id = sqlc.arg(filter_parent));
 
 -- name: GetCatalogScopeCategoryByID :one
 SELECT
@@ -444,3 +453,21 @@ SELECT
 FROM catalog_scope_categories
 WHERE catalog_scope_categories.scope_id = sqlc.arg(source_scope_id)
 ORDER BY main_category_id, sort_order ASC, created_at ASC;
+
+-- name: SearchCatalogScopes :many
+SELECT
+    scope_id,
+    display_id,
+    scope_name,
+    description,
+    created_at,
+    updated_at
+FROM catalog_scopes
+WHERE strpos(lower(concat_ws(' ', display_id, scope_name, description)), lower(sqlc.arg(search_text)::text)) > 0
+ORDER BY created_at ASC, scope_name ASC, scope_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+
+-- name: CountSearchCatalogScopes :one
+SELECT COUNT(*)
+FROM catalog_scopes
+WHERE strpos(lower(concat_ws(' ', display_id, scope_name, description)), lower(sqlc.arg(search_text)::text)) > 0;

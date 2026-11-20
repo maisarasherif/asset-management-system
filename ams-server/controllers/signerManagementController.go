@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	issuance "github.com/maisarasherif/asset-management-system/ams-server/certificateissuance"
+	"github.com/maisarasherif/asset-management-system/ams-server/dto"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
@@ -196,6 +197,34 @@ func ListGeneratedSigners(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		c.Header("Cache-Control", "no-store")
 		c.JSON(http.StatusOK, choices)
+	}
+}
+
+func SearchGeneratedSigners(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := signingUser(c)
+		if !ok {
+			return
+		}
+		certificate, ok := utils.ParseUUIDParam(c, "certificate_id")
+		if !ok {
+			return
+		}
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		if !filters.Valid() {
+			return
+		}
+		limit, offset, page := utils.ParsePagination(c)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		choices, total, err := signerManagement(pool).SearchEligible(ctx, actor, certificate, search, limit, offset)
+		if err != nil {
+			signingError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		c.JSON(http.StatusOK, dto.PaginatedResponse{Data: choices, Meta: utils.BuildMeta(page, total)})
 	}
 }
 

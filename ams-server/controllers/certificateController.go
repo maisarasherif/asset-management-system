@@ -39,13 +39,17 @@ func computeCertificateStatusAt(expiryDate time.Time, now time.Time) string {
 }
 
 func currentCertificateStatus(storedStatus string, expiryDate *time.Time) string {
+	return currentCertificateStatusAt(storedStatus, expiryDate, time.Now())
+}
+
+func currentCertificateStatusAt(storedStatus string, expiryDate *time.Time, now time.Time) string {
 	if expiryDate == nil {
 		if storedStatus == "" {
 			return "PENDING"
 		}
 		return storedStatus
 	}
-	return computeCertificateStatus(*expiryDate)
+	return computeCertificateStatusAt(*expiryDate, now)
 }
 
 func buildCertificateResponse(
@@ -249,20 +253,28 @@ func GetCertificatesByComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		certificates, err := queries.GetCertificatesByComponentIDPaginated(ctx, db.GetCertificatesByComponentIDPaginatedParams{
-			ComponentID: componentID,
-			PageLimit:   limit,
-			PageOffset:  offset,
+		filters := utils.ReadListFilters(c)
+		status := filters.Enum("status", "VALID", "EXPIRING_SOON", "EXPIRED", "PENDING")
+		sortBy := filters.Enum("sort", "RISK")
+		testID := filters.UUID("test_id")
+		search := filters.Text("search")
+		if !filters.Valid() {
+			return
+		}
+		now := time.Now()
+		certificates, err := queries.SearchComponentCertificates(ctx, db.SearchComponentCertificatesParams{
+			SortByRisk:   sortBy == "RISK",
+			FilterStatus: status, FilterTest: testID, SearchText: search, AsOf: now.Format(time.DateOnly), ComponentID: componentID, PageLimit: limit, PageOffset: offset,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
 			return
 		}
 		for i := range certificates {
-			certificates[i].Status = currentCertificateStatus(certificates[i].Status, certificates[i].ExpiryDate)
+			certificates[i].Status = currentCertificateStatusAt(certificates[i].Status, certificates[i].ExpiryDate, now)
 		}
 
-		total, err := queries.CountCertificatesByComponentID(ctx, componentID)
+		total, err := queries.CountSearchComponentCertificates(ctx, db.CountSearchComponentCertificatesParams{FilterStatus: status, FilterTest: testID, SearchText: search, AsOf: now.Format(time.DateOnly), ComponentID: componentID})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificates"})
 			return
@@ -1001,19 +1013,29 @@ func GetCertificatesWithContext(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
-		certificates, err := queries.GetAllCertificatesWithContextPaginated(ctx, db.GetAllCertificatesWithContextPaginatedParams{
-			Limit:  limit,
-			Offset: offset,
+		filters := utils.ReadListFilters(c)
+		status := filters.Enum("status", "VALID", "EXPIRING_SOON", "EXPIRED", "PENDING")
+		testID := filters.UUID("test_id")
+		search := filters.Text("search")
+		asset := filters.UUID("asset_id")
+		component := filters.UUID("component_id")
+		category := filters.UUID("category_id")
+		if !filters.Valid() {
+			return
+		}
+		now := time.Now()
+		certificates, err := queries.SearchCertificatesWithContext(ctx, db.SearchCertificatesWithContextParams{
+			FilterStatus: status, FilterTest: testID, SearchText: search, AsOf: now.Format(time.DateOnly), FilterAsset: asset, FilterComponent: component, FilterCategory: category, PageLimit: limit, PageOffset: offset,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch certificates"})
 			return
 		}
 		for i := range certificates {
-			certificates[i].Status = currentCertificateStatus(certificates[i].Status, certificates[i].ExpiryDate)
+			certificates[i].Status = currentCertificateStatusAt(certificates[i].Status, certificates[i].ExpiryDate, now)
 		}
 
-		total, err := queries.CountAllCertificatesWithContext(ctx)
+		total, err := queries.CountSearchCertificatesWithContext(ctx, db.CountSearchCertificatesWithContextParams{FilterStatus: status, FilterTest: testID, SearchText: search, AsOf: now.Format(time.DateOnly), FilterAsset: asset, FilterComponent: component, FilterCategory: category})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count certificates"})
 			return
@@ -1185,5 +1207,30 @@ func GetAssetComponentCertificateSheetPDF(pool *pgxpool.Pool) gin.HandlerFunc {
 		c.Header("Content-Type", "application/pdf")
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 		c.Data(http.StatusOK, "application/pdf", pdfBytes)
+	}
+}
+
+func SearchTestTypes(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		limit, offset, page := utils.ParsePagination(c)
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		if !filters.Valid() {
+			return
+		}
+		queries := db.New(pool)
+		rows, err := queries.SearchTestTypes(ctx, db.SearchTestTypesParams{SearchText: search, PageLimit: limit, PageOffset: offset})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not search this list."})
+			return
+		}
+		total, err := queries.CountSearchTestTypes(ctx, search)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not count matching results."})
+			return
+		}
+		c.JSON(http.StatusOK, dto.PaginatedResponse{Data: rows, Meta: utils.BuildMeta(page, total)})
 	}
 }

@@ -22,7 +22,15 @@ func GetCompetencyCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterStatus := filters.Enum("status", "ACTIVE", "INACTIVE")
+		if !filters.Valid() {
+			return
+		}
+
 		categories, err := queries.GetAllCompetencyCategoriesPaginated(ctx, db.GetAllCompetencyCategoriesPaginatedParams{
+			SearchText: search, FilterStatus: filterStatus,
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -31,7 +39,7 @@ func GetCompetencyCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountCompetencyCategories(ctx)
+		total, err := queries.CountCompetencyCategories(ctx, db.CountCompetencyCategoriesParams{SearchText: search, FilterStatus: filterStatus})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count competency categories"})
 			return
@@ -145,7 +153,16 @@ func GetCompetentPersons(pool *pgxpool.Pool) gin.HandlerFunc {
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterStatus := filters.Enum("status", "ACTIVE", "INACTIVE")
+		filterCategory := filters.UUID("competency_category_id")
+		if !filters.Valid() {
+			return
+		}
+
 		people, err := queries.GetAllCompetentPersonsPaginated(ctx, db.GetAllCompetentPersonsPaginatedParams{
+			SearchText: search, FilterStatus: filterStatus, FilterCategory: filterCategory,
 			Limit:  limit,
 			Offset: offset,
 		})
@@ -154,7 +171,7 @@ func GetCompetentPersons(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountCompetentPersons(ctx)
+		total, err := queries.CountCompetentPersons(ctx, db.CountCompetentPersonsParams{SearchText: search, FilterStatus: filterStatus, FilterCategory: filterCategory})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count competent persons"})
 			return
@@ -283,5 +300,35 @@ func UpdateCompetentPerson(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "competent person updated successfully"})
+	}
+}
+
+func SearchActiveCompetentPersons(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		categories := filters.UUIDs("category_ids")
+		if !filters.Valid() {
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		limit, offset, page := utils.ParsePagination(c)
+		queries := db.New(pool)
+		rows, err := queries.SearchActiveCompetentPersons(ctx, db.SearchActiveCompetentPersonsParams{
+			SearchText: search, CategoryIds: categories, PageLimit: limit, PageOffset: offset,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load competent persons."})
+			return
+		}
+		total, err := queries.CountSearchActiveCompetentPersons(ctx, db.CountSearchActiveCompetentPersonsParams{
+			SearchText: search, CategoryIds: categories,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not count competent persons."})
+			return
+		}
+		c.JSON(http.StatusOK, dto.PaginatedResponse{Data: rows, Meta: utils.BuildMeta(page, total)})
 	}
 }

@@ -38,13 +38,17 @@ SELECT
     created_at,
     updated_at
 FROM hr_admin_persons
-WHERE strpos(lower(concat_ws(' ', display_id, person_code, full_name, department, role_title)), lower(sqlc.arg(search)::text)) > 0
+WHERE strpos(lower(concat_ws(' ', display_id, person_code, full_name, department, role_title, status)), lower(sqlc.arg(search)::text)) > 0
+  AND (sqlc.arg(status_filter)::text = '' OR status = sqlc.arg(status_filter))
+  AND (sqlc.arg(facet)::text = '' OR lower(department) = lower(sqlc.arg(facet)))
 ORDER BY created_at DESC, person_id
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountHRAdminPersons :one
 SELECT COUNT(*) FROM hr_admin_persons
-WHERE strpos(lower(concat_ws(' ', display_id, person_code, full_name, department, role_title)), lower(sqlc.arg(search)::text)) > 0;
+WHERE strpos(lower(concat_ws(' ', display_id, person_code, full_name, department, role_title, status)), lower(sqlc.arg(search)::text)) > 0
+  AND (sqlc.arg(status_filter)::text = '' OR status = sqlc.arg(status_filter))
+  AND (sqlc.arg(facet)::text = '' OR lower(department) = lower(sqlc.arg(facet)));
 
 -- name: GetHRAdminPersonByID :one
 SELECT
@@ -126,13 +130,17 @@ SELECT
     created_at,
     updated_at
 FROM hr_admin_vehicles
-WHERE strpos(lower(concat_ws(' ', display_id, plate_number, make, model)), lower(sqlc.arg(search)::text)) > 0
+WHERE strpos(lower(concat_ws(' ', display_id, plate_number, make, model, vehicle_year, status)), lower(sqlc.arg(search)::text)) > 0
+  AND (sqlc.arg(status_filter)::text = '' OR status = sqlc.arg(status_filter))
+  AND (sqlc.arg(facet)::text = '' OR lower(make) = lower(sqlc.arg(facet)))
 ORDER BY created_at DESC, vehicle_id
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountHRAdminVehicles :one
 SELECT COUNT(*) FROM hr_admin_vehicles
-WHERE strpos(lower(concat_ws(' ', display_id, plate_number, make, model)), lower(sqlc.arg(search)::text)) > 0;
+WHERE strpos(lower(concat_ws(' ', display_id, plate_number, make, model, vehicle_year, status)), lower(sqlc.arg(search)::text)) > 0
+  AND (sqlc.arg(status_filter)::text = '' OR status = sqlc.arg(status_filter))
+  AND (sqlc.arg(facet)::text = '' OR lower(make) = lower(sqlc.arg(facet)));
 
 -- name: GetHRAdminVehicleByID :one
 SELECT
@@ -214,13 +222,17 @@ SELECT
     created_at,
     updated_at
 FROM hr_admin_companies
-WHERE strpos(lower(concat_ws(' ', display_id, company_code, company_name, company_kind, location)), lower(sqlc.arg(search)::text)) > 0
+WHERE strpos(lower(concat_ws(' ', display_id, company_code, company_name, company_kind, location, status)), lower(sqlc.arg(search)::text)) > 0
+  AND (sqlc.arg(status_filter)::text = '' OR status = sqlc.arg(status_filter))
+  AND (sqlc.arg(facet)::text = '' OR lower(company_kind) = lower(sqlc.arg(facet)))
 ORDER BY created_at DESC, company_id
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountHRAdminCompanies :one
 SELECT COUNT(*) FROM hr_admin_companies
-WHERE strpos(lower(concat_ws(' ', display_id, company_code, company_name, company_kind, location)), lower(sqlc.arg(search)::text)) > 0;
+WHERE strpos(lower(concat_ws(' ', display_id, company_code, company_name, company_kind, location, status)), lower(sqlc.arg(search)::text)) > 0
+  AND (sqlc.arg(status_filter)::text = '' OR status = sqlc.arg(status_filter))
+  AND (sqlc.arg(facet)::text = '' OR lower(company_kind) = lower(sqlc.arg(facet)));
 
 -- name: GetHRAdminCompanyByID :one
 SELECT
@@ -302,11 +314,23 @@ SELECT
     created_at,
     updated_at
 FROM compliance_record_types
-ORDER BY subject_type ASC, type_name ASC
-LIMIT $1 OFFSET $2;
+WHERE strpos(lower(concat_ws(' ', display_id, subject_type, type_name,
+    replace(renewal_behavior, '_', ' '), CASE WHEN active THEN 'active' ELSE 'inactive' END,
+    description, array_to_string(reminder_policy_days, ' '))), lower(sqlc.arg(search)::text)) > 0
+  AND (sqlc.arg(subject_type_filter)::text = '' OR subject_type = sqlc.arg(subject_type_filter))
+  AND (sqlc.arg(record_type_filter)::uuid = '00000000-0000-0000-0000-000000000000' OR record_type_id = sqlc.arg(record_type_filter))
+  AND (sqlc.arg(status_filter)::text = '' OR active = (sqlc.arg(status_filter) = 'ACTIVE'))
+ORDER BY subject_type ASC, type_name ASC, record_type_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountComplianceRecordTypes :one
-SELECT COUNT(*) FROM compliance_record_types;
+SELECT COUNT(*) FROM compliance_record_types
+WHERE strpos(lower(concat_ws(' ', display_id, subject_type, type_name,
+    replace(renewal_behavior, '_', ' '), CASE WHEN active THEN 'active' ELSE 'inactive' END,
+    description, array_to_string(reminder_policy_days, ' '))), lower(sqlc.arg(search)::text)) > 0
+  AND (sqlc.arg(subject_type_filter)::text = '' OR subject_type = sqlc.arg(subject_type_filter))
+  AND (sqlc.arg(record_type_filter)::uuid = '00000000-0000-0000-0000-000000000000' OR record_type_id = sqlc.arg(record_type_filter))
+  AND (sqlc.arg(status_filter)::text = '' OR active = (sqlc.arg(status_filter) = 'ACTIVE'));
 
 -- name: GetComplianceRecordTypeByID :one
 SELECT
@@ -378,60 +402,126 @@ SET
 WHERE record_type_id = sqlc.arg(record_type_id);
 
 -- name: GetComplianceRecordsPaginated :many
-SELECT
-    cr.record_id,
-    cr.display_id,
-    cr.subject_type,
-    cr.subject_id,
-    CASE
-        WHEN cr.subject_type = 'PERSON' THEN COALESCE(p.full_name, '')
-        WHEN cr.subject_type = 'VEHICLE' THEN COALESCE(v.plate_number, '')
-        WHEN cr.subject_type = 'COMPANY' THEN COALESCE(c.company_name, '')
-        ELSE ''
-    END::text AS subject_name,
-    crt.record_type_id,
-    crt.display_id AS record_type_display_id,
-    crt.type_name,
-    crt.renewal_behavior,
-    crt.requires_document,
-    crt.default_validity_months,
-    COALESCE(p.status, v.status, c.status, 'ARCHIVED')::text AS subject_status,
-    CASE
-        WHEN cr.status = 'ARCHIVED' THEN 'ARCHIVED'
-        WHEN crv.expiry_date IS NULL AND crt.renewal_behavior = 'ONE_TIME' THEN 'NO_EXPIRY'
-        WHEN crv.expiry_date IS NULL THEN 'MISSING_EXPIRY'
-        ELSE COALESCE(rs.queue_status, 'UNTRACKED')
-    END::text AS expiry_status,
-    cr.status,
-    cr.archive_reason,
-    cr.archived_at,
-    cr.archived_by,
-    crv.version_id,
-    crv.display_id AS version_display_id,
-    crv.version_number,
-    crv.issue_date,
-    crv.expiry_date,
-    crv.document_file,
-    crv.issuing_authority,
-    crv.notes,
-    cr.created_at,
-    cr.updated_at
-FROM compliance_records cr
-JOIN compliance_record_types crt ON crt.record_type_id = cr.record_type_id
-LEFT JOIN compliance_record_versions crv ON crv.record_id = cr.record_id AND crv.is_current
-LEFT JOIN hr_admin_persons p ON cr.subject_type = 'PERSON' AND p.person_id = cr.subject_id
-LEFT JOIN hr_admin_vehicles v ON cr.subject_type = 'VEHICLE' AND v.vehicle_id = cr.subject_id
-LEFT JOIN hr_admin_companies c ON cr.subject_type = 'COMPANY' AND c.company_id = cr.subject_id
-LEFT JOIN hr_admin_renewal_status rs ON rs.record_id = cr.record_id
-WHERE (sqlc.arg(filter_type)::text = '' OR
-       (cr.subject_type = sqlc.arg(filter_type) AND cr.subject_id = sqlc.arg(filter_id)::uuid))
-ORDER BY cr.created_at DESC, cr.record_id
+SELECT records.*
+FROM (
+    SELECT
+        cr.record_id,
+        cr.display_id,
+        cr.subject_type,
+        cr.subject_id,
+        CASE
+            WHEN cr.subject_type = 'PERSON' THEN COALESCE(p.full_name, '')
+            WHEN cr.subject_type = 'VEHICLE' THEN COALESCE(v.plate_number, '')
+            WHEN cr.subject_type = 'COMPANY' THEN COALESCE(c.company_name, '')
+            ELSE ''
+        END::text AS subject_name,
+        crt.record_type_id,
+        crt.display_id AS record_type_display_id,
+        crt.type_name,
+        crt.renewal_behavior,
+        crt.requires_document,
+        crt.default_validity_months,
+        COALESCE(p.status, v.status, c.status, 'ARCHIVED')::text AS subject_status,
+        CASE
+            WHEN cr.status = 'ARCHIVED' THEN 'ARCHIVED'
+            WHEN crv.expiry_date IS NULL AND crt.renewal_behavior = 'ONE_TIME' THEN 'NO_EXPIRY'
+            WHEN crv.expiry_date IS NULL THEN 'MISSING_EXPIRY'
+            ELSE COALESCE(rs.queue_status, 'UNTRACKED')
+        END::text AS expiry_status,
+        cr.status,
+        cr.archive_reason,
+        cr.archived_at,
+        cr.archived_by,
+        crv.version_id,
+        crv.display_id AS version_display_id,
+        crv.version_number,
+        crv.issue_date,
+        crv.expiry_date,
+        crv.document_file,
+        crv.issuing_authority,
+        crv.notes,
+        cr.created_at,
+        cr.updated_at
+    FROM compliance_records cr
+    JOIN compliance_record_types crt ON crt.record_type_id = cr.record_type_id
+    LEFT JOIN compliance_record_versions crv ON crv.record_id = cr.record_id AND crv.is_current
+    LEFT JOIN hr_admin_persons p ON cr.subject_type = 'PERSON' AND p.person_id = cr.subject_id
+    LEFT JOIN hr_admin_vehicles v ON cr.subject_type = 'VEHICLE' AND v.vehicle_id = cr.subject_id
+    LEFT JOIN hr_admin_companies c ON cr.subject_type = 'COMPANY' AND c.company_id = cr.subject_id
+    LEFT JOIN hr_admin_renewal_status rs ON rs.record_id = cr.record_id
+) AS records
+WHERE (sqlc.arg(filter_type)::text = '' OR records.subject_type = sqlc.arg(filter_type))
+  AND (sqlc.arg(filter_id)::uuid = '00000000-0000-0000-0000-000000000000' OR records.subject_id = sqlc.arg(filter_id))
+  AND (sqlc.arg(record_type_filter)::uuid = '00000000-0000-0000-0000-000000000000' OR records.record_type_id = sqlc.arg(record_type_filter))
+  AND (sqlc.arg(status_filter)::text = '' OR records.status = sqlc.arg(status_filter))
+  AND (sqlc.arg(expiry_filter)::text = '' OR records.expiry_status = sqlc.arg(expiry_filter))
+  AND strpos(lower(concat_ws(' ', records.display_id, records.subject_type, records.subject_name,
+      records.type_name, records.record_type_display_id, replace(records.renewal_behavior, '_', ' '),
+      records.status, records.document_file, records.issuing_authority,
+      CASE records.expiry_status WHEN 'OK' THEN 'Valid' ELSE replace(records.expiry_status, '_', ' ') END)),
+      lower(sqlc.arg(search)::text)) > 0
+ORDER BY records.created_at DESC, records.record_id
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountComplianceRecords :one
-SELECT COUNT(*) FROM compliance_records cr
-WHERE (sqlc.arg(filter_type)::text = '' OR
-       (cr.subject_type = sqlc.arg(filter_type) AND cr.subject_id = sqlc.arg(filter_id)::uuid));
+SELECT COUNT(*)
+FROM (
+    SELECT
+        cr.record_id,
+        cr.display_id,
+        cr.subject_type,
+        cr.subject_id,
+        CASE
+            WHEN cr.subject_type = 'PERSON' THEN COALESCE(p.full_name, '')
+            WHEN cr.subject_type = 'VEHICLE' THEN COALESCE(v.plate_number, '')
+            WHEN cr.subject_type = 'COMPANY' THEN COALESCE(c.company_name, '')
+            ELSE ''
+        END::text AS subject_name,
+        crt.record_type_id,
+        crt.display_id AS record_type_display_id,
+        crt.type_name,
+        crt.renewal_behavior,
+        crt.requires_document,
+        crt.default_validity_months,
+        COALESCE(p.status, v.status, c.status, 'ARCHIVED')::text AS subject_status,
+        CASE
+            WHEN cr.status = 'ARCHIVED' THEN 'ARCHIVED'
+            WHEN crv.expiry_date IS NULL AND crt.renewal_behavior = 'ONE_TIME' THEN 'NO_EXPIRY'
+            WHEN crv.expiry_date IS NULL THEN 'MISSING_EXPIRY'
+            ELSE COALESCE(rs.queue_status, 'UNTRACKED')
+        END::text AS expiry_status,
+        cr.status,
+        cr.archive_reason,
+        cr.archived_at,
+        cr.archived_by,
+        crv.version_id,
+        crv.display_id AS version_display_id,
+        crv.version_number,
+        crv.issue_date,
+        crv.expiry_date,
+        crv.document_file,
+        crv.issuing_authority,
+        crv.notes,
+        cr.created_at,
+        cr.updated_at
+    FROM compliance_records cr
+    JOIN compliance_record_types crt ON crt.record_type_id = cr.record_type_id
+    LEFT JOIN compliance_record_versions crv ON crv.record_id = cr.record_id AND crv.is_current
+    LEFT JOIN hr_admin_persons p ON cr.subject_type = 'PERSON' AND p.person_id = cr.subject_id
+    LEFT JOIN hr_admin_vehicles v ON cr.subject_type = 'VEHICLE' AND v.vehicle_id = cr.subject_id
+    LEFT JOIN hr_admin_companies c ON cr.subject_type = 'COMPANY' AND c.company_id = cr.subject_id
+    LEFT JOIN hr_admin_renewal_status rs ON rs.record_id = cr.record_id
+) AS records
+WHERE (sqlc.arg(filter_type)::text = '' OR records.subject_type = sqlc.arg(filter_type))
+  AND (sqlc.arg(filter_id)::uuid = '00000000-0000-0000-0000-000000000000' OR records.subject_id = sqlc.arg(filter_id))
+  AND (sqlc.arg(record_type_filter)::uuid = '00000000-0000-0000-0000-000000000000' OR records.record_type_id = sqlc.arg(record_type_filter))
+  AND (sqlc.arg(status_filter)::text = '' OR records.status = sqlc.arg(status_filter))
+  AND (sqlc.arg(expiry_filter)::text = '' OR records.expiry_status = sqlc.arg(expiry_filter))
+  AND strpos(lower(concat_ws(' ', records.display_id, records.subject_type, records.subject_name,
+      records.type_name, records.record_type_display_id, replace(records.renewal_behavior, '_', ' '),
+      records.status, records.document_file, records.issuing_authority,
+      CASE records.expiry_status WHEN 'OK' THEN 'Valid' ELSE replace(records.expiry_status, '_', ' ') END)),
+      lower(sqlc.arg(search)::text)) > 0;
 
 -- name: GetComplianceRecordByID :one
 SELECT

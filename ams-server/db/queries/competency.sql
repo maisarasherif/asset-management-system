@@ -8,7 +8,9 @@ SELECT
     created_at,
     updated_at
 FROM competency_categories
-ORDER BY category_name ASC
+WHERE strpos(lower(concat_ws(' ', category_code, category_name, description)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_status)::text = '' OR active = (sqlc.arg(filter_status) = 'ACTIVE'))
+ORDER BY category_name ASC, competency_category_id
 LIMIT $1 OFFSET $2;
 
 -- name: GetActiveCompetencyCategories :many
@@ -25,7 +27,9 @@ WHERE active = TRUE
 ORDER BY category_name ASC;
 
 -- name: CountCompetencyCategories :one
-SELECT COUNT(*) FROM competency_categories;
+SELECT COUNT(*) FROM competency_categories
+WHERE strpos(lower(concat_ws(' ', category_code, category_name, description)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_status)::text = '' OR active = (sqlc.arg(filter_status) = 'ACTIVE'));
 
 -- name: GetCompetencyCategoryByID :one
 SELECT
@@ -88,7 +92,10 @@ SELECT
     cp.updated_at
 FROM competent_persons cp
 JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
-ORDER BY cp.full_name ASC
+WHERE strpos(lower(concat_ws(' ', cp.full_name, cp.organization, cc.category_name)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_status)::text = '' OR cp.active = (sqlc.arg(filter_status) = 'ACTIVE'))
+  AND (sqlc.arg(filter_category)::uuid = '00000000-0000-0000-0000-000000000000' OR cp.competency_category_id = sqlc.arg(filter_category))
+ORDER BY cp.full_name ASC, cp.competent_person_id
 LIMIT $1 OFFSET $2;
 
 -- name: GetActiveCompetentPersons :many
@@ -108,6 +115,35 @@ FROM competent_persons cp
 JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
 WHERE cp.active = TRUE AND cc.active = TRUE
 ORDER BY cp.full_name ASC;
+
+-- name: SearchActiveCompetentPersons :many
+SELECT
+    cp.competent_person_id,
+    cp.full_name,
+    cp.person_type,
+    cp.organization,
+    cp.competency_category_id,
+    cc.category_code AS competency_category_code,
+    cc.category_name AS competency_category_name,
+    cc.description AS competency_category_description,
+    cp.active,
+    cp.created_at,
+    cp.updated_at
+FROM competent_persons cp
+JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
+WHERE cp.active = TRUE AND cc.active = TRUE
+  AND (cardinality(sqlc.arg(category_ids)::uuid[]) = 0 OR cp.competency_category_id = ANY(sqlc.arg(category_ids)))
+  AND strpos(lower(concat_ws(' ', cp.full_name, cp.organization, cc.category_name)), lower(sqlc.arg(search_text)::text)) > 0
+ORDER BY cp.full_name ASC, cp.competent_person_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+
+-- name: CountSearchActiveCompetentPersons :one
+SELECT COUNT(*)
+FROM competent_persons cp
+JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
+WHERE cp.active = TRUE AND cc.active = TRUE
+  AND (cardinality(sqlc.arg(category_ids)::uuid[]) = 0 OR cp.competency_category_id = ANY(sqlc.arg(category_ids)))
+  AND strpos(lower(concat_ws(' ', cp.full_name, cp.organization, cc.category_name)), lower(sqlc.arg(search_text)::text)) > 0;
 
 -- name: GetCompetencyCategoriesByTemplateComponentTestID :many
 SELECT
@@ -173,7 +209,11 @@ WHERE certificate_id = sqlc.arg(certificate_id)
   AND competency_category_id = sqlc.arg(competency_category_id);
 
 -- name: CountCompetentPersons :one
-SELECT COUNT(*) FROM competent_persons;
+SELECT COUNT(*) FROM competent_persons cp
+JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
+WHERE strpos(lower(concat_ws(' ', cp.full_name, cp.organization, cc.category_name)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_status)::text = '' OR cp.active = (sqlc.arg(filter_status) = 'ACTIVE'))
+  AND (sqlc.arg(filter_category)::uuid = '00000000-0000-0000-0000-000000000000' OR cp.competency_category_id = sqlc.arg(filter_category));
 
 -- name: GetCompetentPersonByID :one
 SELECT

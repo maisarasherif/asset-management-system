@@ -1,3 +1,5 @@
+import { PagedMultiselect, PagedSelect } from "../../components/shared/PagedSelect";
+import { useTemplateComponentFilters } from "./templateFilters";
 import {
   Alert,
   Badge,
@@ -28,6 +30,9 @@ import {
   getTemplate,
   getTemplateConfiguration,
   listAllCatalogScopeCategories,
+  listCatalogScopeCategories,
+  searchCatalogScopes,
+  searchTestTypes,
   listActiveCompetencyCategories,
   listCatalogScopes,
   listTestTypes,
@@ -75,7 +80,6 @@ function findCategoryScopeId(
 
 type TemplateConfigureViewProps = {
   categoryOptions: CategorySelectOption[];
-  catalogScopeOptions: SelectProps.Option[];
   componentColumns: TableProps<TemplateConfigurationComponent>["columnDefinitions"];
   configuredComponents: TemplateConfigurationComponent[];
   deletingComponent: TemplateConfigurationComponent | null;
@@ -641,7 +645,6 @@ export function TemplateConfigurePage() {
   return (
     <TemplateConfigureView
       categoryOptions={categoryOptions}
-      catalogScopeOptions={catalogScopeOptions}
       componentColumns={componentColumns}
       configuredComponents={configuredComponents}
       deletingComponent={deletingComponent}
@@ -671,7 +674,6 @@ export function TemplateConfigurePage() {
 
 function TemplateConfigureView({
   categoryOptions,
-  catalogScopeOptions,
   componentColumns,
   configuredComponents,
   deletingComponent,
@@ -720,6 +722,7 @@ function TemplateConfigureView({
 
         <TemplateComponentsPanel
           columnDefinitions={componentColumns}
+          categoryLabels={new Map(categoryOptions.map(({ value, label }) => [value ?? "", label ?? ""]))}
           components={configuredComponents}
           onOpenCreate={onOpenCreate}
         />
@@ -727,7 +730,6 @@ function TemplateConfigureView({
 
       <TemplateComponentEditorModal
         categoryOptions={categoryOptions}
-        catalogScopeOptions={catalogScopeOptions}
         draft={draft}
         editorMode={editorMode}
         formError={formError}
@@ -815,18 +817,21 @@ function TemplateSummaryCards({ componentCount, template, totalTests }: Template
 type TemplateComponentsPanelProps = {
   columnDefinitions: TableProps<TemplateConfigurationComponent>["columnDefinitions"];
   components: TemplateConfigurationComponent[];
+  categoryLabels: ReadonlyMap<string, string>;
   onOpenCreate: () => void;
 };
 
 function TemplateComponentsPanel({
   columnDefinitions,
   components,
+  categoryLabels,
   onOpenCreate,
 }: TemplateComponentsPanelProps) {
-  const emptyState = useMemo(() => <TemplateComponentsEmptyState />, []);
+  const filtered = useTemplateComponentFilters(components, categoryLabels);
+  const emptyState = components.length ? <Box>No configured components match this view.</Box> : <TemplateComponentsEmptyState />;
   const tableHeader = useMemo(
-    () => <TemplateComponentsHeader count={components.length} onOpenCreate={onOpenCreate} />,
-    [components.length, onOpenCreate]
+    () => <TemplateComponentsHeader count={filtered.total} onOpenCreate={onOpenCreate} />,
+    [filtered.total, onOpenCreate]
   );
 
   return (
@@ -834,7 +839,9 @@ function TemplateComponentsPanel({
       columnDefinitions={columnDefinitions}
       empty={emptyState}
       header={tableHeader}
-      items={components}
+      items={filtered.items}
+      filter={filtered.filter}
+      pagination={filtered.pagination}
       trackBy="template_component_id"
     />
   );
@@ -874,7 +881,6 @@ function TemplateComponentsHeader({ count, onOpenCreate }: TemplateComponentsHea
 
 type TemplateComponentEditorModalProps = {
   categoryOptions: CategorySelectOption[];
-  catalogScopeOptions: SelectProps.Option[];
   draft: TemplateComponentFormState;
   editorMode: EditorMode;
   formError: string;
@@ -891,7 +897,6 @@ type TemplateComponentEditorModalProps = {
 
 function TemplateComponentEditorModal({
   categoryOptions,
-  catalogScopeOptions,
   draft,
   editorMode,
   formError,
@@ -944,8 +949,6 @@ function TemplateComponentEditorModal({
         {formError ? <Alert type="error">{formError}</Alert> : null}
 
         <TemplateComponentCoreFields
-          categoryOptions={categoryOptions}
-          catalogScopeOptions={catalogScopeOptions}
           draft={localDraft}
           onDraftChange={setLocalDraft}
           onScopeChange={(scopeId) => {
@@ -979,16 +982,12 @@ type TemplateComponentFieldProps = {
 };
 
 type TemplateComponentCoreFieldsProps = TemplateComponentFieldProps & {
-  categoryOptions: CategorySelectOption[];
-  catalogScopeOptions: SelectProps.Option[];
   onScopeChange: (scopeId: string) => void;
   selectedCatalogScope: SelectProps.Option | null;
   selectedCategory: CategorySelectOption | null;
 };
 
 function TemplateComponentCoreFields({
-  categoryOptions,
-  catalogScopeOptions,
   draft,
   onDraftChange,
   onScopeChange,
@@ -1006,32 +1005,22 @@ function TemplateComponentCoreFields({
         />
       </FormField>
       <FormField label="Catalog scope">
-        <Select
-          options={catalogScopeOptions}
-          placeholder="Choose a catalog scope"
-          selectedOption={selectedCatalogScope}
-          onChange={({ detail }) => onScopeChange(detail.selectedOption.value || "")}
-        />
+        <PagedSelect label="Catalog scope" queryKey={["catalog-scopes", "picker"]}
+          load={(page, search) => searchCatalogScopes({ page, search, limit: 20 })}
+          getOption={(scope) => ({ label: scope.scope_name, value: scope.scope_id })}
+          selected={selectedCatalogScope} onSelect={(option) => onScopeChange(option?.value ?? "")} />
       </FormField>
       <FormField label="Category">
         <div data-testid="template-component-category">
-          <Select
-            filteringType="auto"
-            filteringAriaLabel="Filter categories"
-            filteringPlaceholder="Find category"
-            options={categoryOptions}
-            placeholder="Choose a category"
-            selectedOption={selectedCategory}
-            virtualScroll
-            onChange={({ detail }) => {
-              const selectedOption = detail.selectedOption as CategorySelectOption;
-              return onDraftChange((currentDraft) => ({
-                ...currentDraft,
-                category_id: String(selectedOption.categoryId || ""),
-                scope_category_id: selectedOption.value || "",
-              }));
-            }}
-          />
+          <PagedSelect key={selectedCatalogScope?.value} label="Category"
+            queryKey={["catalog-scope-categories", selectedCatalogScope?.value, "picker"]}
+            disabled={!selectedCatalogScope?.value}
+            load={(page, search) => listCatalogScopeCategories(selectedCatalogScope!.value!, page, 20, { search })}
+            getOption={(item) => ({ label: [item.main_category_name, item.category_name].filter(Boolean).join(" > "), value: item.scope_category_id })}
+            selected={selectedCategory}
+            onSelect={(_, item) => onDraftChange((current) => ({
+              ...current, category_id: item?.category_id ?? "", scope_category_id: item?.scope_category_id ?? "",
+            }))} />
         </div>
       </FormField>
       <FormField label="Description">
@@ -1077,14 +1066,16 @@ function TemplateComponentClassificationFields({
       </FormField>
       <FormField label="Assigned test types">
         <div data-testid="template-component-tests">
-          <Multiselect
-            options={testOptions}
+          <PagedMultiselect
+            label="Certificate test types" queryKey={["test-types", "template-picker"]}
+            load={(page, search) => searchTestTypes({ page, search, limit: 20 })}
+            getOption={(item) => ({ value: item.test_id, label: item.test_name, description: item.description })}
             placeholder="Choose required tests"
-            selectedOptions={selectedTests}
-            onChange={({ detail }) =>
+            selected={selectedTests}
+            onSelect={(options) =>
               onDraftChange((currentDraft) => ({
                 ...currentDraft,
-                tests: detail.selectedOptions.flatMap((option) => {
+                tests: options.flatMap((option) => {
                   if (!option.value) {
                     return [];
                   }

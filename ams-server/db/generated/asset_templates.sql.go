@@ -25,6 +25,27 @@ func (q *Queries) CountAssetsByTemplateID(ctx context.Context, templateID *uuid.
 	return count, err
 }
 
+const countSearchAssetTemplates = `-- name: CountSearchAssetTemplates :one
+SELECT COUNT(*)
+FROM asset_templates
+WHERE strpos(lower(concat_ws(' ', display_id, template_name, description)), lower($1::text)) > 0
+  AND ($2::text = '' OR EXISTS (
+    SELECT 1 FROM assets a WHERE a.template_id = asset_templates.template_id AND lower(a.assigned_project) = lower($2)
+  ))
+`
+
+type CountSearchAssetTemplatesParams struct {
+	SearchText    string `json:"search_text"`
+	FilterProject string `json:"filter_project"`
+}
+
+func (q *Queries) CountSearchAssetTemplates(ctx context.Context, arg CountSearchAssetTemplatesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchAssetTemplates, arg.SearchText, arg.FilterProject)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAssetTemplate = `-- name: CreateAssetTemplate :one
 INSERT INTO asset_templates (display_id, template_name, description, created_at, updated_at)
 VALUES (allocate_display_id('asset_templates.display_id', 'asset_templates'::REGCLASS), $1, $2, NOW(), NOW())
@@ -159,6 +180,71 @@ func (q *Queries) GetAssetTemplateByID(ctx context.Context, templateID uuid.UUID
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const searchAssetTemplates = `-- name: SearchAssetTemplates :many
+SELECT
+    template_id,
+    display_id,
+    template_name,
+    description,
+    created_at,
+    updated_at
+FROM asset_templates
+WHERE strpos(lower(concat_ws(' ', display_id, template_name, description)), lower($1::text)) > 0
+  AND ($2::text = '' OR EXISTS (
+    SELECT 1 FROM assets a WHERE a.template_id = asset_templates.template_id AND lower(a.assigned_project) = lower($2)
+  ))
+ORDER BY created_at DESC, template_id
+LIMIT $4 OFFSET $3
+`
+
+type SearchAssetTemplatesParams struct {
+	SearchText    string `json:"search_text"`
+	FilterProject string `json:"filter_project"`
+	PageOffset    int32  `json:"page_offset"`
+	PageLimit     int32  `json:"page_limit"`
+}
+
+type SearchAssetTemplatesRow struct {
+	TemplateID   uuid.UUID `json:"template_id"`
+	DisplayID    string    `json:"display_id"`
+	TemplateName string    `json:"template_name"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (q *Queries) SearchAssetTemplates(ctx context.Context, arg SearchAssetTemplatesParams) ([]SearchAssetTemplatesRow, error) {
+	rows, err := q.db.Query(ctx, searchAssetTemplates,
+		arg.SearchText,
+		arg.FilterProject,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchAssetTemplatesRow
+	for rows.Next() {
+		var i SearchAssetTemplatesRow
+		if err := rows.Scan(
+			&i.TemplateID,
+			&i.DisplayID,
+			&i.TemplateName,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateAssetTemplate = `-- name: UpdateAssetTemplate :execrows

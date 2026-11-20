@@ -325,6 +325,13 @@ test.describe("client asset certificates browser flow", () => {
       await expect(record.getByText("Renewal", { exact: true })).toBeVisible();
       await expect(record.getByText("6 months", { exact: true })).toBeVisible();
 
+      const certificateSearch = page.getByRole("searchbox", { name: "Search certificates" });
+      await certificateSearch.fill("certificate absent from this asset");
+      await expect(record).toHaveCount(0);
+      await certificateSearch.fill(certificateName);
+      await expect(record).toBeVisible();
+      expect(new URL(page.url()).searchParams.has("search")).toBe(false);
+
       const buttonBounds = await page.locator(".client-certificate-scroll").evaluate((scroll) => {
         scroll.scrollLeft = scroll.scrollWidth;
         const recordElement = scroll.querySelector(".client-certificate-record");

@@ -118,12 +118,30 @@ LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_ty
 LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
 LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
 LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
-ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC
+WHERE strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, cert.display_id, cert.certificate_name, comp.name, cert_asset.name, maintenance_asset.name, ame.display_id, nd.external_id)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_source)::text = '' OR lower(nd.source_type) = lower(sqlc.arg(filter_source)))
+  AND (sqlc.arg(filter_channel)::text = '' OR lower(nd.channel) = lower(sqlc.arg(filter_channel)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(nd.status) = lower(sqlc.arg(filter_status)))
+ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC, nd.delivery_id
 LIMIT $1 OFFSET $2;
 
 -- name: CountCertificateNotificationDeliveries :one
 SELECT COUNT(*)
-FROM notification_deliveries;
+FROM notification_deliveries nd
+LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
+LEFT JOIN components comp ON comp.component_id = cert.component_id
+LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
+LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
+LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
+WHERE strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, cert.display_id, cert.certificate_name, comp.name, cert_asset.name, maintenance_asset.name, ame.display_id, nd.external_id)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_source)::text = '' OR lower(nd.source_type) = lower(sqlc.arg(filter_source)))
+  AND (sqlc.arg(filter_channel)::text = '' OR lower(nd.channel) = lower(sqlc.arg(filter_channel)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(nd.status) = lower(sqlc.arg(filter_status)));
 
 -- name: GetHRAdminNotificationDeliveriesPaginated :many
 SELECT
@@ -165,13 +183,27 @@ LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id
 LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
 LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
 WHERE nd.source_type = 'hr_admin_compliance_expiry'
-ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, nd.external_id)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_source)::text = '' OR lower(nd.source_type) = lower(sqlc.arg(filter_source)))
+  AND (sqlc.arg(filter_channel)::text = '' OR lower(nd.channel) = lower(sqlc.arg(filter_channel)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(nd.status) = lower(sqlc.arg(filter_status)))
+ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC, nd.delivery_id
 LIMIT $1 OFFSET $2;
 
 -- name: CountHRAdminNotificationDeliveries :one
 SELECT COUNT(*)
-FROM notification_deliveries
-WHERE source_type = 'hr_admin_compliance_expiry';
+FROM notification_deliveries nd
+LEFT JOIN compliance_records hrcr ON hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN compliance_record_versions crv ON crv.record_id = hrcr.record_id AND crv.is_current
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
+WHERE nd.source_type = 'hr_admin_compliance_expiry'
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, nd.external_id)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_source)::text = '' OR lower(nd.source_type) = lower(sqlc.arg(filter_source)))
+  AND (sqlc.arg(filter_channel)::text = '' OR lower(nd.channel) = lower(sqlc.arg(filter_channel)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(nd.status) = lower(sqlc.arg(filter_status)));
 
 -- name: GetCertificateNotificationDeliveryFailuresPaginated :many
 SELECT
@@ -225,13 +257,31 @@ LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id
 LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
 LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
 WHERE nd.status = 'FAILED'
-ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, cert.display_id, cert.certificate_name, comp.name, cert_asset.name, maintenance_asset.name, ame.display_id, nd.error_message)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_source)::text = '' OR lower(nd.source_type) = lower(sqlc.arg(filter_source)))
+  AND (sqlc.arg(filter_channel)::text = '' OR lower(nd.channel) = lower(sqlc.arg(filter_channel)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(nd.status) = lower(sqlc.arg(filter_status)))
+ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC, nd.delivery_id
 LIMIT $1 OFFSET $2;
 
 -- name: CountCertificateNotificationDeliveryFailures :one
 SELECT COUNT(*)
-FROM notification_deliveries
-WHERE status = 'FAILED';
+FROM notification_deliveries nd
+LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
+LEFT JOIN components comp ON comp.component_id = cert.component_id
+LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
+LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
+LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
+WHERE nd.status = 'FAILED'
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, cert.display_id, cert.certificate_name, comp.name, cert_asset.name, maintenance_asset.name, ame.display_id, nd.error_message)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_source)::text = '' OR lower(nd.source_type) = lower(sqlc.arg(filter_source)))
+  AND (sqlc.arg(filter_channel)::text = '' OR lower(nd.channel) = lower(sqlc.arg(filter_channel)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(nd.status) = lower(sqlc.arg(filter_status)));
 
 -- name: GetHRAdminNotificationDeliveryFailuresPaginated :many
 SELECT
@@ -272,14 +322,28 @@ LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle
 LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
 WHERE nd.source_type = 'hr_admin_compliance_expiry'
   AND nd.status = 'FAILED'
-ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, nd.error_message)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_source)::text = '' OR lower(nd.source_type) = lower(sqlc.arg(filter_source)))
+  AND (sqlc.arg(filter_channel)::text = '' OR lower(nd.channel) = lower(sqlc.arg(filter_channel)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(nd.status) = lower(sqlc.arg(filter_status)))
+ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC, nd.delivery_id
 LIMIT $1 OFFSET $2;
 
 -- name: CountHRAdminNotificationDeliveryFailures :one
 SELECT COUNT(*)
-FROM notification_deliveries
-WHERE source_type = 'hr_admin_compliance_expiry'
-  AND status = 'FAILED';
+FROM notification_deliveries nd
+LEFT JOIN compliance_records hrcr ON hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN compliance_record_versions crv ON crv.record_id = hrcr.record_id AND crv.is_current
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
+WHERE nd.source_type = 'hr_admin_compliance_expiry'
+  AND nd.status = 'FAILED'
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, nd.error_message)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_source)::text = '' OR lower(nd.source_type) = lower(sqlc.arg(filter_source)))
+  AND (sqlc.arg(filter_channel)::text = '' OR lower(nd.channel) = lower(sqlc.arg(filter_channel)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(nd.status) = lower(sqlc.arg(filter_status)));
 
 -- name: GetRoutineMaintenanceNotificationDeliveriesForAsset :many
 SELECT
@@ -296,5 +360,6 @@ SELECT
 FROM notification_deliveries nd
 JOIN asset_maintenance_events ame ON ame.maintenance_event_id = nd.source_id
 WHERE nd.source_type = 'routine_maintenance'
-  AND ame.asset_id = $1
+  AND ame.asset_id = sqlc.arg(asset_id)
+  AND ame.maintenance_event_id = ANY(sqlc.arg(event_ids)::uuid[])
 ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.updated_at, nd.created_at) DESC;

@@ -1,3 +1,6 @@
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
+import { recordTypeFacets } from "./hrAdminFacets";
 import {
   Alert,
   Badge,
@@ -14,7 +17,7 @@ import {
   Textarea,
   type TableProps,
 } from "@cloudscape-design/components";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { Select } from "../../components/shared/OptimizedSelect";
@@ -282,14 +285,15 @@ function RecordTypeEditorModal({
 export function HRAdminRecordTypesPage() {
   const queryClient = useQueryClient();
   const { success } = useFlashbar();
-  const [filterText, setFilterText] = useState("");
+  const controls = useListControls("", ["subject_type", "status"]);
   const [compactTable, setCompactTable] = useState(() => isCompactViewport());
   const [editor, setEditor] = useState<RecordTypeEditor>(null);
   const [modalError, setModalError] = useState("");
 
   const recordTypesQuery = useQuery({
-    queryKey: ["hr-admin", "compliance-record-types"],
-    queryFn: () => listComplianceRecordTypes(1, 100),
+    queryKey: ["hr-admin", "compliance-record-types", controls.query],
+    queryFn: () => listComplianceRecordTypes(controls.page, 20, controls.query),
+    placeholderData: keepPreviousData,
   });
 
   useEffect(() => {
@@ -328,27 +332,7 @@ export function HRAdminRecordTypesPage() {
     },
   });
 
-  const recordTypes = useMemo(() => recordTypesQuery.data?.data ?? [], [recordTypesQuery.data?.data]);
-  const filteredRecordTypes = useMemo(() => {
-    const query = filterText.trim().toLowerCase();
-    if (!query) {
-      return recordTypes;
-    }
-    return recordTypes.filter((recordType) =>
-      [
-        recordType.display_id,
-        recordType.subject_type,
-        recordType.type_name,
-        recordType.renewal_behavior,
-        recordType.description,
-        recordType.active ? "active" : "inactive",
-        reminderDaysLabel(recordType.reminder_policy_days),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [filterText, recordTypes]);
+  const filteredRecordTypes = recordTypesQuery.data?.data ?? [];
 
   const openEditor = (recordType?: ComplianceRecordType) => {
     setModalError("");
@@ -532,12 +516,7 @@ export function HRAdminRecordTypesPage() {
     >
       <Container>
         <SpaceBetween size="m">
-          <Input
-            ariaLabel="Search record types"
-            placeholder="Search by subject, name, behavior, status, or reminder days"
-            value={filterText}
-            onChange={({ detail }) => setFilterText(detail.value)}
-          />
+          <ListFilters controls={controls} label="Search record types" facets={recordTypeFacets} />
           <Table
             columnDefinitions={columns}
             empty={
@@ -548,15 +527,16 @@ export function HRAdminRecordTypesPage() {
                   </Button>
                 }
                 description={
-                  filterText
+                  controls.hasCriteria
                     ? "No record types match the current search."
                     : "Create the first record type so HR/Admin users can start adding compliance records."
                 }
-                title={filterText ? "No matching record types" : "No record types yet"}
+                title={controls.hasCriteria ? "No matching record types" : "No record types yet"}
               />
             }
-            header={<Header counter={`(${filteredRecordTypes.length})`}>Record type configuration</Header>}
+            header={<Header counter={`(${recordTypesQuery.data?.meta.total ?? 0})`}>Record type configuration</Header>}
             items={filteredRecordTypes}
+              pagination={<ListPagination controls={controls} meta={recordTypesQuery.data?.meta} />}
             trackBy="record_type_id"
           />
         </SpaceBetween>

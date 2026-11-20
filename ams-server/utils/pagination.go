@@ -33,7 +33,10 @@ func ParsePagination(c *gin.Context) (limit int32, offset int32, meta dto.Pagina
 		}
 	}
 
-	offset64 := int64((page - 1) * int(limit64))
+	offset64 := int64(math.MaxInt32)
+	if int64(page-1) <= int64(math.MaxInt32)/limit64 {
+		offset64 = int64(page-1) * limit64
+	}
 
 	return int32(limit64), int32(offset64), dto.PaginationQuery{
 		Page:  page,

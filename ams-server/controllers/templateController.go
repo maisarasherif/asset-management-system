@@ -1093,3 +1093,29 @@ func DeleteTemplateComponentTest(pool *pgxpool.Pool) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "template component test removed successfully"})
 	}
 }
+
+func SearchAssetTemplates(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		limit, offset, page := utils.ParsePagination(c)
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterProject := filters.Text("project")
+		if !filters.Valid() {
+			return
+		}
+		queries := db.New(pool)
+		rows, err := queries.SearchAssetTemplates(ctx, db.SearchAssetTemplatesParams{SearchText: search, FilterProject: filterProject, PageLimit: limit, PageOffset: offset})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not search this list."})
+			return
+		}
+		total, err := queries.CountSearchAssetTemplates(ctx, db.CountSearchAssetTemplatesParams{SearchText: search, FilterProject: filterProject})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not count matching results."})
+			return
+		}
+		c.JSON(http.StatusOK, dto.PaginatedResponse{Data: rows, Meta: utils.BuildMeta(page, total)})
+	}
+}

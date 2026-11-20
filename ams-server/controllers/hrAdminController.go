@@ -104,13 +104,19 @@ func GetHRAdminPersons(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
-		search := strings.TrimSpace(c.Query("search"))
-		people, err := queries.GetHRAdminPersonsPaginated(ctx, db.GetHRAdminPersonsPaginatedParams{Search: search, PageLimit: limit, PageOffset: offset})
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		status := filters.Enum("status", "ACTIVE", "ARCHIVED")
+		facet := filters.Text("department")
+		if !filters.Valid() {
+			return
+		}
+		people, err := queries.GetHRAdminPersonsPaginated(ctx, db.GetHRAdminPersonsPaginatedParams{Search: search, StatusFilter: status, Facet: facet, PageLimit: limit, PageOffset: offset})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch HR/Admin persons"})
 			return
 		}
-		total, err := queries.CountHRAdminPersons(ctx, search)
+		total, err := queries.CountHRAdminPersons(ctx, db.CountHRAdminPersonsParams{Search: search, StatusFilter: status, Facet: facet})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count HR/Admin persons"})
 			return
@@ -227,13 +233,19 @@ func GetHRAdminVehicles(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
-		search := strings.TrimSpace(c.Query("search"))
-		vehicles, err := queries.GetHRAdminVehiclesPaginated(ctx, db.GetHRAdminVehiclesPaginatedParams{Search: search, PageLimit: limit, PageOffset: offset})
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		status := filters.Enum("status", "ACTIVE", "ARCHIVED")
+		facet := filters.Text("make")
+		if !filters.Valid() {
+			return
+		}
+		vehicles, err := queries.GetHRAdminVehiclesPaginated(ctx, db.GetHRAdminVehiclesPaginatedParams{Search: search, StatusFilter: status, Facet: facet, PageLimit: limit, PageOffset: offset})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch HR/Admin vehicles"})
 			return
 		}
-		total, err := queries.CountHRAdminVehicles(ctx, search)
+		total, err := queries.CountHRAdminVehicles(ctx, db.CountHRAdminVehiclesParams{Search: search, StatusFilter: status, Facet: facet})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count HR/Admin vehicles"})
 			return
@@ -319,13 +331,19 @@ func GetHRAdminCompanies(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
-		search := strings.TrimSpace(c.Query("search"))
-		companies, err := queries.GetHRAdminCompaniesPaginated(ctx, db.GetHRAdminCompaniesPaginatedParams{Search: search, PageLimit: limit, PageOffset: offset})
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		status := filters.Enum("status", "ACTIVE", "ARCHIVED")
+		facet := filters.Enum("company_kind", "LEGAL_ENTITY", "OFFICE", "STAFF_HOUSING", "WAREHOUSE", "YARD", "OTHER")
+		if !filters.Valid() {
+			return
+		}
+		companies, err := queries.GetHRAdminCompaniesPaginated(ctx, db.GetHRAdminCompaniesPaginatedParams{Search: search, StatusFilter: status, Facet: facet, PageLimit: limit, PageOffset: offset})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch HR/Admin companies"})
 			return
 		}
-		total, err := queries.CountHRAdminCompanies(ctx, search)
+		total, err := queries.CountHRAdminCompanies(ctx, db.CountHRAdminCompaniesParams{Search: search, StatusFilter: status, Facet: facet})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count HR/Admin companies"})
 			return
@@ -411,12 +429,22 @@ func GetComplianceRecordTypes(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
-		recordTypes, err := queries.GetComplianceRecordTypesPaginated(ctx, db.GetComplianceRecordTypesPaginatedParams{Limit: limit, Offset: offset})
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		subjectType := filters.Enum("subject_type", "PERSON", "VEHICLE", "COMPANY")
+		status := filters.Enum("status", "ACTIVE", "INACTIVE")
+		recordTypeID := filters.UUID("record_type_id")
+		if !filters.Valid() {
+			return
+		}
+		recordTypes, err := queries.GetComplianceRecordTypesPaginated(ctx, db.GetComplianceRecordTypesPaginatedParams{
+			Search: search, SubjectTypeFilter: subjectType, StatusFilter: status, RecordTypeFilter: recordTypeID, PageLimit: limit, PageOffset: offset,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch compliance record types"})
 			return
 		}
-		total, err := queries.CountComplianceRecordTypes(ctx)
+		total, err := queries.CountComplianceRecordTypes(ctx, db.CountComplianceRecordTypesParams{Search: search, SubjectTypeFilter: subjectType, StatusFilter: status, RecordTypeFilter: recordTypeID})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count compliance record types"})
 			return
@@ -518,23 +546,31 @@ func GetComplianceRecords(pool *pgxpool.Pool) gin.HandlerFunc {
 		defer cancel()
 		limit, offset, query := utils.ParsePagination(c)
 		queries := db.New(pool)
-		filters := c.Request.URL.Query()
-		subjectType := filters.Get("subject_type")
-		filterID := uuid.Nil
-		if filters.Has("subject_type") || filters.Has("subject_id") {
-			id, err := uuid.Parse(filters.Get("subject_id"))
-			if err != nil || (subjectType != "PERSON" && subjectType != "VEHICLE" && subjectType != "COMPANY") {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "provide both a valid subject_type and subject_id"})
-				return
-			}
-			filterID = id
+		filters := utils.ReadListFilters(c)
+		subjectType := filters.Enum("subject_type", "PERSON", "VEHICLE", "COMPANY")
+		subjectID := filters.UUID("subject_id")
+		recordTypeID := filters.UUID("record_type_id")
+		status := filters.Enum("status", "ACTIVE", "ARCHIVED")
+		expiry := filters.Enum("expiry_status", "EXPIRED", "DUE_NOW", "UPCOMING", "OK", "ARCHIVED", "NO_EXPIRY", "MISSING_EXPIRY", "UNTRACKED")
+		search := filters.Text("search")
+		if !filters.Valid() {
+			return
 		}
-		records, err := queries.GetComplianceRecordsPaginated(ctx, db.GetComplianceRecordsPaginatedParams{FilterType: subjectType, FilterID: filterID, PageLimit: limit, PageOffset: offset})
+		if subjectID != uuid.Nil && subjectType == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "The subject_id filter requires subject_type."})
+			return
+		}
+		records, err := queries.GetComplianceRecordsPaginated(ctx, db.GetComplianceRecordsPaginatedParams{
+			FilterType: subjectType, FilterID: subjectID, RecordTypeFilter: recordTypeID,
+			StatusFilter: status, ExpiryFilter: expiry, Search: search, PageLimit: limit, PageOffset: offset,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch compliance records"})
 			return
 		}
-		total, err := queries.CountComplianceRecords(ctx, db.CountComplianceRecordsParams{FilterType: subjectType, FilterID: filterID})
+		total, err := queries.CountComplianceRecords(ctx, db.CountComplianceRecordsParams{
+			FilterType: subjectType, FilterID: subjectID, RecordTypeFilter: recordTypeID, StatusFilter: status, ExpiryFilter: expiry, Search: search,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count compliance records"})
 			return

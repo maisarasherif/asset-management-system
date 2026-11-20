@@ -1,3 +1,4 @@
+import { CompetentPersonPicker } from "../../components/shared/CompetentPersonPicker";
 import {
   Box,
   Button,
@@ -9,7 +10,6 @@ import {
   SpaceBetween,
   StatusIndicator,
   SegmentedControl,
-  type SelectProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
@@ -27,7 +27,6 @@ import { ApiError } from "../../lib/api/client";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { CertificateIssuanceHistory } from "./CertificateIssuanceHistory";
 import { GeneratedCertificateSigner } from "./GeneratedCertificateSigner";
-import { Select } from "../../components/shared/OptimizedSelect";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type {
@@ -212,7 +211,8 @@ export function CertificateDetailPage() {
           queryKey: ["certificates", componentId],
         }),
         queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
-        queryClient.invalidateQueries({ queryKey: ["asset-dashboard", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["certificates"] }),
+        queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary", assetId] }),
       ]);
       success(
         "Certificate renewed",
@@ -269,18 +269,9 @@ export function CertificateDetailPage() {
   const allowedCompetentPersons = (competentPersonsQuery.data || []).filter((person) =>
     categoryRulesAllowCompetentPerson(allowedCategoryIDs, person)
   );
-  const competentPersonOptions: SelectProps.Option[] = allowedCompetentPersons.map((person) => ({
-    label: person.full_name,
-    value: person.competent_person_id,
-    description: `${person.person_type} - ${person.competency_category_name}`,
-  }));
   const selectedCompetentPerson =
     allowedCompetentPersons.find(
       (person) => person.competent_person_id === selectedCompetentPersonId,
-    ) ?? null;
-  const selectedCompetentPersonOption =
-    competentPersonOptions.find(
-      (option) => option.value === selectedCompetentPersonId,
     ) ?? null;
 
   return renderCertificateDetailPage({
@@ -288,8 +279,6 @@ export function CertificateDetailPage() {
     assetId,
     certificate: certificateQuery.data,
     certificateId,
-    competentPersonOptions,
-    competentPersonsLoading: competentPersonsQuery.isLoading,
     component: componentQuery.data,
     componentId,
     downloadDisabled: !certificateQuery.data.certificate_file,
@@ -317,7 +306,6 @@ export function CertificateDetailPage() {
     renewalIssueDateValue,
     selectedCompetentPerson,
     selectedCompetentPersonId,
-    selectedCompetentPersonOption,
     selectedFile,
     selectedTestType,
     selectedTypeRequiresExpiry,
@@ -340,8 +328,6 @@ interface CertificateDetailPageViewProps {
   assetId: string;
   certificate: Certificate;
   certificateId: string;
-  competentPersonOptions: SelectProps.Option[];
-  competentPersonsLoading: boolean;
   component: ComponentRecord;
   componentId: string;
   downloadDisabled: boolean;
@@ -360,7 +346,6 @@ interface CertificateDetailPageViewProps {
   renewalIssueDateValue: string;
   selectedCompetentPerson: CompetentPerson | null;
   selectedCompetentPersonId: string;
-  selectedCompetentPersonOption: SelectProps.Option | null;
   selectedFile: File | null;
   selectedTestType: TestType | null;
   selectedTypeRequiresExpiry: boolean;
@@ -377,8 +362,6 @@ function renderCertificateDetailPage({
   assetId,
   certificate,
   certificateId,
-  competentPersonOptions,
-  competentPersonsLoading,
   component,
   componentId,
   downloadDisabled,
@@ -397,7 +380,6 @@ function renderCertificateDetailPage({
   renewalIssueDateValue,
   selectedCompetentPerson,
   selectedCompetentPersonId,
-  selectedCompetentPersonOption,
   selectedFile,
   selectedTestType,
   selectedTypeRequiresExpiry,
@@ -576,20 +558,9 @@ function renderCertificateDetailPage({
                 )}
               </ColumnLayout>
               <FormField label="Competent Person">
-                <Select
-                  disabled={uploadPending}
-                  options={competentPersonOptions}
-                  placeholder="Select competent person"
-                  selectedOption={selectedCompetentPersonOption}
-                  statusType={competentPersonsLoading ? "loading" : "finished"}
-                  loadingText="Loading competent persons"
-                  empty="No active competent persons are available."
-                  onChange={({ detail }) =>
-                    onSelectedCompetentPersonChange(
-                      detail.selectedOption.value || "",
-                    )
-                  }
-                />
+                <CompetentPersonPicker categories={certificate.competency_category_ids ?? []}
+                  person={selectedCompetentPerson} disabled={uploadPending}
+                  onSelect={onSelectedCompetentPersonChange} />
               </FormField>
               {selectedCompetentPerson ? (
                 <Box color="text-body-secondary">

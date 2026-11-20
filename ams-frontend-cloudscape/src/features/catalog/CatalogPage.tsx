@@ -1,3 +1,6 @@
+import { PagedSelect } from "../../components/shared/PagedSelect";
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
 import {
   Alert,
   Box,
@@ -32,6 +35,11 @@ import {
   deleteEquipmentType,
   deleteTestType,
   duplicateCatalogScope,
+  listCatalogScopeCategories,
+  listCatalogScopeMainCategories,
+  listEquipmentTypes,
+  searchTestTypes,
+  searchCatalogScopes,
   listAllCatalogScopeCategories,
   listAllCatalogScopeMainCategories,
   listAllEquipmentTypes,
@@ -639,7 +647,9 @@ function useCatalogColumns({
 }
 
 export function CatalogPage() {
-  const [selectedScopeId, setSelectedScopeId] = useState("");
+  const scopeControls = useListControls("catalog", ["scope"]);
+  const selectedScopeId = scopeControls.filters.scope;
+  const setSelectedScopeId = (scope: string) => scopeControls.setFilters({ scope });
   const [catalogScopeEditor, setCatalogScopeEditor] = useState<CatalogScopeEditor>(null);
   const [mainCategoryEditor, setMainCategoryEditor] = useState<MainCategoryEditor>(null);
   const [categoryEditor, setCategoryEditor] = useState<CategoryEditor>(null);
@@ -1097,6 +1107,31 @@ function CatalogView({
   );
   const hasMainCategories = mainCategories.length > 0;
 
+  const mainControls = useListControls("main", []);
+  const categoryControls = useListControls("categories", ["main_category_id"]);
+  const testControls = useListControls("tests", []);
+  const equipmentControls = useListControls("equipment", []);
+  const listedMain = useQuery({
+    queryKey: ["catalog-scope-main-categories", selectedScopeId, mainControls.query],
+    queryFn: () => listCatalogScopeMainCategories(selectedScopeId, mainControls.page, mainControls.query.limit, mainControls.query),
+    enabled: Boolean(selectedScopeId),
+  });
+  const listedCategories = useQuery({
+    queryKey: ["catalog-scope-categories", selectedScopeId, categoryControls.query],
+    queryFn: () => listCatalogScopeCategories(selectedScopeId, categoryControls.page, categoryControls.query.limit, categoryControls.query),
+    enabled: Boolean(selectedScopeId),
+  });
+  const listedTests = useQuery({
+    queryKey: ["test-types", testControls.query],
+    queryFn: () => searchTestTypes(testControls.query),
+  });
+  const listedEquipment = useQuery({
+    queryKey: ["equipment-types", equipmentControls.query],
+    queryFn: () => listEquipmentTypes(equipmentControls.page, equipmentControls.query.limit, equipmentControls.query),
+  });
+  const mainOptions = mainCategories.map((category) => ({
+    label: category.main_category_name, value: category.main_category_id,
+  }));
   return (
     <>
       <ContentLayout header={pageHeader}>
@@ -1123,14 +1158,25 @@ function CatalogView({
             columnDefinitions={mainCategoryColumns}
             description="Main categories organize the category catalog and make the template editor easier to scan."
             emptyText="No main categories are defined yet."
-            items={mainCategories}
+            items={listedMain.data?.data ?? []}
+            total={listedMain.data?.meta.total ?? 0}
+            failed={listedMain.isError}
+            loading={listedMain.isLoading}
+            filter={<ListFilters controls={mainControls} label="Search main categories" />}
+            pagination={<ListPagination controls={mainControls} meta={listedMain.data?.meta} />}
             onAction={onCreateMainCategory}
             title="Main categories"
             trackBy="scope_main_category_id"
           />
 
           <CategoriesTableSection
-            categories={categories}
+            categories={listedCategories.data?.data ?? []}
+            total={listedCategories.data?.meta.total ?? 0}
+            failed={listedCategories.isError}
+            loading={listedCategories.isLoading}
+            filter={<ListFilters controls={categoryControls} label="Search categories"
+              facets={[{ key: "main_category_id", label: "Main category", options: mainOptions }]} />}
+            pagination={<ListPagination controls={categoryControls} meta={listedCategories.data?.meta} />}
             columnDefinitions={categoryColumns}
             hasMainCategories={hasMainCategories}
             onCreateCategory={onCreateCategory}
@@ -1141,7 +1187,12 @@ function CatalogView({
             columnDefinitions={testTypeColumns}
             description="Test / Certificate types define certificate families and renewal requirements."
             emptyText="No test / certificate types are defined yet."
-            items={testTypes}
+            items={listedTests.data?.data ?? []}
+            total={listedTests.data?.meta.total ?? 0}
+            failed={listedTests.isError}
+            loading={listedTests.isLoading}
+            filter={<ListFilters controls={testControls} label="Search test and certificate types" />}
+            pagination={<ListPagination controls={testControls} meta={listedTests.data?.meta} />}
             onAction={onCreateTestType}
             title="Test / Certificate types"
             trackBy="test_id"
@@ -1152,7 +1203,12 @@ function CatalogView({
             columnDefinitions={equipmentTypeColumns}
             description="Equipment types classify single-asset equipment without using component categories."
             emptyText="No equipment types are defined yet."
-            items={equipmentTypes}
+            items={listedEquipment.data?.data ?? []}
+            total={listedEquipment.data?.meta.total ?? 0}
+            failed={listedEquipment.isError}
+            loading={listedEquipment.isLoading}
+            filter={<ListFilters controls={equipmentControls} label="Search equipment types" />}
+            pagination={<ListPagination controls={equipmentControls} meta={listedEquipment.data?.meta} />}
             onAction={onCreateEquipmentType}
             title="Equipment types"
             trackBy="equipment_type_id"
@@ -1274,11 +1330,10 @@ function CatalogScopeSelector({
       }
     >
       <FormField label="Selected scope">
-        <Select
-          options={options}
-          selectedOption={selectedOption}
-          onChange={({ detail }) => onSelect(detail.selectedOption.value || "")}
-        />
+        <PagedSelect label="Selected scope" queryKey={["catalog-scopes", "picker"]}
+          load={(page, search) => searchCatalogScopes({ page, search, limit: 20 })}
+          getOption={(scope) => ({ label: scope.scope_name, value: scope.scope_id, description: scope.description || scope.display_id })}
+          selected={selectedOption} onSelect={(option) => onSelect(option?.value ?? "")} />
       </FormField>
     </Container>
   );
@@ -1344,6 +1399,11 @@ type CatalogTableSectionProps<T> = {
   description: string;
   emptyText: string;
   items: T[];
+  total: number;
+  loading: boolean;
+  failed: boolean;
+  filter: React.ReactNode;
+  pagination: React.ReactNode;
   onAction: () => void;
   title: string;
   trackBy: keyof T & string;
@@ -1356,6 +1416,11 @@ function CatalogTableSection<T>({
   description,
   emptyText,
   items,
+  total,
+  loading,
+  failed,
+  filter,
+  pagination,
   onAction,
   title,
   trackBy,
@@ -1365,13 +1430,13 @@ function CatalogTableSection<T>({
       <CatalogTableHeader
         actionDisabled={actionDisabled}
         actionText={actionText}
-        count={items.length}
+        count={total}
         description={description}
         onAction={onAction}
         title={title}
       />
     ),
-    [actionDisabled, actionText, description, items.length, onAction, title]
+    [actionDisabled, actionText, description, total, onAction, title]
   );
   const empty = useMemo(() => <Box color="text-body-secondary">{emptyText}</Box>, [emptyText]);
 
@@ -1379,8 +1444,12 @@ function CatalogTableSection<T>({
     <Container header={header}>
       <Table
         columnDefinitions={columnDefinitions}
-        empty={empty}
+        empty={failed ? <Alert type="error">This list could not be loaded.</Alert> : empty}
         items={items}
+        loading={loading}
+        loadingText="Loading results"
+        filter={filter}
+        pagination={pagination}
         trackBy={trackBy}
         variant="embedded"
         wrapLines={false}
@@ -1424,6 +1493,11 @@ function CatalogTableHeader({
 
 type CategoriesTableSectionProps = {
   categories: CatalogScopeCategory[];
+  total: number;
+  loading: boolean;
+  failed: boolean;
+  filter: React.ReactNode;
+  pagination: React.ReactNode;
   columnDefinitions: TableProps<CatalogScopeCategory>["columnDefinitions"];
   hasMainCategories: boolean;
   onCreateCategory: () => void;
@@ -1431,6 +1505,11 @@ type CategoriesTableSectionProps = {
 
 function CategoriesTableSection({
   categories,
+  total,
+  loading,
+  failed,
+  filter,
+  pagination,
   columnDefinitions,
   hasMainCategories,
   onCreateCategory,
@@ -1443,6 +1522,11 @@ function CategoriesTableSection({
       description="Categories are assigned to asset components and template components."
       emptyText="No categories are defined yet."
       items={categories}
+      total={total}
+      loading={loading}
+      failed={failed}
+      filter={filter}
+      pagination={pagination}
       onAction={onCreateCategory}
       title="Categories"
       trackBy="scope_category_id"

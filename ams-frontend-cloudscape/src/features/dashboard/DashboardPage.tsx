@@ -1,3 +1,7 @@
+import { AssetCategoryFilter, AssetComponentFilter } from "../../components/shared/AssetComponentFilters";
+import { CertificateListFilters } from "../../components/shared/CertificateListFilters";
+import { ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
 import {
   Box,
   Button,
@@ -19,16 +23,17 @@ import { RouterLink } from "../../components/shared/RouterLink";
 import { TableCellText } from "../../components/shared/TableCells";
 import {
   getAssetComponentCertificateSheet,
-  getAssetDashboard,
-  listAllAssets,
+  getAsset,
+  getAssetCertificateSummary,
+  listAssets,
+  listCertificatesWithContext,
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { AssetDashboardData } from "../../types/ams";
 import { formatDate, formatDateTime, humanizeEnum } from "../../utils/format";
 import { assetStatusType, certificateStatusType } from "../../utils/status";
 
-type DashboardCertificate = AssetDashboardData["certificates"][number];
+type DashboardCertificate = import("../../types/ams").CertificateWithContext;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -110,21 +115,38 @@ export function DashboardPage() {
   const { error } = useFlashbar();
 
   const assetsQuery = useQuery({
-    queryKey: ["assets", "all"],
-    queryFn: listAllAssets,
+    queryKey: ["assets", "first"],
+    queryFn: () => listAssets(1, 1),
   });
 
   useEffect(() => {
-    if (!selectedAssetId && assetsQuery.data && assetsQuery.data.length > 0) {
-      setSelectedAssetId(assetsQuery.data[0].asset_id);
+    if (!selectedAssetId && assetsQuery.data && assetsQuery.data.data.length > 0) {
+      setSelectedAssetId(assetsQuery.data.data[0].asset_id);
     }
   }, [assetsQuery.data, selectedAssetId, setSelectedAssetId]);
 
-  const activeAssetId = selectedAssetId ?? assetsQuery.data?.[0]?.asset_id ?? null;
+  const activeAssetId = selectedAssetId ?? assetsQuery.data?.data[0]?.asset_id ?? null;
 
   const dashboardQuery = useQuery({
     queryKey: ["dashboard", activeAssetId],
-    queryFn: () => getAssetDashboard(activeAssetId!),
+    queryFn: async () => {
+      const id = activeAssetId!;
+      const [asset, summary, expired, expiring] = await Promise.all([
+        getAsset(id),
+        getAssetCertificateSummary(id),
+        listCertificatesWithContext(1, 8, { asset_id: id, status: "EXPIRED" }),
+        listCertificatesWithContext(1, 8, { asset_id: id, status: "EXPIRING_SOON" }),
+      ]);
+      return { asset, summary, urgentCertificates: [...expired.data, ...expiring.data] };
+    },
+    enabled: Boolean(activeAssetId),
+  });
+
+  const certificateControls = useListControls("certificates", ["status", "test_id", "component_id", "category_id"]);
+  const certificates = useQuery({
+    queryKey: ["certificates", "dashboard", activeAssetId, certificateControls.query],
+    queryFn: () => listCertificatesWithContext(certificateControls.page, certificateControls.query.limit,
+      { ...certificateControls.query, asset_id: activeAssetId ?? undefined }),
     enabled: Boolean(activeAssetId),
   });
 
@@ -152,7 +174,7 @@ export function DashboardPage() {
     );
   }
 
-  if (!assetsQuery.data || assetsQuery.data.length === 0) {
+  if (!assetsQuery.data || assetsQuery.data.data.length === 0) {
     return (
       <PageEmpty
         action={isAdmin ? <Button onClick={() => navigate("/assets/new")}>Create asset</Button> : undefined}
@@ -173,8 +195,8 @@ export function DashboardPage() {
 
   const dashboard = dashboardQuery.data;
   const urgentCertificates = sortCertificatesByRisk(dashboard.urgentCertificates).slice(0, 8);
-  const expiredCount = dashboard.statusCounts.expired;
-  const expiringSoonCount = dashboard.statusCounts.expiringSoon;
+  const expiredCount = dashboard.summary.expired;
+  const expiringSoonCount = dashboard.summary.expiring_soon;
   const actionQueueSummary =
     expiredCount > 0
       ? `${expiredCount} expired certificate${expiredCount === 1 ? "" : "s"} need action now.`
@@ -235,7 +257,7 @@ export function DashboardPage() {
       ),
     },
   ];
-  const latestColumns: TableProps<DashboardCertificate>["columnDefinitions"] = [
+  const latestColumns: TableProps<import("../../types/ams").CertificateWithContext>["columnDefinitions"] = [
     {
       id: "name",
       header: "Certificate",
@@ -277,10 +299,7 @@ export function DashboardPage() {
     },
   ];
 
-  const componentCount =
-    dashboard.asset.asset_kind === "SINGLE_EQUIPMENT"
-      ? 1
-      : dashboard.components.filter((component) => component.component_kind !== "SELF").length;
+  const componentCount = dashboard.summary.component_count;
   const maintenanceConfigured = dashboard.asset.maintenance_interval_hours > 0;
   const maintenanceRequired =
     Boolean(dashboard.asset.maintenance_required_at) ||
@@ -409,9 +428,9 @@ export function DashboardPage() {
         <div className="dashboard-top-grid">
           <Container header={<Header variant="h2">Certificate overview</Header>}>
             <CertificateDonut
-              expired={dashboard.statusCounts.expired}
-              expiringSoon={dashboard.statusCounts.expiringSoon}
-              valid={dashboard.statusCounts.valid}
+              expired={dashboard.summary.expired}
+              expiringSoon={dashboard.summary.expiring_soon}
+              valid={dashboard.summary.valid}
             />
           </Container>
           <Container header={<Header variant="h2">Asset details</Header>}>
@@ -498,8 +517,14 @@ export function DashboardPage() {
           <Table
             columnDefinitions={latestColumns}
             empty={<Box color="text-body-secondary">No certificate data is available for this asset.</Box>}
-            items={dashboard.latestCertificates.slice(0, 8)}
-            loading={false}
+            items={certificates.data?.data ?? []}
+            loading={certificates.isPending}
+            loadingText="Loading certificates"
+            filter={<CertificateListFilters controls={certificateControls}>
+              <AssetComponentFilter assetId={dashboard.asset.asset_id} controls={certificateControls} />
+              <AssetCategoryFilter assetId={dashboard.asset.asset_id} controls={certificateControls} />
+            </CertificateListFilters>}
+            pagination={<ListPagination controls={certificateControls} meta={certificates.data?.meta} />}
             variant="embedded"
           />
         </Container>

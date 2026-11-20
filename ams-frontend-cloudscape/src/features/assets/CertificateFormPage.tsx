@@ -1,3 +1,5 @@
+import { CompetentPersonPicker } from "../../components/shared/CompetentPersonPicker";
+import { PagedSelect } from "../../components/shared/PagedSelect";
 import {
   Alert,
   Box,
@@ -26,10 +28,11 @@ import {
   listActiveCompetencyCategories,
   listActiveCompetentPersons,
   listTestTypes,
+  searchTestTypes,
   patchCertificate,
   uploadCertificateFile,
 } from "../../lib/api/ams";
-import { Multiselect, Select } from "../../components/shared/OptimizedSelect";
+import { Multiselect } from "../../components/shared/OptimizedSelect";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useFlashbar } from "../../providers/flashbar-context";
 import {
@@ -64,7 +67,6 @@ type CertificateFormState = {
 
 type CertificateFormDraft = Partial<CertificateFormState> & { selectedCompetentPersonId?: string };
 type FormDraftSetter = Dispatch<SetStateAction<CertificateFormDraft>>;
-type CompetentPersonsStatus = "loading" | "finished";
 type PatchableCertificateFormField = Exclude<keyof CertificateFormState, "competency_category_ids">;
 
 type SaveCertificateInput = CertificateInput | PatchCertificateInput;
@@ -120,26 +122,6 @@ function getCertificateBaseForm(certificate?: Certificate | null): CertificateFo
     maintenance_notes: certificate?.maintenance_notes ?? "",
     competency_category_ids: certificate?.competency_category_ids ?? [],
   };
-}
-
-function mapTestTypeOptions(testTypes?: TestType[]): SelectProps.Option[] {
-  return (
-    testTypes?.map((testType) => ({
-      label: testType.test_name,
-      value: testType.test_id,
-      description: formatRenewalDuration(testType.requires_renewal, testType.validity_duration),
-    })) ?? []
-  );
-}
-
-function mapCompetentPersonOptions(competentPersons?: CompetentPerson[]): SelectProps.Option[] {
-  return (
-    competentPersons?.map((person) => ({
-      label: person.full_name,
-      value: person.competent_person_id,
-      description: person.organization || person.competency_category_name || undefined,
-    })) ?? []
-  );
 }
 
 function mapCompetencyCategoryOptions(categories?: CompetencyCategory[]): MultiselectProps.Option[] {
@@ -228,8 +210,6 @@ function useCertificateFormData({
     selectedCompetencyCategoryOptions: mapCompetencyCategoryOptions(competencyCategoriesQuery.data).filter((option) =>
       (form.competency_category_ids ?? []).includes(option.value ?? "")
     ),
-    testTypeOptions: mapTestTypeOptions(testTypesQuery.data),
-    competentPersonOptions: mapCompetentPersonOptions(allowedCompetentPersons),
   };
 }
 
@@ -283,6 +263,7 @@ function useCertificateSaveMutation({
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["certificates"] }),
           queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+          queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary", assetId] }),
         ]);
         onClearUpload();
         if (uploadFailed) {
@@ -299,6 +280,7 @@ function useCertificateSaveMutation({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["certificates"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary", assetId] }),
         queryClient.invalidateQueries({ queryKey: ["certificate", certificateId] }),
         queryClient.invalidateQueries({ queryKey: ["uploads", certificateId] }),
       ]);
@@ -408,8 +390,6 @@ export function CertificateFormPage() {
       asset={data.assetQuery.data}
       component={data.componentQuery.data}
       competencyCategoryOptions={data.competencyCategoryOptions}
-      competentPersonOptions={data.competentPersonOptions}
-      competentPersonsStatus={data.competentPersonsQuery.isLoading ? "loading" : "finished"}
       errorMessage={errorMessage}
       form={data.form}
       isEditing={isEditing}
@@ -435,8 +415,6 @@ export function CertificateFormPage() {
           : null
       }
       suggestedExpiry={suggestedExpiry}
-      testTypeOptions={data.testTypeOptions}
-      testTypes={data.testTypesQuery.data ?? []}
     />
   );
 }
@@ -493,8 +471,6 @@ function CertificateFormView({
   asset,
   component,
   competencyCategoryOptions,
-  competentPersonOptions,
-  competentPersonsStatus,
   errorMessage,
   form,
   isEditing,
@@ -509,14 +485,10 @@ function CertificateFormView({
   selectedTestType,
   selectedTestTypeOption,
   suggestedExpiry,
-  testTypeOptions,
-  testTypes,
 }: {
   asset?: Asset;
   component?: ComponentRecord;
   competencyCategoryOptions: MultiselectProps.Option[];
-  competentPersonOptions: SelectProps.Option[];
-  competentPersonsStatus: CompetentPersonsStatus;
   errorMessage: string | null;
   form: CertificateFormState;
   isEditing: boolean;
@@ -531,8 +503,6 @@ function CertificateFormView({
   selectedTestType: TestType | null;
   selectedTestTypeOption: SelectProps.Option | null;
   suggestedExpiry: string;
-  testTypeOptions: SelectProps.Option[];
-  testTypes: TestType[];
 }) {
   const header = useMemo(
     () => (
@@ -546,8 +516,6 @@ function CertificateFormView({
       <ColumnLayout columns={2} variant="text-grid">
         <CertificateInformationPanel
           competencyCategoryOptions={competencyCategoryOptions}
-          competentPersonOptions={competentPersonOptions}
-          competentPersonsStatus={competentPersonsStatus}
           errorMessage={errorMessage}
           form={form}
           isEditing={isEditing}
@@ -561,8 +529,6 @@ function CertificateFormView({
           selectedTestType={selectedTestType}
           selectedTestTypeOption={selectedTestTypeOption}
           suggestedExpiry={suggestedExpiry}
-          testTypeOptions={testTypeOptions}
-          testTypes={testTypes}
         />
 
         <SpaceBetween size="l">
@@ -605,8 +571,6 @@ function CertificateFormHeader({
 
 function CertificateInformationPanel({
   competencyCategoryOptions,
-  competentPersonOptions,
-  competentPersonsStatus,
   errorMessage,
   form,
   isEditing,
@@ -620,12 +584,8 @@ function CertificateInformationPanel({
   selectedTestType,
   selectedTestTypeOption,
   suggestedExpiry,
-  testTypeOptions,
-  testTypes,
 }: {
   competencyCategoryOptions: MultiselectProps.Option[];
-  competentPersonOptions: SelectProps.Option[];
-  competentPersonsStatus: CompetentPersonsStatus;
   errorMessage: string | null;
   form: CertificateFormState;
   isEditing: boolean;
@@ -639,8 +599,6 @@ function CertificateInformationPanel({
   selectedTestType: TestType | null;
   selectedTestTypeOption: SelectProps.Option | null;
   suggestedExpiry: string;
-  testTypeOptions: SelectProps.Option[];
-  testTypes: TestType[];
 }) {
   const header = useMemo(() => <Header variant="h2">Certificate information</Header>, []);
 
@@ -665,8 +623,6 @@ function CertificateInformationPanel({
               form={form}
               onFormChange={onFormChange}
               selectedTestTypeOption={selectedTestTypeOption}
-              testTypeOptions={testTypeOptions}
-              testTypes={testTypes}
             />
             {!isEditing ? (
               <>
@@ -682,8 +638,7 @@ function CertificateInformationPanel({
                   selectedCompetencyCategoryOptions={selectedCompetencyCategoryOptions}
                 />
                 <CertificateUploadFields
-                  competentPersonOptions={competentPersonOptions}
-                  competentPersonsStatus={competentPersonsStatus}
+                  categoryIds={form.competency_category_ids ?? []}
                   onFileChange={onFileChange}
                   onFormChange={onFormChange}
                   selectedCompetentPerson={selectedCompetentPerson}
@@ -702,14 +657,10 @@ function CertificateCoreFields({
   form,
   onFormChange,
   selectedTestTypeOption,
-  testTypeOptions,
-  testTypes,
 }: {
   form: CertificateFormState;
   onFormChange: FormDraftSetter;
   selectedTestTypeOption: SelectProps.Option | null;
-  testTypeOptions: SelectProps.Option[];
-  testTypes: TestType[];
 }) {
   return (
     <>
@@ -721,18 +672,19 @@ function CertificateCoreFields({
       </FormField>
 
       <FormField label="Test / Certificate type" description="Determines certificate renewal and compliance category." stretch>
-        <Select
-          selectedOption={selectedTestTypeOption}
-          options={testTypeOptions}
+        <PagedSelect label="Test / Certificate type" queryKey={["test-types", "certificate-picker"]}
+          selected={selectedTestTypeOption}
+          load={(page, search) => searchTestTypes({ page, limit: 20, search })}
+          getOption={(item) => ({ value: item.test_id, label: item.test_name,
+            description: formatRenewalDuration(item.requires_renewal, item.validity_duration) })}
           placeholder="Select a test type"
-          onChange={({ detail }) => {
-            const nextTestType = testTypes.find((testType) => testType.test_id === detail.selectedOption.value);
+          onSelect={(option, nextTestType) => {
             onFormChange((draft) => {
               const issueDate = draft.issue_date ?? form.issue_date;
               const requiresExpiry = testTypeRequiresExpiry(nextTestType);
               return {
                 ...draft,
-                test_id: detail.selectedOption.value ?? "",
+                test_id: option?.value ?? "",
                 selectedCompetentPersonId: "",
                 expiry_date: requiresExpiry
                   ? addMonths(issueDate, nextTestType?.validity_duration ?? 0) || draft.expiry_date
@@ -850,15 +802,13 @@ function CertificateCompetencyRuleFields({
 }
 
 function CertificateUploadFields({
-  competentPersonOptions,
-  competentPersonsStatus,
+  categoryIds,
   onFileChange,
   onFormChange,
   selectedCompetentPerson,
   selectedFile,
 }: {
-  competentPersonOptions: SelectProps.Option[];
-  competentPersonsStatus: CompetentPersonsStatus;
+  categoryIds: string[];
   onFileChange: (file: File | null) => void;
   onFormChange: FormDraftSetter;
   selectedCompetentPerson: CompetentPerson | null;
@@ -887,26 +837,9 @@ function CertificateUploadFields({
         description="Required when a file is uploaded so the audit trail records who provided it."
         stretch
       >
-        <Select
-          selectedOption={
-            selectedCompetentPerson
-              ? {
-                  label: selectedCompetentPerson.full_name,
-                  value: selectedCompetentPerson.competent_person_id,
-                  description: selectedCompetentPerson.organization || selectedCompetentPerson.competency_category_name || undefined,
-                }
-              : null
-          }
-          options={competentPersonOptions}
-          placeholder="Select competent person"
-          statusType={competentPersonsStatus}
-          onChange={({ detail }) =>
-            onFormChange((draft) => ({
-              ...draft,
-              selectedCompetentPersonId: detail.selectedOption.value ?? "",
-            }))
-          }
-        />
+        <CompetentPersonPicker categories={categoryIds}
+          person={selectedCompetentPerson}
+          onSelect={(id) => onFormChange((draft) => ({ ...draft, selectedCompetentPersonId: id }))} />
       </FormField>
     </>
   );

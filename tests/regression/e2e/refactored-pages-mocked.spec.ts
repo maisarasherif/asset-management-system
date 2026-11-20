@@ -164,6 +164,7 @@ function createMockState() {
     test_id: "test-1",
     display_id: "TEST-001",
     test_name: "Annual Load Test",
+    requires_renewal: true,
     validity_duration: 12,
     description: "Annual inspection",
   };
@@ -172,6 +173,7 @@ function createMockState() {
     test_id: "test-2",
     display_id: "TEST-002",
     test_name: "NDT Inspection",
+    requires_renewal: true,
     validity_duration: 6,
     description: "Non-destructive inspection",
   };
@@ -484,6 +486,48 @@ async function installMockApi(page: Page) {
       return fulfillJson(route, {
         products: [{ product_key: "AMS", product_name: "Asset Management", product_role: "ADMIN", status: "ACTIVE" }],
       });
+    }
+
+    if (method === "GET") {
+      const pagedCollections: Record<string, object[]> = {
+        "/projects/search": state.projects,
+        "/user-project-access/search": state.access,
+        "/templates/search": [state.template],
+        "/catalog-scopes/search": state.catalogScopes,
+        "/test-types/search": state.testTypes,
+        "/competent-persons/active/search": state.competentPeople.filter((person) => person.active),
+      };
+      const items = pagedCollections[path];
+      if (items) {
+        const search = (url.searchParams.get("search") || "").toLowerCase();
+        const role = url.searchParams.get("role");
+        const categoryIds = url.searchParams.get("category_ids")?.split(",");
+        return fulfillJson(route, paginated(items.filter((entry) => {
+          const item = entry as Record<string, unknown>;
+          return (!role || item.role === role) &&
+            (!categoryIds || categoryIds.includes(String(item.competency_category_id))) &&
+            Object.values(item).join(" ").toLowerCase().includes(search);
+        })));
+      }
+      if (path === "/component/missing") {
+        return fulfillJson(route, { error: "component not found" }, 404);
+      }
+      if (/^\/certificate\/[^/]+\/generated-signers\/search$/.test(path)) {
+        return fulfillJson(route, paginated([]));
+      }
+      if (/^\/asset\/[^/]+\/routine-maintenance\/events$/.test(path)) {
+        const events = path.includes("/asset-1/") ? state.maintenanceEvents : [];
+        const status = url.searchParams.get("status");
+        return fulfillJson(route, paginated(events.filter((event) => !status || event.status === status).map((event) => ({ ...event, notifications: [] }))));
+      }
+      if (/^\/asset\/[^/]+\/certificate-summary$/.test(path)) {
+        const single = path.includes("/asset-single/");
+        const created = path.includes("/asset-created/");
+        return fulfillJson(route, {
+          all_components: created ? 0 : 1, component_count: created ? 0 : 1,
+          certificate_count: created ? 0 : 1, expired: 0, expiring_soon: 0, valid: single || created ? 0 : 1,
+        });
+      }
     }
 
     if (path === "/assets" && method === "GET") {
@@ -1244,7 +1288,7 @@ async function installMockApi(page: Page) {
     }
 
     if (path === "/users" && method === "GET") {
-      return fulfillJson(route, paginated(state.users));
+      return fulfillJson(route, paginated(state.users.filter(({ role }) => !url.searchParams.has("role") || role === url.searchParams.get("role"))));
     }
 
     if (path === "/user" && method === "POST") {
@@ -1292,6 +1336,10 @@ async function installMockApi(page: Page) {
 
     if (path === "/user-management-audit-logs" && method === "GET") {
       return fulfillJson(route, paginated(state.userAuditLogs));
+    }
+
+    if (path === "/competency-categories/active" && method === "GET") {
+      return fulfillJson(route, state.competencyCategories.filter((category) => category.active));
     }
 
     if (path === "/competency-categories" && method === "GET") {
@@ -2439,12 +2487,12 @@ test.describe("mocked refactored page smoke coverage", () => {
       page.getByRole("row", { name: /Annual Load Test/ }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Create test type" }).click();
-    const testDialog = page.getByRole("dialog", { name: "Create test type" });
+    await page.getByRole("button", { name: "Create test / certificate type" }).click();
+    const testDialog = page.getByRole("dialog", { name: "Create test / certificate type" });
     await testDialog.getByLabel("Validity duration (months)").fill("0");
-    await testDialog.getByRole("button", { name: "Create test type" }).click();
+    await testDialog.getByRole("button", { name: "Create type", exact: true }).click();
     await expect(
-      testDialog.getByText("Test type name must be at least 2 characters."),
+      testDialog.getByText("Test / Certificate type name must be at least 2 characters."),
     ).toBeVisible();
     expect(
       state.recorded.filter(
@@ -2453,12 +2501,12 @@ test.describe("mocked refactored page smoke coverage", () => {
       ),
     ).toHaveLength(0);
 
-    await testDialog.getByLabel("Test type name").fill("  Visual Inspection  ");
+    await testDialog.getByLabel("Test / Certificate type name").fill("  Visual Inspection  ");
     await testDialog.getByLabel("Validity duration (months)").fill("18");
     await testDialog
       .getByLabel("Description")
       .fill("  Visual inspection cycle  ");
-    await testDialog.getByRole("button", { name: "Create test type" }).click();
+    await testDialog.getByRole("button", { name: "Create type", exact: true }).click();
 
     expect(latestRequest(state, "POST", "/v1/test-type").body).toMatchObject({
       test_name: "Visual Inspection",
@@ -2467,14 +2515,14 @@ test.describe("mocked refactored page smoke coverage", () => {
     });
     await expect(testDialog).toHaveCount(0);
     await expect(
-      page.getByText("Test type created", { exact: true }),
+      page.getByText("Test / Certificate type created", { exact: true }),
     ).toBeVisible();
 
     await page
       .getByRole("row", { name: /Annual Load Test/ })
       .getByRole("button", { name: "Edit" })
       .click();
-    const editTestDialog = page.getByRole("dialog", { name: "Edit test type" });
+    const editTestDialog = page.getByRole("dialog", { name: "Edit test / certificate type" });
     await editTestDialog.getByLabel("Validity duration (months)").fill("24");
     await editTestDialog.getByRole("button", { name: "Save changes" }).click();
 
@@ -2487,7 +2535,7 @@ test.describe("mocked refactored page smoke coverage", () => {
     });
     await expect(editTestDialog).toHaveCount(0);
     await expect(
-      page.getByText("Test type updated", { exact: true }),
+      page.getByText("Test / Certificate type updated", { exact: true }),
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Create equipment type" }).click();

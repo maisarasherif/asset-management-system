@@ -14,12 +14,22 @@ import (
 
 const countCatalogScopeCategories = `-- name: CountCatalogScopeCategories :one
 SELECT COUNT(*)
-FROM catalog_scope_categories
-WHERE scope_id = $1
+FROM catalog_scope_categories csc
+JOIN main_categories mc ON mc.main_category_id = csc.main_category_id
+JOIN categories c ON c.category_id = csc.category_id
+WHERE csc.scope_id = $1
+  AND strpos(lower(concat_ws(' ', csc.display_id, c.display_id, c.category_name, mc.main_category_name, csc.description)), lower($2::text)) > 0
+  AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR csc.main_category_id = $3)
 `
 
-func (q *Queries) CountCatalogScopeCategories(ctx context.Context, scopeID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countCatalogScopeCategories, scopeID)
+type CountCatalogScopeCategoriesParams struct {
+	ScopeID      uuid.UUID `json:"scope_id"`
+	SearchText   string    `json:"search_text"`
+	FilterParent uuid.UUID `json:"filter_parent"`
+}
+
+func (q *Queries) CountCatalogScopeCategories(ctx context.Context, arg CountCatalogScopeCategoriesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCatalogScopeCategories, arg.ScopeID, arg.SearchText, arg.FilterParent)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -67,12 +77,19 @@ func (q *Queries) CountCatalogScopeCategoryReferences(ctx context.Context, scope
 
 const countCatalogScopeMainCategories = `-- name: CountCatalogScopeMainCategories :one
 SELECT COUNT(*)
-FROM catalog_scope_main_categories
-WHERE scope_id = $1
+FROM catalog_scope_main_categories csmc
+JOIN main_categories mc ON mc.main_category_id = csmc.main_category_id
+WHERE csmc.scope_id = $1
+  AND strpos(lower(concat_ws(' ', csmc.display_id, mc.display_id, mc.main_category_name, mc.description)), lower($2::text)) > 0
 `
 
-func (q *Queries) CountCatalogScopeMainCategories(ctx context.Context, scopeID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countCatalogScopeMainCategories, scopeID)
+type CountCatalogScopeMainCategoriesParams struct {
+	ScopeID    uuid.UUID `json:"scope_id"`
+	SearchText string    `json:"search_text"`
+}
+
+func (q *Queries) CountCatalogScopeMainCategories(ctx context.Context, arg CountCatalogScopeMainCategoriesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCatalogScopeMainCategories, arg.ScopeID, arg.SearchText)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -99,6 +116,19 @@ func (q *Queries) CountCatalogScopeReferences(ctx context.Context, scopeID uuid.
 	var reference_count int32
 	err := row.Scan(&reference_count)
 	return reference_count, err
+}
+
+const countSearchCatalogScopes = `-- name: CountSearchCatalogScopes :one
+SELECT COUNT(*)
+FROM catalog_scopes
+WHERE strpos(lower(concat_ws(' ', display_id, scope_name, description)), lower($1::text)) > 0
+`
+
+func (q *Queries) CountSearchCatalogScopes(ctx context.Context, searchText string) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchCatalogScopes, searchText)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const createCatalogScope = `-- name: CreateCatalogScope :one
@@ -656,6 +686,8 @@ FROM catalog_scope_categories csc
 JOIN main_categories mc ON mc.main_category_id = csc.main_category_id
 JOIN categories c ON c.category_id = csc.category_id
 WHERE csc.scope_id = $1
+  AND strpos(lower(concat_ws(' ', csc.display_id, c.display_id, c.category_name, mc.main_category_name, csc.description)), lower($2::text)) > 0
+  AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR csc.main_category_id = $3)
 ORDER BY
     (
         SELECT csmc.sort_order
@@ -665,14 +697,16 @@ ORDER BY
         LIMIT 1
     ) ASC NULLS LAST,
     csc.sort_order ASC,
-    csc.created_at ASC
-LIMIT $3 OFFSET $2
+    csc.created_at ASC, csc.scope_category_id
+LIMIT $5 OFFSET $4
 `
 
 type GetCatalogScopeCategoriesPaginatedParams struct {
-	ScopeID    uuid.UUID `json:"scope_id"`
-	PageOffset int32     `json:"page_offset"`
-	PageLimit  int32     `json:"page_limit"`
+	ScopeID      uuid.UUID `json:"scope_id"`
+	SearchText   string    `json:"search_text"`
+	FilterParent uuid.UUID `json:"filter_parent"`
+	PageOffset   int32     `json:"page_offset"`
+	PageLimit    int32     `json:"page_limit"`
 }
 
 type GetCatalogScopeCategoriesPaginatedRow struct {
@@ -692,7 +726,13 @@ type GetCatalogScopeCategoriesPaginatedRow struct {
 }
 
 func (q *Queries) GetCatalogScopeCategoriesPaginated(ctx context.Context, arg GetCatalogScopeCategoriesPaginatedParams) ([]GetCatalogScopeCategoriesPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getCatalogScopeCategoriesPaginated, arg.ScopeID, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, getCatalogScopeCategoriesPaginated,
+		arg.ScopeID,
+		arg.SearchText,
+		arg.FilterParent,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -833,12 +873,14 @@ SELECT
 FROM catalog_scope_main_categories csmc
 JOIN main_categories mc ON mc.main_category_id = csmc.main_category_id
 WHERE csmc.scope_id = $1
-ORDER BY csmc.sort_order ASC, csmc.created_at ASC
-LIMIT $3 OFFSET $2
+  AND strpos(lower(concat_ws(' ', csmc.display_id, mc.display_id, mc.main_category_name, mc.description)), lower($2::text)) > 0
+ORDER BY csmc.sort_order ASC, csmc.created_at ASC, csmc.scope_main_category_id
+LIMIT $4 OFFSET $3
 `
 
 type GetCatalogScopeMainCategoriesPaginatedParams struct {
 	ScopeID    uuid.UUID `json:"scope_id"`
+	SearchText string    `json:"search_text"`
 	PageOffset int32     `json:"page_offset"`
 	PageLimit  int32     `json:"page_limit"`
 }
@@ -857,7 +899,12 @@ type GetCatalogScopeMainCategoriesPaginatedRow struct {
 }
 
 func (q *Queries) GetCatalogScopeMainCategoriesPaginated(ctx context.Context, arg GetCatalogScopeMainCategoriesPaginatedParams) ([]GetCatalogScopeMainCategoriesPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getCatalogScopeMainCategoriesPaginated, arg.ScopeID, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, getCatalogScopeMainCategoriesPaginated,
+		arg.ScopeID,
+		arg.SearchText,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -983,6 +1030,53 @@ func (q *Queries) GetExistingScopeCategoryIDs(ctx context.Context, dollar_1 []uu
 			return nil, err
 		}
 		items = append(items, scope_category_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchCatalogScopes = `-- name: SearchCatalogScopes :many
+SELECT
+    scope_id,
+    display_id,
+    scope_name,
+    description,
+    created_at,
+    updated_at
+FROM catalog_scopes
+WHERE strpos(lower(concat_ws(' ', display_id, scope_name, description)), lower($1::text)) > 0
+ORDER BY created_at ASC, scope_name ASC, scope_id
+LIMIT $3 OFFSET $2
+`
+
+type SearchCatalogScopesParams struct {
+	SearchText string `json:"search_text"`
+	PageOffset int32  `json:"page_offset"`
+	PageLimit  int32  `json:"page_limit"`
+}
+
+func (q *Queries) SearchCatalogScopes(ctx context.Context, arg SearchCatalogScopesParams) ([]CatalogScope, error) {
+	rows, err := q.db.Query(ctx, searchCatalogScopes, arg.SearchText, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CatalogScope
+	for rows.Next() {
+		var i CatalogScope
+		if err := rows.Scan(
+			&i.ScopeID,
+			&i.DisplayID,
+			&i.ScopeName,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

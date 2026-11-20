@@ -22,10 +22,160 @@ WHERE upa.user_id = $1
   AND upa.status = 'ACTIVE'
   AND p.status = 'ACTIVE'
   AND u.status = 'ACTIVE'
+  AND strpos(lower(concat_ws(' ', a.display_id, a.name, a.description, a.location, a.assigned_project)), lower($2::text)) > 0
+  AND ($3::text = '' OR lower(a.assigned_project) = lower($3))
+  AND ($4::text = '' OR lower(a.status) = lower($4))
 `
 
-func (q *Queries) CountClientAssets(ctx context.Context, userID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countClientAssets, userID)
+type CountClientAssetsParams struct {
+	UserID        uuid.UUID `json:"user_id"`
+	SearchText    string    `json:"search_text"`
+	FilterProject string    `json:"filter_project"`
+	FilterStatus  string    `json:"filter_status"`
+}
+
+func (q *Queries) CountClientAssets(ctx context.Context, arg CountClientAssetsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countClientAssets,
+		arg.UserID,
+		arg.SearchText,
+		arg.FilterProject,
+		arg.FilterStatus,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchClientAssetCertificateTypes = `-- name: CountSearchClientAssetCertificateTypes :one
+SELECT COUNT(DISTINCT test.test_id)
+FROM test_types test
+JOIN certificates cert ON cert.test_id = test.test_id
+JOIN components c ON c.component_id = cert.component_id
+WHERE c.asset_id = $1
+  AND EXISTS (
+      SELECT 1
+      FROM assets a
+      JOIN projects p ON LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+      JOIN user_project_access upa ON upa.project_id = p.project_id
+      JOIN users u ON u.user_id = upa.user_id
+      WHERE a.asset_id = c.asset_id
+        AND upa.user_id = $2
+        AND upa.status = 'ACTIVE'
+        AND p.status = 'ACTIVE'
+        AND u.status = 'ACTIVE'
+  )
+  AND strpos(lower(test.test_name), lower($3::text)) > 0
+`
+
+type CountSearchClientAssetCertificateTypesParams struct {
+	AssetID    uuid.UUID `json:"asset_id"`
+	UserID     uuid.UUID `json:"user_id"`
+	SearchText string    `json:"search_text"`
+}
+
+func (q *Queries) CountSearchClientAssetCertificateTypes(ctx context.Context, arg CountSearchClientAssetCertificateTypesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchClientAssetCertificateTypes, arg.AssetID, arg.UserID, arg.SearchText)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchClientAssetCertificates = `-- name: CountSearchClientAssetCertificates :one
+SELECT COUNT(*)
+FROM certificates cert
+JOIN components c ON c.component_id = cert.component_id
+LEFT JOIN test_types test ON test.test_id = cert.test_id
+WHERE c.asset_id = $1
+  AND EXISTS (
+      SELECT 1
+      FROM assets a
+      JOIN projects p ON LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+      JOIN user_project_access upa ON upa.project_id = p.project_id
+      JOIN users u ON u.user_id = upa.user_id
+      WHERE a.asset_id = c.asset_id
+        AND upa.user_id = $2
+        AND upa.status = 'ACTIVE'
+        AND p.status = 'ACTIVE'
+        AND u.status = 'ACTIVE'
+  )
+  AND strpos(lower(concat_ws(' ', cert.display_id, cert.certificate_name, cert.issuing_authority, c.name, test.test_name)), lower($3::text)) > 0
+  AND ($4::text = '' OR $4 = CASE
+      WHEN cert.expiry_date IS NULL THEN COALESCE(NULLIF(cert.status, ''), 'PENDING')
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date < $5::text::date THEN 'EXPIRED'
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date <= $5::text::date + 30 THEN 'EXPIRING_SOON'
+      ELSE 'VALID'
+  END)
+  AND ($6::uuid = '00000000-0000-0000-0000-000000000000' OR cert.test_id = $6)
+  AND ($7::uuid = '00000000-0000-0000-0000-000000000000' OR c.component_id = $7)
+  AND ($8::uuid = '00000000-0000-0000-0000-000000000000' OR c.category_id = $8 OR c.scope_category_id = $8)
+`
+
+type CountSearchClientAssetCertificatesParams struct {
+	AssetID         uuid.UUID `json:"asset_id"`
+	UserID          uuid.UUID `json:"user_id"`
+	SearchText      string    `json:"search_text"`
+	FilterStatus    string    `json:"filter_status"`
+	AsOf            string    `json:"as_of"`
+	FilterTest      uuid.UUID `json:"filter_test"`
+	FilterComponent uuid.UUID `json:"filter_component"`
+	FilterCategory  uuid.UUID `json:"filter_category"`
+}
+
+func (q *Queries) CountSearchClientAssetCertificates(ctx context.Context, arg CountSearchClientAssetCertificatesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchClientAssetCertificates,
+		arg.AssetID,
+		arg.UserID,
+		arg.SearchText,
+		arg.FilterStatus,
+		arg.AsOf,
+		arg.FilterTest,
+		arg.FilterComponent,
+		arg.FilterCategory,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchClientAssetComponents = `-- name: CountSearchClientAssetComponents :one
+SELECT COUNT(*)
+FROM components c
+LEFT JOIN categories cat ON cat.category_id = c.category_id
+LEFT JOIN main_categories mc ON mc.main_category_id = cat.main_category_id
+WHERE c.asset_id = $1
+  AND EXISTS (
+      SELECT 1
+      FROM assets a
+      JOIN projects p ON LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+      JOIN user_project_access upa ON upa.project_id = p.project_id
+      JOIN users u ON u.user_id = upa.user_id
+      WHERE a.asset_id = c.asset_id
+        AND upa.user_id = $2
+        AND upa.status = 'ACTIVE'
+        AND p.status = 'ACTIVE'
+        AND u.status = 'ACTIVE'
+  )
+  AND strpos(lower(concat_ws(' ', c.display_id, c.name, c.serial_number, c.manufacturer, cat.category_name)), lower($3::text)) > 0
+  AND ($4::text = '' OR c.component_kind = $4)
+  AND ($5::uuid = '00000000-0000-0000-0000-000000000000' OR c.category_id = $5 OR c.scope_category_id = $5)
+`
+
+type CountSearchClientAssetComponentsParams struct {
+	AssetID        uuid.UUID `json:"asset_id"`
+	UserID         uuid.UUID `json:"user_id"`
+	SearchText     string    `json:"search_text"`
+	FilterKind     string    `json:"filter_kind"`
+	FilterCategory uuid.UUID `json:"filter_category"`
+}
+
+func (q *Queries) CountSearchClientAssetComponents(ctx context.Context, arg CountSearchClientAssetComponentsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchClientAssetComponents,
+		arg.AssetID,
+		arg.UserID,
+		arg.SearchText,
+		arg.FilterKind,
+		arg.FilterCategory,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -151,14 +301,20 @@ WHERE upa.user_id = $1
   AND upa.status = 'ACTIVE'
   AND p.status = 'ACTIVE'
   AND u.status = 'ACTIVE'
-ORDER BY a.created_at DESC
-LIMIT $3 OFFSET $2
+  AND strpos(lower(concat_ws(' ', a.display_id, a.name, a.description, a.location, a.assigned_project)), lower($2::text)) > 0
+  AND ($3::text = '' OR lower(a.assigned_project) = lower($3))
+  AND ($4::text = '' OR lower(a.status) = lower($4))
+ORDER BY a.created_at DESC, a.asset_id
+LIMIT $6 OFFSET $5
 `
 
 type GetClientAssetsPaginatedParams struct {
-	UserID     uuid.UUID `json:"user_id"`
-	PageOffset int32     `json:"page_offset"`
-	PageLimit  int32     `json:"page_limit"`
+	UserID        uuid.UUID `json:"user_id"`
+	SearchText    string    `json:"search_text"`
+	FilterProject string    `json:"filter_project"`
+	FilterStatus  string    `json:"filter_status"`
+	PageOffset    int32     `json:"page_offset"`
+	PageLimit     int32     `json:"page_limit"`
 }
 
 type GetClientAssetsPaginatedRow struct {
@@ -185,7 +341,14 @@ type GetClientAssetsPaginatedRow struct {
 }
 
 func (q *Queries) GetClientAssetsPaginated(ctx context.Context, arg GetClientAssetsPaginatedParams) ([]GetClientAssetsPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getClientAssetsPaginated, arg.UserID, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, getClientAssetsPaginated,
+		arg.UserID,
+		arg.SearchText,
+		arg.FilterProject,
+		arg.FilterStatus,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -440,6 +603,335 @@ func (q *Queries) GetClientComponentsByAsset(ctx context.Context, arg GetClientC
 	var items []GetClientComponentsByAssetRow
 	for rows.Next() {
 		var i GetClientComponentsByAssetRow
+		if err := rows.Scan(
+			&i.ComponentID,
+			&i.DisplayID,
+			&i.AssetID,
+			&i.CategoryID,
+			&i.ComponentKind,
+			&i.SingleAssetEquipmentID,
+			&i.MainCategoryName,
+			&i.CategoryName,
+			&i.Name,
+			&i.SerialNumber,
+			&i.Manufacturer,
+			&i.Description,
+			&i.EquipmentType,
+			&i.Structure,
+			&i.Model,
+			&i.Class,
+			&i.ClassCode,
+			&i.SafetyCritical,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Location,
+			&i.AssignedProject,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchClientAssetCertificateTypes = `-- name: SearchClientAssetCertificateTypes :many
+SELECT DISTINCT test.test_id, test.test_name
+FROM test_types test
+JOIN certificates cert ON cert.test_id = test.test_id
+JOIN components c ON c.component_id = cert.component_id
+WHERE c.asset_id = $1
+  AND EXISTS (
+      SELECT 1
+      FROM assets a
+      JOIN projects p ON LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+      JOIN user_project_access upa ON upa.project_id = p.project_id
+      JOIN users u ON u.user_id = upa.user_id
+      WHERE a.asset_id = c.asset_id
+        AND upa.user_id = $2
+        AND upa.status = 'ACTIVE'
+        AND p.status = 'ACTIVE'
+        AND u.status = 'ACTIVE'
+  )
+  AND strpos(lower(test.test_name), lower($3::text)) > 0
+ORDER BY test.test_name, test.test_id
+LIMIT $5 OFFSET $4
+`
+
+type SearchClientAssetCertificateTypesParams struct {
+	AssetID    uuid.UUID `json:"asset_id"`
+	UserID     uuid.UUID `json:"user_id"`
+	SearchText string    `json:"search_text"`
+	PageOffset int32     `json:"page_offset"`
+	PageLimit  int32     `json:"page_limit"`
+}
+
+type SearchClientAssetCertificateTypesRow struct {
+	TestID   uuid.UUID `json:"test_id"`
+	TestName string    `json:"test_name"`
+}
+
+func (q *Queries) SearchClientAssetCertificateTypes(ctx context.Context, arg SearchClientAssetCertificateTypesParams) ([]SearchClientAssetCertificateTypesRow, error) {
+	rows, err := q.db.Query(ctx, searchClientAssetCertificateTypes,
+		arg.AssetID,
+		arg.UserID,
+		arg.SearchText,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchClientAssetCertificateTypesRow
+	for rows.Next() {
+		var i SearchClientAssetCertificateTypesRow
+		if err := rows.Scan(&i.TestID, &i.TestName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchClientAssetCertificates = `-- name: SearchClientAssetCertificates :many
+SELECT
+    cert.certificate_id,
+    cert.display_id,
+    cert.component_id,
+    cert.certificate_name,
+    cert.issue_date,
+    cert.expiry_date,
+    cert.issuing_authority,
+    cert.status,
+    cert.test_id,
+    COALESCE(test.test_name, '') AS test_name,
+    test.validity_duration AS test_period_months,
+    COALESCE(test.requires_renewal, TRUE)::boolean AS test_requires_renewal,
+    cert.imca_ref,
+    cert.imca_d018,
+    cert.maintenance_notes,
+    cert.certificate_file <> '' AS has_file,
+    cert.created_at,
+    cert.updated_at
+FROM certificates cert
+JOIN components c ON c.component_id = cert.component_id
+LEFT JOIN test_types test ON test.test_id = cert.test_id
+WHERE c.asset_id = $1
+  AND EXISTS (
+      SELECT 1
+      FROM assets a
+      JOIN projects p ON LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+      JOIN user_project_access upa ON upa.project_id = p.project_id
+      JOIN users u ON u.user_id = upa.user_id
+      WHERE a.asset_id = c.asset_id
+        AND upa.user_id = $2
+        AND upa.status = 'ACTIVE'
+        AND p.status = 'ACTIVE'
+        AND u.status = 'ACTIVE'
+  )
+  AND strpos(lower(concat_ws(' ', cert.display_id, cert.certificate_name, cert.issuing_authority, c.name, test.test_name)), lower($3::text)) > 0
+  AND ($4::text = '' OR $4 = CASE
+      WHEN cert.expiry_date IS NULL THEN COALESCE(NULLIF(cert.status, ''), 'PENDING')
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date < $5::text::date THEN 'EXPIRED'
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date <= $5::text::date + 30 THEN 'EXPIRING_SOON'
+      ELSE 'VALID'
+  END)
+  AND ($6::uuid = '00000000-0000-0000-0000-000000000000' OR cert.test_id = $6)
+  AND ($7::uuid = '00000000-0000-0000-0000-000000000000' OR c.component_id = $7)
+  AND ($8::uuid = '00000000-0000-0000-0000-000000000000' OR c.category_id = $8 OR c.scope_category_id = $8)
+ORDER BY cert.expiry_date ASC NULLS LAST, cert.created_at DESC, cert.certificate_id
+LIMIT $10 OFFSET $9
+`
+
+type SearchClientAssetCertificatesParams struct {
+	AssetID         uuid.UUID `json:"asset_id"`
+	UserID          uuid.UUID `json:"user_id"`
+	SearchText      string    `json:"search_text"`
+	FilterStatus    string    `json:"filter_status"`
+	AsOf            string    `json:"as_of"`
+	FilterTest      uuid.UUID `json:"filter_test"`
+	FilterComponent uuid.UUID `json:"filter_component"`
+	FilterCategory  uuid.UUID `json:"filter_category"`
+	PageOffset      int32     `json:"page_offset"`
+	PageLimit       int32     `json:"page_limit"`
+}
+
+type SearchClientAssetCertificatesRow struct {
+	CertificateID       uuid.UUID  `json:"certificate_id"`
+	DisplayID           string     `json:"display_id"`
+	ComponentID         uuid.UUID  `json:"component_id"`
+	CertificateName     string     `json:"certificate_name"`
+	IssueDate           *time.Time `json:"issue_date"`
+	ExpiryDate          *time.Time `json:"expiry_date"`
+	IssuingAuthority    string     `json:"issuing_authority"`
+	Status              string     `json:"status"`
+	TestID              uuid.UUID  `json:"test_id"`
+	TestName            string     `json:"test_name"`
+	TestPeriodMonths    *int32     `json:"test_period_months"`
+	TestRequiresRenewal bool       `json:"test_requires_renewal"`
+	ImcaRef             string     `json:"imca_ref"`
+	ImcaD018            string     `json:"imca_d018"`
+	MaintenanceNotes    string     `json:"maintenance_notes"`
+	HasFile             bool       `json:"has_file"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+}
+
+func (q *Queries) SearchClientAssetCertificates(ctx context.Context, arg SearchClientAssetCertificatesParams) ([]SearchClientAssetCertificatesRow, error) {
+	rows, err := q.db.Query(ctx, searchClientAssetCertificates,
+		arg.AssetID,
+		arg.UserID,
+		arg.SearchText,
+		arg.FilterStatus,
+		arg.AsOf,
+		arg.FilterTest,
+		arg.FilterComponent,
+		arg.FilterCategory,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchClientAssetCertificatesRow
+	for rows.Next() {
+		var i SearchClientAssetCertificatesRow
+		if err := rows.Scan(
+			&i.CertificateID,
+			&i.DisplayID,
+			&i.ComponentID,
+			&i.CertificateName,
+			&i.IssueDate,
+			&i.ExpiryDate,
+			&i.IssuingAuthority,
+			&i.Status,
+			&i.TestID,
+			&i.TestName,
+			&i.TestPeriodMonths,
+			&i.TestRequiresRenewal,
+			&i.ImcaRef,
+			&i.ImcaD018,
+			&i.MaintenanceNotes,
+			&i.HasFile,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchClientAssetComponents = `-- name: SearchClientAssetComponents :many
+SELECT
+    c.component_id,
+    c.display_id,
+    c.asset_id,
+    c.category_id,
+    c.component_kind,
+    c.single_asset_equipment_id,
+    COALESCE(mc.main_category_name, '') AS main_category_name,
+    COALESCE(cat.category_name, '') AS category_name,
+    c.name,
+    c.serial_number,
+    c.manufacturer,
+    c.description,
+    c.equipment_type,
+    c.structure,
+    c.model,
+    c.class,
+    c.class_code,
+    c.safety_critical,
+    c.created_at,
+    c.updated_at,
+    c.location,
+    c.assigned_project
+FROM components c
+LEFT JOIN categories cat ON cat.category_id = c.category_id
+LEFT JOIN main_categories mc ON mc.main_category_id = cat.main_category_id
+WHERE c.asset_id = $1
+  AND EXISTS (
+      SELECT 1
+      FROM assets a
+      JOIN projects p ON LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+      JOIN user_project_access upa ON upa.project_id = p.project_id
+      JOIN users u ON u.user_id = upa.user_id
+      WHERE a.asset_id = c.asset_id
+        AND upa.user_id = $2
+        AND upa.status = 'ACTIVE'
+        AND p.status = 'ACTIVE'
+        AND u.status = 'ACTIVE'
+  )
+  AND strpos(lower(concat_ws(' ', c.display_id, c.name, c.serial_number, c.manufacturer, cat.category_name)), lower($3::text)) > 0
+  AND ($4::text = '' OR c.component_kind = $4)
+  AND ($5::uuid = '00000000-0000-0000-0000-000000000000' OR c.category_id = $5 OR c.scope_category_id = $5)
+ORDER BY c.created_at DESC, c.component_id
+LIMIT $7 OFFSET $6
+`
+
+type SearchClientAssetComponentsParams struct {
+	AssetID        uuid.UUID `json:"asset_id"`
+	UserID         uuid.UUID `json:"user_id"`
+	SearchText     string    `json:"search_text"`
+	FilterKind     string    `json:"filter_kind"`
+	FilterCategory uuid.UUID `json:"filter_category"`
+	PageOffset     int32     `json:"page_offset"`
+	PageLimit      int32     `json:"page_limit"`
+}
+
+type SearchClientAssetComponentsRow struct {
+	ComponentID            uuid.UUID  `json:"component_id"`
+	DisplayID              string     `json:"display_id"`
+	AssetID                uuid.UUID  `json:"asset_id"`
+	CategoryID             *uuid.UUID `json:"category_id"`
+	ComponentKind          string     `json:"component_kind"`
+	SingleAssetEquipmentID *uuid.UUID `json:"single_asset_equipment_id"`
+	MainCategoryName       string     `json:"main_category_name"`
+	CategoryName           string     `json:"category_name"`
+	Name                   string     `json:"name"`
+	SerialNumber           string     `json:"serial_number"`
+	Manufacturer           string     `json:"manufacturer"`
+	Description            string     `json:"description"`
+	EquipmentType          string     `json:"equipment_type"`
+	Structure              string     `json:"structure"`
+	Model                  string     `json:"model"`
+	Class                  string     `json:"class"`
+	ClassCode              string     `json:"class_code"`
+	SafetyCritical         string     `json:"safety_critical"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+	Location               string     `json:"location"`
+	AssignedProject        string     `json:"assigned_project"`
+}
+
+func (q *Queries) SearchClientAssetComponents(ctx context.Context, arg SearchClientAssetComponentsParams) ([]SearchClientAssetComponentsRow, error) {
+	rows, err := q.db.Query(ctx, searchClientAssetComponents,
+		arg.AssetID,
+		arg.UserID,
+		arg.SearchText,
+		arg.FilterKind,
+		arg.FilterCategory,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchClientAssetComponentsRow
+	for rows.Next() {
+		var i SearchClientAssetComponentsRow
 		if err := rows.Scan(
 			&i.ComponentID,
 			&i.DisplayID,

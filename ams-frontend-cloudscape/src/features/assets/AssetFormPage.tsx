@@ -1,3 +1,4 @@
+import { PagedMultiselect, PagedSelect } from "../../components/shared/PagedSelect";
 import {
   Alert,
   Box,
@@ -15,30 +16,29 @@ import {
   type SelectProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createAsset,
   getAsset,
   getTemplatePreview,
-  listAllEquipmentTypes,
-  listProjects,
-  listTestTypes,
-  listTemplates,
+  getTemplate,
+  listEquipmentTypes,
+  searchProjects,
+  searchTestTypes,
+  searchTemplates,
   updateAsset,
 } from "../../lib/api/ams";
-import { Multiselect, Select } from "../../components/shared/OptimizedSelect";
+import { Select } from "../../components/shared/OptimizedSelect";
 import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import type { AssetInput, AssetStatus } from "../../types/ams";
+import type { AssetInput, AssetStatus, AssetTemplate, EquipmentType, Project, TestType } from "../../types/ams";
 import { formatRenewalDuration, humanizeEnum } from "../../utils/format";
 
 type AssetFormViewProps = {
   assetId: string | undefined;
   errorMessage: string;
-  equipmentTypesLoading: boolean;
-  equipmentTypeOptions: SelectProps.Option[];
   form: AssetInput;
   isEditing: boolean;
   isSingleEquipment: boolean;
@@ -46,8 +46,6 @@ type AssetFormViewProps = {
   onFormChange: Dispatch<SetStateAction<Partial<AssetInput>>>;
   onSubmit: () => void;
   pageTitle: string;
-  projectOptions: SelectProps.Option[];
-  projectsLoading: boolean;
   savePending: boolean;
   selectedAssignedProjectOption: SelectProps.Option | null;
   selectedAssetKindOption: SelectProps.Option | null;
@@ -55,16 +53,14 @@ type AssetFormViewProps = {
   selectedStatusOption: SelectProps.Option | null;
   selectedTemplateId: string | null;
   selectedTemplateOption: SelectProps.Option | null;
+  setTemplateOption: (option: SelectProps.Option | null) => void;
+  setEquipmentOption: (option: SelectProps.Option | null) => void;
+  setTestOptions: (options: MultiselectProps.Option[]) => void;
   selectedTestOptions: MultiselectProps.Option[];
   templateLocked: boolean;
-  templateOptions: SelectProps.Option[];
   templatePreviewError: boolean;
   templatePreviewLoading: boolean;
   templateSummary: Awaited<ReturnType<typeof getTemplatePreview>> | undefined;
-  templatesError: boolean;
-  templatesLoading: boolean;
-  testTypeOptions: MultiselectProps.Option[];
-  testTypesLoading: boolean;
 };
 
 const DEFAULT_FORM: AssetInput = {
@@ -99,15 +95,18 @@ const ASSET_KIND_OPTIONS: SelectProps.Option[] = [
   },
 ];
 
-const NO_PROJECT_OPTION: SelectProps.Option = {
-  label: "No project - warehouse",
-  description: "Asset is stored in warehouse and not currently used for a project.",
-  value: "",
-};
-
-function normalizeProjectName(projectName: string) {
-  return projectName.trim().toLowerCase();
-}
+const toProjectOption = (project: Project) => ({
+  label: project.project_name, value: project.project_name, description: humanizeEnum(project.status),
+});
+const toTemplateOption = (template: AssetTemplate) => ({
+  label: template.template_name, value: template.template_id, description: template.description || template.display_id,
+});
+const toEquipmentOption = (item: EquipmentType) => ({
+  label: item.equipment_type_name, value: item.equipment_type_id, description: item.description || item.display_id,
+});
+const toTestOption = (item: TestType) => ({
+  label: item.test_name, value: item.test_id, description: formatRenewalDuration(item.requires_renewal, item.validity_duration),
+});
 
 export function AssetFormPage() {
   const navigate = useNavigate();
@@ -125,25 +124,9 @@ export function AssetFormPage() {
     enabled: Boolean(assetId),
   });
 
-  const templatesQuery = useQuery({
-    queryKey: ["templates"],
-    queryFn: listTemplates,
-  });
-
-  const projectsQuery = useQuery({
-    queryKey: ["projects"],
-    queryFn: listProjects,
-  });
-
-  const equipmentTypesQuery = useQuery({
-    queryKey: ["equipment-types", "all"],
-    queryFn: listAllEquipmentTypes,
-  });
-
-  const testTypesQuery = useQuery({
-    queryKey: ["test-types"],
-    queryFn: listTestTypes,
-  });
+  const [equipmentOption, setEquipmentOption] = useState<SelectProps.Option | null>(null);
+  const [templateOption, setTemplateOption] = useState<SelectProps.Option | null>(null);
+  const [testOptions, setTestOptions] = useState<MultiselectProps.Option[]>([]);
 
   const baseForm = assetQuery.data
     ? {
@@ -212,65 +195,20 @@ export function AssetFormPage() {
     },
   });
 
-  const templateOptions = useMemo<SelectProps.Option[]>(
-    () =>
-      (templatesQuery.data || []).map((template) => ({
-        label: template.template_name,
-        description: template.description || template.display_id,
-        value: template.template_id,
-      })),
-    [templatesQuery.data]
-  );
-
-  const selectedTemplateOption =
-    templateOptions.find((option) => option.value === form.template_id) ?? null;
-  const selectedStatusOption =
-    STATUS_OPTIONS.find((option) => option.value === form.status) ?? null;
-  const selectedAssetKindOption =
-    ASSET_KIND_OPTIONS.find((option) => option.value === form.asset_kind) ?? null;
-  const projectOptions = useMemo<SelectProps.Option[]>(
-    () => [
-      NO_PROJECT_OPTION,
-      ...(projectsQuery.data || []).map((project) => ({
-        label: project.project_name,
-        value: project.project_name,
-        description: humanizeEnum(project.status),
-      })),
-    ],
-    [projectsQuery.data]
-  );
-  const selectedAssignedProjectOption =
-    projectOptions.find((option) => option.value === form.assigned_project) ??
-    (form.assigned_project
-      ? { label: form.assigned_project, value: form.assigned_project }
-      : null);
-
-  const equipmentTypeOptions = useMemo<SelectProps.Option[]>(
-    () =>
-      (equipmentTypesQuery.data || []).map((equipmentType) => ({
-        label: equipmentType.equipment_type_name,
-        description: equipmentType.description || equipmentType.display_id,
-        value: equipmentType.equipment_type_id,
-      })),
-    [equipmentTypesQuery.data]
-  );
-  const selectedEquipmentTypeOption =
-    equipmentTypeOptions.find(
-      (option) => option.value === form.single_equipment?.equipment_type_id
-    ) ?? null;
-
-  const testTypeOptions = useMemo<MultiselectProps.Option[]>(
-    () =>
-      (testTypesQuery.data || []).map((testType) => ({
-        label: testType.test_name,
-        description: formatRenewalDuration(testType.requires_renewal, testType.validity_duration),
-        value: testType.test_id,
-      })),
-    [testTypesQuery.data]
-  );
-  const selectedTestOptions = testTypeOptions.filter((option) =>
-    form.single_equipment?.test_type_ids.includes(option.value || "")
-  );
+  const existingTemplate = useQuery({
+    queryKey: ["template", selectedTemplateId],
+    queryFn: () => getTemplate(selectedTemplateId!),
+    enabled: Boolean(isEditing && selectedTemplateId),
+  });
+  const selectedTemplateOption = existingTemplate.data ? toTemplateOption(existingTemplate.data) :
+    templateOption?.value === selectedTemplateId ? templateOption : null;
+  const selectedStatusOption = STATUS_OPTIONS.find((option) => option.value === form.status) ?? null;
+  const selectedAssetKindOption = ASSET_KIND_OPTIONS.find((option) => option.value === form.asset_kind) ?? null;
+  const selectedAssignedProjectOption = form.assigned_project
+    ? { label: form.assigned_project, value: form.assigned_project } : null;
+  const selectedEquipmentTypeOption = equipmentOption?.value === form.single_equipment?.equipment_type_id
+    ? equipmentOption : null;
+  const selectedTestOptions = testOptions.filter((option) => form.single_equipment?.test_type_ids.includes(option.value ?? ""));
 
   if (isEditing && assetQuery.isLoading) {
     return <PageLoading>{"Loading asset details\u2026"}</PageLoading>;
@@ -308,18 +246,6 @@ export function AssetFormPage() {
         return;
       }
     }
-    const assignedProject = form.assigned_project.trim();
-    const assignedProjectExists =
-      !assignedProject ||
-      (projectsQuery.data || []).some(
-        (project) =>
-          normalizeProjectName(project.project_name) === normalizeProjectName(assignedProject)
-      );
-    if (!assignedProjectExists) {
-      setErrorMessage("Choose a project from the projects table, or choose No project - warehouse.");
-      return;
-    }
-
     setErrorMessage("");
     saveMutation.mutate({
       ...form,
@@ -339,8 +265,6 @@ export function AssetFormPage() {
     <AssetFormView
       assetId={assetId}
       errorMessage={errorMessage}
-      equipmentTypesLoading={equipmentTypesQuery.isLoading}
-      equipmentTypeOptions={equipmentTypeOptions}
       form={form}
       isEditing={isEditing}
       isSingleEquipment={isSingleEquipment}
@@ -348,8 +272,6 @@ export function AssetFormPage() {
       onFormChange={setForm}
       onSubmit={handleSubmit}
       pageTitle={pageTitle}
-      projectOptions={projectOptions}
-      projectsLoading={projectsQuery.isLoading}
       savePending={saveMutation.isPending}
       selectedAssignedProjectOption={selectedAssignedProjectOption}
       selectedAssetKindOption={selectedAssetKindOption}
@@ -358,15 +280,13 @@ export function AssetFormPage() {
       selectedTemplateId={selectedTemplateId}
       selectedTemplateOption={selectedTemplateOption}
       selectedTestOptions={selectedTestOptions}
+      setTemplateOption={setTemplateOption}
+      setEquipmentOption={setEquipmentOption}
+      setTestOptions={setTestOptions}
       templateLocked={templateLocked}
-      templateOptions={templateOptions}
       templatePreviewError={templatePreviewQuery.isError}
       templatePreviewLoading={templatePreviewQuery.isLoading}
       templateSummary={templateSummary}
-      templatesError={templatesQuery.isError}
-      templatesLoading={templatesQuery.isLoading}
-      testTypeOptions={testTypeOptions}
-      testTypesLoading={testTypesQuery.isLoading}
     />
   );
 }
@@ -421,8 +341,6 @@ function AssetInformation(props: AssetFormViewProps) {
     form,
     isEditing,
     onFormChange,
-    projectOptions,
-    projectsLoading,
     selectedAssignedProjectOption,
     selectedAssetKindOption,
     selectedStatusOption,
@@ -487,19 +405,10 @@ function AssetInformation(props: AssetFormViewProps) {
               </div>
             </FormField>
             <FormField label="Assigned project">
-              <Select
-                loadingText="Loading projects"
-                options={projectOptions}
-                placeholder="Choose project assignment"
-                selectedOption={selectedAssignedProjectOption}
-                statusType={projectsLoading ? "loading" : "finished"}
-                onChange={({ detail }) =>
-                  onFormChange((current) => ({
-                    ...current,
-                    assigned_project: detail.selectedOption.value || "",
-                  }))
-                }
-              />
+              <PagedSelect label="Assigned project" queryKey={["projects", "asset-assignment"]}
+                allLabel="No project - warehouse" load={(page, search) => searchProjects({ page, search, limit: 20 })}
+                getOption={toProjectOption} selected={selectedAssignedProjectOption}
+                onSelect={(option) => onFormChange((current) => ({ ...current, assigned_project: option?.value ?? "" }))} />
             </FormField>
           </ColumnLayout>
 
@@ -558,19 +467,16 @@ function AssetInformation(props: AssetFormViewProps) {
 }
 
 function AssetModeFields({
-  equipmentTypesLoading,
-  equipmentTypeOptions,
   isEditing,
   isSingleEquipment,
   onFormChange,
   selectedEquipmentTypeOption,
   selectedTemplateOption,
   selectedTestOptions,
+  setTemplateOption,
+  setEquipmentOption,
+  setTestOptions,
   templateLocked,
-  templateOptions,
-  templatesLoading,
-  testTypeOptions,
-  testTypesLoading,
 }: AssetFormViewProps) {
   if (isSingleEquipment && isEditing) {
     return (
@@ -588,22 +494,16 @@ function AssetModeFields({
           label="Equipment type"
         >
           <div data-testid="single-equipment-type-select">
-            <Select
-              loadingText="Loading equipment types"
-              options={equipmentTypeOptions}
-              placeholder="Select equipment type"
-              selectedOption={selectedEquipmentTypeOption}
-              statusType={equipmentTypesLoading ? "loading" : "finished"}
-              onChange={({ detail }) =>
-                onFormChange((current) => ({
-                  ...current,
-                  single_equipment: {
-                    equipment_type_id: detail.selectedOption.value || "",
-                    test_type_ids: current.single_equipment?.test_type_ids || [],
-                  },
-                }))
-              }
-            />
+            <PagedSelect label="Equipment type" queryKey={["equipment-types", "asset-picker"]}
+              load={(page, search) => listEquipmentTypes(page, 20, { search })}
+              getOption={toEquipmentOption} selected={selectedEquipmentTypeOption}
+              onSelect={(option) => {
+                setEquipmentOption(option);
+                onFormChange((current) => ({ ...current, single_equipment: {
+                  equipment_type_id: option?.value ?? "",
+                  test_type_ids: current.single_equipment?.test_type_ids ?? [],
+                } }));
+              }} />
           </div>
         </FormField>
         <FormField
@@ -611,24 +511,16 @@ function AssetModeFields({
           label="Certificate test types"
         >
           <div data-testid="single-equipment-test-types">
-            <Multiselect
-              loadingText="Loading test types"
-              options={testTypeOptions}
-              placeholder="Select certificate test types"
-              selectedOptions={selectedTestOptions}
-              statusType={testTypesLoading ? "loading" : "finished"}
-              onChange={({ detail }) =>
-                onFormChange((current) => ({
-                  ...current,
-                  single_equipment: {
-                    equipment_type_id: current.single_equipment?.equipment_type_id || "",
-                    test_type_ids: detail.selectedOptions.flatMap((option) =>
-                      option.value ? [option.value] : []
-                    ),
-                  },
-                }))
-              }
-            />
+            <PagedMultiselect label="Certificate test types" queryKey={["test-types", "equipment-picker"]}
+              load={(page, search) => searchTestTypes({ page, search, limit: 20 })}
+              getOption={toTestOption} selected={selectedTestOptions}
+              onSelect={(options) => {
+                setTestOptions([...options]);
+                onFormChange((current) => ({ ...current, single_equipment: {
+                  equipment_type_id: current.single_equipment?.equipment_type_id ?? "",
+                  test_type_ids: options.flatMap((option) => option.value ? [option.value] : []),
+                } }));
+              }} />
           </div>
         </FormField>
       </ColumnLayout>
@@ -645,20 +537,13 @@ function AssetModeFields({
         }
         label="Template"
       >
-        <Select
-          disabled={templateLocked || templatesLoading}
-          loadingText="Loading templates"
-          options={templateOptions}
-          placeholder="Select a template"
-          selectedOption={selectedTemplateOption}
-          statusType={templatesLoading ? "loading" : "finished"}
-          onChange={({ detail }) =>
-            onFormChange((current) => ({
-              ...current,
-              template_id: detail.selectedOption.value ?? null,
-            }))
-          }
-        />
+        <PagedSelect label="Asset template" queryKey={["templates", "asset-picker"]}
+          allLabel="No template" disabled={templateLocked} selected={selectedTemplateOption}
+          load={(page, search) => searchTemplates({ page, search, limit: 20 })} getOption={toTemplateOption}
+          onSelect={(option) => {
+            setTemplateOption(option);
+            onFormChange((current) => ({ ...current, template_id: option?.value ?? null }));
+          }} />
       </FormField>
     </ColumnLayout>
   );
@@ -750,12 +635,7 @@ function TemplatePreview({
   templatePreviewError,
   templatePreviewLoading,
   templateSummary,
-  templatesError,
 }: AssetFormViewProps) {
-  if (templatesError) {
-    return <Alert type="error">Templates could not be loaded.</Alert>;
-  }
-
   if (!selectedTemplateId) {
     return (
       <Box color="text-body-secondary">

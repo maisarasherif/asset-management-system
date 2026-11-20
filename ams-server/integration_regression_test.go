@@ -171,6 +171,12 @@ func TestTemplateConfigurationUsesCatalogScopeOrdering(t *testing.T) {
 	}
 	assertField(t, configuration[0], "name", "Catalog First Component")
 	assertField(t, configuration[1], "name", "Legacy First Component")
+	scope := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/catalog-scopes/default", nil, http.StatusOK))
+	scopeID := stringField(t, scope, "scope_id")
+	filtered := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet,
+		"/v1/catalog-scope/"+scopeID+"/categories?search=Catalog%20First&limit=1&main_category_id="+legacySecondMainCategoryID, nil, http.StatusOK))
+	assertField(t, objectField(t, filtered, "meta"), "total", 1)
+	assertField(t, dataArray(t, filtered)[0], "category_id", legacySecondCategoryID)
 }
 
 func TestCreateAssetWithoutTemplate(t *testing.T) {
@@ -543,6 +549,15 @@ func TestRoutineMaintenanceThresholdFlowIsIdempotent(t *testing.T) {
 		t.Fatalf("expected completed event history to remain available, got %d events", len(events))
 	}
 	assertField(t, events[0], "status", "COMPLETED")
+	history := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet,
+		"/v1/asset/"+assetID+"/routine-maintenance/events?status=COMPLETED&search=service&limit=1", nil, http.StatusOK))
+	assertField(t, objectField(t, history, "meta"), "total", 1)
+	assertField(t, dataArray(t, history)[0], "maintenance_event_id", eventID)
+
+	failures := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet,
+		"/v1/scheduler/notification-failures?source_type=routine_maintenance&status=FAILED&channel=EMAIL&limit=1", nil, http.StatusOK))
+	assertField(t, objectField(t, failures, "meta"), "total", 1)
+	assertField(t, dataArray(t, failures)[0], "source_id", eventID)
 }
 
 func TestWorkingHoursCannotDecrease(t *testing.T) {
@@ -721,6 +736,69 @@ func TestDeleteComponentCascadesCertificates(t *testing.T) {
 
 	performJSONRequest(t, h.router, h.adminToken, http.MethodDelete, "/v1/component/"+componentID, nil, http.StatusOK)
 	performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/certificate/"+certificateID, nil, http.StatusNotFound)
+}
+
+func TestAssetCertificateSearchAndAggregate(t *testing.T) {
+	h := setupIntegrationTest(t)
+	componentID, testID := createComponentFixture(t, h, "Filterable Component")
+	makeCertificate := func(name string, days int) {
+		payload := certificatePayload(componentID, testID, days)
+		payload["certificate_name"] = name
+		if days < 0 {
+			payload["issue_date"] = "2000-01-01T00:00:00Z"
+		}
+		createCertificate(t, h, payload)
+	}
+	makeCertificate("Search Target Expired", -5)
+	makeCertificate("Search Target Valid", 90)
+	makeCertificate("Search Target Expiring", 5)
+	var assetID string
+	if err := h.pool.QueryRow(context.Background(), "SELECT asset_id::text FROM components WHERE component_id = $1", componentID).Scan(&assetID); err != nil {
+		t.Fatal(err)
+	}
+	get := func(token, path string, want int) map[string]any {
+		return decodeObject(t, performJSONRequest(t, h.router, token, http.MethodGet, "/v1/"+path, nil, want))
+	}
+	results := get(h.adminToken, "certificates/dashboard?asset_id="+assetID+"&search=target&status=EXPIRED&test_id="+testID+"&limit=1", http.StatusOK)
+	assertField(t, results["meta"].(map[string]any), "total", 1)
+	assertField(t, results["data"].([]any)[0].(map[string]any), "certificate_name", "Search Target Expired")
+
+	aggregate := get(h.adminToken, "asset/"+assetID+"/certificate-summary", http.StatusOK)
+	assertField(t, aggregate, "certificate_count", 3)
+	assertField(t, aggregate, "expired", 1)
+	assertField(t, aggregate, "expiring_soon", 1)
+	assertField(t, aggregate, "valid", 1)
+
+	client := createIntegrationUserToken(t, h.pool, "Search", "Client", "search-client@example.com", "search-client-password", "CLIENT")
+	get(client, "client/asset/"+assetID+"/certificates?search=target", http.StatusNotFound)
+	get(client, "client/asset/"+assetID+"/certificate-summary", http.StatusNotFound)
+	project := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/project", map[string]any{
+		"project_name": "Certificate Search Access", "status": "ACTIVE",
+	}, http.StatusCreated))
+	user := db.New(h.pool)
+	account, err := user.GetUserByEmail(context.Background(), "search-client@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectID := stringField(t, project, "project_id")
+	if _, err := h.pool.Exec(context.Background(), "UPDATE assets SET assigned_project = $1 WHERE asset_id = $2", "Certificate Search Access", assetID); err != nil {
+		t.Fatal(err)
+	}
+	performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/user/"+account.UserID.String()+"/project-access",
+		map[string]any{"project_id": projectID, "status": "ACTIVE"}, http.StatusOK)
+	bound := "client/asset/" + assetID
+	assertField(t, get(client, bound+"/certificate-summary", http.StatusOK), "certificate_count", 3)
+	filtered := get(client, bound+"/certificates?component_id="+componentID+"&status=VALID&limit=1", http.StatusOK)
+	assertField(t, objectField(t, filtered, "meta"), "total", 1)
+	assertField(t, dataArray(t, filtered)[0], "certificate_name", "Search Target Valid")
+	components := get(client, bound+"/components?search=Filterable&component_kind=NORMAL&limit=1", http.StatusOK)
+	assertField(t, objectField(t, components, "meta"), "total", 1)
+	assertField(t, dataArray(t, components)[0], "component_id", componentID)
+	categories := get(client, bound+"/component-categories?limit=1", http.StatusOK)
+	assertField(t, objectField(t, categories, "meta"), "total", 1)
+	types := get(client, bound+"/certificate-types?limit=1", http.StatusOK)
+	assertField(t, objectField(t, types, "meta"), "total", 1)
+	assertField(t, dataArray(t, types)[0], "test_id", testID)
 }
 
 func TestCreateCertificate(t *testing.T) {

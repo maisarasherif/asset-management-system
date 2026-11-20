@@ -1,3 +1,6 @@
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
+import { recordTypeFacets } from "./hrAdminFacets";
 import {
   Alert,
   Box,
@@ -103,11 +106,14 @@ function buildPayload(config: ProductNotificationConfiguration, defaultReminderD
 
 function ReminderPolicyForm({
   config,
-  recordTypes,
 }: {
   config: ProductNotificationConfiguration;
-  recordTypes: ComplianceRecordType[];
 }) {
+  const controls = useListControls("policies", ["subject_type", "status"]);
+  const recordTypesQuery = useQuery({
+    queryKey: ["hr-admin", "compliance-record-types", "policies", controls.query],
+    queryFn: () => listComplianceRecordTypes(controls.page, 20, controls.query),
+  });
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { success } = useFlashbar();
@@ -288,10 +294,15 @@ function ReminderPolicyForm({
             columnDefinitions={recordTypeColumns}
             empty={
               <Box color="text-body-secondary" textAlign="center">
-                No record types have been configured yet.
+                {recordTypesQuery.isError ? <PageError description="Record type policies could not be loaded." onRetry={() => void recordTypesQuery.refetch()} /> : "No matching record type policies."}
               </Box>
             }
-            items={recordTypes}
+            filter={<ListFilters controls={controls} label="Search record type policies" facets={recordTypeFacets} />}
+            loading={recordTypesQuery.isPending}
+            loadingText="Loading record type policies"
+            header={<Header counter={String(recordTypesQuery.data?.meta.total ?? 0)}>Matching policies</Header>}
+            pagination={<ListPagination controls={controls} meta={recordTypesQuery.data?.meta} />}
+            items={recordTypesQuery.data?.data ?? []}
             trackBy="record_type_id"
             variant="embedded"
           />
@@ -306,22 +317,17 @@ export function HRAdminReminderPolicyPage() {
     queryKey: ["hr-admin", "notification-configuration"],
     queryFn: getHRAdminNotificationConfiguration,
   });
-  const recordTypesQuery = useQuery({
-    queryKey: ["hr-admin", "compliance-record-types"],
-    queryFn: () => listComplianceRecordTypes(1, 100),
-  });
 
-  if (configQuery.isLoading || recordTypesQuery.isLoading) {
+  if (configQuery.isLoading) {
     return <PageLoading>{"Loading HR/Admin reminder policy..."}</PageLoading>;
   }
 
-  if (configQuery.isError || recordTypesQuery.isError || !configQuery.data || !recordTypesQuery.data) {
+  if (configQuery.isError || !configQuery.data) {
     return (
       <PageError
         description="The HR/Admin reminder policy could not be loaded."
         onRetry={() => {
           void configQuery.refetch();
-          void recordTypesQuery.refetch();
         }}
       />
     );
@@ -331,7 +337,6 @@ export function HRAdminReminderPolicyPage() {
     <ReminderPolicyForm
       config={configQuery.data}
       key={`${configQuery.data.updated_at}-${formatReminderDays(configQuery.data.default_reminder_days)}`}
-      recordTypes={recordTypesQuery.data.data}
     />
   );
 }

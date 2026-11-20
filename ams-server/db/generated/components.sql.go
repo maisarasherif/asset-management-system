@@ -12,6 +12,41 @@ import (
 	"github.com/google/uuid"
 )
 
+const countAssetComponentCategories = `-- name: CountAssetComponentCategories :one
+SELECT COUNT(DISTINCT COALESCE(c.scope_category_id, c.category_id))
+FROM components c
+JOIN assets a ON a.asset_id = c.asset_id
+LEFT JOIN catalog_scope_categories scoped ON scoped.scope_category_id = c.scope_category_id
+LEFT JOIN categories cat ON cat.category_id = COALESCE(scoped.category_id, c.category_id)
+WHERE a.asset_id = $1
+  AND COALESCE(c.scope_category_id, c.category_id) IS NOT NULL
+  AND strpos(lower(COALESCE(cat.category_name, '')), lower($2::text)) > 0
+  AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR EXISTS (
+      SELECT 1
+      FROM projects p
+      JOIN user_project_access upa ON upa.project_id = p.project_id
+      JOIN users u ON u.user_id = upa.user_id
+      WHERE LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+        AND upa.user_id = $3
+        AND upa.status = 'ACTIVE'
+        AND p.status = 'ACTIVE'
+        AND u.status = 'ACTIVE'
+  ))
+`
+
+type CountAssetComponentCategoriesParams struct {
+	AssetID      uuid.UUID `json:"asset_id"`
+	SearchText   string    `json:"search_text"`
+	ClientUserID uuid.UUID `json:"client_user_id"`
+}
+
+func (q *Queries) CountAssetComponentCategories(ctx context.Context, arg CountAssetComponentCategoriesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAssetComponentCategories, arg.AssetID, arg.SearchText, arg.ClientUserID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countComponents = `-- name: CountComponents :one
 SELECT COUNT(*) FROM components
 `
@@ -27,10 +62,25 @@ const countComponentsByAssetID = `-- name: CountComponentsByAssetID :one
 SELECT COUNT(*)
 FROM components
 WHERE asset_id = $1
+  AND strpos(lower(concat_ws(' ', display_id, name, serial_number, manufacturer, model, description)), lower($2::text)) > 0
+  AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR category_id = $3 OR scope_category_id = $3)
+  AND ($4::text = '' OR lower(component_kind) = lower($4))
 `
 
-func (q *Queries) CountComponentsByAssetID(ctx context.Context, assetID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countComponentsByAssetID, assetID)
+type CountComponentsByAssetIDParams struct {
+	AssetID        uuid.UUID `json:"asset_id"`
+	SearchText     string    `json:"search_text"`
+	FilterCategory uuid.UUID `json:"filter_category"`
+	FilterKind     string    `json:"filter_kind"`
+}
+
+func (q *Queries) CountComponentsByAssetID(ctx context.Context, arg CountComponentsByAssetIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countComponentsByAssetID,
+		arg.AssetID,
+		arg.SearchText,
+		arg.FilterCategory,
+		arg.FilterKind,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -555,14 +605,20 @@ SELECT
     assigned_project
 FROM components
 WHERE asset_id = $1
-ORDER BY created_at DESC
-LIMIT $3 OFFSET $2
+  AND strpos(lower(concat_ws(' ', display_id, name, serial_number, manufacturer, model, description)), lower($2::text)) > 0
+  AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR category_id = $3 OR scope_category_id = $3)
+  AND ($4::text = '' OR lower(component_kind) = lower($4))
+ORDER BY created_at DESC, component_id
+LIMIT $6 OFFSET $5
 `
 
 type GetComponentsByAssetIDPaginatedParams struct {
-	AssetID    uuid.UUID `json:"asset_id"`
-	PageOffset int32     `json:"page_offset"`
-	PageLimit  int32     `json:"page_limit"`
+	AssetID        uuid.UUID `json:"asset_id"`
+	SearchText     string    `json:"search_text"`
+	FilterCategory uuid.UUID `json:"filter_category"`
+	FilterKind     string    `json:"filter_kind"`
+	PageOffset     int32     `json:"page_offset"`
+	PageLimit      int32     `json:"page_limit"`
 }
 
 type GetComponentsByAssetIDPaginatedRow struct {
@@ -590,7 +646,14 @@ type GetComponentsByAssetIDPaginatedRow struct {
 }
 
 func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetComponentsByAssetIDPaginatedParams) ([]GetComponentsByAssetIDPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getComponentsByAssetIDPaginated, arg.AssetID, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, getComponentsByAssetIDPaginated,
+		arg.AssetID,
+		arg.SearchText,
+		arg.FilterCategory,
+		arg.FilterKind,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -621,6 +684,72 @@ func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetCo
 			&i.Location,
 			&i.AssignedProject,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchAssetComponentCategories = `-- name: SearchAssetComponentCategories :many
+SELECT
+    COALESCE(c.scope_category_id, c.category_id)::uuid AS category_id,
+    min(COALESCE(cat.category_name, ''))::text AS category_name
+FROM components c
+JOIN assets a ON a.asset_id = c.asset_id
+LEFT JOIN catalog_scope_categories scoped ON scoped.scope_category_id = c.scope_category_id
+LEFT JOIN categories cat ON cat.category_id = COALESCE(scoped.category_id, c.category_id)
+WHERE a.asset_id = $1
+  AND COALESCE(c.scope_category_id, c.category_id) IS NOT NULL
+  AND strpos(lower(COALESCE(cat.category_name, '')), lower($2::text)) > 0
+  AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR EXISTS (
+      SELECT 1
+      FROM projects p
+      JOIN user_project_access upa ON upa.project_id = p.project_id
+      JOIN users u ON u.user_id = upa.user_id
+      WHERE LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+        AND upa.user_id = $3
+        AND upa.status = 'ACTIVE'
+        AND p.status = 'ACTIVE'
+        AND u.status = 'ACTIVE'
+  ))
+GROUP BY COALESCE(c.scope_category_id, c.category_id)
+ORDER BY category_name, COALESCE(c.scope_category_id, c.category_id)
+LIMIT $5 OFFSET $4
+`
+
+type SearchAssetComponentCategoriesParams struct {
+	AssetID      uuid.UUID `json:"asset_id"`
+	SearchText   string    `json:"search_text"`
+	ClientUserID uuid.UUID `json:"client_user_id"`
+	PageOffset   int32     `json:"page_offset"`
+	PageLimit    int32     `json:"page_limit"`
+}
+
+type SearchAssetComponentCategoriesRow struct {
+	CategoryID   uuid.UUID `json:"category_id"`
+	CategoryName string    `json:"category_name"`
+}
+
+func (q *Queries) SearchAssetComponentCategories(ctx context.Context, arg SearchAssetComponentCategoriesParams) ([]SearchAssetComponentCategoriesRow, error) {
+	rows, err := q.db.Query(ctx, searchAssetComponentCategories,
+		arg.AssetID,
+		arg.SearchText,
+		arg.ClientUserID,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchAssetComponentCategoriesRow
+	for rows.Next() {
+		var i SearchAssetComponentCategoriesRow
+		if err := rows.Scan(&i.CategoryID, &i.CategoryName); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

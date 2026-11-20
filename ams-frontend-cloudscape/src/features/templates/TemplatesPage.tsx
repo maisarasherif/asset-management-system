@@ -1,3 +1,5 @@
+import { ListFilters, ListPagination, TextFacet } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
 import {
   Box,
   Button,
@@ -8,47 +10,21 @@ import {
 } from "@cloudscape-design/components";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
+import { PageEmpty, PageError } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
 import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
-import { listTemplates } from "../../lib/api/ams";
+import { searchTemplates } from "../../lib/api/ams";
 import type { AssetTemplate } from "../../types/ams";
 import { formatDate } from "../../utils/format";
 
 export function TemplatesPage() {
   const navigate = useNavigate();
 
+  const controls = useListControls("", ["project"]);
   const templatesQuery = useQuery({
-    queryKey: ["templates"],
-    queryFn: listTemplates,
+    queryKey: ["templates", controls.query],
+    queryFn: () => searchTemplates(controls.query),
   });
-
-  if (templatesQuery.isLoading) {
-    return <PageLoading>{"Loading the template workspace\u2026"}</PageLoading>;
-  }
-
-  if (templatesQuery.isError) {
-    return (
-      <PageError
-        description="The template workspace could not be loaded."
-        onRetry={() => void templatesQuery.refetch()}
-      />
-    );
-  }
-
-  if (!templatesQuery.data || templatesQuery.data.length === 0) {
-    return (
-      <PageEmpty
-        action={
-          <Button variant="primary" onClick={() => navigate("/templates/new")}>
-            Create template
-          </Button>
-        }
-        description="Templates define the component blueprint and default certificate tests that new assets can inherit."
-        title="No templates found"
-      />
-    );
-  }
 
   const columns: TableProps<AssetTemplate>["columnDefinitions"] = [
     {
@@ -118,14 +94,24 @@ export function TemplatesPage() {
         columnDefinitions={columns}
         header={
           <Header
-            counter={`(${templatesQuery.data.length})`}
+            counter={`(${templatesQuery.data?.meta.total ?? 0})`}
             description="Open a template to review its blueprint, then use Configure to manage component and test assignments."
             variant="h2"
           >
             Template library
           </Header>
         }
-        items={templatesQuery.data}
+        items={templatesQuery.data?.data ?? []}
+        loading={templatesQuery.isPending}
+        loadingText="Loading templates"
+        filter={<ListFilters controls={controls} label="Search templates">
+          <TextFacet key={controls.filters.project} label="Used by project" value={controls.filters.project}
+            onApply={(project) => controls.setFilters({ project })} />
+        </ListFilters>}
+        pagination={<ListPagination controls={controls} meta={templatesQuery.data?.meta} />}
+        empty={templatesQuery.isError
+          ? <PageError description="The template library could not be loaded." onRetry={() => void templatesQuery.refetch()} />
+          : <PageEmpty title="No templates found" description="No templates match this view." />}
         trackBy="template_id"
         variant="embedded"
       />

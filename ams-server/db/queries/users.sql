@@ -10,11 +10,17 @@ SELECT
     created_at,
     updated_at
 FROM users
-ORDER BY created_at DESC
+WHERE strpos(lower(concat_ws(' ', display_id, first_name, last_name, email)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_role)::text = '' OR lower(role) = lower(sqlc.arg(filter_role)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(status) = lower(sqlc.arg(filter_status)))
+ORDER BY created_at DESC, user_id
 LIMIT $1 OFFSET $2;
 
 -- name: CountUsers :one
-SELECT COUNT(*) FROM users;
+SELECT COUNT(*) FROM users
+WHERE strpos(lower(concat_ws(' ', display_id, first_name, last_name, email)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_role)::text = '' OR lower(role) = lower(sqlc.arg(filter_role)))
+  AND (sqlc.arg(filter_status)::text = '' OR lower(status) = lower(sqlc.arg(filter_status)));
 
 -- name: CountUsersByEmail :one
 SELECT COUNT(*) FROM users WHERE email = $1;
@@ -138,8 +144,12 @@ SELECT
     ip_address,
     created_at
 FROM user_management_audit_logs
-ORDER BY created_at DESC
+WHERE strpos(lower(concat_ws(' ', actor_email, target_email, action)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_action)::text = '' OR lower(action) = lower(sqlc.arg(filter_action)))
+ORDER BY created_at DESC, audit_id
 LIMIT $1 OFFSET $2;
 
 -- name: CountUserManagementAuditLogs :one
-SELECT COUNT(*) FROM user_management_audit_logs;
+SELECT COUNT(*) FROM user_management_audit_logs
+WHERE strpos(lower(concat_ws(' ', actor_email, target_email, action)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_action)::text = '' OR lower(action) = lower(sqlc.arg(filter_action)));

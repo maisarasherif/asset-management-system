@@ -1,3 +1,5 @@
+import { ListFilters, ListPagination, TextFacet } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
 import {
   Box,
   Button,
@@ -13,7 +15,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
-import { deleteAsset, getAssetDashboard, listAllAssets } from "../../lib/api/ams";
+import { deleteAsset, getAssetCertificateSummary, listAssets } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { Asset } from "../../types/ams";
@@ -27,16 +29,17 @@ export function AssetsDirectoryPage() {
   const { isAdmin, selectedAssetId, setSelectedAssetId } = useAuth();
   const [assetPendingDelete, setAssetPendingDelete] = useState<Asset | null>(null);
 
+  const controls = useListControls("", ["status", "project"]);
   const assetsQuery = useQuery({
-    queryKey: ["assets", "all"],
-    queryFn: listAllAssets,
+    queryKey: ["assets", controls.query],
+    queryFn: () => listAssets(controls.page, controls.query.limit, controls.query),
   });
 
-  const assets = assetsQuery.data || [];
+  const assets = assetsQuery.data?.data ?? [];
   const assetDashboardQueries = useQueries({
     queries: assets.map((asset) => ({
-      queryKey: ["asset-dashboard", asset.asset_id],
-      queryFn: () => getAssetDashboard(asset.asset_id),
+      queryKey: ["asset-certificate-summary", asset.asset_id],
+      queryFn: () => getAssetCertificateSummary(asset.asset_id),
       staleTime: 60_000,
     })),
   });
@@ -55,7 +58,7 @@ export function AssetsDirectoryPage() {
         queryClient.invalidateQueries({ queryKey: ["assets"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
         queryClient.removeQueries({ queryKey: ["asset", deletedAssetId] }),
-        queryClient.removeQueries({ queryKey: ["asset-dashboard", deletedAssetId] }),
+        queryClient.removeQueries({ queryKey: ["asset-certificate-summary", deletedAssetId] }),
       ]);
       success("Asset deleted", `${deletedAssetName} has been removed.`);
     },
@@ -63,29 +66,6 @@ export function AssetsDirectoryPage() {
       error("Asset delete failed", mutationError.message);
     },
   });
-
-  if (assetsQuery.isLoading) {
-    return <PageLoading>{"Loading the assets directory\u2026"}</PageLoading>;
-  }
-
-  if (assetsQuery.isError) {
-    return (
-      <PageError
-        description="The assets directory could not be loaded."
-        onRetry={() => void assetsQuery.refetch()}
-      />
-    );
-  }
-
-  if (assets.length === 0) {
-    return (
-      <PageEmpty
-        action={isAdmin ? <Button onClick={() => navigate("/assets/new")}>Create asset</Button> : undefined}
-        description="Create an asset to start using the asset-first dashboard and workspace."
-        title="No assets found"
-      />
-    );
-  }
 
   return (
     <>
@@ -108,22 +88,30 @@ export function AssetsDirectoryPage() {
       >
         <SpaceBetween direction="vertical" size="l">
           <Header
-            counter={`(${assets.length})`}
+            counter={`(${assetsQuery.data?.meta.total ?? 0})`}
             description="Open a specific asset to work inside its component and certificate workspace."
             variant="h2"
           >
             Assets
           </Header>
 
+          <ListFilters controls={controls} label="Search assets" facets={[{ key: "status", label: "Status", options: [
+            { value: "ACTIVE", label: "Active" }, { value: "INACTIVE", label: "Inactive" },
+            { value: "MAINTENANCE", label: "Maintenance" },
+          ] }]}>
+            <TextFacet key={controls.filters.project} label="Project" value={controls.filters.project}
+              onApply={(project) => controls.setFilters({ project })} />
+          </ListFilters>
+          {assetsQuery.isPending && <PageLoading>Loading assets…</PageLoading>}
+          {assetsQuery.isError && <PageError description="Assets could not be loaded." onRetry={() => void assetsQuery.refetch()} />}
+          {assetsQuery.isSuccess && assets.length === 0 && <PageEmpty title="No assets found" description="No assets match this view." />}
           <div className="asset-directory-list">
             {assets.map((asset, index) => {
               const dashboardQuery = assetDashboardQueries[index];
-              const statusCounts = dashboardQuery.data?.statusCounts;
-              const componentCount = dashboardQuery.data?.components.length;
-              const certificateCount = dashboardQuery.data?.certificates.length;
-              const urgentCount = statusCounts
-                ? statusCounts.expired + statusCounts.expiringSoon
-                : undefined;
+              const summary = dashboardQuery.data;
+              const componentCount = summary?.all_components;
+              const certificateCount = summary?.certificate_count;
+              const urgentCount = summary ? summary.expired + summary.expiring_soon : undefined;
 
               return (
                 <Container key={asset.asset_id}>
@@ -225,6 +213,7 @@ export function AssetsDirectoryPage() {
               );
             })}
           </div>
+          <ListPagination controls={controls} meta={assetsQuery.data?.meta} />
         </SpaceBetween>
 
         <Box color="text-body-secondary" margin={{ top: "s" }}>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -158,10 +159,7 @@ func (m SignerManagement) Eligible(ctx context.Context, actor, certificate uuid.
 
 func (m SignerManagement) eligible(ctx context.Context, actor, certificate uuid.UUID, role string) ([]EligibleSigner, error) {
 	q := db.New(m.Pool)
-	if _, err := q.GetCertificateByID(ctx, certificate); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrSigningProfileNotFound
-		}
+	if err := requireSignerCertificate(ctx, q, certificate); err != nil {
 		return nil, err
 	}
 	result := []EligibleSigner{}
@@ -185,10 +183,23 @@ func (m SignerManagement) eligible(ctx context.Context, actor, certificate uuid.
 		}
 		return result, nil
 	}
-	rows, err := q.ListEligibleCompetentSigners(ctx, certificate)
+	return competentSigners(ctx, q, db.ListEligibleCompetentSignersParams{CertificateID: certificate, PageLimit: math.MaxInt32})
+}
+
+func requireSignerCertificate(ctx context.Context, q *db.Queries, certificate uuid.UUID) error {
+	_, err := q.GetCertificateByID(ctx, certificate)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrSigningProfileNotFound
+	}
+	return err
+}
+
+func competentSigners(ctx context.Context, q *db.Queries, params db.ListEligibleCompetentSignersParams) ([]EligibleSigner, error) {
+	rows, err := q.ListEligibleCompetentSigners(ctx, params)
 	if err != nil {
 		return nil, err
 	}
+	result := make([]EligibleSigner, 0, len(rows))
 	for _, p := range rows {
 		if strings.TrimSpace(p.FullName) == "" || strings.TrimSpace(p.Organization) == "" {
 			continue
@@ -196,6 +207,39 @@ func (m SignerManagement) eligible(ctx context.Context, actor, certificate uuid.
 		result = append(result, EligibleSigner{OwnerKind: "COMPETENT_PERSON", SignerID: p.SignerID, FullName: p.FullName, Organization: p.Organization, CategoryID: p.CompetencyCategoryID, CategoryName: p.CategoryName, Signature: SignatureVersion{ID: p.SignatureID, OwnerID: p.SignerID, SHA256: p.Sha256, Width: p.Width, Height: p.Height, ByteSize: p.ByteSize, CreatedAt: p.CreatedAt}})
 	}
 	return result, nil
+}
+
+func (m SignerManagement) SearchEligible(ctx context.Context, actor, certificate uuid.UUID, search string, limit, offset int32) ([]EligibleSigner, int64, error) {
+	role, err := m.actorRole(ctx, actor, false)
+	if err != nil {
+		return nil, 0, err
+	}
+	if role == "ADMIN" {
+		rows, err := m.eligible(ctx, actor, certificate, role)
+		if len(rows) == 0 || err != nil {
+			return rows, 0, err
+		}
+		person := rows[0]
+		key := strings.ToLower(strings.Join([]string{person.FullName, person.Organization, person.CategoryName}, " "))
+		if !strings.Contains(key, strings.ToLower(search)) {
+			return rows[:0], 0, nil
+		}
+		if offset > 0 {
+			return rows[:0], 1, nil
+		}
+		return rows, 1, nil
+	}
+	q := db.New(m.Pool)
+	if err := requireSignerCertificate(ctx, q, certificate); err != nil {
+		return nil, 0, err
+	}
+	params := db.ListEligibleCompetentSignersParams{CertificateID: certificate, SearchText: search, PageLimit: limit, PageOffset: offset}
+	rows, err := competentSigners(ctx, q, params)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := q.CountEligibleCompetentSigners(ctx, db.CountEligibleCompetentSignersParams{CertificateID: certificate, SearchText: search})
+	return rows, total, err
 }
 
 func (m SignerManagement) Resolve(ctx context.Context, actor, certificate uuid.UUID, selected *uuid.UUID) (EligibleSigner, error) {

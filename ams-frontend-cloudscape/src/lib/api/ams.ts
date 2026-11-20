@@ -1,6 +1,7 @@
 import type {
+  ClientCertificate,
+  ClientComponent,
   Asset,
-  AssetDashboardData,
   AssetInput,
   AssetMaintenanceEvent,
   AssetMaintenanceUpdateResponse,
@@ -79,8 +80,8 @@ import type {
   UserProjectAccess,
   UserProjectAccessInput,
 } from "../../types/ams";
-import { countCertificateStatuses } from "../../utils/certificateStatusCounts";
 import { apiRequest } from "./client";
+import { listQueryString, type ListQuery } from "./list-query";
 
 interface LoginPayload {
   email: string;
@@ -163,8 +164,9 @@ export function updatePassword(payload: UpdatePasswordInput) {
   });
 }
 
-export function listHRAdminPersons(page = 1, limit = 100, search = "") {
-  return apiRequest<PaginatedResponse<HRAdminPerson>>(`/v1/hr-admin/persons?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
+export function listHRAdminPersons(page = 1, limit = 100, filters: ListQuery | string = {}) {
+  const query = listQueryString({ page, limit, ...(typeof filters === "string" ? { search: filters } : filters) });
+  return apiRequest<PaginatedResponse<HRAdminPerson>>(`/v1/hr-admin/persons?${query}`);
 }
 
 export function listHRAdminDepartments() {
@@ -192,8 +194,9 @@ export function archiveHRAdminPerson(personId: string, archiveReason: string) {
   });
 }
 
-export function listHRAdminVehicles(page = 1, limit = 100, search = "") {
-  return apiRequest<PaginatedResponse<HRAdminVehicle>>(`/v1/hr-admin/vehicles?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
+export function listHRAdminVehicles(page = 1, limit = 100, filters: ListQuery | string = {}) {
+  const query = listQueryString({ page, limit, ...(typeof filters === "string" ? { search: filters } : filters) });
+  return apiRequest<PaginatedResponse<HRAdminVehicle>>(`/v1/hr-admin/vehicles?${query}`);
 }
 
 export function createHRAdminVehicle(payload: HRAdminVehicleInput) {
@@ -217,8 +220,9 @@ export function archiveHRAdminVehicle(vehicleId: string, archiveReason: string) 
   });
 }
 
-export function listHRAdminCompanies(page = 1, limit = 100, search = "") {
-  return apiRequest<PaginatedResponse<HRAdminCompany>>(`/v1/hr-admin/companies?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
+export function listHRAdminCompanies(page = 1, limit = 100, filters: ListQuery | string = {}) {
+  const query = listQueryString({ page, limit, ...(typeof filters === "string" ? { search: filters } : filters) });
+  return apiRequest<PaginatedResponse<HRAdminCompany>>(`/v1/hr-admin/companies?${query}`);
 }
 
 export function createHRAdminCompany(payload: HRAdminCompanyInput) {
@@ -242,9 +246,9 @@ export function archiveHRAdminCompany(companyId: string, archiveReason: string) 
   });
 }
 
-export function listComplianceRecordTypes(page = 1, limit = 100) {
+export function listComplianceRecordTypes(page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<ComplianceRecordType>>(
-    `/v1/hr-admin/compliance-record-types?page=${page}&limit=${limit}`
+    `/v1/hr-admin/compliance-record-types?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -281,15 +285,16 @@ export function getHRAdminOverview() {
   return apiRequest<{ groups: HRAdminOverviewGroup[]; refresh_after_ms: number }>("/v1/hr-admin/overview");
 }
 
-export function listComplianceRecords(page = 1, limit = 100, subject?: { type: HRAdminSubjectType; id: string }) {
-  const query = new URLSearchParams({ page: String(page), limit: String(limit) });
-  if (subject) {
-    query.set("subject_type", subject.type);
-    query.set("subject_id", subject.id);
-  }
-  return apiRequest<PaginatedResponse<ComplianceRecord>>(
-    `/v1/hr-admin/compliance-records?${query}`
-  );
+export function listComplianceRecords(
+  page = 1,
+  limit = 100,
+  subject?: { type: HRAdminSubjectType; id: string },
+  filters: ListQuery = {}
+) {
+  const query = listQueryString({
+    page, limit, ...filters, ...(subject && { subject_type: subject.type, subject_id: subject.id }),
+  });
+  return apiRequest<PaginatedResponse<ComplianceRecord>>(`/v1/hr-admin/compliance-records?${query}`);
 }
 
 export function createComplianceRecord(payload: ComplianceRecordInput) {
@@ -406,8 +411,8 @@ export function deleteUserProjectAccess(accessId: string) {
   });
 }
 
-export function listUsers(page = 1, limit = 100) {
-  return apiRequest<PaginatedResponse<UserAccount>>(`/v1/users?page=${page}&limit=${limit}`);
+export function listUsers(page = 1, limit = 100, filters: ListQuery = {}) {
+  return apiRequest<PaginatedResponse<UserAccount>>(`/v1/users?${listQueryString({ page, limit, ...filters })}`);
 }
 
 export function listAllUsers() {
@@ -434,9 +439,9 @@ export function deleteUser(userId: string) {
   });
 }
 
-export function listUserManagementAuditLogs(page = 1, limit = 100) {
+export function listUserManagementAuditLogs(page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<UserManagementAuditLog>>(
-    `/v1/user-management-audit-logs?page=${page}&limit=${limit}`
+    `/v1/user-management-audit-logs?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -444,9 +449,9 @@ export function listAllUserManagementAuditLogs() {
   return fetchAllPages((page) => listUserManagementAuditLogs(page));
 }
 
-export function listCompetencyCategories(page = 1, limit = 100) {
+export function listCompetencyCategories(page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<CompetencyCategory>>(
-    `/v1/competency-categories?page=${page}&limit=${limit}`
+    `/v1/competency-categories?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -475,9 +480,9 @@ export function updateCompetencyCategory(
   });
 }
 
-export function listCompetentPersons(page = 1, limit = 100) {
+export function listCompetentPersons(page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<CompetentPerson>>(
-    `/v1/competent-persons?page=${page}&limit=${limit}`
+    `/v1/competent-persons?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -503,24 +508,24 @@ export function updateCompetentPerson(competentPersonId: string, payload: Compet
   });
 }
 
-export function listAssets(page = 1, limit = 100) {
-  return apiRequest<PaginatedResponse<Asset>>(`/v1/assets?page=${page}&limit=${limit}`);
+export function listAssets(page = 1, limit = 100, filters: ListQuery = {}) {
+  return apiRequest<PaginatedResponse<Asset>>(`/v1/assets?${listQueryString({ page, limit, ...filters })}`);
 }
 
 export function listAllAssets() {
   return fetchAllPages((page) => listAssets(page));
 }
 
-export function listClientAssets(page = 1, limit = 100) {
-  return apiRequest<PaginatedResponse<Asset>>(`/v1/client/assets?page=${page}&limit=${limit}`);
+export function listClientAssets(page = 1, limit = 100, filters: ListQuery = {}) {
+  return apiRequest<PaginatedResponse<Asset>>(`/v1/client/assets?${listQueryString({ page, limit, ...filters })}`);
 }
 
 export function listAllClientAssets() {
   return fetchAllPages((page) => listClientAssets(page));
 }
 
-export function getClientAsset(assetId: string) {
-  return apiRequest<ClientAssetDetail>(`/v1/client/asset/${assetId}`);
+export function getClientAsset(assetId: string, includeCertificates = true, includeComponents = true) {
+  return apiRequest<ClientAssetDetail>(`/v1/client/asset/${assetId}${includeCertificates ? "" : "?include_certificates=false" + (includeComponents ? "" : "&include_components=false")}`);
 }
 
 export function getClientCertificateDownloadUrl(certificateId: string) {
@@ -566,6 +571,12 @@ export function updateAssetWorkingHours(assetId: string, payload: AssetWorkingHo
   });
 }
 
+export function searchAssetRoutineMaintenance(assetId: string, query: ListQuery) {
+  return apiRequest<PaginatedResponse<AssetMaintenanceEvent>>(
+    `/v1/asset/${assetId}/routine-maintenance/events?${listQueryString(query)}`
+  );
+}
+
 export function listAssetRoutineMaintenance(assetId: string) {
   return apiRequest<AssetMaintenanceEvent[]>(`/v1/asset/${assetId}/routine-maintenance`);
 }
@@ -587,9 +598,9 @@ export function getSingleAssetEquipment(assetId: string) {
   return apiRequest<SingleAssetEquipment>(`/v1/asset/${assetId}/single-equipment`);
 }
 
-export function listComponentsByAsset(assetId: string, page = 1, limit = 100) {
+export function listComponentsByAsset(assetId: string, page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<ComponentRecord>>(
-    `/v1/components/asset/${assetId}?page=${page}&limit=${limit}`
+    `/v1/components/asset/${assetId}?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -690,9 +701,9 @@ export function deleteCatalogScope(scopeId: string) {
   });
 }
 
-export function listCatalogScopeMainCategories(scopeId: string, page = 1, limit = 100) {
+export function listCatalogScopeMainCategories(scopeId: string, page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<CatalogScopeMainCategory>>(
-    `/v1/catalog-scope/${scopeId}/main-categories?page=${page}&limit=${limit}`
+    `/v1/catalog-scope/${scopeId}/main-categories?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -726,9 +737,9 @@ export function deleteCatalogScopeMainCategory(scopeMainCategoryId: string) {
   });
 }
 
-export function listCatalogScopeCategories(scopeId: string, page = 1, limit = 100) {
+export function listCatalogScopeCategories(scopeId: string, page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<CatalogScopeCategory>>(
-    `/v1/catalog-scope/${scopeId}/categories?page=${page}&limit=${limit}`
+    `/v1/catalog-scope/${scopeId}/categories?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -806,9 +817,9 @@ export function deleteTestType(testId: string) {
   });
 }
 
-export function listEquipmentTypes(page = 1, limit = 100) {
+export function listEquipmentTypes(page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<EquipmentType>>(
-    `/v1/equipment-types?page=${page}&limit=${limit}`
+    `/v1/equipment-types?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -951,10 +962,10 @@ export async function getTemplatePreview(templateId: string) {
 export function listCertificatesByComponent(
   componentId: string,
   page = 1,
-  limit = 100
+  limit = 100, filters: ListQuery = {}
 ) {
   return apiRequest<PaginatedResponse<Certificate>>(
-    `/v1/certificates/component/${componentId}?page=${page}&limit=${limit}`
+    `/v1/certificates/component/${componentId}?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -962,9 +973,9 @@ export function listAllCertificatesByComponent(componentId: string) {
   return fetchAllPages((page) => listCertificatesByComponent(componentId, page));
 }
 
-export function listCertificatesWithContext(page = 1, limit = 100) {
+export function listCertificatesWithContext(page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<CertificateWithContext>>(
-    `/v1/certificates/dashboard?page=${page}&limit=${limit}`
+    `/v1/certificates/dashboard?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -972,9 +983,9 @@ export function listAllCertificatesWithContext() {
   return fetchAllPages((page) => listCertificatesWithContext(page));
 }
 
-export function listCertificateNotificationTasks(page = 1, limit = 100) {
+export function listCertificateNotificationTasks(page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<CertificateNotificationTask>>(
-    `/v1/scheduler/certificate-notifications?page=${page}&limit=${limit}`
+    `/v1/scheduler/certificate-notifications?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -982,9 +993,9 @@ export function listAllCertificateNotificationTasks() {
   return fetchAllPages((page) => listCertificateNotificationTasks(page));
 }
 
-export function listCertificateNotificationFailures(page = 1, limit = 100) {
+export function listCertificateNotificationFailures(page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<CertificateNotificationFailure>>(
-    `/v1/scheduler/notification-failures?page=${page}&limit=${limit}`
+    `/v1/scheduler/notification-failures?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -992,9 +1003,9 @@ export function listAllCertificateNotificationFailures() {
   return fetchAllPages((page) => listCertificateNotificationFailures(page));
 }
 
-export function listHRAdminNotificationTasks(page = 1, limit = 100) {
+export function listHRAdminNotificationTasks(page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<CertificateNotificationTask>>(
-    `/v1/hr-admin/scheduler/notification-tasks?page=${page}&limit=${limit}`
+    `/v1/hr-admin/scheduler/notification-tasks?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -1002,9 +1013,9 @@ export function listAllHRAdminNotificationTasks() {
   return fetchAllPages((page) => listHRAdminNotificationTasks(page));
 }
 
-export function listHRAdminNotificationFailures(page = 1, limit = 100) {
+export function listHRAdminNotificationFailures(page = 1, limit = 100, filters: ListQuery = {}) {
   return apiRequest<PaginatedResponse<CertificateNotificationFailure>>(
-    `/v1/hr-admin/scheduler/notification-failures?page=${page}&limit=${limit}`
+    `/v1/hr-admin/scheduler/notification-failures?${listQueryString({ page, limit, ...filters })}`
   );
 }
 
@@ -1083,40 +1094,56 @@ export function getCertificateUploadDownloadUrl(certificateId: string, uploadId:
   );
 }
 
-export async function getAssetDashboard(assetId: string): Promise<AssetDashboardData> {
-  const [asset, components] = await Promise.all([
-    getAsset(assetId),
-    listAllComponentsByAsset(assetId),
-  ]);
+export interface AssetCertificateSummary {
+  component_count: number;
+  all_components: number;
+  certificate_count: number;
+  valid: number;
+  expiring_soon: number;
+  expired: number;
+}
 
-  const certificates = await Promise.all(
-    components.map(async (component) => {
-      const componentCertificates = await listAllCertificatesByComponent(component.component_id);
-      return componentCertificates.map((certificate) => ({
-        ...certificate,
-        component_name: component.name,
-      }));
-    })
-  );
+export function getAssetCertificateSummary(assetId: string, client = false) {
+  return apiRequest<AssetCertificateSummary>(`/v1/${client ? "client/" : ""}asset/${assetId}/certificate-summary`);
+}
 
-  const flatCertificates = certificates.flat();
+export function searchTemplates(query: ListQuery) {
+  return apiRequest<PaginatedResponse<AssetTemplate>>(`/v1/templates/search?${listQueryString(query)}`);
+}
 
-  const statusCounts = countCertificateStatuses(flatCertificates);
+export function searchTestTypes(query: ListQuery) {
+  return apiRequest<PaginatedResponse<TestType>>(`/v1/test-types/search?${listQueryString(query)}`);
+}
 
-  const byExpiryDate = [...flatCertificates].sort((left, right) => {
-    if (!left.expiry_date) return 1;
-    if (!right.expiry_date) return -1;
-    return new Date(left.expiry_date).getTime() - new Date(right.expiry_date).getTime();
-  });
+export function searchCatalogScopes(query: ListQuery) {
+  return apiRequest<PaginatedResponse<CatalogScope>>(`/v1/catalog-scopes/search?${listQueryString(query)}`);
+}
 
-  return {
-    asset,
-    components,
-    certificates: flatCertificates,
-    statusCounts,
-    urgentCertificates: byExpiryDate.filter((certificate) =>
-      ["EXPIRED", "EXPIRING_SOON"].includes(certificate.status)
-    ),
-    latestCertificates: byExpiryDate,
-  };
+export function searchProjects(query: ListQuery) {
+  return apiRequest<PaginatedResponse<Project>>(`/v1/projects/search?${listQueryString(query)}`);
+}
+
+export function searchUserProjectAccess(query: ListQuery) {
+  return apiRequest<PaginatedResponse<UserProjectAccess>>(`/v1/user-project-access/search?${listQueryString(query)}`);
+}
+
+export function listClientAssetCertificates(assetId: string, query: ListQuery) {
+  return apiRequest<PaginatedResponse<ClientCertificate>>(`/v1/client/asset/${assetId}/certificates?${listQueryString(query)}`);
+}
+
+export function listClientAssetComponents(assetId: string, query: ListQuery) {
+  return apiRequest<PaginatedResponse<ClientComponent>>(`/v1/client/asset/${assetId}/components?${listQueryString(query)}`);
+}
+
+export function listClientAssetCertificateTypes(assetId: string, query: ListQuery) {
+  return apiRequest<PaginatedResponse<Pick<TestType, "test_id" | "test_name">>>(`/v1/client/asset/${assetId}/certificate-types?${listQueryString(query)}`);
+}
+
+
+export function listAssetComponentCategories(assetId: string, query: ListQuery, client = false) {
+  return apiRequest<PaginatedResponse<{ category_id: string; category_name: string }>>(`/v1/${client ? "client/" : ""}asset/${assetId}/component-categories?${listQueryString(query)}`);
+}
+
+export function searchActiveCompetentPersons(query: ListQuery) {
+  return apiRequest<PaginatedResponse<CompetentPerson>>(`/v1/competent-persons/active/search?${listQueryString(query)}`);
 }

@@ -1679,11 +1679,11 @@
           ]
         },
         {
-          "name": "Reject partial subject filter",
+          "name": "Filter records by group and type before pagination",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/hr-admin/compliance-records?subject_type=VEHICLE"
+            "url": "{{baseUrl}}/hr-admin/compliance-records?subject_type=PERSON&record_type_id={{hr_record_type_id}}&limit=1"
           },
           "event": [
             {
@@ -1691,7 +1691,56 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Reject partial subject filter\", function () {",
+                  "pm.test(\"Filter records by group and type before pagination\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const result = pm.response.json();",
+                  "  pm.expect(result.meta.total).to.eql(1);",
+                  "  pm.expect(result.data).to.have.length(1);",
+                  "  pm.expect(result.data[0].subject_type).to.eql(\"PERSON\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Return no matches for unrelated record-type search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-record-types?subject_type=COMPANY&search=zz-regression-no-match&limit=1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Return no matches for unrelated record-type search\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const result = pm.response.json();",
+                  "  pm.expect(result.meta.total).to.eql(0);",
+                  "  pm.expect(result.data).to.deep.eql([]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject unscoped subject ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/compliance-records?subject_id={{hr_vehicle_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Reject unscoped subject ID\", function () {",
                   "  pm.response.to.have.status(400);",
                   "});"
                 ]

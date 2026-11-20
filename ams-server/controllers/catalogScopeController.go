@@ -356,7 +356,14 @@ func GetCatalogScopeMainCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		if !filters.Valid() {
+			return
+		}
+
 		items, err := queries.GetCatalogScopeMainCategoriesPaginated(ctx, db.GetCatalogScopeMainCategoriesPaginatedParams{
+			SearchText: search,
 			ScopeID:    scopeID,
 			PageLimit:  limit,
 			PageOffset: offset,
@@ -366,7 +373,7 @@ func GetCatalogScopeMainCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountCatalogScopeMainCategories(ctx, scopeID)
+		total, err := queries.CountCatalogScopeMainCategories(ctx, db.CountCatalogScopeMainCategoriesParams{SearchText: search, ScopeID: scopeID})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count catalog scope main categories"})
 			return
@@ -566,7 +573,15 @@ func GetCatalogScopeCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		filterParent := filters.UUID("main_category_id")
+		if !filters.Valid() {
+			return
+		}
+
 		items, err := queries.GetCatalogScopeCategoriesPaginated(ctx, db.GetCatalogScopeCategoriesPaginatedParams{
+			SearchText: search, FilterParent: filterParent,
 			ScopeID:    scopeID,
 			PageLimit:  limit,
 			PageOffset: offset,
@@ -576,7 +591,7 @@ func GetCatalogScopeCategories(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		total, err := queries.CountCatalogScopeCategories(ctx, scopeID)
+		total, err := queries.CountCatalogScopeCategories(ctx, db.CountCatalogScopeCategoriesParams{SearchText: search, FilterParent: filterParent, ScopeID: scopeID})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count catalog scope categories"})
 			return
@@ -781,5 +796,30 @@ func DeleteCatalogScopeCategory(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "catalog scope category deleted successfully"})
+	}
+}
+
+func SearchCatalogScopes(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		limit, offset, page := utils.ParsePagination(c)
+		filters := utils.ReadListFilters(c)
+		search := filters.Text("search")
+		if !filters.Valid() {
+			return
+		}
+		queries := db.New(pool)
+		rows, err := queries.SearchCatalogScopes(ctx, db.SearchCatalogScopesParams{SearchText: search, PageLimit: limit, PageOffset: offset})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not search this list."})
+			return
+		}
+		total, err := queries.CountSearchCatalogScopes(ctx, search)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not count matching results."})
+			return
+		}
+		c.JSON(http.StatusOK, dto.PaginatedResponse{Data: rows, Meta: utils.BuildMeta(page, total)})
 	}
 }

@@ -1,3 +1,5 @@
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls, type ListControls } from "../../components/shared/useListControls";
 import {
   Alert,
   Box,
@@ -22,7 +24,7 @@ import { PageError, PageLoading } from "../../components/shared/PageStates";
 import {
   completeAssetRoutineMaintenance,
   getAsset,
-  listAssetRoutineMaintenance,
+  searchAssetRoutineMaintenance,
   updateAssetWorkingHours,
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
@@ -55,9 +57,15 @@ export function AssetRoutineMaintenancePage() {
     enabled: Boolean(assetId),
   });
 
+  const historyControls = useListControls("events", ["status"]);
+  const openEvent = useQuery({
+    queryKey: ["routine-maintenance", assetId, "open"],
+    queryFn: () => searchAssetRoutineMaintenance(assetId!, { status: "REQUIRED", page: 1, limit: 1 }),
+    enabled: Boolean(assetId),
+  });
   const maintenanceQuery = useQuery({
-    queryKey: ["routine-maintenance", assetId],
-    queryFn: () => listAssetRoutineMaintenance(assetId!),
+    queryKey: ["routine-maintenance", assetId, historyControls.query],
+    queryFn: () => searchAssetRoutineMaintenance(assetId!, historyControls.query),
     enabled: Boolean(assetId),
   });
 
@@ -71,7 +79,7 @@ export function AssetRoutineMaintenancePage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["asset", assetId] }),
         queryClient.invalidateQueries({ queryKey: ["assets"] }),
-        queryClient.invalidateQueries({ queryKey: ["asset-dashboard", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary", assetId] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
         queryClient.invalidateQueries({ queryKey: ["routine-maintenance", assetId] }),
       ]);
@@ -97,7 +105,7 @@ export function AssetRoutineMaintenancePage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["asset", assetId] }),
         queryClient.invalidateQueries({ queryKey: ["assets"] }),
-        queryClient.invalidateQueries({ queryKey: ["asset-dashboard", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary", assetId] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
         queryClient.invalidateQueries({ queryKey: ["routine-maintenance", assetId] }),
       ]);
@@ -117,32 +125,31 @@ export function AssetRoutineMaintenancePage() {
     return <PageError description="The asset route is missing." title="Invalid route" />;
   }
 
-  if (assetQuery.isLoading || maintenanceQuery.isLoading) {
+  if (assetQuery.isLoading || openEvent.isLoading) {
     return <PageLoading>{"Loading routine maintenance\u2026"}</PageLoading>;
   }
 
-  if (assetQuery.isError || maintenanceQuery.isError || !assetQuery.data) {
+  if (assetQuery.isError || openEvent.isError || !assetQuery.data) {
     return (
       <PageError
         description="Routine maintenance could not be loaded for this asset."
         onRetry={() => {
           void assetQuery.refetch();
-          void maintenanceQuery.refetch();
+          void openEvent.refetch();
         }}
       />
     );
   }
 
   const asset = assetQuery.data;
-  const maintenanceEvents = maintenanceQuery.data || [];
-  const openMaintenanceEvent =
-    maintenanceEvents.find((event) => event.status === "REQUIRED") ?? null;
+  const maintenanceEvents = maintenanceQuery.data?.data ?? [];
+  const openMaintenanceEvent = openEvent.data?.data[0] ?? null;
   const maintenanceConfigured = asset.maintenance_interval_hours > 0;
   const maintenanceRemaining = maintenanceConfigured
     ? asset.next_maintenance_due_hours - asset.working_hours
     : 0;
   const openNotificationFailures =
-    openMaintenanceEvent?.notifications.filter(
+    openMaintenanceEvent?.notifications?.filter(
       (notification) => notification.status === "FAILED" && notification.error_message
     ) ?? [];
 
@@ -189,6 +196,9 @@ export function AssetRoutineMaintenancePage() {
     maintenanceColumns,
     maintenanceConfigured,
     maintenanceEvents,
+    historyControls,
+    historyMeta: maintenanceQuery.data?.meta,
+    historyError: maintenanceQuery.isError,
     maintenanceLoading: maintenanceQuery.isLoading,
     maintenanceRemaining,
     navigate,
@@ -214,6 +224,9 @@ interface AssetRoutineMaintenanceViewProps {
   maintenanceColumns: TableProps<AssetMaintenanceEvent>["columnDefinitions"];
   maintenanceConfigured: boolean;
   maintenanceEvents: AssetMaintenanceEvent[];
+  historyControls: ListControls;
+  historyMeta?: import("../../types/ams").PaginationMeta;
+  historyError: boolean;
   maintenanceLoading: boolean;
   maintenanceRemaining: number;
   navigate: ReturnType<typeof useNavigate>;
@@ -361,6 +374,9 @@ function renderAssetRoutineMaintenancePage({
   maintenanceColumns,
   maintenanceConfigured,
   maintenanceEvents,
+  historyControls,
+  historyMeta,
+  historyError,
   maintenanceLoading,
   maintenanceRemaining,
   navigate,
@@ -495,7 +511,7 @@ function renderAssetRoutineMaintenancePage({
           <Container
             header={
               <Header
-                counter={`(${maintenanceEvents.length})`}
+                counter={`(${historyMeta?.total ?? 0})`}
                 description="Routine maintenance history for this asset."
                 variant="h2"
               >
@@ -507,10 +523,16 @@ function renderAssetRoutineMaintenancePage({
               columnDefinitions={maintenanceColumns}
               empty={
                 <Box color="text-body-secondary">
-                  No routine maintenance events have been recorded yet.
+                  {historyError ? "Maintenance history could not be loaded." : "No routine maintenance events match this view."}
                 </Box>
               }
               items={maintenanceEvents}
+              filter={<ListFilters controls={historyControls} label="Search maintenance history"
+                facets={[{ key: "status", label: "Status", options: [
+                  { value: "REQUIRED", label: "Required" }, { value: "COMPLETED", label: "Completed" },
+                  { value: "CANCELLED", label: "Cancelled" },
+                ] }]} />}
+              pagination={<ListPagination controls={historyControls} meta={historyMeta} />}
               loading={maintenanceLoading}
               loadingText="Loading routine maintenance"
               trackBy="maintenance_event_id"

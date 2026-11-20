@@ -1,3 +1,5 @@
+import { listQueryString, type ListQuery } from "./list-query";
+import type { PaginatedResponse } from "../../types/ams";
 import { apiRequest } from "./client";
 import type { CertificatePreview } from "./certificate-preview";
 
@@ -64,8 +66,8 @@ export function recoverCertificateIssuance(certificateId: string, issuanceId: st
  if (body && file) body.append("file", file);
  return apiRequest<CertificateIssuance>(`/v1/certificate/${encodeURIComponent(certificateId)}/issuances/${encodeURIComponent(issuanceId)}/${action}`, { method: "POST", body });
 }
-export function listCertificateHistory(certificateId: string,page=1) {
- return apiRequest<{data:CertificateHistory[];meta:{total:number}}>(`/v1/certificate/${encodeURIComponent(certificateId)}/history?page=${page}&limit=20`);
+export function listCertificateHistory(certificateId: string,page=1,filters: ListQuery = {}) {
+ return apiRequest<PaginatedResponse<CertificateHistory>>(`/v1/certificate/${encodeURIComponent(certificateId)}/history?${listQueryString({ page, limit: 20, ...filters })}`);
 }
 export function getCertificateHistoryDocument(certificateId:string,historyId:string) {
  return apiRequest<{url:string}>(`/v1/certificate/${encodeURIComponent(certificateId)}/history/${encodeURIComponent(historyId)}/file`);

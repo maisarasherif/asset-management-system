@@ -73,6 +73,84 @@ func (q *Queries) CountCertificatesByTestID(ctx context.Context, testID uuid.UUI
 	return count, err
 }
 
+const countSearchCertificatesWithContext = `-- name: CountSearchCertificatesWithContext :one
+SELECT COUNT(*)
+FROM certificates cert
+JOIN components comp ON comp.component_id = cert.component_id
+JOIN assets asset ON asset.asset_id = comp.asset_id
+WHERE strpos(lower(concat_ws(' ', cert.display_id, cert.certificate_name, cert.issuing_authority, cert.imca_ref, comp.name, asset.name)), lower($1::text)) > 0
+  AND ($2::text = '' OR $2 = CASE
+      WHEN cert.expiry_date IS NULL THEN COALESCE(NULLIF(cert.status, ''), 'PENDING')
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date < $3::text::date THEN 'EXPIRED'
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date <= $3::text::date + 30 THEN 'EXPIRING_SOON'
+      ELSE 'VALID'
+  END)
+  AND ($4::uuid = '00000000-0000-0000-0000-000000000000' OR cert.test_id = $4)
+  AND ($5::uuid = '00000000-0000-0000-0000-000000000000' OR asset.asset_id = $5)
+  AND ($6::uuid = '00000000-0000-0000-0000-000000000000' OR comp.component_id = $6)
+  AND ($7::uuid = '00000000-0000-0000-0000-000000000000' OR comp.category_id = $7 OR comp.scope_category_id = $7)
+`
+
+type CountSearchCertificatesWithContextParams struct {
+	SearchText      string    `json:"search_text"`
+	FilterStatus    string    `json:"filter_status"`
+	AsOf            string    `json:"as_of"`
+	FilterTest      uuid.UUID `json:"filter_test"`
+	FilterAsset     uuid.UUID `json:"filter_asset"`
+	FilterComponent uuid.UUID `json:"filter_component"`
+	FilterCategory  uuid.UUID `json:"filter_category"`
+}
+
+func (q *Queries) CountSearchCertificatesWithContext(ctx context.Context, arg CountSearchCertificatesWithContextParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchCertificatesWithContext,
+		arg.SearchText,
+		arg.FilterStatus,
+		arg.AsOf,
+		arg.FilterTest,
+		arg.FilterAsset,
+		arg.FilterComponent,
+		arg.FilterCategory,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchComponentCertificates = `-- name: CountSearchComponentCertificates :one
+SELECT COUNT(*)
+FROM certificates
+WHERE component_id = $1
+  AND strpos(lower(concat_ws(' ', display_id, certificate_name, issuing_authority, imca_ref)), lower($2::text)) > 0
+  AND ($3::text = '' OR $3 = CASE
+      WHEN expiry_date IS NULL THEN COALESCE(NULLIF(status, ''), 'PENDING')
+      WHEN (expiry_date AT TIME ZONE 'UTC')::date < $4::text::date THEN 'EXPIRED'
+      WHEN (expiry_date AT TIME ZONE 'UTC')::date <= $4::text::date + 30 THEN 'EXPIRING_SOON'
+      ELSE 'VALID'
+  END)
+  AND ($5::uuid = '00000000-0000-0000-0000-000000000000' OR test_id = $5)
+`
+
+type CountSearchComponentCertificatesParams struct {
+	ComponentID  uuid.UUID `json:"component_id"`
+	SearchText   string    `json:"search_text"`
+	FilterStatus string    `json:"filter_status"`
+	AsOf         string    `json:"as_of"`
+	FilterTest   uuid.UUID `json:"filter_test"`
+}
+
+func (q *Queries) CountSearchComponentCertificates(ctx context.Context, arg CountSearchComponentCertificatesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchComponentCertificates,
+		arg.ComponentID,
+		arg.SearchText,
+		arg.FilterStatus,
+		arg.AsOf,
+		arg.FilterTest,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCertificate = `-- name: CreateCertificate :one
 INSERT INTO certificates (
     display_id,
@@ -526,6 +604,77 @@ func (q *Queries) GetAllCertificatesWithContextPaginated(ctx context.Context, ar
 		return nil, err
 	}
 	return items, nil
+}
+
+const getAssetCertificateSummary = `-- name: GetAssetCertificateSummary :one
+WITH scoped_asset AS (
+    SELECT a.asset_id, a.asset_kind
+    FROM assets a
+    WHERE a.asset_id = $1
+      AND ($2::uuid = '00000000-0000-0000-0000-000000000000' OR EXISTS (
+          SELECT 1
+          FROM projects p
+          JOIN user_project_access upa ON upa.project_id = p.project_id
+          JOIN users u ON u.user_id = upa.user_id
+          WHERE LOWER(TRIM(p.project_name)) = LOWER(TRIM(a.assigned_project))
+            AND upa.user_id = $2
+            AND upa.status = 'ACTIVE'
+            AND p.status = 'ACTIVE'
+            AND u.status = 'ACTIVE'
+      ))
+), component_counts AS (
+    SELECT COUNT(*) FILTER (WHERE c.component_kind <> 'SELF')::bigint AS components,
+           COUNT(*)::bigint AS all_components
+    FROM components c JOIN scoped_asset a USING (asset_id)
+), current_certificates AS (
+    SELECT CASE
+        WHEN cert.expiry_date IS NULL THEN COALESCE(NULLIF(cert.status, ''), 'PENDING')
+        WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date < $3::text::date THEN 'EXPIRED'
+        WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date <= $3::text::date + 30 THEN 'EXPIRING_SOON'
+        ELSE 'VALID'
+    END AS status
+    FROM scoped_asset a JOIN components c USING (asset_id)
+    JOIN certificates cert USING (component_id)
+)
+SELECT
+    CASE WHEN a.asset_kind = 'SINGLE_EQUIPMENT' THEN 1 ELSE cc.components END::bigint AS component_count,
+    cc.all_components::bigint AS all_components,
+    COUNT(current_certificates.status)::bigint AS certificate_count,
+    COUNT(*) FILTER (WHERE status = 'VALID')::bigint AS valid,
+    COUNT(*) FILTER (WHERE status = 'EXPIRING_SOON')::bigint AS expiring_soon,
+    COUNT(*) FILTER (WHERE status = 'EXPIRED')::bigint AS expired
+FROM scoped_asset a CROSS JOIN component_counts cc
+LEFT JOIN current_certificates ON true
+GROUP BY a.asset_kind, cc.components, cc.all_components
+`
+
+type GetAssetCertificateSummaryParams struct {
+	AssetID      uuid.UUID `json:"asset_id"`
+	ClientUserID uuid.UUID `json:"client_user_id"`
+	AsOf         string    `json:"as_of"`
+}
+
+type GetAssetCertificateSummaryRow struct {
+	ComponentCount   int64 `json:"component_count"`
+	AllComponents    int64 `json:"all_components"`
+	CertificateCount int64 `json:"certificate_count"`
+	Valid            int64 `json:"valid"`
+	ExpiringSoon     int64 `json:"expiring_soon"`
+	Expired          int64 `json:"expired"`
+}
+
+func (q *Queries) GetAssetCertificateSummary(ctx context.Context, arg GetAssetCertificateSummaryParams) (GetAssetCertificateSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getAssetCertificateSummary, arg.AssetID, arg.ClientUserID, arg.AsOf)
+	var i GetAssetCertificateSummaryRow
+	err := row.Scan(
+		&i.ComponentCount,
+		&i.AllComponents,
+		&i.CertificateCount,
+		&i.Valid,
+		&i.ExpiringSoon,
+		&i.Expired,
+	)
+	return i, err
 }
 
 const getAssetComponentCertificateSheetRows = `-- name: GetAssetComponentCertificateSheetRows :many
@@ -997,6 +1146,241 @@ func (q *Queries) GetExpiringCertificatesWithContext(ctx context.Context, expiry
 			&i.AssetID,
 			&i.AssetDisplayID,
 			&i.AssetName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchCertificatesWithContext = `-- name: SearchCertificatesWithContext :many
+SELECT
+    cert.certificate_id AS certificate_id,
+    cert.display_id AS certificate_display_id,
+    cert.certificate_name,
+    cert.issue_date,
+    cert.expiry_date,
+    cert.status,
+    cert.issuing_authority,
+    cert.test_id AS test_id,
+    cert.imca_ref,
+    cert.imca_d018,
+    cert.maintenance_notes,
+    cert.certificate_file,
+    comp.component_id AS component_id,
+    comp.display_id AS component_display_id,
+    comp.name AS component_name,
+    asset.asset_id AS asset_id,
+    asset.display_id AS asset_display_id,
+    asset.name AS asset_name
+FROM certificates cert
+JOIN components comp ON comp.component_id = cert.component_id
+JOIN assets asset ON asset.asset_id = comp.asset_id
+WHERE strpos(lower(concat_ws(' ', cert.display_id, cert.certificate_name, cert.issuing_authority, cert.imca_ref, comp.name, asset.name)), lower($1::text)) > 0
+  AND ($2::text = '' OR $2 = CASE
+      WHEN cert.expiry_date IS NULL THEN COALESCE(NULLIF(cert.status, ''), 'PENDING')
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date < $3::text::date THEN 'EXPIRED'
+      WHEN (cert.expiry_date AT TIME ZONE 'UTC')::date <= $3::text::date + 30 THEN 'EXPIRING_SOON'
+      ELSE 'VALID'
+  END)
+  AND ($4::uuid = '00000000-0000-0000-0000-000000000000' OR cert.test_id = $4)
+  AND ($5::uuid = '00000000-0000-0000-0000-000000000000' OR asset.asset_id = $5)
+  AND ($6::uuid = '00000000-0000-0000-0000-000000000000' OR comp.component_id = $6)
+  AND ($7::uuid = '00000000-0000-0000-0000-000000000000' OR comp.category_id = $7 OR comp.scope_category_id = $7)
+ORDER BY cert.expiry_date ASC, cert.certificate_id
+LIMIT $9 OFFSET $8
+`
+
+type SearchCertificatesWithContextParams struct {
+	SearchText      string    `json:"search_text"`
+	FilterStatus    string    `json:"filter_status"`
+	AsOf            string    `json:"as_of"`
+	FilterTest      uuid.UUID `json:"filter_test"`
+	FilterAsset     uuid.UUID `json:"filter_asset"`
+	FilterComponent uuid.UUID `json:"filter_component"`
+	FilterCategory  uuid.UUID `json:"filter_category"`
+	PageOffset      int32     `json:"page_offset"`
+	PageLimit       int32     `json:"page_limit"`
+}
+
+type SearchCertificatesWithContextRow struct {
+	CertificateID        uuid.UUID  `json:"certificate_id"`
+	CertificateDisplayID string     `json:"certificate_display_id"`
+	CertificateName      string     `json:"certificate_name"`
+	IssueDate            *time.Time `json:"issue_date"`
+	ExpiryDate           *time.Time `json:"expiry_date"`
+	Status               string     `json:"status"`
+	IssuingAuthority     string     `json:"issuing_authority"`
+	TestID               uuid.UUID  `json:"test_id"`
+	ImcaRef              string     `json:"imca_ref"`
+	ImcaD018             string     `json:"imca_d018"`
+	MaintenanceNotes     string     `json:"maintenance_notes"`
+	CertificateFile      string     `json:"certificate_file"`
+	ComponentID          uuid.UUID  `json:"component_id"`
+	ComponentDisplayID   string     `json:"component_display_id"`
+	ComponentName        string     `json:"component_name"`
+	AssetID              uuid.UUID  `json:"asset_id"`
+	AssetDisplayID       string     `json:"asset_display_id"`
+	AssetName            string     `json:"asset_name"`
+}
+
+func (q *Queries) SearchCertificatesWithContext(ctx context.Context, arg SearchCertificatesWithContextParams) ([]SearchCertificatesWithContextRow, error) {
+	rows, err := q.db.Query(ctx, searchCertificatesWithContext,
+		arg.SearchText,
+		arg.FilterStatus,
+		arg.AsOf,
+		arg.FilterTest,
+		arg.FilterAsset,
+		arg.FilterComponent,
+		arg.FilterCategory,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchCertificatesWithContextRow
+	for rows.Next() {
+		var i SearchCertificatesWithContextRow
+		if err := rows.Scan(
+			&i.CertificateID,
+			&i.CertificateDisplayID,
+			&i.CertificateName,
+			&i.IssueDate,
+			&i.ExpiryDate,
+			&i.Status,
+			&i.IssuingAuthority,
+			&i.TestID,
+			&i.ImcaRef,
+			&i.ImcaD018,
+			&i.MaintenanceNotes,
+			&i.CertificateFile,
+			&i.ComponentID,
+			&i.ComponentDisplayID,
+			&i.ComponentName,
+			&i.AssetID,
+			&i.AssetDisplayID,
+			&i.AssetName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchComponentCertificates = `-- name: SearchComponentCertificates :many
+SELECT
+    certificate_id,
+    display_id,
+    component_id,
+    certificate_name,
+    issue_date,
+    expiry_date,
+    certificate_file,
+    issuing_authority,
+    status,
+    test_id,
+    imca_ref,
+    imca_d018,
+    maintenance_notes,
+    created_at,
+    updated_at
+FROM certificates
+WHERE component_id = $1
+  AND strpos(lower(concat_ws(' ', display_id, certificate_name, issuing_authority, imca_ref)), lower($2::text)) > 0
+  AND ($3::text = '' OR $3 = CASE
+      WHEN expiry_date IS NULL THEN COALESCE(NULLIF(status, ''), 'PENDING')
+      WHEN (expiry_date AT TIME ZONE 'UTC')::date < $4::text::date THEN 'EXPIRED'
+      WHEN (expiry_date AT TIME ZONE 'UTC')::date <= $4::text::date + 30 THEN 'EXPIRING_SOON'
+      ELSE 'VALID'
+  END)
+  AND ($5::uuid = '00000000-0000-0000-0000-000000000000' OR test_id = $5)
+ORDER BY
+    CASE WHEN $6::boolean THEN CASE
+        WHEN expiry_date IS NOT NULL AND (expiry_date AT TIME ZONE 'UTC')::date < $4::text::date THEN 0
+        WHEN expiry_date IS NOT NULL AND (expiry_date AT TIME ZONE 'UTC')::date <= $4::text::date + 30 THEN 1
+        WHEN expiry_date IS NULL AND status = 'EXPIRED' THEN 0
+        WHEN expiry_date IS NULL AND status = 'EXPIRING_SOON' THEN 1
+        WHEN expiry_date IS NULL AND COALESCE(NULLIF(status, ''), 'PENDING') = 'PENDING' THEN 2
+        ELSE 3 END
+    END,
+    CASE WHEN $6::boolean THEN expiry_date END NULLS LAST,
+    created_at DESC, certificate_id
+LIMIT $8 OFFSET $7
+`
+
+type SearchComponentCertificatesParams struct {
+	ComponentID  uuid.UUID `json:"component_id"`
+	SearchText   string    `json:"search_text"`
+	FilterStatus string    `json:"filter_status"`
+	AsOf         string    `json:"as_of"`
+	FilterTest   uuid.UUID `json:"filter_test"`
+	SortByRisk   bool      `json:"sort_by_risk"`
+	PageOffset   int32     `json:"page_offset"`
+	PageLimit    int32     `json:"page_limit"`
+}
+
+type SearchComponentCertificatesRow struct {
+	CertificateID    uuid.UUID  `json:"certificate_id"`
+	DisplayID        string     `json:"display_id"`
+	ComponentID      uuid.UUID  `json:"component_id"`
+	CertificateName  string     `json:"certificate_name"`
+	IssueDate        *time.Time `json:"issue_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
+	CertificateFile  string     `json:"certificate_file"`
+	IssuingAuthority string     `json:"issuing_authority"`
+	Status           string     `json:"status"`
+	TestID           uuid.UUID  `json:"test_id"`
+	ImcaRef          string     `json:"imca_ref"`
+	ImcaD018         string     `json:"imca_d018"`
+	MaintenanceNotes string     `json:"maintenance_notes"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+func (q *Queries) SearchComponentCertificates(ctx context.Context, arg SearchComponentCertificatesParams) ([]SearchComponentCertificatesRow, error) {
+	rows, err := q.db.Query(ctx, searchComponentCertificates,
+		arg.ComponentID,
+		arg.SearchText,
+		arg.FilterStatus,
+		arg.AsOf,
+		arg.FilterTest,
+		arg.SortByRisk,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchComponentCertificatesRow
+	for rows.Next() {
+		var i SearchComponentCertificatesRow
+		if err := rows.Scan(
+			&i.CertificateID,
+			&i.DisplayID,
+			&i.ComponentID,
+			&i.CertificateName,
+			&i.IssueDate,
+			&i.ExpiryDate,
+			&i.CertificateFile,
+			&i.IssuingAuthority,
+			&i.Status,
+			&i.TestID,
+			&i.ImcaRef,
+			&i.ImcaD018,
+			&i.MaintenanceNotes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

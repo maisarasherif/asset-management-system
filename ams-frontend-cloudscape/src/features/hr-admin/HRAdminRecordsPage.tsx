@@ -1,3 +1,7 @@
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
+import { recordFacets } from "./hrAdminFacets";
+import { RecordTypeFilter } from "./HRAdminListFilters";
 import {
   Alert,
   Badge,
@@ -8,25 +12,20 @@ import {
   ContentLayout,
   FormField,
   Header,
-  Input,
   Modal,
   SpaceBetween,
   Table,
   Textarea,
   type TableProps,
 } from "@cloudscape-design/components";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
+import { PageEmpty, PageError } from "../../components/shared/PageStates";
 import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
 import {
   archiveComplianceRecord,
   getComplianceRecordDownloadUrl,
   listComplianceRecords,
-  listComplianceRecordTypes,
-  listHRAdminCompanies,
-  listHRAdminPersons,
-  listHRAdminVehicles,
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
@@ -130,7 +129,7 @@ export function HRAdminRecordsPage() {
   const hrRole = getProductRole("HR_ADMIN");
   const canWrite = hrRole === "ADMIN" || hrRole === "USER";
   const canArchive = hrRole === "ADMIN";
-  const [filterText, setFilterText] = useState("");
+  const controls = useListControls("", ["subject_type", "status", "expiry_status", "record_type_id"]);
   const [compactTable, setCompactTable] = useState(() => isCompactViewport());
   const [editor, setEditor] = useState<RecordEditor>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>(null);
@@ -138,26 +137,11 @@ export function HRAdminRecordsPage() {
   const [modalError, setModalError] = useState("");
 
   const recordsQuery = useQuery({
-    queryKey: ["hr-admin", "compliance-records"],
-    queryFn: () => listComplianceRecords(1, 100),
+    queryKey: ["hr-admin", "compliance-records", controls.query],
+    queryFn: () => listComplianceRecords(controls.page, 20, undefined, controls.query),
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: "always",
     refetchOnMount: "always",
-  });
-  const recordTypesQuery = useQuery({
-    queryKey: ["hr-admin", "compliance-record-types"],
-    queryFn: () => listComplianceRecordTypes(1, 100),
-  });
-  const peopleQuery = useQuery({
-    queryKey: ["hr-admin", "persons"],
-    queryFn: () => listHRAdminPersons(1, 100),
-  });
-  const vehiclesQuery = useQuery({
-    queryKey: ["hr-admin", "vehicles"],
-    queryFn: () => listHRAdminVehicles(1, 100),
-  });
-  const companiesQuery = useQuery({
-    queryKey: ["hr-admin", "companies"],
-    queryFn: () => listHRAdminCompanies(1, 100),
   });
 
   useEffect(() => {
@@ -196,35 +180,8 @@ export function HRAdminRecordsPage() {
     },
   });
 
-  const records = useMemo(() => recordsQuery.data?.data ?? [], [recordsQuery.data?.data]);
-  const recordTypes = useMemo(() => recordTypesQuery.data?.data ?? [], [recordTypesQuery.data?.data]);
-  const people = useMemo(() => peopleQuery.data?.data ?? [], [peopleQuery.data?.data]);
-  const vehicles = useMemo(() => vehiclesQuery.data?.data ?? [], [vehiclesQuery.data?.data]);
-  const companies = useMemo(() => companiesQuery.data?.data ?? [], [companiesQuery.data?.data]);
 
-  const filteredRecords = useMemo(() => {
-    const query = filterText.trim().toLowerCase();
-    if (!query) {
-      return records;
-    }
-    return records.filter((record) =>
-      [
-        record.display_id,
-        record.subject_type,
-        record.subject_name,
-        record.type_name,
-        record.record_type_display_id,
-        record.renewal_behavior,
-        record.status,
-        pgTextValue(record.document_file),
-        pgTextValue(record.issuing_authority),
-        expirySignal(record),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [filterText, records]);
+  const filteredRecords = recordsQuery.data?.data ?? [];
 
   const columns = useMemo<TableProps.ColumnDefinition<ComplianceRecord>[]>(() => {
     const renewRecord = (item: ComplianceRecord) => {
@@ -398,38 +355,6 @@ export function HRAdminRecordsPage() {
     archiveRecordMutation.mutate(target);
   };
 
-  const isLoading =
-    recordsQuery.isLoading ||
-    recordTypesQuery.isLoading ||
-    peopleQuery.isLoading ||
-    vehiclesQuery.isLoading ||
-    companiesQuery.isLoading;
-  const hasError =
-    recordsQuery.isError ||
-    recordTypesQuery.isError ||
-    peopleQuery.isError ||
-    vehiclesQuery.isError ||
-    companiesQuery.isError;
-
-  if (isLoading) {
-    return <PageLoading>{"Loading HR/Admin compliance records..."}</PageLoading>;
-  }
-
-  if (hasError || !recordsQuery.data || !recordTypesQuery.data) {
-    return (
-      <PageError
-        description="The HR/Admin compliance records workspace could not be loaded."
-        onRetry={() => {
-          void recordsQuery.refetch();
-          void recordTypesQuery.refetch();
-          void peopleQuery.refetch();
-          void vehiclesQuery.refetch();
-          void companiesQuery.refetch();
-        }}
-      />
-    );
-  }
-
   return (
     <ContentLayout
       header={
@@ -473,15 +398,14 @@ export function HRAdminRecordsPage() {
         ) : null}
         <Container>
           <SpaceBetween size="m">
-            <Input
-              ariaLabel="Search records"
-              placeholder="Search by subject, type, status, authority, document, or expiry"
-              value={filterText}
-              onChange={({ detail }) => setFilterText(detail.value)}
-            />
+            <ListFilters controls={controls} label="Search records" facets={recordFacets}>
+                <RecordTypeFilter controls={controls} />
+              </ListFilters>
             <Table
               columnDefinitions={columns}
-              empty={
+              loading={recordsQuery.isPending}
+              loadingText="Loading records"
+              empty={recordsQuery.isError ? <PageError description="The compliance records could not be loaded." onRetry={() => void recordsQuery.refetch()} /> : (
                 <PageEmpty
                   action={
                     canWrite ? (
@@ -507,15 +431,16 @@ export function HRAdminRecordsPage() {
                     ) : undefined
                   }
                   description={
-                    filterText
+                    controls.hasCriteria
                       ? "No compliance records match the current search."
                       : "Create the first compliance record after at least one active subject and record type exist."
                   }
-                  title={filterText ? "No matching records" : "No records yet"}
+                  title={controls.hasCriteria ? "No matching records" : "No records yet"}
                 />
-              }
-              header={<Header counter={`(${filteredRecords.length})`}>Compliance records</Header>}
+              )}
+              header={<Header counter={`(${recordsQuery.data?.meta.total ?? 0})`}>Compliance records</Header>}
               items={filteredRecords}
+              pagination={<ListPagination controls={controls} meta={recordsQuery.data?.meta} />}
               trackBy="record_id"
             />
           </SpaceBetween>
@@ -523,12 +448,8 @@ export function HRAdminRecordsPage() {
       </SpaceBetween>
 
       {editor && <RecordEditorModal
-        companies={companies}
         editor={editor}
         onSaved={() => setEditor(null)}
-        people={people}
-        recordTypes={recordTypes}
-        vehicles={vehicles}
         onDismiss={() => {
           setEditor(null);
           setModalError("");

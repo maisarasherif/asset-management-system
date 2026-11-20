@@ -130,6 +130,24 @@ FROM asset_maintenance_events
 WHERE asset_id = $1
 ORDER BY created_at DESC;
 
+-- name: SearchAssetMaintenanceEvents :many
+SELECT * FROM asset_maintenance_events
+WHERE asset_id = sqlc.arg(asset_id)
+  AND (sqlc.arg(filter_status)::text = '' OR status = sqlc.arg(filter_status))
+  AND (sqlc.arg(search)::text = ''
+    OR strpos(lower(display_id), lower(sqlc.arg(search))) > 0
+    OR strpos(lower(completion_notes), lower(sqlc.arg(search))) > 0)
+ORDER BY created_at DESC, maintenance_event_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+
+-- name: CountSearchAssetMaintenanceEvents :one
+SELECT COUNT(*) FROM asset_maintenance_events
+WHERE asset_id = sqlc.arg(asset_id)
+  AND (sqlc.arg(filter_status)::text = '' OR status = sqlc.arg(filter_status))
+  AND (sqlc.arg(search)::text = ''
+    OR strpos(lower(display_id), lower(sqlc.arg(search))) > 0
+    OR strpos(lower(completion_notes), lower(sqlc.arg(search))) > 0);
+
 -- name: CompleteOpenAssetMaintenanceEvent :one
 UPDATE asset_maintenance_events
 SET

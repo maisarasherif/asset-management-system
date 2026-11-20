@@ -1,3 +1,5 @@
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
 import {
   Alert,
   Badge,
@@ -13,8 +15,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TableCellText } from "../../components/shared/TableCells";
 import {
-  listAllHRAdminNotificationFailures,
-  listAllHRAdminNotificationTasks,
+  listHRAdminNotificationFailures,
+  listHRAdminNotificationTasks,
   runHRAdminReminderScheduler,
 } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
@@ -66,17 +68,27 @@ function copyableKey(key: string) {
   );
 }
 
+const channelFacet = { key: "channel", label: "Channel", options: [
+  { value: "EMAIL", label: "Email" }, { value: "CLICKUP", label: "ClickUp" },
+] };
+const statusFacet = { key: "status", label: "Status", options: [
+  { value: "PENDING", label: "Pending" }, { value: "SENT", label: "Sent" },
+  { value: "FAILED", label: "Failed" },
+] };
+
 export function HRAdminSchedulerPage() {
   const queryClient = useQueryClient();
   const { error, success } = useFlashbar();
 
+  const tasksControls = useListControls("jobs", ["channel", "status"]);
   const tasksQuery = useQuery({
-    queryKey: ["hr-admin", "scheduler", "notification-tasks", "all"],
-    queryFn: listAllHRAdminNotificationTasks,
+    queryKey: ["hr-admin", "scheduler", "notification-tasks", "all", tasksControls.query],
+    queryFn: () => listHRAdminNotificationTasks(tasksControls.page, tasksControls.query.limit, tasksControls.query),
   });
+  const failuresControls = useListControls("failures", ["channel"]);
   const failuresQuery = useQuery({
-    queryKey: ["hr-admin", "scheduler", "notification-failures", "all"],
-    queryFn: listAllHRAdminNotificationFailures,
+    queryKey: ["hr-admin", "scheduler", "notification-failures", "all", failuresControls.query],
+    queryFn: () => listHRAdminNotificationFailures(failuresControls.page, failuresControls.query.limit, failuresControls.query),
   });
 
   const runMutation = useMutation({
@@ -239,7 +251,7 @@ export function HRAdminSchedulerPage() {
 
         <Container
           header={
-            <Header counter={`(${tasksQuery.data?.length || 0})`} variant="h2">
+            <Header counter={`(${tasksQuery.data?.meta.total ?? 0})`} variant="h2">
               Job audit
             </Header>
           }
@@ -247,7 +259,9 @@ export function HRAdminSchedulerPage() {
           <Table
             columnDefinitions={taskColumns}
             empty={<Box color="text-body-secondary">No HR/Admin reminder jobs have been recorded.</Box>}
-            items={tasksQuery.data || []}
+            items={tasksQuery.data?.data ?? []}
+            filter={<ListFilters controls={tasksControls} label="Search jobs" facets={[channelFacet, statusFacet]} />}
+            pagination={<ListPagination controls={tasksControls} meta={tasksQuery.data?.meta} />}
             loading={isInitialLoading}
             loadingText="Loading HR/Admin notification audit"
             trackBy="task_id"
@@ -257,7 +271,7 @@ export function HRAdminSchedulerPage() {
 
         <Container
           header={
-            <Header counter={`(${failuresQuery.data?.length || 0})`} variant="h2">
+            <Header counter={`(${failuresQuery.data?.meta.total ?? 0})`} variant="h2">
               Failure audit
             </Header>
           }
@@ -265,7 +279,9 @@ export function HRAdminSchedulerPage() {
           <Table
             columnDefinitions={failureColumns}
             empty={<Box color="text-body-secondary">No failed HR/Admin reminder jobs have been recorded.</Box>}
-            items={failuresQuery.data || []}
+            items={failuresQuery.data?.data ?? []}
+            filter={<ListFilters controls={failuresControls} label="Search failures" facets={[channelFacet]} />}
+            pagination={<ListPagination controls={failuresControls} meta={failuresQuery.data?.meta} />}
             loading={isInitialLoading}
             loadingText="Loading HR/Admin failure audit"
             trackBy="id"

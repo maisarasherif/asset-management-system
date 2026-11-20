@@ -83,11 +83,37 @@ func (q *Queries) ClaimNotificationDelivery(ctx context.Context, arg ClaimNotifi
 
 const countCertificateNotificationDeliveries = `-- name: CountCertificateNotificationDeliveries :one
 SELECT COUNT(*)
-FROM notification_deliveries
+FROM notification_deliveries nd
+LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
+LEFT JOIN components comp ON comp.component_id = cert.component_id
+LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
+LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
+LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
+WHERE strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, cert.display_id, cert.certificate_name, comp.name, cert_asset.name, maintenance_asset.name, ame.display_id, nd.external_id)), lower($1::text)) > 0
+  AND ($2::text = '' OR lower(nd.source_type) = lower($2))
+  AND ($3::text = '' OR lower(nd.channel) = lower($3))
+  AND ($4::text = '' OR lower(nd.status) = lower($4))
 `
 
-func (q *Queries) CountCertificateNotificationDeliveries(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countCertificateNotificationDeliveries)
+type CountCertificateNotificationDeliveriesParams struct {
+	SearchText    string `json:"search_text"`
+	FilterSource  string `json:"filter_source"`
+	FilterChannel string `json:"filter_channel"`
+	FilterStatus  string `json:"filter_status"`
+}
+
+func (q *Queries) CountCertificateNotificationDeliveries(ctx context.Context, arg CountCertificateNotificationDeliveriesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificateNotificationDeliveries,
+		arg.SearchText,
+		arg.FilterSource,
+		arg.FilterChannel,
+		arg.FilterStatus,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -95,12 +121,38 @@ func (q *Queries) CountCertificateNotificationDeliveries(ctx context.Context) (i
 
 const countCertificateNotificationDeliveryFailures = `-- name: CountCertificateNotificationDeliveryFailures :one
 SELECT COUNT(*)
-FROM notification_deliveries
-WHERE status = 'FAILED'
+FROM notification_deliveries nd
+LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
+LEFT JOIN components comp ON comp.component_id = cert.component_id
+LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
+LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
+LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
+WHERE nd.status = 'FAILED'
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, cert.display_id, cert.certificate_name, comp.name, cert_asset.name, maintenance_asset.name, ame.display_id, nd.error_message)), lower($1::text)) > 0
+  AND ($2::text = '' OR lower(nd.source_type) = lower($2))
+  AND ($3::text = '' OR lower(nd.channel) = lower($3))
+  AND ($4::text = '' OR lower(nd.status) = lower($4))
 `
 
-func (q *Queries) CountCertificateNotificationDeliveryFailures(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countCertificateNotificationDeliveryFailures)
+type CountCertificateNotificationDeliveryFailuresParams struct {
+	SearchText    string `json:"search_text"`
+	FilterSource  string `json:"filter_source"`
+	FilterChannel string `json:"filter_channel"`
+	FilterStatus  string `json:"filter_status"`
+}
+
+func (q *Queries) CountCertificateNotificationDeliveryFailures(ctx context.Context, arg CountCertificateNotificationDeliveryFailuresParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificateNotificationDeliveryFailures,
+		arg.SearchText,
+		arg.FilterSource,
+		arg.FilterChannel,
+		arg.FilterStatus,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -108,12 +160,34 @@ func (q *Queries) CountCertificateNotificationDeliveryFailures(ctx context.Conte
 
 const countHRAdminNotificationDeliveries = `-- name: CountHRAdminNotificationDeliveries :one
 SELECT COUNT(*)
-FROM notification_deliveries
-WHERE source_type = 'hr_admin_compliance_expiry'
+FROM notification_deliveries nd
+LEFT JOIN compliance_records hrcr ON hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN compliance_record_versions crv ON crv.record_id = hrcr.record_id AND crv.is_current
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
+WHERE nd.source_type = 'hr_admin_compliance_expiry'
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, nd.external_id)), lower($1::text)) > 0
+  AND ($2::text = '' OR lower(nd.source_type) = lower($2))
+  AND ($3::text = '' OR lower(nd.channel) = lower($3))
+  AND ($4::text = '' OR lower(nd.status) = lower($4))
 `
 
-func (q *Queries) CountHRAdminNotificationDeliveries(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countHRAdminNotificationDeliveries)
+type CountHRAdminNotificationDeliveriesParams struct {
+	SearchText    string `json:"search_text"`
+	FilterSource  string `json:"filter_source"`
+	FilterChannel string `json:"filter_channel"`
+	FilterStatus  string `json:"filter_status"`
+}
+
+func (q *Queries) CountHRAdminNotificationDeliveries(ctx context.Context, arg CountHRAdminNotificationDeliveriesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countHRAdminNotificationDeliveries,
+		arg.SearchText,
+		arg.FilterSource,
+		arg.FilterChannel,
+		arg.FilterStatus,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -121,13 +195,35 @@ func (q *Queries) CountHRAdminNotificationDeliveries(ctx context.Context) (int64
 
 const countHRAdminNotificationDeliveryFailures = `-- name: CountHRAdminNotificationDeliveryFailures :one
 SELECT COUNT(*)
-FROM notification_deliveries
-WHERE source_type = 'hr_admin_compliance_expiry'
-  AND status = 'FAILED'
+FROM notification_deliveries nd
+LEFT JOIN compliance_records hrcr ON hrcr.record_id = nd.source_id
+LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
+LEFT JOIN compliance_record_versions crv ON crv.record_id = hrcr.record_id AND crv.is_current
+LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
+LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
+LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
+WHERE nd.source_type = 'hr_admin_compliance_expiry'
+  AND nd.status = 'FAILED'
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, nd.error_message)), lower($1::text)) > 0
+  AND ($2::text = '' OR lower(nd.source_type) = lower($2))
+  AND ($3::text = '' OR lower(nd.channel) = lower($3))
+  AND ($4::text = '' OR lower(nd.status) = lower($4))
 `
 
-func (q *Queries) CountHRAdminNotificationDeliveryFailures(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countHRAdminNotificationDeliveryFailures)
+type CountHRAdminNotificationDeliveryFailuresParams struct {
+	SearchText    string `json:"search_text"`
+	FilterSource  string `json:"filter_source"`
+	FilterChannel string `json:"filter_channel"`
+	FilterStatus  string `json:"filter_status"`
+}
+
+func (q *Queries) CountHRAdminNotificationDeliveryFailures(ctx context.Context, arg CountHRAdminNotificationDeliveryFailuresParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countHRAdminNotificationDeliveryFailures,
+		arg.SearchText,
+		arg.FilterSource,
+		arg.FilterChannel,
+		arg.FilterStatus,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -207,13 +303,21 @@ LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_ty
 LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id = hrcr.subject_id
 LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
 LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
-ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC
+WHERE strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, cert.display_id, cert.certificate_name, comp.name, cert_asset.name, maintenance_asset.name, ame.display_id, nd.external_id)), lower($3::text)) > 0
+  AND ($4::text = '' OR lower(nd.source_type) = lower($4))
+  AND ($5::text = '' OR lower(nd.channel) = lower($5))
+  AND ($6::text = '' OR lower(nd.status) = lower($6))
+ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC, nd.delivery_id
 LIMIT $1 OFFSET $2
 `
 
 type GetCertificateNotificationDeliveriesPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit         int32  `json:"limit"`
+	Offset        int32  `json:"offset"`
+	SearchText    string `json:"search_text"`
+	FilterSource  string `json:"filter_source"`
+	FilterChannel string `json:"filter_channel"`
+	FilterStatus  string `json:"filter_status"`
 }
 
 type GetCertificateNotificationDeliveriesPaginatedRow struct {
@@ -242,7 +346,14 @@ type GetCertificateNotificationDeliveriesPaginatedRow struct {
 }
 
 func (q *Queries) GetCertificateNotificationDeliveriesPaginated(ctx context.Context, arg GetCertificateNotificationDeliveriesPaginatedParams) ([]GetCertificateNotificationDeliveriesPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getCertificateNotificationDeliveriesPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getCertificateNotificationDeliveriesPaginated,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchText,
+		arg.FilterSource,
+		arg.FilterChannel,
+		arg.FilterStatus,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -336,13 +447,21 @@ LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id
 LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
 LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
 WHERE nd.status = 'FAILED'
-ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, cert.display_id, cert.certificate_name, comp.name, cert_asset.name, maintenance_asset.name, ame.display_id, nd.error_message)), lower($3::text)) > 0
+  AND ($4::text = '' OR lower(nd.source_type) = lower($4))
+  AND ($5::text = '' OR lower(nd.channel) = lower($5))
+  AND ($6::text = '' OR lower(nd.status) = lower($6))
+ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC, nd.delivery_id
 LIMIT $1 OFFSET $2
 `
 
 type GetCertificateNotificationDeliveryFailuresPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit         int32  `json:"limit"`
+	Offset        int32  `json:"offset"`
+	SearchText    string `json:"search_text"`
+	FilterSource  string `json:"filter_source"`
+	FilterChannel string `json:"filter_channel"`
+	FilterStatus  string `json:"filter_status"`
 }
 
 type GetCertificateNotificationDeliveryFailuresPaginatedRow struct {
@@ -369,7 +488,14 @@ type GetCertificateNotificationDeliveryFailuresPaginatedRow struct {
 }
 
 func (q *Queries) GetCertificateNotificationDeliveryFailuresPaginated(ctx context.Context, arg GetCertificateNotificationDeliveryFailuresPaginatedParams) ([]GetCertificateNotificationDeliveryFailuresPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getCertificateNotificationDeliveryFailuresPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getCertificateNotificationDeliveryFailuresPaginated,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchText,
+		arg.FilterSource,
+		arg.FilterChannel,
+		arg.FilterStatus,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -449,13 +575,21 @@ LEFT JOIN hr_admin_persons hrp ON hrcr.subject_type = 'PERSON' AND hrp.person_id
 LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle_id = hrcr.subject_id
 LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
 WHERE nd.source_type = 'hr_admin_compliance_expiry'
-ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, nd.external_id)), lower($3::text)) > 0
+  AND ($4::text = '' OR lower(nd.source_type) = lower($4))
+  AND ($5::text = '' OR lower(nd.channel) = lower($5))
+  AND ($6::text = '' OR lower(nd.status) = lower($6))
+ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.created_at) DESC, nd.delivery_id
 LIMIT $1 OFFSET $2
 `
 
 type GetHRAdminNotificationDeliveriesPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit         int32  `json:"limit"`
+	Offset        int32  `json:"offset"`
+	SearchText    string `json:"search_text"`
+	FilterSource  string `json:"filter_source"`
+	FilterChannel string `json:"filter_channel"`
+	FilterStatus  string `json:"filter_status"`
 }
 
 type GetHRAdminNotificationDeliveriesPaginatedRow struct {
@@ -484,7 +618,14 @@ type GetHRAdminNotificationDeliveriesPaginatedRow struct {
 }
 
 func (q *Queries) GetHRAdminNotificationDeliveriesPaginated(ctx context.Context, arg GetHRAdminNotificationDeliveriesPaginatedParams) ([]GetHRAdminNotificationDeliveriesPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getHRAdminNotificationDeliveriesPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getHRAdminNotificationDeliveriesPaginated,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchText,
+		arg.FilterSource,
+		arg.FilterChannel,
+		arg.FilterStatus,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -565,13 +706,21 @@ LEFT JOIN hr_admin_vehicles hrv ON hrcr.subject_type = 'VEHICLE' AND hrv.vehicle
 LEFT JOIN hr_admin_companies hrc ON hrcr.subject_type = 'COMPANY' AND hrc.company_id = hrcr.subject_id
 WHERE nd.source_type = 'hr_admin_compliance_expiry'
   AND nd.status = 'FAILED'
-ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC
+  AND strpos(lower(concat_ws(' ', nd.display_id, nd.source_type, nd.tier, nd.channel, hrcr.display_id, hrcrt.type_name, hrp.full_name, hrv.plate_number, hrc.company_name, nd.error_message)), lower($3::text)) > 0
+  AND ($4::text = '' OR lower(nd.source_type) = lower($4))
+  AND ($5::text = '' OR lower(nd.channel) = lower($5))
+  AND ($6::text = '' OR lower(nd.status) = lower($6))
+ORDER BY COALESCE(nd.failed_at, nd.updated_at) DESC, nd.delivery_id
 LIMIT $1 OFFSET $2
 `
 
 type GetHRAdminNotificationDeliveryFailuresPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit         int32  `json:"limit"`
+	Offset        int32  `json:"offset"`
+	SearchText    string `json:"search_text"`
+	FilterSource  string `json:"filter_source"`
+	FilterChannel string `json:"filter_channel"`
+	FilterStatus  string `json:"filter_status"`
 }
 
 type GetHRAdminNotificationDeliveryFailuresPaginatedRow struct {
@@ -598,7 +747,14 @@ type GetHRAdminNotificationDeliveryFailuresPaginatedRow struct {
 }
 
 func (q *Queries) GetHRAdminNotificationDeliveryFailuresPaginated(ctx context.Context, arg GetHRAdminNotificationDeliveryFailuresPaginatedParams) ([]GetHRAdminNotificationDeliveryFailuresPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getHRAdminNotificationDeliveryFailuresPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getHRAdminNotificationDeliveryFailuresPaginated,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchText,
+		arg.FilterSource,
+		arg.FilterChannel,
+		arg.FilterStatus,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -654,8 +810,14 @@ FROM notification_deliveries nd
 JOIN asset_maintenance_events ame ON ame.maintenance_event_id = nd.source_id
 WHERE nd.source_type = 'routine_maintenance'
   AND ame.asset_id = $1
+  AND ame.maintenance_event_id = ANY($2::uuid[])
 ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.updated_at, nd.created_at) DESC
 `
+
+type GetRoutineMaintenanceNotificationDeliveriesForAssetParams struct {
+	AssetID  uuid.UUID   `json:"asset_id"`
+	EventIds []uuid.UUID `json:"event_ids"`
+}
 
 type GetRoutineMaintenanceNotificationDeliveriesForAssetRow struct {
 	DeliveryID         uuid.UUID  `json:"delivery_id"`
@@ -670,8 +832,8 @@ type GetRoutineMaintenanceNotificationDeliveriesForAssetRow struct {
 	FailedAt           *time.Time `json:"failed_at"`
 }
 
-func (q *Queries) GetRoutineMaintenanceNotificationDeliveriesForAsset(ctx context.Context, assetID uuid.UUID) ([]GetRoutineMaintenanceNotificationDeliveriesForAssetRow, error) {
-	rows, err := q.db.Query(ctx, getRoutineMaintenanceNotificationDeliveriesForAsset, assetID)
+func (q *Queries) GetRoutineMaintenanceNotificationDeliveriesForAsset(ctx context.Context, arg GetRoutineMaintenanceNotificationDeliveriesForAssetParams) ([]GetRoutineMaintenanceNotificationDeliveriesForAssetRow, error) {
+	rows, err := q.db.Query(ctx, getRoutineMaintenanceNotificationDeliveriesForAsset, arg.AssetID, arg.EventIds)
 	if err != nil {
 		return nil, err
 	}

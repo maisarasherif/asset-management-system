@@ -45,3 +45,21 @@ WHERE test_id = sqlc.arg(test_id);
 
 -- name: DeleteTestType :execrows
 DELETE FROM test_types WHERE test_id = $1;
+
+-- name: SearchTestTypes :many
+SELECT
+    test_id,
+    display_id,
+    test_name,
+    validity_duration,
+    requires_renewal,
+    description
+FROM test_types
+WHERE strpos(lower(concat_ws(' ', display_id, test_name, description)), lower(sqlc.arg(search_text)::text)) > 0
+ORDER BY test_name ASC, test_id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+
+-- name: CountSearchTestTypes :one
+SELECT COUNT(*)
+FROM test_types
+WHERE strpos(lower(concat_ws(' ', display_id, test_name, description)), lower(sqlc.arg(search_text)::text)) > 0;

@@ -809,6 +809,22 @@ func TestGeneratedRenewalSignerEligibilityRevalidatesCategoryStatusAndOwnership(
 		assertChoicesFor(path, token, expected...)
 	}
 	assertChoices(h.adminToken, allowed)
+	pagedSigners := func(token, query string) map[string]any {
+		return decodeObject(t, performJSONRequest(t, h.router, token, http.MethodGet, path+"/generated-signers/search?"+query, nil, http.StatusOK))
+	}
+	page := pagedSigners(h.adminToken, "search=examiner&limit=1")
+	assertField(t, objectField(t, page, "meta"), "total", 1)
+	assertField(t, dataArray(t, page)[0], "signer_id", allowed.String())
+	if len(dataArray(t, pagedSigners(h.adminToken, "search=examiner&limit=1&page=2"))) != 0 {
+		t.Fatal("returned a signer after the final page")
+	}
+	unrelated := pagedSigners(h.adminToken, "search=wrong%20category")
+	assertField(t, objectField(t, unrelated, "meta"), "total", 0)
+
+	candidates := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodGet,
+		"/v1/competent-persons/active/search?category_ids="+b.String()+"&search=examiner&limit=1", nil, http.StatusOK))
+	assertField(t, objectField(t, candidates, "meta"), "total", 1)
+	assertField(t, dataArray(t, candidates)[0], "competent_person_id", wrong.String())
 	assertChoices(adminToken)
 	if _, err := manager.AssignCategory(ctx, actor, admin, &a); err != nil {
 		t.Fatal(err)
@@ -820,6 +836,9 @@ func TestGeneratedRenewalSignerEligibilityRevalidatesCategoryStatusAndOwnership(
 		t.Fatal(err)
 	}
 	assertChoices(adminToken, admin)
+	ownPage := pagedSigners(adminToken, "search=examiner&limit=1")
+	assertField(t, objectField(t, ownPage, "meta"), "total", 1)
+	assertField(t, dataArray(t, ownPage)[0], "signer_id", admin.String())
 	resolved := decodeObject(t, performJSONRequest(t, h.router, adminToken, http.MethodPost, path+"/generated-signer", map[string]any{}, http.StatusOK))
 	assertField(t, resolved, "owner_kind", "ACCOUNT")
 	assertField(t, resolved, "full_name", "Own Examiner")

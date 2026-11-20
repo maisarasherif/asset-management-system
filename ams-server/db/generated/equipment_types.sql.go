@@ -13,10 +13,11 @@ import (
 
 const countEquipmentTypes = `-- name: CountEquipmentTypes :one
 SELECT COUNT(*) FROM equipment_types
+WHERE strpos(lower(concat_ws(' ', display_id, equipment_type_name, description)), lower($1::text)) > 0
 `
 
-func (q *Queries) CountEquipmentTypes(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countEquipmentTypes)
+func (q *Queries) CountEquipmentTypes(ctx context.Context, searchText string) (int64, error) {
+	row := q.db.QueryRow(ctx, countEquipmentTypes, searchText)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -105,17 +106,19 @@ SELECT
     created_at,
     updated_at
 FROM equipment_types
-ORDER BY sort_order ASC, created_at ASC
+WHERE strpos(lower(concat_ws(' ', display_id, equipment_type_name, description)), lower($3::text)) > 0
+ORDER BY sort_order ASC, created_at ASC, equipment_type_id
 LIMIT $1 OFFSET $2
 `
 
 type GetAllEquipmentTypesPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
+	SearchText string `json:"search_text"`
 }
 
 func (q *Queries) GetAllEquipmentTypesPaginated(ctx context.Context, arg GetAllEquipmentTypesPaginatedParams) ([]EquipmentType, error) {
-	rows, err := q.db.Query(ctx, getAllEquipmentTypesPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getAllEquipmentTypesPaginated, arg.Limit, arg.Offset, arg.SearchText)
 	if err != nil {
 		return nil, err
 	}

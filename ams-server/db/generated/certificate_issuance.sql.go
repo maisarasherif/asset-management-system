@@ -208,15 +208,43 @@ func (q *Queries) CompleteCertificateIssuance(ctx context.Context, arg CompleteC
 }
 
 const countCertificateHistory = `-- name: CountCertificateHistory :one
-SELECT ((SELECT count(*) FROM certificate_issuances ci WHERE ci.certificate_id = $1)
- + (SELECT count(*) FROM certificate_upload_audit ua WHERE ua.certificate_id = $1 AND ua.issuance_id IS NULL))::BIGINT
+SELECT COUNT(*) FROM (
+ SELECT issuance_id AS history_id, source, state, COALESCE(document_number, '')::TEXT AS document_number,
+ file_name, content_type, issue_date, expiry_date,
+ COALESCE(snapshot->'signer'->>'full_name', '')::TEXT AS signer_name,
+ COALESCE(snapshot->'signer'->>'organization', '')::TEXT AS signer_organization,
+ approved_at AS recorded_at, TRUE AS snapshot_available, actor_id::TEXT AS actor_id,
+ failure_code, cleanup_state, cleanup_failure_code, lease_until,
+ COALESCE(snapshot->'signer'->>'owner_kind', '')::TEXT AS owner_kind,
+ COALESCE(snapshot->'signer'->>'signer_id', '')::TEXT AS signer_id
+ FROM certificate_issuances ci WHERE ci.certificate_id = $1
+ UNION ALL
+ SELECT uuid, 'LEGACY', 'LEGACY', '', file_name, '', NULL::DATE, NULL::DATE,
+ '', '', uploaded_at, FALSE, '', '', 'NONE', '', NULL::TIMESTAMPTZ, '', ''
+ FROM certificate_upload_audit ua WHERE ua.certificate_id = $1 AND ua.issuance_id IS NULL
+) history
+WHERE strpos(lower(concat_ws(' ', document_number, file_name, signer_name, signer_organization)), lower($2::text)) > 0
+  AND ($3::text = '' OR source = $3)
+  AND ($4::text = '' OR state = $4)
 `
 
-func (q *Queries) CountCertificateHistory(ctx context.Context, certificateID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countCertificateHistory, certificateID)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
+type CountCertificateHistoryParams struct {
+	CertificateID uuid.UUID `json:"certificate_id"`
+	SearchText    string    `json:"search_text"`
+	FilterSource  string    `json:"filter_source"`
+	FilterState   string    `json:"filter_state"`
+}
+
+func (q *Queries) CountCertificateHistory(ctx context.Context, arg CountCertificateHistoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCertificateHistory,
+		arg.CertificateID,
+		arg.SearchText,
+		arg.FilterSource,
+		arg.FilterState,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const countCertificateIssuances = `-- name: CountCertificateIssuances :one
@@ -318,11 +346,18 @@ SELECT history_id, source, state, document_number, file_name, content_type, issu
  SELECT uuid, 'LEGACY', 'LEGACY', '', file_name, '', NULL::DATE, NULL::DATE,
  '', '', uploaded_at, FALSE, '', '', 'NONE', '', NULL::TIMESTAMPTZ, '', ''
  FROM certificate_upload_audit ua WHERE ua.certificate_id = $1 AND ua.issuance_id IS NULL
-) history ORDER BY recorded_at DESC, history_id DESC LIMIT $3 OFFSET $2
+) history
+WHERE strpos(lower(concat_ws(' ', document_number, file_name, signer_name, signer_organization)), lower($2::text)) > 0
+  AND ($3::text = '' OR source = $3)
+  AND ($4::text = '' OR state = $4)
+ORDER BY recorded_at DESC, history_id DESC LIMIT $6 OFFSET $5
 `
 
 type GetCertificateHistoryParams struct {
 	CertificateID uuid.UUID `json:"certificate_id"`
+	SearchText    string    `json:"search_text"`
+	FilterSource  string    `json:"filter_source"`
+	FilterState   string    `json:"filter_state"`
 	PageOffset    int32     `json:"page_offset"`
 	PageLimit     int32     `json:"page_limit"`
 }
@@ -350,7 +385,14 @@ type GetCertificateHistoryRow struct {
 }
 
 func (q *Queries) GetCertificateHistory(ctx context.Context, arg GetCertificateHistoryParams) ([]GetCertificateHistoryRow, error) {
-	rows, err := q.db.Query(ctx, getCertificateHistory, arg.CertificateID, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, getCertificateHistory,
+		arg.CertificateID,
+		arg.SearchText,
+		arg.FilterSource,
+		arg.FilterState,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

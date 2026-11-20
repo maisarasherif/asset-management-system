@@ -1,3 +1,6 @@
+import { activeArchived } from "../../components/shared/listFacetOptions";
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
 import {
   Alert,
   Badge,
@@ -14,10 +17,9 @@ import {
   SpaceBetween,
   Table,
   Textarea,
-  type SelectProps,
   type TableProps,
 } from "@cloudscape-design/components";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
@@ -34,7 +36,7 @@ import { formatEventTime } from "./hrAdminDates";
 import { PermanentDeleteModal, type PermanentDeleteTarget } from "./PermanentDeleteModal";
 import { humanizeEnum } from "../../utils/format";
 
-const companyKindOptions: SelectProps.Option[] = [
+const companyKindOptions = [
   "LEGAL_ENTITY",
   "OFFICE",
   "STAFF_HOUSING",
@@ -219,7 +221,7 @@ export function HRAdminCompaniesPage() {
   const hrRole = getProductRole("HR_ADMIN");
   const canWrite = hrRole === "ADMIN" || hrRole === "USER";
   const canArchive = hrRole === "ADMIN";
-  const [filterText, setFilterText] = useState("");
+  const controls = useListControls("", ["status", "company_kind"]);
   const [compactTable, setCompactTable] = useState(() => isCompactViewport());
   const [editor, setEditor] = useState<CompanyEditor>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>(null);
@@ -227,8 +229,9 @@ export function HRAdminCompaniesPage() {
   const [modalError, setModalError] = useState("");
 
   const companiesQuery = useQuery({
-    queryKey: ["hr-admin", "companies"],
-    queryFn: () => listHRAdminCompanies(1, 100),
+    queryKey: ["hr-admin", "companies", controls.query],
+    queryFn: () => listHRAdminCompanies(controls.page, 20, controls.query),
+    placeholderData: keepPreviousData,
   });
 
   useEffect(() => {
@@ -279,26 +282,7 @@ export function HRAdminCompaniesPage() {
     },
   });
 
-  const companies = useMemo(() => companiesQuery.data?.data ?? [], [companiesQuery.data?.data]);
-  const filteredCompanies = useMemo(() => {
-    const query = filterText.trim().toLowerCase();
-    if (!query) {
-      return companies;
-    }
-
-    return companies.filter((company) =>
-      [
-        company.company_code,
-        company.company_name,
-        humanizeEnum(company.company_kind),
-        company.location,
-        company.status,
-        company.display_id,
-      ]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(query))
-    );
-  }, [companies, filterText]);
+  const filteredCompanies = companiesQuery.data?.data ?? [];
 
   const columns = useMemo<TableProps.ColumnDefinition<HRAdminCompany>[]>(() => {
     const editCompany = (item: HRAdminCompany) => {
@@ -512,12 +496,7 @@ export function HRAdminCompaniesPage() {
         ) : null}
         <Container>
           <SpaceBetween size="m">
-            <Input
-              ariaLabel="Search companies"
-              placeholder="Search by name, code, kind, location, or status"
-              value={filterText}
-              onChange={({ detail }) => setFilterText(detail.value)}
-            />
+            <ListFilters controls={controls} label="Search companies" facets={[{ key: "status", label: "Status", options: activeArchived }, { key: "company_kind", label: "Company kind", options: companyKindOptions }]} />
             <Table
               columnDefinitions={columns}
               empty={
@@ -541,15 +520,16 @@ export function HRAdminCompaniesPage() {
                     ) : undefined
                   }
                   description={
-                    filterText
+                    controls.hasCriteria
                       ? "No company records match the current search."
                       : "Create the first company before adding office, license, tenancy, or staff housing records."
                   }
-                  title={filterText ? "No matching companies" : "No companies yet"}
+                  title={controls.hasCriteria ? "No matching companies" : "No companies yet"}
                 />
               }
-              header={<Header counter={`(${filteredCompanies.length})`}>Company records</Header>}
+              header={<Header counter={`(${companiesQuery.data?.meta.total ?? 0})`}>Company records</Header>}
               items={filteredCompanies}
+              pagination={<ListPagination controls={controls} meta={companiesQuery.data?.meta} />}
               trackBy="company_id"
             />
           </SpaceBetween>

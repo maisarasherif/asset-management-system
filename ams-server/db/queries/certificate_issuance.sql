@@ -89,11 +89,31 @@ SELECT * FROM (
  SELECT uuid, 'LEGACY', 'LEGACY', '', file_name, '', NULL::DATE, NULL::DATE,
  '', '', uploaded_at, FALSE, '', '', 'NONE', '', NULL::TIMESTAMPTZ, '', ''
  FROM certificate_upload_audit ua WHERE ua.certificate_id = sqlc.arg(certificate_id) AND ua.issuance_id IS NULL
-) history ORDER BY recorded_at DESC, history_id DESC LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+) history
+WHERE strpos(lower(concat_ws(' ', document_number, file_name, signer_name, signer_organization)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_source)::text = '' OR source = sqlc.arg(filter_source))
+  AND (sqlc.arg(filter_state)::text = '' OR state = sqlc.arg(filter_state))
+ORDER BY recorded_at DESC, history_id DESC LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountCertificateHistory :one
-SELECT ((SELECT count(*) FROM certificate_issuances ci WHERE ci.certificate_id = $1)
- + (SELECT count(*) FROM certificate_upload_audit ua WHERE ua.certificate_id = $1 AND ua.issuance_id IS NULL))::BIGINT;
+SELECT COUNT(*) FROM (
+ SELECT issuance_id AS history_id, source, state, COALESCE(document_number, '')::TEXT AS document_number,
+ file_name, content_type, issue_date, expiry_date,
+ COALESCE(snapshot->'signer'->>'full_name', '')::TEXT AS signer_name,
+ COALESCE(snapshot->'signer'->>'organization', '')::TEXT AS signer_organization,
+ approved_at AS recorded_at, TRUE AS snapshot_available, actor_id::TEXT AS actor_id,
+ failure_code, cleanup_state, cleanup_failure_code, lease_until,
+ COALESCE(snapshot->'signer'->>'owner_kind', '')::TEXT AS owner_kind,
+ COALESCE(snapshot->'signer'->>'signer_id', '')::TEXT AS signer_id
+ FROM certificate_issuances ci WHERE ci.certificate_id = sqlc.arg(certificate_id)
+ UNION ALL
+ SELECT uuid, 'LEGACY', 'LEGACY', '', file_name, '', NULL::DATE, NULL::DATE,
+ '', '', uploaded_at, FALSE, '', '', 'NONE', '', NULL::TIMESTAMPTZ, '', ''
+ FROM certificate_upload_audit ua WHERE ua.certificate_id = sqlc.arg(certificate_id) AND ua.issuance_id IS NULL
+) history
+WHERE strpos(lower(concat_ws(' ', document_number, file_name, signer_name, signer_organization)), lower(sqlc.arg(search_text)::text)) > 0
+  AND (sqlc.arg(filter_source)::text = '' OR source = sqlc.arg(filter_source))
+  AND (sqlc.arg(filter_state)::text = '' OR state = sqlc.arg(filter_state));
 
 -- name: LockIssuanceForRecovery :one
 SELECT * FROM certificate_issuances WHERE issuance_id = $1 AND certificate_id = $2 FOR UPDATE;

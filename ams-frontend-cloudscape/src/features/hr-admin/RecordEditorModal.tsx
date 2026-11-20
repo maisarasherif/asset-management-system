@@ -12,16 +12,15 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppDatePicker } from "../../components/shared/AppDatePicker";
+import type { SelectProps } from "@cloudscape-design/components/select";
+import { PagedSelect } from "../../components/shared/PagedSelect";
 import { Select } from "../../components/shared/OptimizedSelect";
-import { createComplianceRecord, renewComplianceRecord, uploadComplianceRecordDocument } from "../../lib/api/ams";
+import { createComplianceRecord, listComplianceRecordTypes, listHRAdminPersons, listHRAdminVehicles, listHRAdminCompanies, renewComplianceRecord, uploadComplianceRecordDocument } from "../../lib/api/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type {
   ComplianceRecordType,
   ComplianceRecordInput,
   ComplianceRecordVersionInput,
-  HRAdminCompany,
-  HRAdminPerson,
-  HRAdminVehicle,
   HRAdminSubjectType,
 } from "../../types/ams";
 import { humanizeEnum, toIsoDate } from "../../utils/format";
@@ -64,49 +63,26 @@ function calculatedExpiryDate(
   return date.toISOString().slice(0, 10);
 }
 
-function subjectOptions(
-  subjectType: HRAdminSubjectType,
-  people: HRAdminPerson[],
-  vehicles: HRAdminVehicle[],
-  companies: HRAdminCompany[]
-) {
+async function loadSubjects(subjectType: HRAdminSubjectType, page: number, search: string) {
+  const filters = { status: "ACTIVE", search };
   if (subjectType === "PERSON") {
-    return people
-      .filter((person) => person.status === "ACTIVE")
-      .map((person) => ({
-        label: person.full_name,
-        value: person.person_id,
-        description: person.person_code || person.display_id,
-      }));
+    const result = await listHRAdminPersons(page, 20, filters);
+    return { ...result, data: result.data.map((item) => ({ label: item.full_name, value: item.person_id, description: item.person_code || item.display_id })) };
   }
   if (subjectType === "VEHICLE") {
-    return vehicles
-      .filter((vehicle) => vehicle.status === "ACTIVE")
-      .map((vehicle) => ({
-        label: vehicle.plate_number,
-        value: vehicle.vehicle_id,
-        description: [vehicle.make, vehicle.model].filter(Boolean).join(" ") || vehicle.display_id,
-      }));
+    const result = await listHRAdminVehicles(page, 20, filters);
+    return { ...result, data: result.data.map((item) => ({ label: item.plate_number, value: item.vehicle_id, description: [item.make, item.model].filter(Boolean).join(" ") || item.display_id })) };
   }
-  return companies
-    .filter((company) => company.status === "ACTIVE")
-    .map((company) => ({
-      label: company.company_name,
-      value: company.company_id,
-      description: company.company_code || humanizeEnum(company.company_kind),
-    }));
+  const result = await listHRAdminCompanies(page, 20, filters);
+  return { ...result, data: result.data.map((item) => ({ label: item.company_name, value: item.company_id, description: item.company_code || item.display_id })) };
 }
 
-function recordTypeOptions(subjectType: HRAdminSubjectType, recordTypes: ComplianceRecordType[]) {
-  return recordTypes
-    .filter((recordType) => recordType.active && recordType.subject_type === subjectType)
-    .map((recordType) => ({
-      label: recordType.type_name,
-      value: recordType.record_type_id,
-      description: `${humanizeEnum(recordType.renewal_behavior)}${
-        recordType.requires_document ? " - document required" : ""
-      }`,
-    }));
+function recordTypeOption(item: ComplianceRecordType) {
+  return {
+    label: item.type_name,
+    value: item.record_type_id,
+    description: humanizeEnum(item.renewal_behavior) + (item.requires_document ? " - document required" : ""),
+  };
 }
 
 function toVersionInput(editor: NonNullable<RecordEditor>): ComplianceRecordVersionInput {
@@ -139,18 +115,10 @@ function complianceDocumentTooLargeMessage() {
 export function RecordEditorModal({
   editor,
   onSaved,
-  people = [],
-  recordTypes = [],
-  vehicles = [],
-  companies = [],
   onDismiss,
 }: {
   editor: RecordEditor;
   onSaved: () => void;
-  people?: HRAdminPerson[];
-  recordTypes?: ComplianceRecordType[];
-  vehicles?: HRAdminVehicle[];
-  companies?: HRAdminCompany[];
   onDismiss: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -161,12 +129,9 @@ export function RecordEditorModal({
   const [expiryDateError, setExpiryDateError] = useState("");
 
   const subjectType = draft?.subject_type ?? "PERSON";
-  const availableSubjects = subjectOptions(subjectType, people, vehicles, companies);
-  const availableRecordTypes = recordTypeOptions(subjectType, recordTypes);
-  const selectedSubject = availableSubjects.find((option) => option.value === draft?.subject_id) ?? null;
-  const selectedRecordType = availableRecordTypes.find((option) => option.value === draft?.record_type_id) ?? null;
-  const currentRecordType =
-    draft?.policy ?? recordTypes.find((recordType) => recordType.record_type_id === draft?.record_type_id);
+  const [selectedSubject, setSelectedSubject] = useState<SelectProps.Option | null>(null);
+  const [selectedRecordType, setSelectedRecordType] = useState<SelectProps.Option | null>(null);
+  const currentRecordType = draft?.policy;
 
   const saveRecordMutation = useMutation<unknown, Error, NonNullable<RecordEditor>>({
     mutationFn: async (draft) => {
@@ -201,7 +166,7 @@ export function RecordEditorModal({
   });
 
   const saveRecord = (draft: NonNullable<RecordEditor>) => {
-    const recordType = draft.policy ?? recordTypes.find((item) => item.record_type_id === draft.record_type_id);
+    const recordType = draft.policy;
     if (draft.mode === "create" && !draft.subject_id) {
       setModalError("Choose the subject for this compliance record.");
       return;
@@ -236,8 +201,7 @@ export function RecordEditorModal({
       if (!current) {
         return current;
       }
-      const recordType =
-        current.policy ?? recordTypes.find((item) => item.record_type_id === current.record_type_id);
+      const recordType = current.policy;
       const nextExpiry = calculatedExpiryDate(issueDate, recordType);
       return {
         ...current,
@@ -279,7 +243,9 @@ export function RecordEditorModal({
                 ariaLabel="Subject type"
                 options={SUBJECT_TYPE_OPTIONS}
                 selectedOption={SUBJECT_TYPE_OPTIONS.find((option) => option.value === subjectType) ?? null}
-                onChange={({ detail }) =>
+                onChange={({ detail }) => {
+                  setSelectedSubject(null);
+                  setSelectedRecordType(null);
                   setDraft(
                     (current) =>
                       current && {
@@ -287,46 +253,38 @@ export function RecordEditorModal({
                         subject_type: (detail.selectedOption.value as HRAdminSubjectType) || "PERSON",
                         subject_id: "",
                         record_type_id: "",
+                        policy: undefined,
                         expiry_date: "",
                       }
-                  )
-                }
+                  );
+                }}
               />
             </FormField>
             <FormField label="Subject" constraintText="Required">
-              <Select
-                ariaLabel="Subject"
-                empty="No active subjects for this subject type"
-                options={availableSubjects}
-                selectedOption={selectedSubject}
-                onChange={({ detail }) =>
-                  setDraft((current) => current && { ...current, subject_id: detail.selectedOption.value || "" })
-                }
-              />
+              <PagedSelect key={subjectType} label="Subject" selected={selectedSubject}
+                queryKey={["hr-admin", "record-subject-options", subjectType]}
+                load={(page, search) => loadSubjects(subjectType, page, search)}
+                getOption={(option) => option}
+                onSelect={(option) => {
+                  setSelectedSubject(option);
+                  setDraft((current) => current && { ...current, subject_id: option?.value ?? "" });
+                }} />
             </FormField>
             <FormField label="Record type" constraintText="Required">
-              <Select
-                ariaLabel="Record type"
-                empty="No active record types for this subject type"
-                options={availableRecordTypes}
-                selectedOption={selectedRecordType}
-                onChange={({ detail }) => {
-                  const recordTypeId = detail.selectedOption.value || "";
-                  const recordType = recordTypes.find((item) => item.record_type_id === recordTypeId);
-                  setDraft((current) => {
-                    if (!current) {
-                      return current;
-                    }
-                    const nextExpiry = calculatedExpiryDate(current.issue_date, recordType);
-                    return {
-                      ...current,
-                      record_type_id: recordTypeId,
-                      expiry_date:
-                        nextExpiry || (recordType?.renewal_behavior === "ONE_TIME" ? "" : current.expiry_date),
-                    };
+              <PagedSelect key={subjectType} label="Record type" selected={selectedRecordType}
+                queryKey={["hr-admin", "compliance-record-types", "editor", subjectType]}
+                load={(page, search) => listComplianceRecordTypes(page, 20, { search, subject_type: subjectType, status: "ACTIVE" })}
+                getOption={recordTypeOption}
+                onSelect={(option, recordType) => {
+                  setSelectedRecordType(option);
+                  setDraft((current) => current && {
+                    ...current,
+                    record_type_id: option?.value ?? "",
+                    policy: recordType,
+                    expiry_date: calculatedExpiryDate(current.issue_date, recordType)
+                      || (recordType?.renewal_behavior === "ONE_TIME" ? "" : current.expiry_date),
                   });
-                }}
-              />
+                }} />
             </FormField>
           </>
         ) : null}

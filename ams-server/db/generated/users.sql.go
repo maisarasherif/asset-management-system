@@ -14,10 +14,17 @@ import (
 
 const countUserManagementAuditLogs = `-- name: CountUserManagementAuditLogs :one
 SELECT COUNT(*) FROM user_management_audit_logs
+WHERE strpos(lower(concat_ws(' ', actor_email, target_email, action)), lower($1::text)) > 0
+  AND ($2::text = '' OR lower(action) = lower($2))
 `
 
-func (q *Queries) CountUserManagementAuditLogs(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countUserManagementAuditLogs)
+type CountUserManagementAuditLogsParams struct {
+	SearchText   string `json:"search_text"`
+	FilterAction string `json:"filter_action"`
+}
+
+func (q *Queries) CountUserManagementAuditLogs(ctx context.Context, arg CountUserManagementAuditLogsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUserManagementAuditLogs, arg.SearchText, arg.FilterAction)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -25,10 +32,19 @@ func (q *Queries) CountUserManagementAuditLogs(ctx context.Context) (int64, erro
 
 const countUsers = `-- name: CountUsers :one
 SELECT COUNT(*) FROM users
+WHERE strpos(lower(concat_ws(' ', display_id, first_name, last_name, email)), lower($1::text)) > 0
+  AND ($2::text = '' OR lower(role) = lower($2))
+  AND ($3::text = '' OR lower(status) = lower($3))
 `
 
-func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countUsers)
+type CountUsersParams struct {
+	SearchText   string `json:"search_text"`
+	FilterRole   string `json:"filter_role"`
+	FilterStatus string `json:"filter_status"`
+}
+
+func (q *Queries) CountUsers(ctx context.Context, arg CountUsersParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsers, arg.SearchText, arg.FilterRole, arg.FilterStatus)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -219,13 +235,19 @@ SELECT
     created_at,
     updated_at
 FROM users
-ORDER BY created_at DESC
+WHERE strpos(lower(concat_ws(' ', display_id, first_name, last_name, email)), lower($3::text)) > 0
+  AND ($4::text = '' OR lower(role) = lower($4))
+  AND ($5::text = '' OR lower(status) = lower($5))
+ORDER BY created_at DESC, user_id
 LIMIT $1 OFFSET $2
 `
 
 type GetAllUsersPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit        int32  `json:"limit"`
+	Offset       int32  `json:"offset"`
+	SearchText   string `json:"search_text"`
+	FilterRole   string `json:"filter_role"`
+	FilterStatus string `json:"filter_status"`
 }
 
 type GetAllUsersPaginatedRow struct {
@@ -241,7 +263,13 @@ type GetAllUsersPaginatedRow struct {
 }
 
 func (q *Queries) GetAllUsersPaginated(ctx context.Context, arg GetAllUsersPaginatedParams) ([]GetAllUsersPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getAllUsersPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getAllUsersPaginated,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchText,
+		arg.FilterRole,
+		arg.FilterStatus,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -380,17 +408,26 @@ SELECT
     ip_address,
     created_at
 FROM user_management_audit_logs
-ORDER BY created_at DESC
+WHERE strpos(lower(concat_ws(' ', actor_email, target_email, action)), lower($3::text)) > 0
+  AND ($4::text = '' OR lower(action) = lower($4))
+ORDER BY created_at DESC, audit_id
 LIMIT $1 OFFSET $2
 `
 
 type GetUserManagementAuditLogsPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit        int32  `json:"limit"`
+	Offset       int32  `json:"offset"`
+	SearchText   string `json:"search_text"`
+	FilterAction string `json:"filter_action"`
 }
 
 func (q *Queries) GetUserManagementAuditLogsPaginated(ctx context.Context, arg GetUserManagementAuditLogsPaginatedParams) ([]UserManagementAuditLog, error) {
-	rows, err := q.db.Query(ctx, getUserManagementAuditLogsPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getUserManagementAuditLogsPaginated,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchText,
+		arg.FilterAction,
+	)
 	if err != nil {
 		return nil, err
 	}

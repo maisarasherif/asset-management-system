@@ -1,3 +1,4 @@
+import { useTemplateComponentFilters } from "./templateFilters";
 import {
   Alert,
   Badge,
@@ -245,7 +246,7 @@ export function TemplateDetailPage() {
     updateMutation.mutate(draft);
   };
 
-  return renderTemplateDetailPage({
+  return <TemplateDetailView {...{
     categoryMap,
     componentColumns,
     configuredComponents,
@@ -266,7 +267,7 @@ export function TemplateDetailPage() {
     testTypeMap,
     totalTests,
     updatePending: updateMutation.isPending,
-  });
+  }} />;
 }
 
 interface TemplateDetailPageViewProps {
@@ -352,7 +353,7 @@ function TemplateDetailsEditorModal({
   );
 }
 
-function renderTemplateDetailPage({
+function TemplateDetailView({
   categoryMap,
   componentColumns,
   configuredComponents,
@@ -374,6 +375,7 @@ function renderTemplateDetailPage({
   totalTests,
   updatePending,
 }: TemplateDetailPageViewProps) {
+  const filtered = useTemplateComponentFilters(configuredComponents, categoryMap);
   return (
     <>
       <ContentLayout
@@ -454,7 +456,7 @@ function renderTemplateDetailPage({
                     {configuredComponents.length === 0 ? "Configure template" : "Edit configuration"}
                   </Button>
                 }
-                counter={`(${configuredComponents.length})`}
+                counter={`(${filtered.total})`}
                 description="Each row represents a component blueprint that will be created for new assets using this template."
                 variant="h2"
               >
@@ -478,7 +480,10 @@ function renderTemplateDetailPage({
             ) : (
               <Table
                 columnDefinitions={componentColumns}
-                items={configuredComponents}
+                items={filtered.items}
+                empty={<Box>No configured components match this view.</Box>}
+                filter={filtered.filter}
+                pagination={filtered.pagination}
                 trackBy="template_component_id"
                 variant="embedded"
               />
@@ -497,7 +502,7 @@ function renderTemplateDetailPage({
               }
             >
               <div className="template-component-stack">
-                {configuredComponents.map((component) => (
+                {filtered.items.map((component) => (
                   <div key={component.template_component_id} className="template-component-card">
                     <SpaceBetween direction="vertical" size="s">
                       <div className="template-component-card__header">

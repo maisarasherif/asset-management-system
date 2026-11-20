@@ -1,3 +1,6 @@
+import { activeArchived } from "../../components/shared/listFacetOptions";
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
 import {
   Alert,
   Badge,
@@ -15,7 +18,7 @@ import {
   Textarea,
   type TableProps,
 } from "@cloudscape-design/components";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
@@ -213,7 +216,7 @@ export function HRAdminPersonsPage() {
   const hrRole = getProductRole("HR_ADMIN");
   const canWrite = hrRole === "ADMIN" || hrRole === "USER";
   const canArchive = hrRole === "ADMIN";
-  const [filterText, setFilterText] = useState("");
+  const controls = useListControls("", ["status", "department"]);
   const [compactTable, setCompactTable] = useState(() => isCompactViewport());
   const [editor, setEditor] = useState<PersonEditor>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>(null);
@@ -221,8 +224,9 @@ export function HRAdminPersonsPage() {
   const [modalError, setModalError] = useState("");
 
   const peopleQuery = useQuery({
-    queryKey: ["hr-admin", "persons"],
-    queryFn: () => listHRAdminPersons(1, 100),
+    queryKey: ["hr-admin", "persons", controls.query],
+    queryFn: () => listHRAdminPersons(controls.page, 20, controls.query),
+    placeholderData: keepPreviousData,
   });
   const departmentsQuery = useQuery({
     queryKey: ["hr-admin", "departments"],
@@ -277,20 +281,8 @@ export function HRAdminPersonsPage() {
     },
   });
 
-  const people = useMemo(() => peopleQuery.data?.data ?? [], [peopleQuery.data?.data]);
   const departments = useMemo(() => departmentsQuery.data ?? [], [departmentsQuery.data]);
-  const filteredPeople = useMemo(() => {
-    const query = filterText.trim().toLowerCase();
-    if (!query) {
-      return people;
-    }
-    return people.filter((person) =>
-      [person.display_id, person.person_code, person.full_name, person.department, person.role_title, person.status]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [filterText, people]);
+  const filteredPeople = peopleQuery.data?.data ?? [];
 
   const columns = useMemo<TableProps.ColumnDefinition<HRAdminPerson>[]>(() => {
     const editPerson = (item: HRAdminPerson) => {
@@ -510,12 +502,7 @@ export function HRAdminPersonsPage() {
         ) : null}
         <Container>
           <SpaceBetween size="m">
-            <Input
-              ariaLabel="Search persons"
-              placeholder="Search by name, code, department, role, or status"
-              value={filterText}
-              onChange={({ detail }) => setFilterText(detail.value)}
-            />
+            <ListFilters controls={controls} label="Search people" facets={[{ key: "status", label: "Status", options: activeArchived }, { key: "department", label: "Department", options: departments.map((row) => ({ value: row.department_name, label: row.department_name })) }]} />
             <Table
               columnDefinitions={columns}
               empty={
@@ -539,15 +526,16 @@ export function HRAdminPersonsPage() {
                     ) : undefined
                   }
                   description={
-                    filterText
+                    controls.hasCriteria
                       ? "No person records match the current search."
                       : "Create the first person before adding employment, certification, or other responsibility records."
                   }
-                  title={filterText ? "No matching persons" : "No persons yet"}
+                  title={controls.hasCriteria ? "No matching persons" : "No persons yet"}
                 />
               }
-              header={<Header counter={`(${filteredPeople.length})`}>Person records</Header>}
+              header={<Header counter={`(${peopleQuery.data?.meta.total ?? 0})`}>Person records</Header>}
               items={filteredPeople}
+              pagination={<ListPagination controls={controls} meta={peopleQuery.data?.meta} />}
               trackBy="person_id"
             />
           </SpaceBetween>

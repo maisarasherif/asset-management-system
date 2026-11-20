@@ -1,3 +1,9 @@
+import { componentKindFacet } from "../../components/shared/listFacetOptions";
+import { AssetCategoryFilter } from "../../components/shared/AssetComponentFilters";
+import { ListFilters, ListPagination } from "../../components/shared/ListFilters";
+import { useListControls, type ListControls } from "../../components/shared/useListControls";
+import { CertificateListFilters } from "../../components/shared/CertificateListFilters";
+import type { PaginationMeta } from "../../types/ams";
 import {
   Alert,
   Box,
@@ -23,9 +29,10 @@ import {
   getSingleAssetEquipment,
   listAllCatalogScopeCategories,
   listCatalogScopes,
-  listAssetRoutineMaintenance,
-  listAllCertificatesByComponent,
-  listAllComponentsByAsset,
+  searchAssetRoutineMaintenance,
+  listCertificatesByComponent,
+  listComponentsByAsset,
+  getComponent,
   listTestTypes,
   getCertificateDownloadUrl,
 } from "../../lib/api/ams";
@@ -59,6 +66,12 @@ type AssetWorkspaceViewProps = {
   categoryMap: Map<string, string>;
   certificateColumns: TableProps<Certificate>["columnDefinitions"];
   certificateCount: number;
+  certificateControls: ListControls;
+  certificateMeta?: PaginationMeta;
+  componentControls: ListControls;
+  componentMeta?: PaginationMeta;
+  componentError: boolean;
+  componentLoading: boolean;
   certificateItems: Certificate[];
   certificatesError: boolean;
   certificatesLoading: boolean;
@@ -101,13 +114,6 @@ function daysUntil(expiryDate: string | null | undefined) {
   return Math.ceil((expiryStart - todayStart) / DAY_MS);
 }
 
-function certificateRiskRank(certificate: Certificate) {
-  if (certificate.status === "EXPIRED") return 0;
-  if (certificate.status === "EXPIRING_SOON") return 1;
-  if (certificate.status === "PENDING") return 2;
-  return 3;
-}
-
 function certificateTimingLabel(certificate: Certificate) {
   const days = daysUntil(certificate.expiry_date);
 
@@ -126,19 +132,6 @@ function certificateTimingLabel(certificate: Certificate) {
   return `${days} d remaining`;
 }
 
-function sortCertificatesByRisk(certificates: Certificate[]) {
-  return [...certificates].sort((a, b) => {
-    const riskDelta = certificateRiskRank(a) - certificateRiskRank(b);
-    if (riskDelta !== 0) {
-      return riskDelta;
-    }
-
-    const firstExpiry = a.expiry_date ? new Date(a.expiry_date).getTime() : Number.POSITIVE_INFINITY;
-    const secondExpiry = b.expiry_date ? new Date(b.expiry_date).getTime() : Number.POSITIVE_INFINITY;
-    return firstExpiry - secondExpiry;
-  });
-}
-
 export function AssetWorkspacePage() {
   const navigate = useNavigate();
   const { assetId } = useParams();
@@ -154,9 +147,15 @@ export function AssetWorkspacePage() {
     enabled: Boolean(assetId),
   });
 
+  const componentControls = useListControls("components", ["category_id", "component_kind"]);
+  const componentTotal = useQuery({
+    queryKey: ["components", assetId, "normal-count"],
+    queryFn: () => listComponentsByAsset(assetId!, 1, 1, { component_kind: "NORMAL" }),
+    enabled: Boolean(assetId && assetQuery.data?.asset_kind !== "SINGLE_EQUIPMENT"),
+  });
   const componentsQuery = useQuery({
-    queryKey: ["components", assetId],
-    queryFn: () => listAllComponentsByAsset(assetId!),
+    queryKey: ["components", assetId, componentControls.query],
+    queryFn: () => listComponentsByAsset(assetId!, componentControls.page, componentControls.query.limit, componentControls.query),
     enabled: Boolean(assetId),
   });
 
@@ -178,7 +177,7 @@ export function AssetWorkspacePage() {
 
   const maintenanceQuery = useQuery({
     queryKey: ["routine-maintenance", assetId],
-    queryFn: () => listAssetRoutineMaintenance(assetId!),
+    queryFn: () => searchAssetRoutineMaintenance(assetId!, { limit: 1, status: "REQUIRED" }),
     enabled: Boolean(assetId),
   });
 
@@ -191,24 +190,6 @@ export function AssetWorkspacePage() {
     setSelectedAssetId(assetId ?? null);
   }, [assetId, setSelectedAssetId]);
 
-  useEffect(() => {
-    if (!componentsQuery.data || componentsQuery.data.length === 0) {
-      return;
-    }
-
-    const selectedExists = componentsQuery.data.some(
-      (component) => component.component_id === selectedComponentId
-    );
-
-    if (selectedExists) {
-      return;
-    }
-
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set("component", componentsQuery.data[0].component_id);
-    setSearchParams(nextParams, { replace: true });
-  }, [componentsQuery.data, searchParams, selectedComponentId, setSearchParams]);
-
   const isSingleEquipment = assetQuery.data?.asset_kind === "SINGLE_EQUIPMENT";
   const equipmentQuery = useQuery({
     queryKey: ["single-equipment", assetId],
@@ -216,14 +197,38 @@ export function AssetWorkspacePage() {
     enabled: Boolean(assetId && isSingleEquipment),
   });
 
-  const selectedComponent = isSingleEquipment
-    ? componentsQuery.data?.find((component) => component.component_kind === "SELF") ?? null
-    : componentsQuery.data?.find((component) => component.component_id === selectedComponentId) ??
-      null;
+  const selfComponent = useQuery({
+    queryKey: ["components", assetId, "self"],
+    queryFn: () => listComponentsByAsset(assetId!, 1, 1, { component_kind: "SELF" }),
+    enabled: Boolean(assetId && isSingleEquipment),
+  });
+  const componentDetail = useQuery({
+    queryKey: ["component", selectedComponentId],
+    queryFn: () => getComponent(selectedComponentId!),
+    enabled: Boolean(selectedComponentId && !isSingleEquipment),
+    retry: false,
+  });
+  const firstComponentId = componentsQuery.data?.data[0]?.component_id;
+  const unavailableComponent = componentDetail.isError ||
+    (componentDetail.isSuccess && componentDetail.data.asset_id !== assetId);
 
+  useEffect(() => {
+    if (isSingleEquipment || componentControls.hasCriteria || !firstComponentId ||
+      (selectedComponentId && !unavailableComponent) || selectedComponentId === firstComponentId) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("component", firstComponentId);
+    setSearchParams(nextParams, { replace: true, preventScrollReset: true });
+  }, [componentControls.hasCriteria, firstComponentId, isSingleEquipment, searchParams,
+    selectedComponentId, setSearchParams, unavailableComponent]);
+
+  const selectedComponent = isSingleEquipment ? selfComponent.data?.data[0] ?? null :
+    componentDetail.data?.asset_id === assetId ? componentDetail.data ?? null : null;
+
+  const certificateControls = useListControls("certificates", ["status", "test_id"]);
   const certificatesQuery = useQuery({
-    queryKey: ["certificates", selectedComponent?.component_id],
-    queryFn: () => listAllCertificatesByComponent(selectedComponent!.component_id),
+    queryKey: ["certificates", selectedComponent?.component_id, certificateControls.query],
+    queryFn: () => listCertificatesByComponent(selectedComponent!.component_id,
+      certificateControls.page, certificateControls.query.limit, { ...certificateControls.query, sort: "RISK" }),
     enabled: Boolean(selectedComponent?.component_id),
   });
 
@@ -269,7 +274,7 @@ export function AssetWorkspacePage() {
   const groupedComponents = useMemo(() => {
     const sections: ComponentGroupSection[] = [];
 
-    for (const component of componentsQuery.data || []) {
+    for (const component of componentsQuery.data?.data ?? []) {
       if (component.component_kind === "SELF") {
         continue;
       }
@@ -319,7 +324,6 @@ export function AssetWorkspacePage() {
 
   if (
     assetQuery.isLoading ||
-    componentsQuery.isLoading ||
     catalogScopesQuery.isLoading ||
     scopeCategoriesQuery.isLoading ||
     testTypesQuery.isLoading ||
@@ -330,13 +334,11 @@ export function AssetWorkspacePage() {
 
   if (
     assetQuery.isError ||
-    componentsQuery.isError ||
     catalogScopesQuery.isError ||
     scopeCategoriesQuery.isError ||
     testTypesQuery.isError ||
     (isSingleEquipment && equipmentQuery.isError) ||
     !assetQuery.data ||
-    !componentsQuery.data ||
     !testTypesQuery.data
   ) {
     return (
@@ -435,19 +437,10 @@ export function AssetWorkspacePage() {
     },
   ];
 
-  const componentCount = isSingleEquipment
-    ? 1
-    : componentsQuery.data.filter((component) => component.component_kind !== "SELF").length;
-  const certificateItems = sortCertificatesByRisk(
-    (certificatesQuery.data || []).filter(
-      (certificate): certificate is Certificate =>
-        Boolean(certificate && certificate.certificate_id)
-    )
-  );
-  const certificateCount = certificateItems.length;
-  const maintenanceEvents = maintenanceQuery.data || [];
-  const openMaintenanceEvent =
-    maintenanceEvents.find((event) => event.status === "REQUIRED") ?? null;
+  const componentCount = isSingleEquipment ? 1 : componentTotal.data?.meta.total ?? 0;
+  const certificateItems = certificatesQuery.data?.data ?? [];
+  const certificateCount = certificatesQuery.data?.meta.total ?? 0;
+  const openMaintenanceEvent = maintenanceQuery.data?.data[0] ?? null;
   const maintenanceConfigured = assetQuery.data.maintenance_interval_hours > 0;
   const maintenanceRemaining = maintenanceConfigured
     ? assetQuery.data.next_maintenance_due_hours - assetQuery.data.working_hours
@@ -455,6 +448,7 @@ export function AssetWorkspacePage() {
   const handleComponentSelect = (componentId: string) => {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("component", componentId);
+    nextParams.delete("certificates.page");
     setSearchParams(nextParams);
   };
 
@@ -465,6 +459,12 @@ export function AssetWorkspacePage() {
       categoryMap={categoryMap}
       certificateColumns={certificateColumns}
       certificateCount={certificateCount}
+      certificateControls={certificateControls}
+      certificateMeta={certificatesQuery.data?.meta}
+      componentControls={componentControls}
+      componentMeta={componentsQuery.data?.meta}
+      componentError={componentsQuery.isError}
+      componentLoading={componentsQuery.isPending}
       certificateItems={certificateItems}
       certificatesError={certificatesQuery.isError}
       certificatesLoading={certificatesQuery.isLoading}
@@ -563,8 +563,7 @@ function AssetWorkspaceHeader({
 }
 
 function ComponentNavigation(props: AssetWorkspaceViewProps) {
-  const { assetId, componentCount, groupedComponents, isAdmin, navigate } = props;
-
+  const { assetId, componentCount, groupedComponents, isAdmin, navigate, componentControls } = props;
   return (
     <div className="asset-workspace-grid__nav">
       <Container
@@ -578,7 +577,13 @@ function ComponentNavigation(props: AssetWorkspaceViewProps) {
           </Header>
         }
       >
-        {componentCount === 0 ? (
+        <ListFilters controls={componentControls} label="Search components" facets={[componentKindFacet]}>
+          <AssetCategoryFilter assetId={assetId} controls={componentControls} />
+        </ListFilters>
+        {props.componentError ? <Alert type="error">Components could not be loaded.</Alert> :
+          props.componentLoading ? <Box>Loading components…</Box> :
+          groupedComponents.length === 0 && componentControls.hasCriteria ? <Box>No components match these filters.</Box> :
+          componentCount === 0 ? (
           <PageEmpty
             action={
               isAdmin ? (
@@ -599,6 +604,7 @@ function ComponentNavigation(props: AssetWorkspaceViewProps) {
             </div>
           </div>
         )}
+        <ListPagination controls={componentControls} meta={props.componentMeta} />
       </Container>
     </div>
   );
@@ -887,12 +893,14 @@ function CertificatesPanel(props: AssetWorkspaceViewProps) {
     <Container header={<CertificatesHeader {...props} />}>
       {!props.selectedComponent ? (
         <NoCertificateContext isSingleEquipment={props.isSingleEquipment} />
-      ) : props.certificatesError ? (
-        <Alert type="error">Certificate data could not be loaded for this component.</Alert>
       ) : (
         <Table
           columnDefinitions={props.certificateColumns}
-          empty={props.isSingleEquipment ? SINGLE_EQUIPMENT_CERTIFICATE_EMPTY : COMPONENT_CERTIFICATE_EMPTY}
+          empty={props.certificatesError
+            ? <Alert type="error">Certificate data could not be loaded.</Alert>
+            : props.isSingleEquipment ? SINGLE_EQUIPMENT_CERTIFICATE_EMPTY : COMPONENT_CERTIFICATE_EMPTY}
+          filter={<CertificateListFilters controls={props.certificateControls} />}
+          pagination={<ListPagination controls={props.certificateControls} meta={props.certificateMeta} />}
           items={props.certificateItems}
           loading={props.certificatesLoading}
           loadingText="Loading certificates"

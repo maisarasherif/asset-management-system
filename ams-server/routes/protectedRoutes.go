@@ -28,9 +28,11 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	admin.PUT("/user/:user_id/password", controller.AdminUpdateUserPassword(pool))
 	admin.DELETE("/user/:user_id", controller.DeleteUser(pool))
 	admin.GET("/user-management-audit-logs", controller.GetUserManagementAuditLogs(pool))
+	admin.GET("/projects/search", controller.SearchProjects(pool))
 	admin.GET("/projects", controller.GetProjects(pool))
 	admin.POST("/project", controller.AddProject(pool))
 	admin.PUT("/project/:project_id", controller.UpdateProject(pool))
+	admin.GET("/user-project-access/search", controller.SearchUserProjectAccess(pool))
 	admin.GET("/user-project-access", controller.GetUserProjectAccess(pool))
 	admin.POST("/user/:user_id/project-access", controller.UpsertUserProjectAccess(pool))
 	admin.PUT("/user-project-access/:access_id", controller.UpdateUserProjectAccess(pool))
@@ -133,6 +135,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	account.GET("/user/:user_id/signing-profile", controller.GetAdminSigningProfile(pool))
 	account.PUT("/user/:user_id/signing-profile", controller.AssignAdminSigningCategory(pool))
 	account.GET("/certificate/:certificate_id/generated-signers", controller.ListGeneratedSigners(pool))
+	account.GET("/certificate/:certificate_id/generated-signers/search", controller.SearchGeneratedSigners(pool))
 	account.POST("/certificate/:certificate_id/generated-signer", controller.ResolveGeneratedSigner(pool))
 	account.POST("/certificate/:certificate_id/generated-preview", controller.PrepareCertificatePreview(pool))
 	account.POST("/certificate/:certificate_id/generated-preview/validate", controller.ValidateCertificatePreview(pool))
@@ -165,6 +168,9 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	protected.GET("/asset/:asset_id", controller.GetAsset(pool))
 	protected.GET("/asset/:asset_id/single-equipment", controller.GetSingleAssetEquipment(pool))
 	protected.GET("/asset/:asset_id/routine-maintenance", controller.GetAssetRoutineMaintenance(pool))
+	protected.GET("/asset/:asset_id/certificate-summary", controller.GetAssetCertificateSummary(pool, false))
+	protected.GET("/asset/:asset_id/component-categories", controller.SearchAssetComponentCategories(pool, false))
+	protected.GET("/asset/:asset_id/routine-maintenance/events", controller.SearchAssetRoutineMaintenance(pool))
 	protected.GET("/asset/:asset_id/component-certificate-sheet", controller.GetAssetComponentCertificateSheetPDF(pool))
 
 	// Component Routes
@@ -193,6 +199,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	protected.GET("/main-category/:main_category_id", controller.GetMainCategory(pool))
 
 	// Catalog Scope Routes
+	protected.GET("/catalog-scopes/search", controller.SearchCatalogScopes(pool))
 	protected.GET("/catalog-scopes", controller.GetCatalogScopes(pool))
 	protected.GET("/catalog-scopes/default", controller.GetDefaultCatalogScope(pool))
 	protected.GET("/catalog-scope/:scope_id/main-categories", controller.GetCatalogScopeMainCategories(pool))
@@ -204,6 +211,7 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	protected.GET("/categories/main/:main_category_id", controller.GetCategoriesByMainCategory(pool))
 
 	// Test Type Routes
+	protected.GET("/test-types/search", controller.SearchTestTypes(pool))
 	protected.GET("/test-types", controller.GetTestTypes(pool))
 
 	// Equipment Type Routes
@@ -213,8 +221,10 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	// Competency Routes
 	protected.GET("/competency-categories/active", controller.GetActiveCompetencyCategories(pool))
 	protected.GET("/competent-persons/active", controller.GetActiveCompetentPersons(pool))
+	protected.GET("/competent-persons/active/search", controller.SearchActiveCompetentPersons(pool))
 
 	// Template Routes
+	protected.GET("/templates/search", controller.SearchAssetTemplates(pool))
 	protected.GET("/templates", controller.GetTemplates(pool))
 	protected.GET("/template/:template_id", controller.GetTemplate(pool))
 	protected.GET("/template/:template_id/configuration", controller.GetTemplateConfiguration(pool))
@@ -227,6 +237,11 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 
 	client.GET("/assets", controller.GetClientAssets(pool))
 	client.GET("/asset/:asset_id", controller.GetClientAsset(pool))
+	client.GET("/asset/:asset_id/certificate-summary", controller.GetAssetCertificateSummary(pool, true))
+	client.GET("/asset/:asset_id/component-categories", controller.SearchAssetComponentCategories(pool, true))
+	client.GET("/asset/:asset_id/certificates", controller.SearchClientAssetCertificates(pool))
+	client.GET("/asset/:asset_id/components", controller.SearchClientAssetComponents(pool))
+	client.GET("/asset/:asset_id/certificate-types", controller.SearchClientAssetCertificateTypes(pool))
 	client.GET("/certificate/:certificate_id/file", controller.GetClientCertificateFile(pool))
 
 	scheduler := router.Group("/v1")

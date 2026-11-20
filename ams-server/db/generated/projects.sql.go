@@ -12,6 +12,55 @@ import (
 	"github.com/google/uuid"
 )
 
+const countSearchProjects = `-- name: CountSearchProjects :one
+SELECT COUNT(*)
+FROM projects
+WHERE strpos(lower(concat_ws(' ', project_name, description)), lower($1::text)) > 0
+  AND ($2::text = '' OR status = $2)
+`
+
+type CountSearchProjectsParams struct {
+	SearchText   string `json:"search_text"`
+	FilterStatus string `json:"filter_status"`
+}
+
+func (q *Queries) CountSearchProjects(ctx context.Context, arg CountSearchProjectsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchProjects, arg.SearchText, arg.FilterStatus)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchUserProjectAccess = `-- name: CountSearchUserProjectAccess :one
+SELECT COUNT(*)
+FROM user_project_access upa
+JOIN users u ON u.user_id = upa.user_id
+JOIN projects p ON p.project_id = upa.project_id
+WHERE strpos(lower(concat_ws(' ', u.first_name, u.last_name, u.email, p.project_name)), lower($1::text)) > 0
+  AND ($2::uuid = '00000000-0000-0000-0000-000000000000' OR upa.project_id = $2)
+  AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR upa.user_id = $3)
+  AND ($4::text = '' OR upa.status = $4)
+`
+
+type CountSearchUserProjectAccessParams struct {
+	SearchText    string    `json:"search_text"`
+	FilterProject uuid.UUID `json:"filter_project"`
+	FilterUser    uuid.UUID `json:"filter_user"`
+	FilterStatus  string    `json:"filter_status"`
+}
+
+func (q *Queries) CountSearchUserProjectAccess(ctx context.Context, arg CountSearchUserProjectAccessParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchUserProjectAccess,
+		arg.SearchText,
+		arg.FilterProject,
+		arg.FilterUser,
+		arg.FilterStatus,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createProject = `-- name: CreateProject :one
 INSERT INTO projects (
     project_name,
@@ -269,6 +318,149 @@ func (q *Queries) ListUserProjectAccessByUser(ctx context.Context, userID uuid.U
 		if err := rows.Scan(
 			&i.AccessID,
 			&i.UserID,
+			&i.ProjectID,
+			&i.ProjectName,
+			&i.ProjectStatus,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchProjects = `-- name: SearchProjects :many
+SELECT
+    project_id,
+    project_name,
+    description,
+    status,
+    created_at,
+    updated_at
+FROM projects
+WHERE strpos(lower(concat_ws(' ', project_name, description)), lower($1::text)) > 0
+  AND ($2::text = '' OR status = $2)
+ORDER BY project_name ASC, project_id
+LIMIT $4 OFFSET $3
+`
+
+type SearchProjectsParams struct {
+	SearchText   string `json:"search_text"`
+	FilterStatus string `json:"filter_status"`
+	PageOffset   int32  `json:"page_offset"`
+	PageLimit    int32  `json:"page_limit"`
+}
+
+func (q *Queries) SearchProjects(ctx context.Context, arg SearchProjectsParams) ([]Project, error) {
+	rows, err := q.db.Query(ctx, searchProjects,
+		arg.SearchText,
+		arg.FilterStatus,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Project
+	for rows.Next() {
+		var i Project
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.ProjectName,
+			&i.Description,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchUserProjectAccess = `-- name: SearchUserProjectAccess :many
+SELECT
+    upa.access_id,
+    upa.user_id,
+    COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), u.email)::text AS user_name,
+    u.email AS user_email,
+    u.role AS user_role,
+    u.status AS user_status,
+    upa.project_id,
+    p.project_name,
+    p.status AS project_status,
+    upa.status,
+    upa.created_at,
+    upa.updated_at
+FROM user_project_access upa
+JOIN users u ON u.user_id = upa.user_id
+JOIN projects p ON p.project_id = upa.project_id
+WHERE strpos(lower(concat_ws(' ', u.first_name, u.last_name, u.email, p.project_name)), lower($1::text)) > 0
+  AND ($2::uuid = '00000000-0000-0000-0000-000000000000' OR upa.project_id = $2)
+  AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR upa.user_id = $3)
+  AND ($4::text = '' OR upa.status = $4)
+ORDER BY p.project_name ASC, user_name ASC, upa.access_id
+LIMIT $6 OFFSET $5
+`
+
+type SearchUserProjectAccessParams struct {
+	SearchText    string    `json:"search_text"`
+	FilterProject uuid.UUID `json:"filter_project"`
+	FilterUser    uuid.UUID `json:"filter_user"`
+	FilterStatus  string    `json:"filter_status"`
+	PageOffset    int32     `json:"page_offset"`
+	PageLimit     int32     `json:"page_limit"`
+}
+
+type SearchUserProjectAccessRow struct {
+	AccessID      uuid.UUID `json:"access_id"`
+	UserID        uuid.UUID `json:"user_id"`
+	UserName      string    `json:"user_name"`
+	UserEmail     string    `json:"user_email"`
+	UserRole      string    `json:"user_role"`
+	UserStatus    string    `json:"user_status"`
+	ProjectID     uuid.UUID `json:"project_id"`
+	ProjectName   string    `json:"project_name"`
+	ProjectStatus string    `json:"project_status"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+func (q *Queries) SearchUserProjectAccess(ctx context.Context, arg SearchUserProjectAccessParams) ([]SearchUserProjectAccessRow, error) {
+	rows, err := q.db.Query(ctx, searchUserProjectAccess,
+		arg.SearchText,
+		arg.FilterProject,
+		arg.FilterUser,
+		arg.FilterStatus,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchUserProjectAccessRow
+	for rows.Next() {
+		var i SearchUserProjectAccessRow
+		if err := rows.Scan(
+			&i.AccessID,
+			&i.UserID,
+			&i.UserName,
+			&i.UserEmail,
+			&i.UserRole,
+			&i.UserStatus,
 			&i.ProjectID,
 			&i.ProjectName,
 			&i.ProjectStatus,

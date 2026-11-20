@@ -1,3 +1,5 @@
+import { ListFilters, ListPagination, TextFacet, type ListFacet } from "../../components/shared/ListFilters";
+import { useListControls } from "../../components/shared/useListControls";
 import {
   Alert,
   Badge,
@@ -26,9 +28,10 @@ import {
   createUser,
   deleteUser,
   listAllCompetencyCategories,
-  listAllCompetentPersons,
-  listAllUserManagementAuditLogs,
-  listAllUsers,
+  listUserManagementAuditLogs,
+  listCompetencyCategories,
+  listCompetentPersons,
+  listUsers,
   updateCompetencyCategory,
   updateCompetentPerson,
   updateUser,
@@ -441,20 +444,10 @@ function CompetentPersonEditorModal({
 }
 
 function useAdministrationData() {
-  const usersQuery = useQuery({ queryKey: ["users", "all"], queryFn: listAllUsers });
-  const auditLogsQuery = useQuery({
-    queryKey: ["user-management-audit-logs", "all"],
-    queryFn: listAllUserManagementAuditLogs,
-  });
   const categoriesQuery = useQuery({
     queryKey: ["competency-categories", "all"],
     queryFn: listAllCompetencyCategories,
   });
-  const peopleQuery = useQuery({
-    queryKey: ["competent-persons", "all"],
-    queryFn: listAllCompetentPersons,
-  });
-
   const categoryOptions = useMemo<SelectProps.Option[]>(
     () =>
       (categoriesQuery.data || []).map((category) => ({
@@ -465,7 +458,7 @@ function useAdministrationData() {
     [categoriesQuery.data]
   );
 
-  return { auditLogsQuery, categoriesQuery, categoryOptions, peopleQuery, usersQuery };
+  return { categoriesQuery, categoryOptions };
 }
 
 type UseAdministrationMutationsOptions = {
@@ -817,7 +810,7 @@ export function AdministrationPage() {
   const [passwordChangeTarget, setPasswordChangeTarget] = useState<PasswordChangeTarget>(null);
   const [modalError, setModalError] = useState("");
 
-  const { auditLogsQuery, categoriesQuery, categoryOptions, peopleQuery, usersQuery } =
+  const { categoriesQuery, categoryOptions } =
     useAdministrationData();
   const mutations = useAdministrationMutations({
     onCategorySaved: () => {
@@ -902,20 +895,8 @@ export function AdministrationPage() {
     },
   });
 
-  const loading =
-    usersQuery.isLoading ||
-    auditLogsQuery.isLoading ||
-    categoriesQuery.isLoading ||
-    peopleQuery.isLoading;
-  const failed =
-    usersQuery.isError ||
-    auditLogsQuery.isError ||
-    categoriesQuery.isError ||
-    peopleQuery.isError ||
-    !usersQuery.data ||
-    !auditLogsQuery.data ||
-    !categoriesQuery.data ||
-    !peopleQuery.data;
+  const loading = categoriesQuery.isLoading;
+  const failed = categoriesQuery.isError || !categoriesQuery.data;
 
   if (loading) {
     return <PageLoading>{"Loading administration data\u2026"}</PageLoading>;
@@ -926,10 +907,7 @@ export function AdministrationPage() {
       <PageError
         description="The administration workspace could not be loaded."
         onRetry={() => {
-	          void usersQuery.refetch();
-	          void auditLogsQuery.refetch();
 	          void categoriesQuery.refetch();
-          void peopleQuery.refetch();
         }}
       />
     );
@@ -986,7 +964,6 @@ export function AdministrationPage() {
   return (
     <AdministrationView
       auditColumns={auditColumns}
-      auditLogs={auditLogsQuery.data}
       canManageSuperAdmins={canManageSuperAdmins}
       categories={categoriesQuery.data}
       categoryColumns={categoryColumns}
@@ -1058,7 +1035,6 @@ export function AdministrationPage() {
       onSaveUser={saveUser}
       passwordChangeLoading={mutations.changeUserPasswordMutation.isPending}
       passwordChangeTarget={passwordChangeTarget}
-      people={peopleQuery.data}
       personColumns={personColumns}
       personEditor={personEditor}
       saveCategoryLoading={mutations.saveCategoryMutation.isPending}
@@ -1066,14 +1042,12 @@ export function AdministrationPage() {
       saveUserLoading={mutations.saveUserMutation.isPending}
       userColumns={userColumns}
       userEditor={userEditor}
-      users={usersQuery.data}
     />
   );
 }
 
 type AdministrationViewProps = {
   auditColumns: TableProps<UserManagementAuditLog>["columnDefinitions"];
-  auditLogs: UserManagementAuditLog[];
   canManageSuperAdmins: boolean;
   categories: CompetencyCategory[];
   categoryColumns: TableProps<CompetencyCategory>["columnDefinitions"];
@@ -1097,7 +1071,6 @@ type AdministrationViewProps = {
   onSaveUser: (editor: NonNullable<UserEditor>) => void;
   passwordChangeLoading: boolean;
   passwordChangeTarget: PasswordChangeTarget;
-  people: CompetentPerson[];
   personColumns: TableProps<CompetentPerson>["columnDefinitions"];
   personEditor: CompetentPersonEditor;
   saveCategoryLoading: boolean;
@@ -1105,12 +1078,10 @@ type AdministrationViewProps = {
   saveUserLoading: boolean;
   userColumns: TableProps<UserAccount>["columnDefinitions"];
   userEditor: UserEditor;
-  users: UserAccount[];
 };
 
 function AdministrationView({
   auditColumns,
-  auditLogs,
   canManageSuperAdmins,
   categories,
   categoryColumns,
@@ -1134,7 +1105,6 @@ function AdministrationView({
   onSaveUser,
   passwordChangeLoading,
   passwordChangeTarget,
-  people,
   personColumns,
   personEditor,
   saveCategoryLoading,
@@ -1142,8 +1112,37 @@ function AdministrationView({
   saveUserLoading,
   userColumns,
   userEditor,
-  users,
 }: AdministrationViewProps) {
+  const userControls = useListControls("users", ["role", "status"]);
+  const auditControls = useListControls("audit", ["action"]);
+  const personControls = useListControls("people", ["status", "competency_category_id"]);
+  const categoryControls = useListControls("categories", ["status"]);
+  const listedUsers = useQuery({
+    queryKey: ["users", userControls.query],
+    queryFn: () => listUsers(userControls.page, userControls.query.limit, userControls.query),
+  });
+  const listedAudit = useQuery({
+    queryKey: ["user-management-audit-logs", auditControls.query],
+    queryFn: () => listUserManagementAuditLogs(auditControls.page, auditControls.query.limit, auditControls.query),
+  });
+  const listedPeople = useQuery({
+    queryKey: ["competent-persons", personControls.query],
+    queryFn: () => listCompetentPersons(personControls.page, personControls.query.limit, personControls.query),
+  });
+  const listedCategories = useQuery({
+    queryKey: ["competency-categories", categoryControls.query],
+    queryFn: () => listCompetencyCategories(categoryControls.page, categoryControls.query.limit, categoryControls.query),
+  });
+  const roleFacet: ListFacet = { key: "role", label: "Role", options: ROLE_OPTIONS.map(({ label, value }) => ({ label: label ?? "", value: value ?? "" })) };
+  const userStatusFacet: ListFacet = { key: "status", label: "Status", options: [
+    { value: "ACTIVE", label: "Active" }, { value: "SUSPENDED", label: "Suspended" },
+  ] };
+  const activityFacet: ListFacet = { key: "status", label: "Activity", options: [
+    { value: "ACTIVE", label: "Active" }, { value: "INACTIVE", label: "Inactive" },
+  ] };
+  const categoryFacet: ListFacet = { key: "competency_category_id", label: "Competency category", options:
+    categoryOptions.map(({ label, value }) => ({ label: label ?? "", value: value ?? "" })),
+  };
   const layoutHeader = useMemo(
     () => (
       <Header
@@ -1170,12 +1169,17 @@ function AdministrationView({
     <>
       <ContentLayout header={layoutHeader}>
         <SpaceBetween direction="vertical" size="l">
-          {canManageSuperAdmins ? <SignerManagementSettings users={users} people={people} categories={categories} /> : null}
+          {canManageSuperAdmins ? <SignerManagementSettings /> : null}
           <AdminTableSection
             actionText="Create user"
             columnDefinitions={userColumns}
             emptyText="No users are available."
-            items={users}
+            items={listedUsers.data?.data ?? []}
+            total={listedUsers.data?.meta.total ?? 0}
+            loading={listedUsers.isPending}
+            failed={listedUsers.isError}
+            filter={<ListFilters controls={userControls} label="Search users" facets={[roleFacet, userStatusFacet]} />}
+            pagination={<ListPagination controls={userControls} meta={listedUsers.data?.meta} />}
             onAction={onCreateUser}
             title="Users"
             trackBy="user_id"
@@ -1184,7 +1188,15 @@ function AdministrationView({
           <AdminTableSection
             columnDefinitions={auditColumns}
             emptyText="No user management audit events are available."
-            items={auditLogs}
+            items={listedAudit.data?.data ?? []}
+            total={listedAudit.data?.meta.total ?? 0}
+            loading={listedAudit.isPending}
+            failed={listedAudit.isError}
+            filter={<ListFilters controls={auditControls} label="Search audit events">
+              <TextFacet key={auditControls.filters.action} label="Action" value={auditControls.filters.action}
+                onApply={(action) => auditControls.setFilters({ action })} />
+            </ListFilters>}
+            pagination={<ListPagination controls={auditControls} meta={listedAudit.data?.meta} />}
             title="User Management Audit"
             trackBy="audit_id"
           />
@@ -1194,7 +1206,12 @@ function AdministrationView({
             actionText="Create competent person"
             columnDefinitions={personColumns}
             emptyText="No competent persons are available."
-            items={people}
+            items={listedPeople.data?.data ?? []}
+            total={listedPeople.data?.meta.total ?? 0}
+            loading={listedPeople.isPending}
+            failed={listedPeople.isError}
+            filter={<ListFilters controls={personControls} label="Search competent persons" facets={[activityFacet, categoryFacet]} />}
+            pagination={<ListPagination controls={personControls} meta={listedPeople.data?.meta} />}
             onAction={onCreatePerson}
             title="Competent Persons"
             trackBy="competent_person_id"
@@ -1204,7 +1221,12 @@ function AdministrationView({
             actionText="Create competency category"
             columnDefinitions={categoryColumns}
             emptyText="No competency categories are available."
-            items={categories}
+            items={listedCategories.data?.data ?? []}
+            total={listedCategories.data?.meta.total ?? 0}
+            loading={listedCategories.isPending}
+            failed={listedCategories.isError}
+            filter={<ListFilters controls={categoryControls} label="Search competency categories" facets={[activityFacet]} />}
+            pagination={<ListPagination controls={categoryControls} meta={listedCategories.data?.meta} />}
             onAction={onCreateCategory}
             title="Competency Categories"
             trackBy="competency_category_id"
@@ -1266,6 +1288,11 @@ type AdminTableSectionProps<T> = {
   columnDefinitions: TableProps<T>["columnDefinitions"];
   emptyText: string;
   items: T[];
+  total: number;
+  loading: boolean;
+  failed: boolean;
+  filter: React.ReactNode;
+  pagination: React.ReactNode;
   onAction?: () => void;
   title: string;
   trackBy: keyof T & string;
@@ -1277,6 +1304,11 @@ function AdminTableSection<T>({
   columnDefinitions,
   emptyText,
   items,
+  total,
+  loading,
+  failed,
+  filter,
+  pagination,
   onAction,
   title,
   trackBy,
@@ -1286,12 +1318,12 @@ function AdminTableSection<T>({
       <AdminTableHeader
         actionDisabled={actionDisabled}
         actionText={actionText}
-        count={items.length}
+        count={total}
         onAction={onAction}
         title={title}
       />
     ),
-    [actionDisabled, actionText, items.length, onAction, title]
+    [actionDisabled, actionText, total, onAction, title]
   );
   const empty = useMemo(() => <Box color="text-body-secondary">{emptyText}</Box>, [emptyText]);
 
@@ -1299,8 +1331,12 @@ function AdminTableSection<T>({
     <Container header={header}>
       <Table
         columnDefinitions={columnDefinitions}
-        empty={empty}
+        empty={failed ? <Alert type="error">This list could not be loaded.</Alert> : empty}
         items={items}
+        loading={loading}
+        loadingText="Loading results"
+        filter={filter}
+        pagination={pagination}
         trackBy={trackBy}
         variant="embedded"
       />

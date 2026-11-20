@@ -702,6 +702,106 @@
       ]
     },
     {
+      "name": "Client certificate filters apply to scoped rows and totals",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "url": "{{baseUrl}}/client/asset/{{asset_id}}/certificates?component_id={{component_id}}&status=VALID&limit=1"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Client certificate filters apply to scoped rows and totals\", function () {",
+              "  pm.response.to.have.status(200);",
+              "  const result = pm.response.json();",
+              "  pm.expect(result.meta.total).to.eql(1);",
+              "  pm.expect(result.data).to.have.length(1);",
+              "  pm.expect(result.data[0].certificate_id).to.eql(pm.collectionVariables.get('certificate_id'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Client certificate search returns no matches",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "url": "{{baseUrl}}/client/asset/{{asset_id}}/certificates?search=zz-regression-no-match&limit=1"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Client certificate search returns no matches\", function () {",
+              "  pm.response.to.have.status(200);",
+              "  const result = pm.response.json();",
+              "  pm.expect(result.meta.total).to.eql(0);",
+              "  pm.expect(result.data).to.deep.eql([]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Client summary retains full certificate totals",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "url": "{{baseUrl}}/client/asset/{{asset_id}}/certificate-summary"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Client summary retains full certificate totals\", function () {",
+              "  pm.response.to.have.status(200);",
+              "  const result = pm.response.json();",
+              "  pm.expect(result.certificate_count).to.eql(1);",
+              "  pm.expect(result.valid).to.eql(1);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "14 Client Cannot Use Staff Asset API",
       "request": {
         "auth": {
@@ -818,6 +918,66 @@
               "  pm.response.to.have.status(200);",
               "  const body = pm.response.json();",
               "  pm.expect(body.data).to.be.an('array').with.length(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Suspended access cannot search certificates",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "url": "{{baseUrl}}/client/asset/{{asset_id}}/certificates?status=VALID"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Suspended access cannot search certificates\", function () {",
+              "  pm.response.to.have.status(404);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Suspended access cannot read certificate totals",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "url": "{{baseUrl}}/client/asset/{{asset_id}}/certificate-summary"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Suspended access cannot read certificate totals\", function () {",
+              "  pm.response.to.have.status(404);",
               "});"
             ]
           }

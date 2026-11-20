@@ -11,6 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
+const countSearchTestTypes = `-- name: CountSearchTestTypes :one
+SELECT COUNT(*)
+FROM test_types
+WHERE strpos(lower(concat_ws(' ', display_id, test_name, description)), lower($1::text)) > 0
+`
+
+func (q *Queries) CountSearchTestTypes(ctx context.Context, searchText string) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchTestTypes, searchText)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTestType = `-- name: CreateTestType :one
 INSERT INTO test_types (display_id, test_name, validity_duration, requires_renewal, description)
 VALUES (allocate_display_id('test_types.display_id', 'test_types'::REGCLASS), $1, $2, $3, $4)
@@ -179,6 +192,62 @@ func (q *Queries) GetTestTypeByID(ctx context.Context, testID uuid.UUID) (GetTes
 		&i.Description,
 	)
 	return i, err
+}
+
+const searchTestTypes = `-- name: SearchTestTypes :many
+SELECT
+    test_id,
+    display_id,
+    test_name,
+    validity_duration,
+    requires_renewal,
+    description
+FROM test_types
+WHERE strpos(lower(concat_ws(' ', display_id, test_name, description)), lower($1::text)) > 0
+ORDER BY test_name ASC, test_id
+LIMIT $3 OFFSET $2
+`
+
+type SearchTestTypesParams struct {
+	SearchText string `json:"search_text"`
+	PageOffset int32  `json:"page_offset"`
+	PageLimit  int32  `json:"page_limit"`
+}
+
+type SearchTestTypesRow struct {
+	TestID           uuid.UUID `json:"test_id"`
+	DisplayID        string    `json:"display_id"`
+	TestName         string    `json:"test_name"`
+	ValidityDuration *int32    `json:"validity_duration"`
+	RequiresRenewal  bool      `json:"requires_renewal"`
+	Description      string    `json:"description"`
+}
+
+func (q *Queries) SearchTestTypes(ctx context.Context, arg SearchTestTypesParams) ([]SearchTestTypesRow, error) {
+	rows, err := q.db.Query(ctx, searchTestTypes, arg.SearchText, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchTestTypesRow
+	for rows.Next() {
+		var i SearchTestTypesRow
+		if err := rows.Scan(
+			&i.TestID,
+			&i.DisplayID,
+			&i.TestName,
+			&i.ValidityDuration,
+			&i.RequiresRenewal,
+			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateTestType = `-- name: UpdateTestType :execrows

@@ -1,3 +1,6 @@
+import { ListFilters, ListPagination, type ListFacet } from "../../components/shared/ListFilters";
+import { useListControls, type ListControls } from "../../components/shared/useListControls";
+import { PagedSelect } from "../../components/shared/PagedSelect";
 import {
   Alert,
   Badge,
@@ -16,23 +19,24 @@ import {
   type TableProps,
 } from "@cloudscape-design/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Select } from "../../components/shared/OptimizedSelect";
-import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { TableCellActions, TableCellText } from "../../components/shared/TableCells";
 import {
   createProject,
   deleteUserProjectAccess,
-  listAllUsers,
-  listProjects,
-  listUserProjectAccess,
+  listUsers,
+  searchProjects,
+  searchUserProjectAccess,
   updateProject,
   updateUserProjectAccess,
   upsertUserProjectAccess,
 } from "../../lib/api/ams";
 import type {
   Project,
+  PaginationMeta,
   ProjectAccessStatus,
+  UserAccount,
   ProjectStatus,
   UserProjectAccess,
 } from "../../types/ams";
@@ -66,6 +70,18 @@ const ACCESS_STATUS_OPTIONS: SelectProps.Option[] = [
   { label: "Active", value: "ACTIVE" },
   { label: "Suspended", value: "SUSPENDED" },
 ];
+
+function clientOption(user: UserAccount): SelectProps.Option {
+  return {
+    label: [user.first_name, user.last_name].join(" ").trim() || user.email,
+    value: user.user_id,
+    description: user.email,
+  };
+}
+
+function projectOption(project: Project): SelectProps.Option {
+  return { label: project.project_name, value: project.project_id, description: humanizeEnum(project.status) };
+}
 
 function statusBadge(status: string) {
   return (
@@ -176,9 +192,12 @@ function AccessEditorModal({
     setDraft(editor);
   }, [editor]);
 
-  const selectedClient = clientOptions.find((option) => option.value === draft?.user_id) ?? null;
-  const selectedProject =
-    projectOptions.find((option) => option.value === draft?.project_id) ?? null;
+  const [selectedClient, setSelectedClient] = useState(
+    () => clientOptions.find((option) => option.value === editor?.user_id) ?? null
+  );
+  const [selectedProject, setSelectedProject] = useState(
+    () => projectOptions.find((option) => option.value === editor?.project_id) ?? null
+  );
   const selectedStatus =
     ACCESS_STATUS_OPTIONS.find((option) => option.value === draft?.status) ??
     ACCESS_STATUS_OPTIONS[0];
@@ -200,24 +219,20 @@ function AccessEditorModal({
       <SpaceBetween direction="vertical" size="l">
         {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
         <FormField label="Client user">
-          <Select
-            options={clientOptions}
-            placeholder="Select client"
-            selectedOption={selectedClient}
-            onChange={({ detail }) =>
-              setDraft((current) => current && { ...current, user_id: detail.selectedOption.value || "" })
-            }
-          />
+          <PagedSelect label="Client user" queryKey={["users", "client-picker"]}
+            load={(page, search) => listUsers(page, 20, { search, role: "CLIENT" })}
+            getOption={clientOption} selected={selectedClient} onSelect={(option) => {
+              setSelectedClient(option);
+              setDraft((current) => current && { ...current, user_id: option?.value ?? "" });
+            }} />
         </FormField>
         <FormField label="Project">
-          <Select
-            options={projectOptions}
-            placeholder="Select project"
-            selectedOption={selectedProject}
-            onChange={({ detail }) =>
-              setDraft((current) => current && { ...current, project_id: detail.selectedOption.value || "" })
-            }
-          />
+          <PagedSelect label="Project" queryKey={["projects", "picker"]}
+            load={(page, search) => searchProjects({ page, search, limit: 20 })}
+            getOption={projectOption} selected={selectedProject} onSelect={(option) => {
+              setSelectedProject(option);
+              setDraft((current) => current && { ...current, project_id: option?.value ?? "" });
+            }} />
         </FormField>
         <FormField label="Access status">
           <Select
@@ -246,35 +261,26 @@ export function ClientAccessPage() {
   const [accessEditor, setAccessEditor] = useState<AccessEditor>(null);
   const [modalError, setModalError] = useState("");
 
-  const usersQuery = useQuery({ queryKey: ["users", "all"], queryFn: listAllUsers });
-  const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects });
-  const accessQuery = useQuery({
-    queryKey: ["user-project-access"],
-    queryFn: listUserProjectAccess,
+  const projectControls = useListControls("projects", ["status"]);
+  const accessControls = useListControls("access", ["status", "project_id", "user_id"]);
+  const usersQuery = useQuery({
+    queryKey: ["users", "client-default"],
+    queryFn: () => listUsers(1, 1, { role: "CLIENT" }),
   });
-
-  const clientUsers = useMemo(
-    () => (usersQuery.data || []).filter((user) => user.role === "CLIENT"),
-    [usersQuery.data]
-  );
-  const clientOptions = useMemo<SelectProps.Option[]>(
-    () =>
-      clientUsers.map((user) => ({
-        label: `${user.first_name} ${user.last_name}`.trim() || user.email,
-        value: user.user_id,
-        description: `${user.email} - ${humanizeEnum(user.status)}`,
-      })),
-    [clientUsers]
-  );
-  const projectOptions = useMemo<SelectProps.Option[]>(
-    () =>
-      (projectsQuery.data || []).map((project) => ({
-        label: project.project_name,
-        value: project.project_id,
-        description: humanizeEnum(project.status),
-      })),
-    [projectsQuery.data]
-  );
+  const defaultProjects = useQuery({
+    queryKey: ["projects", "default"],
+    queryFn: () => searchProjects({ page: 1, limit: 1 }),
+  });
+  const projectsQuery = useQuery({
+    queryKey: ["projects", projectControls.query],
+    queryFn: () => searchProjects(projectControls.query),
+  });
+  const accessQuery = useQuery({
+    queryKey: ["user-project-access", accessControls.query],
+    queryFn: () => searchUserProjectAccess(accessControls.query),
+  });
+  const clientOptions = (usersQuery.data?.data ?? []).map(clientOption);
+  const projectOptions = (defaultProjects.data?.data ?? []).map(projectOption);
 
   const saveProjectMutation = useMutation<unknown, Error, NonNullable<ProjectEditor>>({
     mutationFn: (editor: NonNullable<ProjectEditor>) => {
@@ -354,32 +360,6 @@ export function ClientAccessPage() {
       error("Access removal failed", mutationError.message);
     },
   });
-
-  const loading = usersQuery.isLoading || projectsQuery.isLoading || accessQuery.isLoading;
-  const failed =
-    usersQuery.isError ||
-    projectsQuery.isError ||
-    accessQuery.isError ||
-    !usersQuery.data ||
-    !projectsQuery.data ||
-    !accessQuery.data;
-
-  if (loading) {
-    return <PageLoading>{"Loading client access controls\u2026"}</PageLoading>;
-  }
-
-  if (failed) {
-    return (
-      <PageError
-        description="Client access controls could not be loaded."
-        onRetry={() => {
-          void usersQuery.refetch();
-          void projectsQuery.refetch();
-          void accessQuery.refetch();
-        }}
-      />
-    );
-  }
 
   const projectColumns: TableProps<Project>["columnDefinitions"] = [
     {
@@ -507,7 +487,11 @@ export function ClientAccessPage() {
   return renderClientAccessPage({
     accessColumns,
     accessEditor,
-    accessItems: accessQuery.data,
+    accessItems: accessQuery.data?.data ?? [],
+    accessControls,
+    accessMeta: accessQuery.data?.meta,
+    accessListPending: accessQuery.isPending,
+    accessListFailed: accessQuery.isError,
     accessLoading: saveAccessMutation.isPending,
     clientOptions,
     modalError,
@@ -540,7 +524,11 @@ export function ClientAccessPage() {
     onSaveProject: saveProject,
     projectColumns,
     projectEditor,
-    projectItems: projectsQuery.data,
+    projectItems: projectsQuery.data?.data ?? [],
+    projectControls,
+    projectMeta: projectsQuery.data?.meta,
+    projectListPending: projectsQuery.isPending,
+    projectListFailed: projectsQuery.isError,
     projectLoading: saveProjectMutation.isPending,
     projectOptions,
   });
@@ -550,6 +538,10 @@ interface ClientAccessPageViewProps {
   accessColumns: TableProps<UserProjectAccess>["columnDefinitions"];
   accessEditor: AccessEditor;
   accessItems: UserProjectAccess[];
+  accessControls: ListControls;
+  accessMeta?: PaginationMeta;
+  accessListPending: boolean;
+  accessListFailed: boolean;
   accessLoading: boolean;
   clientOptions: SelectProps.Option[];
   modalError: string;
@@ -562,6 +554,10 @@ interface ClientAccessPageViewProps {
   projectColumns: TableProps<Project>["columnDefinitions"];
   projectEditor: ProjectEditor;
   projectItems: Project[];
+  projectControls: ListControls;
+  projectMeta?: PaginationMeta;
+  projectListPending: boolean;
+  projectListFailed: boolean;
   projectLoading: boolean;
   projectOptions: SelectProps.Option[];
 }
@@ -570,6 +566,10 @@ function renderClientAccessPage({
   accessColumns,
   accessEditor,
   accessItems,
+  accessControls,
+  accessMeta,
+  accessListPending,
+  accessListFailed,
   accessLoading,
   clientOptions,
   modalError,
@@ -582,6 +582,10 @@ function renderClientAccessPage({
   projectColumns,
   projectEditor,
   projectItems,
+  projectControls,
+  projectMeta,
+  projectListPending,
+  projectListFailed,
   projectLoading,
   projectOptions,
 }: ClientAccessPageViewProps) {
@@ -606,7 +610,7 @@ function renderClientAccessPage({
                     Create project
                   </Button>
                 }
-                counter={`(${projectItems.length})`}
+                counter={`(${projectMeta?.total ?? 0})`}
                 variant="h2"
               >
                 Projects
@@ -615,8 +619,13 @@ function renderClientAccessPage({
           >
             <Table
               columnDefinitions={projectColumns}
-              empty={<Box color="text-body-secondary">No projects are available.</Box>}
+              empty={<Box color="text-body-secondary">{projectListFailed ? "This list could not be loaded." : "No projects match this view."}</Box>}
               items={projectItems}
+              loading={projectListPending}
+              loadingText="Loading results"
+              filter={<ListFilters controls={projectControls} label="Search projects"
+                facets={[statusFacet(PROJECT_STATUS_OPTIONS)]}></ListFilters>}
+              pagination={<ListPagination controls={projectControls} meta={projectMeta} />}
               trackBy="project_id"
               variant="embedded"
             />
@@ -634,7 +643,7 @@ function renderClientAccessPage({
                     Assign access
                   </Button>
                 }
-                counter={`(${accessItems.length})`}
+                counter={`(${accessMeta?.total ?? 0})`}
                 variant="h2"
               >
                 Client project access
@@ -646,8 +655,15 @@ function renderClientAccessPage({
             ) : null}
             <Table
               columnDefinitions={accessColumns}
-              empty={<Box color="text-body-secondary">No client project access is assigned.</Box>}
+              empty={<Box color="text-body-secondary">{accessListFailed ? "This list could not be loaded." : "No client project access matches this view."}</Box>}
               items={accessItems}
+              loading={accessListPending}
+              loadingText="Loading results"
+              filter={<ListFilters controls={accessControls} label="Search access"
+                facets={[statusFacet(ACCESS_STATUS_OPTIONS)]}>
+                  <AccessFilters controls={accessControls} />
+                </ListFilters>}
+              pagination={<ListPagination controls={accessControls} meta={accessMeta} />}
               trackBy="access_id"
               variant="embedded"
             />
@@ -678,4 +694,32 @@ function renderClientAccessPage({
       />
     </>
   );
+}
+
+
+function statusFacet(options: SelectProps.Option[]): ListFacet {
+  return { key: "status", label: "Status", options: options.map(({ value, label }) => ({
+    value: value ?? "", label: label ?? "",
+  })) };
+}
+
+function AccessFilters({ controls }: { controls: ListControls }) {
+  const [project, setProject] = useState<SelectProps.Option | null>(null);
+  const [client, setClient] = useState<SelectProps.Option | null>(null);
+  const projectId = controls.filters.project_id;
+  const userId = controls.filters.user_id;
+  return <>
+    <FormField label="Project">
+      <PagedSelect label="Project" queryKey={["projects", "picker"]} allLabel="All projects"
+        load={(page, search) => searchProjects({ page, search, limit: 20 })} getOption={projectOption}
+        selected={project?.value === projectId ? project : projectId ? { value: projectId, label: "Selected project" } : null}
+        onSelect={(option) => { setProject(option); controls.setFilters({ project_id: option?.value ?? "" }); }} />
+    </FormField>
+    <FormField label="Client user">
+      <PagedSelect label="Client user" queryKey={["users", "client-picker"]} allLabel="All clients"
+        load={(page, search) => listUsers(page, 20, { search, role: "CLIENT" })} getOption={clientOption}
+        selected={client?.value === userId ? client : userId ? { value: userId, label: "Selected client" } : null}
+        onSelect={(option) => { setClient(option); controls.setFilters({ user_id: option?.value ?? "" }); }} />
+    </FormField>
+  </>;
 }

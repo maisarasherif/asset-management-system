@@ -111,21 +111,38 @@ func (q *Queries) CountCertificateUploadAuditByCompetentPersonID(ctx context.Con
 
 const countCompetencyCategories = `-- name: CountCompetencyCategories :one
 SELECT COUNT(*) FROM competency_categories
+WHERE strpos(lower(concat_ws(' ', category_code, category_name, description)), lower($1::text)) > 0
+  AND ($2::text = '' OR active = ($2 = 'ACTIVE'))
 `
 
-func (q *Queries) CountCompetencyCategories(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countCompetencyCategories)
+type CountCompetencyCategoriesParams struct {
+	SearchText   string `json:"search_text"`
+	FilterStatus string `json:"filter_status"`
+}
+
+func (q *Queries) CountCompetencyCategories(ctx context.Context, arg CountCompetencyCategoriesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCompetencyCategories, arg.SearchText, arg.FilterStatus)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const countCompetentPersons = `-- name: CountCompetentPersons :one
-SELECT COUNT(*) FROM competent_persons
+SELECT COUNT(*) FROM competent_persons cp
+JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
+WHERE strpos(lower(concat_ws(' ', cp.full_name, cp.organization, cc.category_name)), lower($1::text)) > 0
+  AND ($2::text = '' OR cp.active = ($2 = 'ACTIVE'))
+  AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR cp.competency_category_id = $3)
 `
 
-func (q *Queries) CountCompetentPersons(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countCompetentPersons)
+type CountCompetentPersonsParams struct {
+	SearchText     string    `json:"search_text"`
+	FilterStatus   string    `json:"filter_status"`
+	FilterCategory uuid.UUID `json:"filter_category"`
+}
+
+func (q *Queries) CountCompetentPersons(ctx context.Context, arg CountCompetentPersonsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCompetentPersons, arg.SearchText, arg.FilterStatus, arg.FilterCategory)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -139,6 +156,27 @@ WHERE competency_category_id = $1
 
 func (q *Queries) CountCompetentPersonsByCategoryID(ctx context.Context, competencyCategoryID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countCompetentPersonsByCategoryID, competencyCategoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchActiveCompetentPersons = `-- name: CountSearchActiveCompetentPersons :one
+SELECT COUNT(*)
+FROM competent_persons cp
+JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
+WHERE cp.active = TRUE AND cc.active = TRUE
+  AND (cardinality($1::uuid[]) = 0 OR cp.competency_category_id = ANY($1))
+  AND strpos(lower(concat_ws(' ', cp.full_name, cp.organization, cc.category_name)), lower($2::text)) > 0
+`
+
+type CountSearchActiveCompetentPersonsParams struct {
+	CategoryIds []uuid.UUID `json:"category_ids"`
+	SearchText  string      `json:"search_text"`
+}
+
+func (q *Queries) CountSearchActiveCompetentPersons(ctx context.Context, arg CountSearchActiveCompetentPersonsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchActiveCompetentPersons, arg.CategoryIds, arg.SearchText)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -394,17 +432,26 @@ SELECT
     created_at,
     updated_at
 FROM competency_categories
-ORDER BY category_name ASC
+WHERE strpos(lower(concat_ws(' ', category_code, category_name, description)), lower($3::text)) > 0
+  AND ($4::text = '' OR active = ($4 = 'ACTIVE'))
+ORDER BY category_name ASC, competency_category_id
 LIMIT $1 OFFSET $2
 `
 
 type GetAllCompetencyCategoriesPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit        int32  `json:"limit"`
+	Offset       int32  `json:"offset"`
+	SearchText   string `json:"search_text"`
+	FilterStatus string `json:"filter_status"`
 }
 
 func (q *Queries) GetAllCompetencyCategoriesPaginated(ctx context.Context, arg GetAllCompetencyCategoriesPaginatedParams) ([]CompetencyCategory, error) {
-	rows, err := q.db.Query(ctx, getAllCompetencyCategoriesPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getAllCompetencyCategoriesPaginated,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchText,
+		arg.FilterStatus,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -446,13 +493,19 @@ SELECT
     cp.updated_at
 FROM competent_persons cp
 JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
-ORDER BY cp.full_name ASC
+WHERE strpos(lower(concat_ws(' ', cp.full_name, cp.organization, cc.category_name)), lower($3::text)) > 0
+  AND ($4::text = '' OR cp.active = ($4 = 'ACTIVE'))
+  AND ($5::uuid = '00000000-0000-0000-0000-000000000000' OR cp.competency_category_id = $5)
+ORDER BY cp.full_name ASC, cp.competent_person_id
 LIMIT $1 OFFSET $2
 `
 
 type GetAllCompetentPersonsPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit          int32     `json:"limit"`
+	Offset         int32     `json:"offset"`
+	SearchText     string    `json:"search_text"`
+	FilterStatus   string    `json:"filter_status"`
+	FilterCategory uuid.UUID `json:"filter_category"`
 }
 
 type GetAllCompetentPersonsPaginatedRow struct {
@@ -470,7 +523,13 @@ type GetAllCompetentPersonsPaginatedRow struct {
 }
 
 func (q *Queries) GetAllCompetentPersonsPaginated(ctx context.Context, arg GetAllCompetentPersonsPaginatedParams) ([]GetAllCompetentPersonsPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getAllCompetentPersonsPaginated, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getAllCompetentPersonsPaginated,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchText,
+		arg.FilterStatus,
+		arg.FilterCategory,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -666,6 +725,86 @@ func (q *Queries) GetCompetentPersonByID(ctx context.Context, competentPersonID 
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const searchActiveCompetentPersons = `-- name: SearchActiveCompetentPersons :many
+SELECT
+    cp.competent_person_id,
+    cp.full_name,
+    cp.person_type,
+    cp.organization,
+    cp.competency_category_id,
+    cc.category_code AS competency_category_code,
+    cc.category_name AS competency_category_name,
+    cc.description AS competency_category_description,
+    cp.active,
+    cp.created_at,
+    cp.updated_at
+FROM competent_persons cp
+JOIN competency_categories cc ON cc.competency_category_id = cp.competency_category_id
+WHERE cp.active = TRUE AND cc.active = TRUE
+  AND (cardinality($1::uuid[]) = 0 OR cp.competency_category_id = ANY($1))
+  AND strpos(lower(concat_ws(' ', cp.full_name, cp.organization, cc.category_name)), lower($2::text)) > 0
+ORDER BY cp.full_name ASC, cp.competent_person_id
+LIMIT $4 OFFSET $3
+`
+
+type SearchActiveCompetentPersonsParams struct {
+	CategoryIds []uuid.UUID `json:"category_ids"`
+	SearchText  string      `json:"search_text"`
+	PageOffset  int32       `json:"page_offset"`
+	PageLimit   int32       `json:"page_limit"`
+}
+
+type SearchActiveCompetentPersonsRow struct {
+	CompetentPersonID             uuid.UUID `json:"competent_person_id"`
+	FullName                      string    `json:"full_name"`
+	PersonType                    string    `json:"person_type"`
+	Organization                  string    `json:"organization"`
+	CompetencyCategoryID          uuid.UUID `json:"competency_category_id"`
+	CompetencyCategoryCode        string    `json:"competency_category_code"`
+	CompetencyCategoryName        string    `json:"competency_category_name"`
+	CompetencyCategoryDescription string    `json:"competency_category_description"`
+	Active                        bool      `json:"active"`
+	CreatedAt                     time.Time `json:"created_at"`
+	UpdatedAt                     time.Time `json:"updated_at"`
+}
+
+func (q *Queries) SearchActiveCompetentPersons(ctx context.Context, arg SearchActiveCompetentPersonsParams) ([]SearchActiveCompetentPersonsRow, error) {
+	rows, err := q.db.Query(ctx, searchActiveCompetentPersons,
+		arg.CategoryIds,
+		arg.SearchText,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchActiveCompetentPersonsRow
+	for rows.Next() {
+		var i SearchActiveCompetentPersonsRow
+		if err := rows.Scan(
+			&i.CompetentPersonID,
+			&i.FullName,
+			&i.PersonType,
+			&i.Organization,
+			&i.CompetencyCategoryID,
+			&i.CompetencyCategoryCode,
+			&i.CompetencyCategoryName,
+			&i.CompetencyCategoryDescription,
+			&i.Active,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateCompetencyCategory = `-- name: UpdateCompetencyCategory :execrows

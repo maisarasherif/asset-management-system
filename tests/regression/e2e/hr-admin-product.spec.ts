@@ -197,7 +197,12 @@ async function chooseSelectOption(page: Page, label: string, optionName: string 
     label === "Subject"
       ? /^Subject(?! type)/
       : new RegExp(`^${escapeRegExp(label)}(\\s|$)`);
-  await page.getByRole("button", { name: labelPattern }).first().click();
+  const dialog = page.getByRole("dialog");
+  const scope = await dialog.count() ? dialog : page;
+  await scope.getByRole("button", { name: labelPattern }).first().click();
+  if (typeof optionName === "string" && (label === "Subject" || label === "Record type")) {
+    await scope.getByRole("combobox", { name: "Filter options" }).fill(optionName);
+  }
   await page.getByRole("option", { name: optionName }).click();
 }
 
@@ -554,6 +559,19 @@ test.describe("HR/Admin product E2E", () => {
       await archiveDialog.getByRole("button", { name: "Archive record" }).click();
       await expect(page.getByText("Compliance record archived")).toBeVisible();
       await expect(page.getByText("Archived").first()).toBeVisible();
+
+      await page.goto("/hr-admin/record-types?subject_type=VEHICLE");
+      const typeSearch = page.getByRole("searchbox", { name: "Search record types" });
+      await typeSearch.fill(overviewRecordType.type_name);
+      await expect(page.getByRole("row").filter({ hasText: overviewRecordType.type_name })).toHaveCount(0);
+      await expect(page).toHaveURL(/subject_type=VEHICLE/);
+      expect(new URL(page.url()).searchParams.has("search")).toBe(false);
+      await chooseSelectOption(page, "Subject group", "Persons");
+      await expect(page).toHaveURL(/subject_type=PERSON/);
+      await expect(page.getByRole("row").filter({ hasText: overviewRecordType.type_name })).toBeVisible();
+      await page.reload();
+      await expect(page.getByRole("searchbox", { name: "Search record types" })).toHaveValue("");
+      await expect(page).toHaveURL(/subject_type=PERSON/);
 
       await page.goto("/hr-admin/reminder-policy");
       await expect(page.getByRole("heading", { name: "Reminder Policy" })).toBeVisible();
