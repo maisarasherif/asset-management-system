@@ -1613,6 +1613,12 @@
                   "  pm.expect(groups.map(g => g.subject_type)).to.have.members(['PERSON','VEHICLE','COMPANY']);",
                   "  pm.expect(groups.every(g => g.subject_count > 0)).to.be.true;",
                   "  pm.expect(refresh_after_ms).to.be.within(1,86400000);",
+                  "  for (const group of groups) {",
+                  "    for (const key of ['valid_count', 'expiring_soon_count', 'expired_count']) {",
+                  "      pm.expect(Number.isInteger(group[key]) && group[key] >= 0, group.subject_type + ' ' + key).to.be.true;",
+                  "    }",
+                  "  }",
+                  "  pm.collectionVariables.set('hr_dashboard_before', JSON.stringify(groups));",
                   "  const count = groups.find(g => g.subject_type === 'PERSON').expired_count;",
                   "  pm.expect(count).to.be.above(0);",
                   "  pm.collectionVariables.set('hr_expired_before', count);",
@@ -1919,7 +1925,7 @@
           ]
         },
         {
-          "name": "Renewal refreshes overview expired count",
+          "name": "Renewal moves one tracked record from expired to valid",
           "request": {
             "method": "GET",
             "header": [],
@@ -1931,10 +1937,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Renewal refreshes overview expired count\", function () {",
+                  "pm.test(\"Renewal moves one tracked record from expired to valid\", function () {",
                   "  pm.response.to.have.status(200);",
-                  "  const person = pm.response.json().groups.find(g => g.subject_type === 'PERSON');",
+                  "  const groups = pm.response.json().groups;",
+                  "  const before = JSON.parse(pm.collectionVariables.get('hr_dashboard_before'));",
+                  "  const person = groups.find(g => g.subject_type === 'PERSON');",
+                  "  const previousPerson = before.find(g => g.subject_type === 'PERSON');",
                   "  pm.expect(person.expired_count).to.eql(Number(pm.collectionVariables.get('hr_expired_before')) - 1);",
+                  "  pm.expect(person.valid_count).to.eql(previousPerson.valid_count + 1);",
+                  "  pm.expect(person.expiring_soon_count).to.eql(previousPerson.expiring_soon_count);",
+                  "  pm.expect(groups.find(g => g.subject_type === 'COMPANY')).to.eql(before.find(g => g.subject_type === 'COMPANY'));",
                   "});"
                 ]
               }
@@ -2037,10 +2049,19 @@
             "url": "{{baseUrl}}/hr-admin/compliance-records",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"subject_type\": \"VEHICLE\",\n  \"subject_id\": \"{{hr_vehicle_id}}\",\n  \"record_type_id\": \"{{hr_vehicle_record_type_id}}\",\n  \"issue_date\": \"2026-01-01T00:00:00Z\",\n  \"expiry_date\": \"2027-01-01T00:00:00Z\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"Vehicle registration before archive\"\n}"
+              "raw": "{\n  \"subject_type\": \"VEHICLE\",\n  \"subject_id\": \"{{hr_vehicle_id}}\",\n  \"record_type_id\": \"{{hr_vehicle_record_type_id}}\",\n  \"issue_date\": \"2000-01-01T00:00:00Z\",\n  \"expiry_date\": \"{{hr_vehicle_soon_expiry}}\",\n  \"issuing_authority\": \"Postman Authority\",\n  \"notes\": \"Vehicle registration before archive\"\n}"
             }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('hr_vehicle_soon_expiry', new Date(Date.now() + 7 * 86400000).toISOString());"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -2050,6 +2071,30 @@
                   "const body = pm.response.json();",
                   "pm.expect(body.record.record_id).to.be.a('string');",
                   "pm.collectionVariables.set('hr_vehicle_record_id', body.record.record_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upcoming vehicle increases the amber count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/overview"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Upcoming vehicle increases the amber count', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const vehicle = pm.response.json().groups.find(g => g.subject_type === 'VEHICLE');",
+                  "  const before = JSON.parse(pm.collectionVariables.get('hr_dashboard_before')).find(g => g.subject_type === 'VEHICLE');",
+                  "  pm.expect(vehicle).to.eql({ ...before, expiring_soon_count: before.expiring_soon_count + 1 });",
+                  "});"
                 ]
               }
             }
@@ -2164,6 +2209,32 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Archived subjects and records leave tracked dashboard counts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/hr-admin/overview"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Archived subjects and records leave tracked dashboard counts', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const before = JSON.parse(pm.collectionVariables.get('hr_dashboard_before'));",
+                  "  const groups = pm.response.json().groups;",
+                  "  const person = before.find(g => g.subject_type === 'PERSON');",
+                  "  pm.expect(groups.find(g => g.subject_type === 'PERSON')).to.eql({ ...person, expired_count: person.expired_count - 1 });",
+                  "  pm.expect(groups.find(g => g.subject_type === 'VEHICLE')).to.eql(before.find(g => g.subject_type === 'VEHICLE'));",
+                  "});"
                 ]
               }
             }

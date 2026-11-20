@@ -645,11 +645,16 @@ WITH totals AS (
     SELECT 'PERSON'::text AS subject_type, COUNT(*) AS subject_count FROM hr_admin_persons
     UNION ALL SELECT 'VEHICLE', COUNT(*) FROM hr_admin_vehicles
     UNION ALL SELECT 'COMPANY', COUNT(*) FROM hr_admin_companies
-), expired AS (
-    SELECT subject_type, COUNT(*) AS record_count
-    FROM hr_admin_renewal_status WHERE queue_status = 'EXPIRED'
+), compliance AS (
+    SELECT subject_type,
+           COUNT(*) FILTER (WHERE days_until_expiry > 30) AS valid_count,
+           COUNT(*) FILTER (WHERE days_until_expiry BETWEEN 0 AND 30) AS expiring_soon_count,
+           COUNT(*) FILTER (WHERE days_until_expiry < 0) AS expired_count
+    FROM hr_admin_renewal_status
     GROUP BY subject_type
 )
 SELECT totals.subject_type, totals.subject_count::bigint AS subject_count,
-       COALESCE(expired.record_count, 0)::bigint AS expired_count
-FROM totals LEFT JOIN expired USING (subject_type);
+       COALESCE(compliance.valid_count, 0)::bigint AS valid_count,
+       COALESCE(compliance.expiring_soon_count, 0)::bigint AS expiring_soon_count,
+       COALESCE(compliance.expired_count, 0)::bigint AS expired_count
+FROM totals LEFT JOIN compliance USING (subject_type);

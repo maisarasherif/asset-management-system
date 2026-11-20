@@ -712,7 +712,47 @@ func TestHRAdminOverviewExpiryBoundaryAndDirectory(t *testing.T) {
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/hr-admin/vehicles/"+archived+"/archive", map[string]any{"archive_reason": "Retired from fleet"}, http.StatusOK)
 	assertField(t, group("VEHICLE"), "subject_count", 3)
 	assertField(t, group("VEHICLE"), "expired_count", 1)
-	assertField(t, group("PERSON"), "subject_count", 0)
+	for _, kind := range []string{"PERSON", "COMPANY"} {
+		empty := group(kind)
+		for _, field := range []string{"subject_count", "valid_count", "expiring_soon_count", "expired_count"} {
+			assertField(t, empty, field, 0)
+		}
+	}
+	nowInDubai := time.Now().UTC().Add(4 * time.Hour)
+	documentDate := time.Date(nowInDubai.Year(), nowInDubai.Month(), nowInDubai.Day(), 0, 0, 0, 0, time.UTC)
+	person := createHRAdminPerson(t, h, "DB-30", "Expiring person")
+	company := createHRAdminCompany(t, h, "DB-31", "Valid company")
+	for _, test := range []struct {
+		subjectType, subjectID, name, behavior string
+		days                                   int
+		archive                                bool
+	}{
+		{"PERSON", person, "Expires today", "RENEWABLE", 0, false},
+		{"PERSON", person, "Expires in 30 days", "RENEWABLE", 30, false},
+		{"PERSON", person, "Archived person record", "RENEWABLE", -1, true},
+		{"COMPANY", company, "Expires in 31 days", "RENEWABLE", 31, false},
+		{"COMPANY", company, "One-time evidence", "ONE_TIME", -1, false},
+	} {
+		typeID := createComplianceRecordType(t, h, map[string]any{
+			"subject_type": test.subjectType, "type_name": test.name, "renewal_behavior": test.behavior, "active": true,
+		})
+		id := createComplianceRecord(t, h, map[string]any{
+			"subject_type": test.subjectType, "subject_id": test.subjectID, "record_type_id": typeID,
+			"expiry_date": documentDate.AddDate(0, 0, test.days).Format(time.RFC3339),
+		})
+		if test.archive {
+			performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/hr-admin/compliance-records/"+id+"/archive",
+				map[string]any{"archive_reason": "Superseded evidence"}, http.StatusOK)
+		}
+	}
+	personCounts := group("PERSON")
+	assertField(t, personCounts, "valid_count", 0)
+	assertField(t, personCounts, "expiring_soon_count", 2)
+	assertField(t, personCounts, "expired_count", 0)
+	companyCounts := group("COMPANY")
+	assertField(t, companyCounts, "valid_count", 1)
+	assertField(t, companyCounts, "expiring_soon_count", 0)
+	assertField(t, companyCounts, "expired_count", 0)
 	first := get("vehicles?search=db-fleet&limit=1&page=1")
 	second := get("vehicles?search=db-fleet&limit=1&page=2")
 	assertField(t, first["meta"].(map[string]any), "total", 2)
@@ -749,7 +789,9 @@ func TestHRAdminOverviewExpiryBoundaryAndDirectory(t *testing.T) {
 		}, http.StatusCreated))
 		assertField(t, saved, "version_number", version.number)
 		assertField(t, saved, "document_file", version.document)
-		assertField(t, group("VEHICLE"), "expired_count", 0)
+		counts := group("VEHICLE")
+		assertField(t, counts, "expired_count", 0)
+		assertField(t, counts, "valid_count", 1)
 		assertField(t, get(records)["data"].([]any)[0].(map[string]any), "expiry_status", "OK")
 	}
 	history := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, versions, nil, http.StatusOK))

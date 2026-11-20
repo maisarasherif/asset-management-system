@@ -187,7 +187,7 @@ export function SubjectDirectory({ type, canWrite }: { type: HRAdminSubjectType;
   const items = directory.data?.items ?? [];
   const selected = items.find((item) => item.id === selectedId);
   return (
-    <div className="hr-subject-workspace">
+    <SpaceBetween size="m">
       <Container
         header={
           <Header variant="h2" counter={directory.data ? `(${directory.data.meta.total})` : undefined}>
@@ -260,6 +260,6 @@ export function SubjectDirectory({ type, canWrite }: { type: HRAdminSubjectType;
           <Box color="text-body-secondary">Select a subject to view its records.</Box>
         </Container>
       )}
-    </div>
+    </SpaceBetween>
   );
 }

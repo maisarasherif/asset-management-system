@@ -167,6 +167,8 @@ export interface ComplianceRecordTypeInput {
 export interface HRAdminOverviewGroup {
   subject_type: HRAdminSubjectType;
   subject_count: number;
+  valid_count: number;
+  expiring_soon_count: number;
   expired_count: number;
 }
 

@@ -626,12 +626,31 @@ test.describe("HR/Admin product E2E", () => {
             expect(archived.status()).toBe(200);
           }
         }
-        const overview = await getJson<{ groups: { subject_type: string; expired_count: number }[] }>(
+        const overview = await getJson<{
+          groups: { subject_type: string; expired_count: number; valid_count: number; expiring_soon_count: number }[];
+        }>(
           api, "/hr-admin/overview", token);
-        const before = overview.groups.find(group => group.subject_type === "VEHICLE")!.expired_count;
+        const before = overview.groups.find(group => group.subject_type === "VEHICLE")!;
         const page = await context.newPage();
         await loginStaff(page, ADMIN_EMAIL!, ADMIN_PASSWORD!);
         await page.goto("/hr-admin");
+        const chart = page.getByRole("region", { name: "Compliance dashboard" });
+        await expect(chart.getByRole("heading", { name: "Compliance status" })).toBeVisible();
+        await expect(chart.getByRole("application", { name: "Compliance status by subject group" })).toBeVisible();
+        const legend = chart.getByRole("toolbar");
+        for (const status of ["Valid", "Expiring soon", "Expired"]) {
+          await expect(legend.getByRole("button", { name: status, exact: true })).toBeVisible();
+        }
+        await expect(page.getByLabel("Find a plate or vehicle")).toHaveCount(0);
+        const fullWidth = (await chart.boundingBox())!.width;
+        await chart.getByRole("button", { name: "View record counts" }).click();
+        const counts = chart.getByRole("table", { name: "Compliance counts by subject group" });
+        await expect(counts.getByRole("rowheader")).toHaveText(["Persons", "Vehicles", "Companies"]);
+        const vehicleCounts = counts.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Vehicles" }) });
+        const formatCount = (count: number) => new Intl.NumberFormat("en-US").format(count);
+        await expect(vehicleCounts.getByRole("cell")).toHaveText(
+          [before.valid_count, before.expiring_soon_count, before.expired_count].map(formatCount)
+        );
         const groupButtons = page.getByRole("group", { name: "Subject groups" }).getByRole("button");
         await expect(groupButtons).toHaveCount(3);
         const widths = await groupButtons.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().width));
@@ -639,7 +658,21 @@ test.describe("HR/Admin product E2E", () => {
         const vehicles = page.getByRole("button", { name: /^Vehicles \(/ });
         if (mobile) await vehicles.tap();
         else { await vehicles.focus(); await page.keyboard.press("Space"); }
-        await page.getByLabel("Find a plate or vehicle").fill(plate);
+        const search = page.getByLabel("Find a plate or vehicle");
+        await expect(search).toBeVisible();
+        const searchBox = (await search.boundingBox())!;
+        const splitChart = (await chart.boundingBox())!;
+        if (mobile) {
+          expect(splitChart.y).toBeGreaterThan(searchBox.y + searchBox.height);
+          expect(splitChart.width).toBeCloseTo(fullWidth, 0);
+        } else {
+          expect(splitChart.x).toBeGreaterThan(searchBox.x + searchBox.width);
+          expect(splitChart.width).toBeLessThan(fullWidth);
+        }
+        await expect(counts.getByRole("rowheader")).toHaveText(["Persons", "Vehicles", "Companies"]);
+        await legend.getByRole("button", { name: "Expired", exact: true }).click();
+        await expect(vehicles).toHaveAttribute("aria-pressed", "true");
+        await search.fill(plate);
         await page.getByRole("row").filter({ hasText: plate }).click();
         const row = page.getByRole("row").filter({ hasText: kind.type_name });
         await expect(row.getByText("Expired", { exact: true })).toBeVisible();
@@ -675,7 +708,10 @@ test.describe("HR/Admin product E2E", () => {
         await expect(dialog).toHaveCount(0);
         await expect(row.getByText("Valid", { exact: true })).toBeVisible();
         await expect(row.getByRole("cell", { name: "19 Nov 2099" })).toBeVisible();
-        await expect(vehicles).toContainText(String(before - 1) + " expired");
+        await expect(vehicles).toContainText(String(before.expired_count - 1) + " expired");
+        await expect(vehicleCounts.getByRole("cell")).toHaveText(
+          [before.valid_count + 1, before.expiring_soon_count, before.expired_count - 1].map(formatCount)
+        );
         await expect(page.getByRole("row").filter({ hasText: plate }).getByRole("radio")).toBeChecked();
         await renew.click();
         await expect(expiry).toHaveValue("19/11/2099");
@@ -686,6 +722,24 @@ test.describe("HR/Admin product E2E", () => {
         expect(history.map(v => [v.version_number, v.is_current, v.document_file])).toEqual([
           [2, true, "existing-document.pdf"], [1, false, "existing-document.pdf"],
         ]);
+
+        if (mobile) {
+          await chart.getByRole("button", { name: "All subjects" }).tap();
+        } else {
+          // Page heading sits outside the photo, records and chart regions.
+          await page.getByRole("heading", { name: "HR/Admin overview" }).click();
+        }
+        await expect(vehicles).toHaveAttribute("aria-pressed", "false");
+        await expect(search).toHaveCount(0);
+        expect((await chart.boundingBox())!.width).toBeCloseTo(fullWidth, 0);
+        await expect(counts).toBeVisible();
+        await page.getByRole("button", { name: /^Companies \(/ }).click();
+        await expect(page.getByLabel("Find a company")).toBeVisible();
+        const showAll = chart.getByRole("button", { name: "All subjects" });
+        await showAll.focus();
+        await page.keyboard.press("Enter");
+        await expect(page.getByRole("button", { name: /^Companies \(/ })).toBeFocused();
+        await expect(page.getByLabel("Find a company")).toHaveCount(0);
 
         // The desktop subject list shows the event timestamp from the real API.
         await page.setViewportSize({ width: 1584, height: 992 });

@@ -1,11 +1,12 @@
 import { Button, Container, ContentLayout, Header, SpaceBetween } from "@cloudscape-design/components";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { getHRAdminOverview } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import type { HRAdminSubjectType } from "../../types/ams";
+import { ComplianceStatusChart } from "./ComplianceStatusChart";
 import { ImageAccordion } from "./ImageAccordion";
 import { SubjectDirectory } from "./SubjectDirectory";
 
@@ -26,6 +27,7 @@ export function HRAdminOverviewPage() {
   const isAdmin = role === "ADMIN";
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<HRAdminSubjectType | null>(null);
+  const photoPanels = useRef<HTMLDivElement>(null);
   const summary = useQuery({
     queryKey: ["hr-admin", "overview"],
     queryFn: getHRAdminOverview,
@@ -46,6 +48,28 @@ export function HRAdminOverviewPage() {
     );
     return () => window.clearTimeout(timer);
   }, [queryClient, section, summary.data, summary.dataUpdatedAt]);
+
+  useEffect(() => {
+    if (!selected || section) return;
+    function onBackgroundClick(event: MouseEvent) {
+      if (!(event.target instanceof Element) || document.querySelector('[aria-modal="true"]')) return;
+      // Keep clicks inside either pane, including the Renew form, and in shell controls.
+      if (
+        event.target.closest(
+          "[data-hr-overview-region], button, a, input, select, textarea, label, [role='button'], [role='dialog']"
+        )
+      )
+        return;
+      setSelected(null);
+    }
+    document.addEventListener("click", onBackgroundClick, true);
+    return () => document.removeEventListener("click", onBackgroundClick, true);
+  }, [selected, section]);
+
+  function showAllSubjects() {
+    photoPanels.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus();
+    setSelected(null);
+  }
 
   if (section) {
     return (
@@ -100,16 +124,32 @@ export function HRAdminOverviewPage() {
         </Header>
       }
     >
-      <SpaceBetween size="l">
-        {summary.isError ? (
-          <PageError description="Could not load subject totals." onRetry={() => void summary.refetch()} />
-        ) : summary.data ? (
-          <ImageAccordion groups={summary.data.groups} selected={selected} onSelect={setSelected} />
-        ) : (
-          <PageLoading>Loading subject totals...</PageLoading>
-        )}
-        {selected && <SubjectDirectory key={selected} type={selected} canWrite={isAdmin || role === "USER"} />}
-      </SpaceBetween>
+      {summary.data ? (
+        <SpaceBetween size="l">
+          <div ref={photoPanels} data-hr-overview-region>
+            <ImageAccordion groups={summary.data.groups} selected={selected} onSelect={setSelected} />
+          </div>
+          <div className="hr-overview-workspace">
+            <div className="hr-overview-panes">
+              {selected && (
+                <div key={selected} data-hr-overview-region>
+                  <SubjectDirectory type={selected} canWrite={isAdmin || role === "USER"} />
+                </div>
+              )}
+              <section key="chart" aria-label="Compliance dashboard" data-hr-overview-region>
+                <ComplianceStatusChart
+                  groups={summary.data.groups}
+                  actions={selected ? <Button onClick={showAllSubjects}>All subjects</Button> : undefined}
+                />
+              </section>
+            </div>
+          </div>
+        </SpaceBetween>
+      ) : summary.isError ? (
+        <PageError description="Could not load compliance status." onRetry={() => void summary.refetch()} />
+      ) : (
+        <PageLoading>Loading compliance status...</PageLoading>
+      )}
     </ContentLayout>
   );
 }

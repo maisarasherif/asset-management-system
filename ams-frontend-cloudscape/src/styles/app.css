@@ -1842,15 +1842,21 @@ body {
 
 .hr-subject-panel__expired { color: #b42318; }
 
-.hr-subject-workspace {
+.hr-overview-workspace {
+  container: hr-overview / inline-size;
+}
+
+.hr-overview-panes {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 16px;
 }
 
-@media (max-width: 1050px) {
-  .hr-subject-workspace { grid-template-columns: minmax(0, 1fr); }
+@container hr-overview (min-width: 880px) {
+  .hr-overview-panes:has(> :nth-child(2)) {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
 }
 
 @media (max-width: 600px) {

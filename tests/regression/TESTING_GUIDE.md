@@ -573,6 +573,21 @@ The runner deleted 75 journaled storage objects, dropped the isolated database
 directory is `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.YTs6Tv`,
 including the certificate request timings in `certificate-latency-summary.json`.
 
+## Consolidated HR/Admin compliance chart
+
+Run the complete HR/Admin command in step 2 against the chart revision, then
+the default regression in step 3. The suite covers all three counts, the UAE
+date cutoff, exclusions, renewal updates, the full-width and split layouts,
+background and keyboard reset, and the mobile layout. Inspect the
+`vehicle-dashboard` attachments in the Playwright report for the split and
+stacked layouts. The existing isolated runner needs no changes.
+
+The overview query reuses the view installed by migration 55. After the VPS
+regression passes, deploy the backend and frontend together with `ams deploy`
+using the updated deployment Makefile on `hr-db`. In the production overview,
+compare the chart's red counts with the photo panels, open a group, and clear
+the selection to verify the full-width view.
+
 ## Result report and completion gate
 
 After each feature step, record:
