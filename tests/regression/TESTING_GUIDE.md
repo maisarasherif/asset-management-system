@@ -582,6 +582,22 @@ background and keyboard reset, and the mobile layout. Inspect the
 `vehicle-dashboard` attachments in the Playwright report for the split and
 stacked layouts. The existing isolated runner needs no changes.
 
+**Focused VPS gate passed on 20 November 2026.** Go reported 200 passed,
+0 failed and 0 skipped. The HR/Admin Newman collection passed. All 6
+Playwright tests passed in 1.8 minutes. The runner deleted 24 journaled
+storage objects, dropped the isolated database `ams_e2e_20261120063531`,
+and exited with status `0`. This handoff targeted `hr-db` at `d0d6cbb`.
+VPS evidence is in
+`/home/pms/ams-testing/asset-management-system/.vps-test-run/run.JGNUE0`.
+
+**Broader VPS gate passed on 20 November 2026.** Go reported 200 passed,
+0 failed and 0 skipped. Newman passed. All 12 Playwright tests passed in
+4.8 minutes, covering HR/Admin, generated renewals, and whole-app routing.
+The runner deleted 75 journaled storage objects, dropped the isolated database
+`ams_e2e_20261120064234`, and exited with status `0`. VPS evidence is in
+`/home/pms/ams-testing/asset-management-system/.vps-test-run/run.ADYcpQ`.
+The run also saved certificate request timings in `certificate-latency-summary.json`.
+
 The overview query reuses the view installed by migration 55. After the VPS
 regression passes, deploy the backend and frontend together with `ams deploy`
 using the updated deployment Makefile on `hr-db`. In the production overview,
