@@ -6,24 +6,20 @@ SELECT
     photo,
     datasheet,
     description,
-    status,
+status,
     asset_kind,
     location,
     assigned_project,
     working_hours,
     working_hours_note,
-    maintenance_interval_hours,
-    next_maintenance_due_hours,
-    maintenance_required_at,
-    last_maintenance_completed_at,
-    last_maintenance_completed_hours,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = assets.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) AS quarantined,
     template_id,
     created_at,
     updated_at
 FROM assets
 WHERE strpos(lower(concat_ws(' ', display_id, name, description, location, assigned_project)), lower(sqlc.arg(search_text)::text)) > 0
   AND (sqlc.arg(filter_project)::text = '' OR lower(assigned_project) = lower(sqlc.arg(filter_project)))
-  AND (sqlc.arg(filter_status)::text = '' OR lower(status) = lower(sqlc.arg(filter_status)))
+  AND (sqlc.arg(filter_status)::text = '' OR CASE WHEN sqlc.arg(filter_status) = 'QUARANTINED' THEN EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = assets.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) ELSE lower(status) = lower(sqlc.arg(filter_status)) AND NOT EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = assets.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) END)
 ORDER BY created_at DESC, asset_id
 LIMIT $1 OFFSET $2;
 
@@ -31,7 +27,7 @@ LIMIT $1 OFFSET $2;
 SELECT COUNT(*) FROM assets
 WHERE strpos(lower(concat_ws(' ', display_id, name, description, location, assigned_project)), lower(sqlc.arg(search_text)::text)) > 0
   AND (sqlc.arg(filter_project)::text = '' OR lower(assigned_project) = lower(sqlc.arg(filter_project)))
-  AND (sqlc.arg(filter_status)::text = '' OR lower(status) = lower(sqlc.arg(filter_status)));
+  AND (sqlc.arg(filter_status)::text = '' OR CASE WHEN sqlc.arg(filter_status) = 'QUARANTINED' THEN EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = assets.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) ELSE lower(status) = lower(sqlc.arg(filter_status)) AND NOT EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = assets.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) END);
 
 -- name: GetAssetByID :one
 SELECT
@@ -41,22 +37,18 @@ SELECT
     photo,
     datasheet,
     description,
-    status,
+status,
     asset_kind,
     location,
     assigned_project,
     working_hours,
     working_hours_note,
-    maintenance_interval_hours,
-    next_maintenance_due_hours,
-    maintenance_required_at,
-    last_maintenance_completed_at,
-    last_maintenance_completed_hours,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = assets.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) AS quarantined,
     template_id,
     created_at,
     updated_at
 FROM assets
-WHERE asset_id = $1
+WHERE assets.asset_id = $1
 LIMIT 1;
 
 -- name: CreateAsset :one
@@ -66,12 +58,10 @@ INSERT INTO assets (
     photo,
     datasheet,
     description,
-    status,
+status,
     asset_kind,
     location,
     assigned_project,
-    maintenance_interval_hours,
-    next_maintenance_due_hours,
     created_at,
     updated_at
 )
@@ -85,8 +75,6 @@ VALUES (
     sqlc.arg(asset_kind),
     $6,
     $7,
-    sqlc.arg(maintenance_interval_hours),
-    sqlc.arg(maintenance_interval_hours),
     NOW(),
     NOW()
 )
@@ -97,17 +85,13 @@ RETURNING
     photo,
     datasheet,
     description,
-    status,
+status,
     asset_kind,
     location,
     assigned_project,
     working_hours,
     working_hours_note,
-    maintenance_interval_hours,
-    next_maintenance_due_hours,
-    maintenance_required_at,
-    last_maintenance_completed_at,
-    last_maintenance_completed_hours,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = assets.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) AS quarantined,
     template_id,
     created_at,
     updated_at;
@@ -119,13 +103,11 @@ INSERT INTO assets (
     photo,
     datasheet,
     description,
-    status,
+status,
     asset_kind,
     location,
     assigned_project,
     template_id,
-    maintenance_interval_hours,
-    next_maintenance_due_hours,
     created_at,
     updated_at
 )
@@ -140,8 +122,6 @@ VALUES (
     $6,
     $7,
     sqlc.arg(template_id),
-    sqlc.arg(maintenance_interval_hours),
-    sqlc.arg(maintenance_interval_hours),
     NOW(),
     NOW()
 )
@@ -152,17 +132,13 @@ RETURNING
     photo,
     datasheet,
     description,
-    status,
+status,
     asset_kind,
     location,
     assigned_project,
     working_hours,
     working_hours_note,
-    maintenance_interval_hours,
-    next_maintenance_due_hours,
-    maintenance_required_at,
-    last_maintenance_completed_at,
-    last_maintenance_completed_hours,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = assets.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) AS quarantined,
     template_id,
     created_at,
     updated_at;
@@ -174,14 +150,8 @@ SET name = $1, photo = $2, datasheet = $3,
     status = $5,
     location = $6,
     assigned_project = $7,
-    maintenance_interval_hours = sqlc.arg(maintenance_interval_hours),
-    next_maintenance_due_hours = CASE
-        WHEN sqlc.arg(maintenance_interval_hours)::bigint > 0
-            THEN last_maintenance_completed_hours + sqlc.arg(maintenance_interval_hours)::bigint
-        ELSE 0
-    END,
     updated_at = NOW()
-WHERE asset_id = sqlc.arg(asset_id)
+WHERE assets.asset_id = sqlc.arg(asset_id)
 RETURNING
     asset_id,
     display_id,
@@ -189,20 +159,16 @@ RETURNING
     photo,
     datasheet,
     description,
-    status,
+status,
     asset_kind,
     location,
     assigned_project,
     working_hours,
     working_hours_note,
-    maintenance_interval_hours,
-    next_maintenance_due_hours,
-    maintenance_required_at,
-    last_maintenance_completed_at,
-    last_maintenance_completed_hours,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = assets.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) AS quarantined,
     template_id,
     created_at,
     updated_at;
 
 -- name: DeleteAsset :execrows
-DELETE FROM assets WHERE asset_id = $1;
+DELETE FROM assets WHERE assets.asset_id = $1;

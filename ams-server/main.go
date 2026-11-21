@@ -9,6 +9,7 @@ import (
 	controller "github.com/maisarasherif/asset-management-system/ams-server/controllers"
 	databases "github.com/maisarasherif/asset-management-system/ams-server/database"
 	"github.com/maisarasherif/asset-management-system/ams-server/logger"
+	"github.com/maisarasherif/asset-management-system/ams-server/maintenance"
 	middleware "github.com/maisarasherif/asset-management-system/ams-server/middleware"
 	routes "github.com/maisarasherif/asset-management-system/ams-server/routes"
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
@@ -36,6 +37,7 @@ func main() {
 
 	utils.StartExpiryScheduler(pool, riverClient)
 	utils.StartHRAdminReminderScheduler(pool, riverClient)
+	maintenance.Service{Pool: pool, River: riverClient}.StartScanner(riverCtx)
 
 	router := gin.New()
 	router.Use(

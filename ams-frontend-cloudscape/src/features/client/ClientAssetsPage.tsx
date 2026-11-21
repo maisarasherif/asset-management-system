@@ -7,14 +7,13 @@ import {
   ContentLayout,
   Header,
   SpaceBetween,
-  StatusIndicator,
 } from "@cloudscape-design/components";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { listClientAssets } from "../../lib/api/ams";
-import { formatDate, humanizeEnum } from "../../utils/format";
-import { assetStatusType } from "../../utils/status";
+import { formatDate } from "../../utils/format";
+import { Availability } from "../maintenance/EquipmentMaintenanceSummary";
 
 export function ClientAssetsPage() {
   const navigate = useNavigate();
@@ -39,7 +38,7 @@ export function ClientAssetsPage() {
     >
       <ListFilters controls={controls} label="Search assets" facets={[{ key: "status", label: "Status", options: [
         { value: "ACTIVE", label: "Active" }, { value: "INACTIVE", label: "Inactive" },
-        { value: "MAINTENANCE", label: "Maintenance" },
+        { value: "QUARANTINED", label: "Quarantined" },
       ] }]}>
         <TextFacet key={controls.filters.project} label="Project" value={controls.filters.project}
           onApply={(project) => controls.setFilters({ project })} />
@@ -57,9 +56,7 @@ export function ClientAssetsPage() {
                     <div>
                       <Box variant="h2">{asset.name}</Box>
                     </div>
-                    <StatusIndicator type={assetStatusType(asset.status)}>
-                      {humanizeEnum(asset.status)}
-                    </StatusIndicator>
+                    <Availability quarantined={asset.quarantined} status={asset.status} />
                   </div>
                   <Box color="text-body-secondary">
                     {asset.description || "No asset description is available."}

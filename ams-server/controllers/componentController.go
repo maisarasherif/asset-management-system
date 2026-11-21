@@ -185,7 +185,9 @@ func AddComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			SafetyCritical:  input.SafetyCritical,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add component"})
+			if !maintenanceRelatedConflict(c, err, false) {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add component"})
+			}
 			return
 		}
 
@@ -248,7 +250,9 @@ func UpdateComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			ComponentID:     componentID,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update component"})
+			if !maintenanceRelatedConflict(c, err, false) {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update component"})
+			}
 			return
 		}
 		if rows == 0 {
@@ -284,7 +288,10 @@ func DeleteComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		rows, err := queries.DeleteComponent(ctx, componentID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete component"})
+			if !maintenanceRelatedConflict(c, err, true) {
+				logger.Log.Error().Err(err).Str("component_id", componentID.String()).Msg("Component deletion failed")
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete component"})
+			}
 			return
 		}
 		if rows == 0 {
@@ -431,7 +438,9 @@ func PatchComponent(pool *pgxpool.Pool) gin.HandlerFunc {
 			ComponentID:     componentID,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update component"})
+			if !maintenanceRelatedConflict(c, err, false) {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update component"})
+			}
 			return
 		}
 		if rows == 0 {
@@ -451,7 +460,7 @@ func SearchAssetComponentCategories(pool *pgxpool.Pool, client bool) gin.Handler
 		}
 		userID := uuid.Nil
 		if client {
-			userID, ok = clientUserID(c)
+			userID, ok = requestUserID(c)
 			if !ok {
 				return
 			}

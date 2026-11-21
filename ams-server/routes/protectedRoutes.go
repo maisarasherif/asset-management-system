@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	controller "github.com/maisarasherif/asset-management-system/ams-server/controllers"
+	"github.com/maisarasherif/asset-management-system/ams-server/maintenance"
 	"github.com/maisarasherif/asset-management-system/ams-server/middleware"
 	"github.com/riverqueue/river"
 )
@@ -40,10 +41,8 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 
 	// Asset Routes
 	admin.POST("/asset", controller.AddAsset(pool))
-	admin.PUT("/asset/:asset_id", controller.UpdateAsset(pool, riverClient))
-	admin.PATCH("/asset/:asset_id", controller.PatchAsset(pool, riverClient))
-	admin.PATCH("/asset/:asset_id/working-hours", controller.UpdateAssetWorkingHours(pool, riverClient))
-	admin.POST("/asset/:asset_id/routine-maintenance/complete", controller.CompleteAssetRoutineMaintenance(pool))
+	admin.PUT("/asset/:asset_id", controller.UpdateAsset(pool))
+	admin.PATCH("/asset/:asset_id", controller.PatchAsset(pool))
 	admin.DELETE("/asset/:asset_id", controller.DeleteAsset(pool))
 
 	// Component Routes
@@ -119,6 +118,9 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	admin.POST("/template-component/:template_component_id/test", controller.AddTemplateComponentTest(pool))
 	admin.DELETE("/template-component-test/:template_component_test_id", controller.DeleteTemplateComponentTest(pool))
 
+	service := maintenance.Service{Pool: pool, River: riverClient}
+	maintenanceAPI := controller.MaintenanceController{Service: service}
+
 	// ===================Authenticated Account Routes======================================================
 	account := router.Group("/v1")
 	account.Use(middleware.AuthMiddleware(), middleware.ActiveUserMiddleware(pool))
@@ -159,6 +161,36 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	protected := router.Group("/v1")
 	protected.Use(middleware.AuthMiddleware(), middleware.ActiveUserMiddleware(pool), middleware.StaffMiddleware())
 
+	account.PATCH("/asset/:asset_id/working-hours", controller.RequireMaintenanceRole(false), controller.UpdateAssetWorkingHours(service))
+	work := account.Group("/maintenance", controller.RequireMaintenanceRole(false))
+	work.GET("/work-orders", maintenanceAPI.WorkOrders)
+	work.POST("/work-orders", maintenanceAPI.Raise)
+	work.GET("/work-orders/:order_id", maintenanceAPI.WorkOrder)
+	work.POST("/work-orders/:order_id/assign", maintenanceAPI.OrderAction("assign"))
+	work.POST("/work-orders/:order_id/start", maintenanceAPI.OrderAction("start"))
+	work.POST("/work-orders/:order_id/complete", maintenanceAPI.OrderAction("complete"))
+	work.POST("/work-orders/:order_id/cancel", maintenanceAPI.OrderAction("cancel"))
+	work.GET("/technicians", maintenanceAPI.Technicians)
+	work.GET("/plans", maintenanceAPI.Plans)
+	work.GET("/quarantine", maintenanceAPI.Quarantines)
+	work.POST("/quarantine", maintenanceAPI.Tag)
+	work.GET("/quarantine/:quarantine_id/blockers", maintenanceAPI.Blockers)
+	work.GET("/stores", maintenanceAPI.Stores)
+	work.GET("/stores/:store_id/stock", maintenanceAPI.Stock)
+	work.GET("/stores/:store_id/stock/:part_id/changes", maintenanceAPI.StockChanges)
+	work.GET("/usage", maintenanceAPI.Usage)
+	work.POST("/work-orders/:order_id/usage", maintenanceAPI.RecordUsage)
+	work.PATCH("/usage/:usage_id", maintenanceAPI.CorrectUsage)
+
+	settings := account.Group("/maintenance", controller.RequireMaintenanceRole(true))
+	settings.POST("/plans", maintenanceAPI.SavePlan(false))
+	settings.PUT("/plans/:plan_id", maintenanceAPI.SavePlan(true))
+	settings.POST("/scan", maintenanceAPI.Scan)
+	settings.POST("/quarantine/:quarantine_id/release", maintenanceAPI.Release)
+	settings.POST("/stores", maintenanceAPI.AddStore)
+	settings.POST("/parts", maintenanceAPI.AddPart)
+	settings.PUT("/stores/:store_id/stock/:part_id", maintenanceAPI.SaveStock)
+
 	// User Routes
 	protected.GET("/users", controller.GetUsers(pool))
 	protected.GET("/user/:user_id", controller.GetUser(pool))
@@ -167,10 +199,8 @@ func SetupProtectedRoutesWithJobs(router *gin.Engine, pool *pgxpool.Pool, riverU
 	protected.GET("/assets", controller.GetAssets(pool))
 	protected.GET("/asset/:asset_id", controller.GetAsset(pool))
 	protected.GET("/asset/:asset_id/single-equipment", controller.GetSingleAssetEquipment(pool))
-	protected.GET("/asset/:asset_id/routine-maintenance", controller.GetAssetRoutineMaintenance(pool))
 	protected.GET("/asset/:asset_id/certificate-summary", controller.GetAssetCertificateSummary(pool, false))
 	protected.GET("/asset/:asset_id/component-categories", controller.SearchAssetComponentCategories(pool, false))
-	protected.GET("/asset/:asset_id/routine-maintenance/events", controller.SearchAssetRoutineMaintenance(pool))
 	protected.GET("/asset/:asset_id/component-certificate-sheet", controller.GetAssetComponentCertificateSheetPDF(pool))
 
 	// Component Routes

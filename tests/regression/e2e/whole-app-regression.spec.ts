@@ -364,7 +364,7 @@ async function createRegressionFixture(
     asset_kind: "COMPONENTIZED",
     location: "Whole App Yard",
     assigned_project: projectName,
-    maintenance_interval_hours: 100,
+
     template_id: template.template_id,
   });
 
@@ -377,7 +377,7 @@ async function createRegressionFixture(
     asset_kind: "COMPONENTIZED",
     location: "Warehouse A",
     assigned_project: "",
-    maintenance_interval_hours: 0,
+
     template_id: null,
   });
 
@@ -596,8 +596,8 @@ test.describe("whole app regression", () => {
       ]);
       await expectRoute(
         page,
-        `/assets/${fixture.assetId}/routine-maintenance`,
-        ["Routine maintenance", fixture.assetName],
+        `/maintenance?asset_id=${fixture.assetId}`,
+        ["Maintenance work orders"],
       );
       await expectRoute(page, `/assets/${fixture.assetId}/components/new`, [
         "Create component",

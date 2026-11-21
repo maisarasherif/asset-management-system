@@ -61,7 +61,7 @@ func (q *Queries) CountComponents(ctx context.Context) (int64, error) {
 const countComponentsByAssetID = `-- name: CountComponentsByAssetID :one
 SELECT COUNT(*)
 FROM components
-WHERE asset_id = $1
+WHERE components.asset_id = $1
   AND strpos(lower(concat_ws(' ', display_id, name, serial_number, manufacturer, model, description)), lower($2::text)) > 0
   AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR category_id = $3 OR scope_category_id = $3)
   AND ($4::text = '' OR lower(component_kind) = lower($4))
@@ -389,7 +389,7 @@ func (q *Queries) CreateSelfComponent(ctx context.Context, arg CreateSelfCompone
 }
 
 const deleteComponent = `-- name: DeleteComponent :execrows
-DELETE FROM components WHERE component_id = $1
+DELETE FROM components WHERE components.component_id = $1
 `
 
 func (q *Queries) DeleteComponent(ctx context.Context, componentID uuid.UUID) (int64, error) {
@@ -422,6 +422,7 @@ SELECT
     created_at,
     updated_at,
     location,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = components.asset_id AND (q.component_id IS NULL OR q.component_id = components.component_id) AND q.released_at IS NULL) AS quarantined,
     assigned_project
 FROM components
 ORDER BY created_at DESC
@@ -454,6 +455,7 @@ type GetAllComponentsPaginatedRow struct {
 	CreatedAt              time.Time  `json:"created_at"`
 	UpdatedAt              time.Time  `json:"updated_at"`
 	Location               string     `json:"location"`
+	Quarantined            bool       `json:"quarantined"`
 	AssignedProject        string     `json:"assigned_project"`
 }
 
@@ -487,6 +489,7 @@ func (q *Queries) GetAllComponentsPaginated(ctx context.Context, arg GetAllCompo
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Location,
+			&i.Quarantined,
 			&i.AssignedProject,
 		); err != nil {
 			return nil, err
@@ -521,9 +524,10 @@ SELECT
     created_at,
     updated_at,
     location,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = components.asset_id AND (q.component_id IS NULL OR q.component_id = components.component_id) AND q.released_at IS NULL) AS quarantined,
     assigned_project
 FROM components
-WHERE component_id = $1
+WHERE components.component_id = $1
 LIMIT 1
 `
 
@@ -548,6 +552,7 @@ type GetComponentByIDRow struct {
 	CreatedAt              time.Time  `json:"created_at"`
 	UpdatedAt              time.Time  `json:"updated_at"`
 	Location               string     `json:"location"`
+	Quarantined            bool       `json:"quarantined"`
 	AssignedProject        string     `json:"assigned_project"`
 }
 
@@ -575,6 +580,7 @@ func (q *Queries) GetComponentByID(ctx context.Context, componentID uuid.UUID) (
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Location,
+		&i.Quarantined,
 		&i.AssignedProject,
 	)
 	return i, err
@@ -602,9 +608,10 @@ SELECT
     created_at,
     updated_at,
     location,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = components.asset_id AND (q.component_id IS NULL OR q.component_id = components.component_id) AND q.released_at IS NULL) AS quarantined,
     assigned_project
 FROM components
-WHERE asset_id = $1
+WHERE components.asset_id = $1
   AND strpos(lower(concat_ws(' ', display_id, name, serial_number, manufacturer, model, description)), lower($2::text)) > 0
   AND ($3::uuid = '00000000-0000-0000-0000-000000000000' OR category_id = $3 OR scope_category_id = $3)
   AND ($4::text = '' OR lower(component_kind) = lower($4))
@@ -642,6 +649,7 @@ type GetComponentsByAssetIDPaginatedRow struct {
 	CreatedAt              time.Time  `json:"created_at"`
 	UpdatedAt              time.Time  `json:"updated_at"`
 	Location               string     `json:"location"`
+	Quarantined            bool       `json:"quarantined"`
 	AssignedProject        string     `json:"assigned_project"`
 }
 
@@ -682,6 +690,7 @@ func (q *Queries) GetComponentsByAssetIDPaginated(ctx context.Context, arg GetCo
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Location,
+			&i.Quarantined,
 			&i.AssignedProject,
 		); err != nil {
 			return nil, err

@@ -60,25 +60,6 @@ func CertificateExpiryClickUpPayload(certificateName, assetName, componentName s
 	}
 }
 
-func RoutineMaintenanceClickUpPayload(assetName, assetDisplayID string, workingHours, dueAtHours int64) clickUpTask {
-	description := fmt.Sprintf(
-		"Routine maintenance required:\n\nAsset: %s\nAsset ID: %s\nCurrent Working Hours: %d\nMaintenance Due At: %d\n\nPlease arrange and complete routine maintenance.",
-		assetName,
-		assetDisplayID,
-		workingHours,
-		dueAtHours,
-	)
-
-	return clickUpTask{
-		Name:        fmt.Sprintf("Routine Maintenance Required: %s", assetName),
-		Description: description,
-		Priority:    2,
-		DueDate:     time.Now().AddDate(0, 0, 7).UnixMilli(),
-		DueDateTime: false,
-		Assignees:   clickUpAssignees(),
-	}
-}
-
 func CreateClickUpTaskFromPayload(task clickUpTask) (string, error) {
 	return CreateClickUpTaskFromPayloadForList(task, "")
 }

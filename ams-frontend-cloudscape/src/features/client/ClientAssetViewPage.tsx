@@ -26,7 +26,8 @@ import {
   getClientCertificateDownloadUrl,
 } from "../../lib/api/ams";
 import { formatDate, formatRenewalDuration, humanizeEnum } from "../../utils/format";
-import { assetStatusType, certificateStatusType } from "../../utils/status";
+import { Availability } from "../maintenance/EquipmentMaintenanceSummary";
+import { certificateStatusType } from "../../utils/status";
 import type { ClientComponent } from "../../types/ams";
 import { useFlashbar } from "../../providers/flashbar-context";
 
@@ -130,9 +131,7 @@ export function ClientAssetViewPage() {
             <SpaceBetween direction="vertical" size="xs">
               <div className="summary-row">
                 <Box variant="awsui-key-label">Status</Box>
-                <StatusIndicator type={assetStatusType(asset.status)}>
-                  {humanizeEnum(asset.status)}
-                </StatusIndicator>
+                <Availability quarantined={asset.quarantined} status={asset.status} />
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Location</Box>
@@ -179,6 +178,7 @@ export function ClientAssetViewPage() {
                         onClick={() => handleComponentSelect(component)}
                       >
                         <span className="client-component-list__title">{component.name}</span>
+                        {component.quarantined && <Availability quarantined />}
                         <span className="client-component-list__grid">
                           <span>
                             <span className="client-component-list__label">Main category</span>

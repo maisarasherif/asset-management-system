@@ -9,7 +9,7 @@ The shared base that provides cross-product capabilities such as identity, notif
 _Avoid_: App, module, service
 
 **AMS Product**:
-The product workspace for assets, components, certificates, routine maintenance, catalog configuration, scheduler runs, and client access.
+The product workspace for assets, components, certificates, maintenance, catalog configuration, scheduler runs, and client access.
 _Avoid_: Asset module, main app
 
 **HR/Admin Product**:
@@ -147,6 +147,21 @@ _Avoid_: Car, automobile, fleet item
 **Asset**:
 An operational item tracked in the AMS Product for asset, component, certificate, maintenance, and client-access workflows.
 _Avoid_: Vehicle, compliance subject
+
+**Work Order**:
+A record of routine or non-routine work against one Asset or one of its components. Technicians assign, start, and complete each Work Order independently and record the Spare Parts used.
+
+**Routine Maintenance Plan**:
+A recurring service rule for an Asset or a component. An operating-hours threshold, calendar date, or the first of both triggers one open Work Order for the plan.
+
+**Quarantine Zone**:
+The register of red-tagged Assets and components. A red tag blocks assignment to a new project. An administrator can release the target after blocking Work Orders are resolved. The green tag indicates availability for use.
+
+**Spare Parts Store**:
+The Warehouse or the single store associated with a specific worksite project. Each store has its own on-hand counts by part number.
+
+**Parts Usage**:
+The quantity of a Spare Part consumed from a specific store on a Work Order. Saving usage decrements stock and records the entry together.
 
 **Certificate**:
 An AMS Product record of a test or certification for an Asset's component, with issue and expiry dates where applicable and an associated certificate document.

@@ -24,7 +24,7 @@ WHERE upa.user_id = $1
   AND u.status = 'ACTIVE'
   AND strpos(lower(concat_ws(' ', a.display_id, a.name, a.description, a.location, a.assigned_project)), lower($2::text)) > 0
   AND ($3::text = '' OR lower(a.assigned_project) = lower($3))
-  AND ($4::text = '' OR lower(a.status) = lower($4))
+  AND ($4::text = '' OR CASE WHEN $4 = 'QUARANTINED' THEN EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) ELSE lower(a.status) = lower($4) AND NOT EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) END)
 `
 
 type CountClientAssetsParams struct {
@@ -195,11 +195,7 @@ SELECT
     a.assigned_project,
     a.working_hours,
     a.working_hours_note,
-    a.maintenance_interval_hours,
-    a.next_maintenance_due_hours,
-    a.maintenance_required_at,
-    a.last_maintenance_completed_at,
-    a.last_maintenance_completed_hours,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) AS quarantined,
     a.template_id,
     a.created_at,
     a.updated_at
@@ -221,26 +217,22 @@ type GetClientAssetByIDParams struct {
 }
 
 type GetClientAssetByIDRow struct {
-	AssetID                       uuid.UUID  `json:"asset_id"`
-	DisplayID                     string     `json:"display_id"`
-	Name                          string     `json:"name"`
-	Photo                         string     `json:"photo"`
-	Datasheet                     string     `json:"datasheet"`
-	Description                   string     `json:"description"`
-	Status                        string     `json:"status"`
-	AssetKind                     string     `json:"asset_kind"`
-	Location                      string     `json:"location"`
-	AssignedProject               string     `json:"assigned_project"`
-	WorkingHours                  int64      `json:"working_hours"`
-	WorkingHoursNote              string     `json:"working_hours_note"`
-	MaintenanceIntervalHours      int64      `json:"maintenance_interval_hours"`
-	NextMaintenanceDueHours       int64      `json:"next_maintenance_due_hours"`
-	MaintenanceRequiredAt         *time.Time `json:"maintenance_required_at"`
-	LastMaintenanceCompletedAt    *time.Time `json:"last_maintenance_completed_at"`
-	LastMaintenanceCompletedHours int64      `json:"last_maintenance_completed_hours"`
-	TemplateID                    *uuid.UUID `json:"template_id"`
-	CreatedAt                     time.Time  `json:"created_at"`
-	UpdatedAt                     time.Time  `json:"updated_at"`
+	AssetID          uuid.UUID  `json:"asset_id"`
+	DisplayID        string     `json:"display_id"`
+	Name             string     `json:"name"`
+	Photo            string     `json:"photo"`
+	Datasheet        string     `json:"datasheet"`
+	Description      string     `json:"description"`
+	Status           string     `json:"status"`
+	AssetKind        string     `json:"asset_kind"`
+	Location         string     `json:"location"`
+	AssignedProject  string     `json:"assigned_project"`
+	WorkingHours     int64      `json:"working_hours"`
+	WorkingHoursNote string     `json:"working_hours_note"`
+	Quarantined      bool       `json:"quarantined"`
+	TemplateID       *uuid.UUID `json:"template_id"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetClientAssetByID(ctx context.Context, arg GetClientAssetByIDParams) (GetClientAssetByIDRow, error) {
@@ -259,11 +251,7 @@ func (q *Queries) GetClientAssetByID(ctx context.Context, arg GetClientAssetByID
 		&i.AssignedProject,
 		&i.WorkingHours,
 		&i.WorkingHoursNote,
-		&i.MaintenanceIntervalHours,
-		&i.NextMaintenanceDueHours,
-		&i.MaintenanceRequiredAt,
-		&i.LastMaintenanceCompletedAt,
-		&i.LastMaintenanceCompletedHours,
+		&i.Quarantined,
 		&i.TemplateID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -285,11 +273,7 @@ SELECT DISTINCT
     a.assigned_project,
     a.working_hours,
     a.working_hours_note,
-    a.maintenance_interval_hours,
-    a.next_maintenance_due_hours,
-    a.maintenance_required_at,
-    a.last_maintenance_completed_at,
-    a.last_maintenance_completed_hours,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) AS quarantined,
     a.template_id,
     a.created_at,
     a.updated_at
@@ -303,7 +287,7 @@ WHERE upa.user_id = $1
   AND u.status = 'ACTIVE'
   AND strpos(lower(concat_ws(' ', a.display_id, a.name, a.description, a.location, a.assigned_project)), lower($2::text)) > 0
   AND ($3::text = '' OR lower(a.assigned_project) = lower($3))
-  AND ($4::text = '' OR lower(a.status) = lower($4))
+  AND ($4::text = '' OR CASE WHEN $4 = 'QUARANTINED' THEN EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) ELSE lower(a.status) = lower($4) AND NOT EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) END)
 ORDER BY a.created_at DESC, a.asset_id
 LIMIT $6 OFFSET $5
 `
@@ -318,26 +302,22 @@ type GetClientAssetsPaginatedParams struct {
 }
 
 type GetClientAssetsPaginatedRow struct {
-	AssetID                       uuid.UUID  `json:"asset_id"`
-	DisplayID                     string     `json:"display_id"`
-	Name                          string     `json:"name"`
-	Photo                         string     `json:"photo"`
-	Datasheet                     string     `json:"datasheet"`
-	Description                   string     `json:"description"`
-	Status                        string     `json:"status"`
-	AssetKind                     string     `json:"asset_kind"`
-	Location                      string     `json:"location"`
-	AssignedProject               string     `json:"assigned_project"`
-	WorkingHours                  int64      `json:"working_hours"`
-	WorkingHoursNote              string     `json:"working_hours_note"`
-	MaintenanceIntervalHours      int64      `json:"maintenance_interval_hours"`
-	NextMaintenanceDueHours       int64      `json:"next_maintenance_due_hours"`
-	MaintenanceRequiredAt         *time.Time `json:"maintenance_required_at"`
-	LastMaintenanceCompletedAt    *time.Time `json:"last_maintenance_completed_at"`
-	LastMaintenanceCompletedHours int64      `json:"last_maintenance_completed_hours"`
-	TemplateID                    *uuid.UUID `json:"template_id"`
-	CreatedAt                     time.Time  `json:"created_at"`
-	UpdatedAt                     time.Time  `json:"updated_at"`
+	AssetID          uuid.UUID  `json:"asset_id"`
+	DisplayID        string     `json:"display_id"`
+	Name             string     `json:"name"`
+	Photo            string     `json:"photo"`
+	Datasheet        string     `json:"datasheet"`
+	Description      string     `json:"description"`
+	Status           string     `json:"status"`
+	AssetKind        string     `json:"asset_kind"`
+	Location         string     `json:"location"`
+	AssignedProject  string     `json:"assigned_project"`
+	WorkingHours     int64      `json:"working_hours"`
+	WorkingHoursNote string     `json:"working_hours_note"`
+	Quarantined      bool       `json:"quarantined"`
+	TemplateID       *uuid.UUID `json:"template_id"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetClientAssetsPaginated(ctx context.Context, arg GetClientAssetsPaginatedParams) ([]GetClientAssetsPaginatedRow, error) {
@@ -369,11 +349,7 @@ func (q *Queries) GetClientAssetsPaginated(ctx context.Context, arg GetClientAss
 			&i.AssignedProject,
 			&i.WorkingHours,
 			&i.WorkingHoursNote,
-			&i.MaintenanceIntervalHours,
-			&i.NextMaintenanceDueHours,
-			&i.MaintenanceRequiredAt,
-			&i.LastMaintenanceCompletedAt,
-			&i.LastMaintenanceCompletedHours,
+			&i.Quarantined,
 			&i.TemplateID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -544,6 +520,7 @@ SELECT
     c.created_at,
     c.updated_at,
     c.location,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = c.asset_id AND (q.component_id IS NULL OR q.component_id = c.component_id) AND q.released_at IS NULL) AS quarantined,
     c.assigned_project
 FROM components c
 LEFT JOIN categories cat ON cat.category_id = c.category_id
@@ -591,6 +568,7 @@ type GetClientComponentsByAssetRow struct {
 	CreatedAt              time.Time  `json:"created_at"`
 	UpdatedAt              time.Time  `json:"updated_at"`
 	Location               string     `json:"location"`
+	Quarantined            bool       `json:"quarantined"`
 	AssignedProject        string     `json:"assigned_project"`
 }
 
@@ -625,6 +603,7 @@ func (q *Queries) GetClientComponentsByAsset(ctx context.Context, arg GetClientC
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Location,
+			&i.Quarantined,
 			&i.AssignedProject,
 		); err != nil {
 			return nil, err
@@ -856,6 +835,7 @@ SELECT
     c.created_at,
     c.updated_at,
     c.location,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = c.asset_id AND (q.component_id IS NULL OR q.component_id = c.component_id) AND q.released_at IS NULL) AS quarantined,
     c.assigned_project
 FROM components c
 LEFT JOIN categories cat ON cat.category_id = c.category_id
@@ -912,6 +892,7 @@ type SearchClientAssetComponentsRow struct {
 	CreatedAt              time.Time  `json:"created_at"`
 	UpdatedAt              time.Time  `json:"updated_at"`
 	Location               string     `json:"location"`
+	Quarantined            bool       `json:"quarantined"`
 	AssignedProject        string     `json:"assigned_project"`
 }
 
@@ -954,6 +935,7 @@ func (q *Queries) SearchClientAssetComponents(ctx context.Context, arg SearchCli
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Location,
+			&i.Quarantined,
 			&i.AssignedProject,
 		); err != nil {
 			return nil, err

@@ -116,11 +116,10 @@ function getHelpPanelContent(pathname: string) {
     };
   }
 
-  if (pathname.includes("/routine-maintenance")) {
+  if (pathname.startsWith("/maintenance")) {
     return {
-      title: "Routine maintenance",
-      content:
-        "Track working hours, review maintenance thresholds, and close routine maintenance events for the selected asset.",
+      title: "Maintenance",
+      content: "Track work orders, routine service plans, equipment quarantine, and spare parts across stores.",
     };
   }
 
@@ -340,7 +339,17 @@ export function AppShellLayout() {
           label: "Compliance",
           items: [{ href: "/hr-admin/records", text: "Records" }],
         },
-      ];
+        {
+        label: "Maintenance",
+        items: [
+          { href: "/maintenance", text: "Work orders" },
+          { href: "/maintenance/plans", text: "Routine plans" },
+          { href: "/maintenance/quarantine", text: "Quarantine Zone" },
+          { href: "/maintenance/inventory", text: "Spare parts inventory" },
+          { href: "/maintenance/usage", text: "Parts usage" },
+        ],
+      },
+    ];
 
       if (hrAdminRole === "ADMIN") {
         groups[2].items.push({ href: "/hr-admin/record-types", text: "Record types" });
@@ -470,7 +479,7 @@ export function AppShellLayout() {
                   <strong>HR/Admin</strong>
                   <span>Compliance registry</span>
                 </div>
-              ) : (
+              ) : !location.pathname.startsWith("/maintenance") ? (
                 <div className="brand-sidebar__asset">
                   <span className="brand-sidebar__asset-label">Current asset</span>
                   <PagedSelect label="Select asset"
@@ -491,11 +500,6 @@ export function AppShellLayout() {
                         return;
                       }
 
-                      if (location.pathname.includes("/routine-maintenance")) {
-                        navigate(`/assets/${nextAssetId}/routine-maintenance`);
-                        return;
-                      }
-
                       if (location.pathname.startsWith("/assets/") && !location.pathname.endsWith("/new")) {
                         navigate(`/assets/${nextAssetId}`);
                         return;
@@ -505,7 +509,7 @@ export function AppShellLayout() {
                     }}
                   />
                 </div>
-              )
+              ) : undefined
             }
             onFollow={(event) => {
               event.preventDefault();

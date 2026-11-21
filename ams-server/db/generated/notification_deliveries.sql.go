@@ -87,7 +87,7 @@ FROM notification_deliveries nd
 LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
 LEFT JOIN components comp ON comp.component_id = cert.component_id
 LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
-LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN maintenance_work_orders ame ON nd.source_type = 'routine_maintenance' AND ame.work_order_id = nd.source_id
 LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
 LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
 LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
@@ -125,7 +125,7 @@ FROM notification_deliveries nd
 LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
 LEFT JOIN components comp ON comp.component_id = cert.component_id
 LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
-LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN maintenance_work_orders ame ON nd.source_type = 'routine_maintenance' AND ame.work_order_id = nd.source_id
 LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
 LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
 LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
@@ -296,7 +296,7 @@ FROM notification_deliveries nd
 LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
 LEFT JOIN components comp ON comp.component_id = cert.component_id
 LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
-LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN maintenance_work_orders ame ON nd.source_type = 'routine_maintenance' AND ame.work_order_id = nd.source_id
 LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
 LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
 LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
@@ -439,7 +439,7 @@ FROM notification_deliveries nd
 LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
 LEFT JOIN components comp ON comp.component_id = cert.component_id
 LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
-LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN maintenance_work_orders ame ON nd.source_type = 'routine_maintenance' AND ame.work_order_id = nd.source_id
 LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
 LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
 LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
@@ -782,75 +782,6 @@ func (q *Queries) GetHRAdminNotificationDeliveryFailuresPaginated(ctx context.Co
 			&i.Channel,
 			&i.Tier,
 			&i.ErrorMessage,
-			&i.FailedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getRoutineMaintenanceNotificationDeliveriesForAsset = `-- name: GetRoutineMaintenanceNotificationDeliveriesForAsset :many
-SELECT
-    nd.delivery_id,
-    nd.source_id AS maintenance_event_id,
-    nd.channel,
-    nd.status,
-    nd.external_id,
-    nd.error_message,
-    nd.created_at,
-    nd.updated_at,
-    nd.sent_at,
-    nd.failed_at
-FROM notification_deliveries nd
-JOIN asset_maintenance_events ame ON ame.maintenance_event_id = nd.source_id
-WHERE nd.source_type = 'routine_maintenance'
-  AND ame.asset_id = $1
-  AND ame.maintenance_event_id = ANY($2::uuid[])
-ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.updated_at, nd.created_at) DESC
-`
-
-type GetRoutineMaintenanceNotificationDeliveriesForAssetParams struct {
-	AssetID  uuid.UUID   `json:"asset_id"`
-	EventIds []uuid.UUID `json:"event_ids"`
-}
-
-type GetRoutineMaintenanceNotificationDeliveriesForAssetRow struct {
-	DeliveryID         uuid.UUID  `json:"delivery_id"`
-	MaintenanceEventID uuid.UUID  `json:"maintenance_event_id"`
-	Channel            string     `json:"channel"`
-	Status             string     `json:"status"`
-	ExternalID         string     `json:"external_id"`
-	ErrorMessage       string     `json:"error_message"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
-	SentAt             *time.Time `json:"sent_at"`
-	FailedAt           *time.Time `json:"failed_at"`
-}
-
-func (q *Queries) GetRoutineMaintenanceNotificationDeliveriesForAsset(ctx context.Context, arg GetRoutineMaintenanceNotificationDeliveriesForAssetParams) ([]GetRoutineMaintenanceNotificationDeliveriesForAssetRow, error) {
-	rows, err := q.db.Query(ctx, getRoutineMaintenanceNotificationDeliveriesForAsset, arg.AssetID, arg.EventIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetRoutineMaintenanceNotificationDeliveriesForAssetRow
-	for rows.Next() {
-		var i GetRoutineMaintenanceNotificationDeliveriesForAssetRow
-		if err := rows.Scan(
-			&i.DeliveryID,
-			&i.MaintenanceEventID,
-			&i.Channel,
-			&i.Status,
-			&i.ExternalID,
-			&i.ErrorMessage,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SentAt,
 			&i.FailedAt,
 		); err != nil {
 			return nil, err

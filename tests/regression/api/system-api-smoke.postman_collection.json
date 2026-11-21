@@ -1623,7 +1623,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Manual Asset Updated {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Updated manual asset\",\n  \"status\": \"MAINTENANCE\",\n  \"location\": \"Warehouse B\",\n  \"assigned_project\": \"Project Manual 2 {{runSuffix}}\"\n}"
+              "raw": "{\n  \"name\": \"Manual Asset Updated {{runSuffix}}\",\n  \"photo\": \"\",\n  \"datasheet\": \"\",\n  \"description\": \"Updated manual asset\",\n  \"status\": \"INACTIVE\",\n  \"location\": \"Warehouse B\",\n  \"assigned_project\": \"Project Manual 2 {{runSuffix}}\"\n}"
             },
             "url": "{{baseUrl}}/asset/{{asset_id}}"
           },

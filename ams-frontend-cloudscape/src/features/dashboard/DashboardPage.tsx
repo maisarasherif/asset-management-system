@@ -30,8 +30,9 @@ import {
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import { formatDate, formatDateTime, humanizeEnum } from "../../utils/format";
-import { assetStatusType, certificateStatusType } from "../../utils/status";
+import { formatDate, humanizeEnum } from "../../utils/format";
+import { Availability, EquipmentMaintenanceSummary } from "../maintenance/EquipmentMaintenanceSummary";
+import { certificateStatusType } from "../../utils/status";
 
 type DashboardCertificate = import("../../types/ams").CertificateWithContext;
 
@@ -300,14 +301,6 @@ export function DashboardPage() {
   ];
 
   const componentCount = dashboard.summary.component_count;
-  const maintenanceConfigured = dashboard.asset.maintenance_interval_hours > 0;
-  const maintenanceRequired =
-    Boolean(dashboard.asset.maintenance_required_at) ||
-    (maintenanceConfigured &&
-      dashboard.asset.working_hours >= dashboard.asset.next_maintenance_due_hours);
-  const maintenanceRemaining = maintenanceConfigured
-    ? dashboard.asset.next_maintenance_due_hours - dashboard.asset.working_hours
-    : 0;
 
   return (
     <ContentLayout
@@ -437,9 +430,7 @@ export function DashboardPage() {
             <SpaceBetween direction="vertical" size="xs">
               <div className="summary-row">
                 <Box variant="awsui-key-label">Status</Box>
-                <StatusIndicator type={assetStatusType(dashboard.asset.status)}>
-                  {humanizeEnum(dashboard.asset.status)}
-                </StatusIndicator>
+                <Availability quarantined={dashboard.asset.quarantined} status={dashboard.asset.status} />
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Assigned project</Box>
@@ -465,49 +456,7 @@ export function DashboardPage() {
               </div>
               <div className="summary-row">
                 <Box variant="awsui-key-label">Routine maintenance</Box>
-                {maintenanceRequired ? (
-                  <StatusIndicator type="warning">Required</StatusIndicator>
-                ) : maintenanceConfigured ? (
-                  <StatusIndicator type="success">On schedule</StatusIndicator>
-                ) : (
-                  <StatusIndicator type="info">Not configured</StatusIndicator>
-                )}
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Working hours</Box>
-                <Box>{dashboard.asset.working_hours.toLocaleString()} h</Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Interval</Box>
-                <Box>
-                  {maintenanceConfigured
-                    ? `${dashboard.asset.maintenance_interval_hours.toLocaleString()} h`
-                    : "Not configured"}
-                </Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Next due</Box>
-                <Box>
-                  {maintenanceConfigured
-                    ? `${dashboard.asset.next_maintenance_due_hours.toLocaleString()} h`
-                    : "Not configured"}
-                </Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Remaining</Box>
-                <Box>
-                  {maintenanceConfigured
-                    ? `${Math.max(maintenanceRemaining, 0).toLocaleString()} h`
-                    : "Not configured"}
-                </Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Last maintenance</Box>
-                <Box>
-                  {dashboard.asset.last_maintenance_completed_at
-                    ? `${formatDateTime(dashboard.asset.last_maintenance_completed_at)} at ${dashboard.asset.last_maintenance_completed_hours.toLocaleString()} h`
-                    : "No completion recorded"}
-                </Box>
+                <EquipmentMaintenanceSummary asset={dashboard.asset} />
               </div>
             </SpaceBetween>
           </Container>

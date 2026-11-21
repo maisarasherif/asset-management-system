@@ -16,7 +16,7 @@ import (
 	"github.com/maisarasherif/asset-management-system/ams-server/utils"
 )
 
-func clientUserID(c *gin.Context) (uuid.UUID, bool) {
+func requestUserID(c *gin.Context) (uuid.UUID, bool) {
 	userID, err := utils.GetUserIdFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -34,7 +34,7 @@ func clientUserID(c *gin.Context) (uuid.UUID, bool) {
 
 func GetClientAssets(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, ok := clientUserID(c)
+		userID, ok := requestUserID(c)
 		if !ok {
 			return
 		}
@@ -48,7 +48,7 @@ func GetClientAssets(pool *pgxpool.Pool) gin.HandlerFunc {
 		filters := utils.ReadListFilters(c)
 		search := filters.Text("search")
 		filterProject := filters.Text("project")
-		filterStatus := filters.Enum("status", "ACTIVE", "INACTIVE", "MAINTENANCE")
+		filterStatus := filters.Enum("status", "ACTIVE", "INACTIVE", "QUARANTINED")
 		if !filters.Valid() {
 			return
 		}
@@ -79,7 +79,7 @@ func GetClientAssets(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetClientAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, ok := clientUserID(c)
+		userID, ok := requestUserID(c)
 		if !ok {
 			return
 		}
@@ -146,7 +146,7 @@ func GetClientAsset(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetClientCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, ok := clientUserID(c)
+		userID, ok := requestUserID(c)
 		if !ok {
 			return
 		}
@@ -188,7 +188,7 @@ func GetClientCertificateFile(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func SearchClientAssetCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, ok := clientUserID(c)
+		userID, ok := requestUserID(c)
 		if !ok {
 			return
 		}
@@ -244,7 +244,7 @@ func SearchClientAssetCertificates(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func SearchClientAssetComponents(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, ok := clientUserID(c)
+		userID, ok := requestUserID(c)
 		if !ok {
 			return
 		}
@@ -284,7 +284,7 @@ func SearchClientAssetComponents(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func SearchClientAssetCertificateTypes(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, ok := clientUserID(c)
+		userID, ok := requestUserID(c)
 		if !ok {
 			return
 		}

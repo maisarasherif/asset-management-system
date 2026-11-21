@@ -239,16 +239,15 @@ func TestSingleAssetEquipmentCreationRegression(t *testing.T) {
 	testTwoID := createTestType(t, h, "Single Asset Load Test", 6)
 
 	asset := createAsset(t, h, map[string]any{
-		"name":                       "Single Equipment Asset",
-		"photo":                      "",
-		"datasheet":                  "",
-		"description":                "Single asset equipment regression",
-		"status":                     "ACTIVE",
-		"asset_kind":                 "SINGLE_EQUIPMENT",
-		"location":                   "Yard SE",
-		"assigned_project":           "Project Single Equipment",
-		"maintenance_interval_hours": 0,
-		"template_id":                nil,
+		"name":             "Single Equipment Asset",
+		"photo":            "",
+		"datasheet":        "",
+		"description":      "Single asset equipment regression",
+		"status":           "ACTIVE",
+		"asset_kind":       "SINGLE_EQUIPMENT",
+		"location":         "Yard SE",
+		"assigned_project": "Project Single Equipment",
+		"template_id":      nil,
 		"single_equipment": map[string]any{
 			"equipment_type_id": equipmentTypeID,
 			"test_type_ids":     []string{testOneID, testTwoID, testOneID},
@@ -407,7 +406,7 @@ func TestUpdateAsset(t *testing.T) {
 		"photo":            "",
 		"datasheet":        "",
 		"description":      "After update",
-		"status":           "MAINTENANCE",
+		"status":           "INACTIVE",
 		"location":         "New Yard",
 		"assigned_project": "Project Two",
 	}, http.StatusOK)
@@ -415,7 +414,7 @@ func TestUpdateAsset(t *testing.T) {
 	fetched := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/asset/"+assetID, nil, http.StatusOK))
 	assertField(t, fetched, "name", "Updated Asset")
 	assertField(t, fetched, "description", "After update")
-	assertField(t, fetched, "status", "MAINTENANCE")
+	assertField(t, fetched, "status", "INACTIVE")
 	assertField(t, fetched, "location", "New Yard")
 	assertField(t, fetched, "assigned_project", "Project Two")
 
@@ -425,7 +424,7 @@ func TestUpdateAsset(t *testing.T) {
 		"photo":            "",
 		"datasheet":        "",
 		"description":      "After update",
-		"status":           "MAINTENANCE",
+		"status":           "INACTIVE",
 		"location":         "New Yard",
 		"assigned_project": missingProjectName,
 	}, http.StatusBadRequest))
@@ -457,122 +456,18 @@ func TestPatchAsset(t *testing.T) {
 	assertField(t, fetched, "description", "Patch me")
 }
 
-func TestRoutineMaintenanceThresholdFlowIsIdempotent(t *testing.T) {
-	h := setupIntegrationTest(t)
-	disableExternalMaintenanceNotifications(t)
-
-	created := createAsset(t, h, map[string]any{
-		"name":                       "Routine Maintenance Asset",
-		"photo":                      "",
-		"datasheet":                  "",
-		"description":                "Tracks maintenance by working hours",
-		"status":                     "ACTIVE",
-		"location":                   "Engine Room",
-		"assigned_project":           "Project Maintenance",
-		"maintenance_interval_hours": 100,
-	})
-	assetID := stringField(t, created, "asset_id")
-	assertField(t, created, "maintenance_interval_hours", 100)
-	assertField(t, created, "next_maintenance_due_hours", 100)
-
-	belowThreshold := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID+"/working-hours", map[string]any{
-		"working_hours": 90,
-		"note":          "Below threshold",
-	}, http.StatusOK))
-	belowAsset := objectField(t, belowThreshold, "asset")
-	assertField(t, belowAsset, "working_hours", 90)
-	if belowThreshold["maintenance_event"] != nil {
-		t.Fatalf("expected no maintenance event below threshold, got %v", belowThreshold["maintenance_event"])
-	}
-
-	events := decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/asset/"+assetID+"/routine-maintenance", nil, http.StatusOK))
-	if len(events) != 0 {
-		t.Fatalf("expected no routine maintenance events below threshold, got %d", len(events))
-	}
-
-	triggered := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID+"/working-hours", map[string]any{
-		"working_hours": 100,
-		"note":          "Reached threshold",
-	}, http.StatusOK))
-	triggeredAsset := objectField(t, triggered, "asset")
-	assertField(t, triggeredAsset, "status", "MAINTENANCE")
-	assertField(t, triggeredAsset, "working_hours", 100)
-	triggeredEvent := objectField(t, triggered, "maintenance_event")
-	assertField(t, triggeredEvent, "status", "REQUIRED")
-	assertField(t, triggeredEvent, "due_at_hours", 100)
-	assertField(t, triggeredEvent, "triggered_at_hours", 100)
-	eventID := stringField(t, triggeredEvent, "maintenance_event_id")
-
-	failureAudit := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/notification-failures?page=1&limit=20", nil, http.StatusOK))
-	routineFailure := findByStringField(t, dataArray(t, failureAudit), "idempotency_key", "routine-maintenance:"+eventID+":EMAIL")
-	assertField(t, routineFailure, "source_type", "routine_maintenance")
-	assertField(t, routineFailure, "source_id", eventID)
-	assertField(t, routineFailure, "source_name", "Routine maintenance")
-	assertField(t, routineFailure, "asset_id", assetID)
-	assertField(t, routineFailure, "channel", "EMAIL")
-	assertField(t, routineFailure, "error_message", "River client is not configured")
-
-	jobAudit := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/scheduler/certificate-notifications?page=1&limit=20", nil, http.StatusOK))
-	routineJob := findByStringField(t, dataArray(t, jobAudit), "idempotency_key", "routine-maintenance:"+eventID+":EMAIL")
-	assertField(t, routineJob, "source_type", "routine_maintenance")
-	assertField(t, routineJob, "source_id", eventID)
-	assertField(t, routineJob, "status", "FAILED")
-
-	duplicate := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID+"/working-hours", map[string]any{
-		"working_hours": 125,
-		"note":          "Same maintenance cycle",
-	}, http.StatusOK))
-	if duplicate["maintenance_event"] != nil {
-		t.Fatalf("expected duplicate threshold update to return no new event, got %v", duplicate["maintenance_event"])
-	}
-
-	events = decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/asset/"+assetID+"/routine-maintenance", nil, http.StatusOK))
-	if len(events) != 1 {
-		t.Fatalf("expected exactly one open routine maintenance event, got %d", len(events))
-	}
-	assertField(t, events[0], "maintenance_event_id", eventID)
-	assertField(t, events[0], "status", "REQUIRED")
-
-	completed := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodPost, "/v1/asset/"+assetID+"/routine-maintenance/complete", map[string]any{
-		"completion_notes": "Routine service completed",
-	}, http.StatusOK))
-	completedAsset := objectField(t, completed, "asset")
-	assertField(t, completedAsset, "status", "ACTIVE")
-	assertField(t, completedAsset, "last_maintenance_completed_hours", 125)
-	assertField(t, completedAsset, "next_maintenance_due_hours", 225)
-	completedEvent := objectField(t, completed, "maintenance_event")
-	assertField(t, completedEvent, "status", "COMPLETED")
-	assertField(t, completedEvent, "completion_notes", "Routine service completed")
-
-	events = decodeArray(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet, "/v1/asset/"+assetID+"/routine-maintenance", nil, http.StatusOK))
-	if len(events) != 1 {
-		t.Fatalf("expected completed event history to remain available, got %d events", len(events))
-	}
-	assertField(t, events[0], "status", "COMPLETED")
-	history := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet,
-		"/v1/asset/"+assetID+"/routine-maintenance/events?status=COMPLETED&search=service&limit=1", nil, http.StatusOK))
-	assertField(t, objectField(t, history, "meta"), "total", 1)
-	assertField(t, dataArray(t, history)[0], "maintenance_event_id", eventID)
-
-	failures := decodeObject(t, performJSONRequest(t, h.router, h.adminToken, http.MethodGet,
-		"/v1/scheduler/notification-failures?source_type=routine_maintenance&status=FAILED&channel=EMAIL&limit=1", nil, http.StatusOK))
-	assertField(t, objectField(t, failures, "meta"), "total", 1)
-	assertField(t, dataArray(t, failures)[0], "source_id", eventID)
-}
-
 func TestWorkingHoursCannotDecrease(t *testing.T) {
 	h := setupIntegrationTest(t)
 	disableExternalMaintenanceNotifications(t)
 
 	assetID := stringField(t, createAsset(t, h, map[string]any{
-		"name":                       "Counter Guard Asset",
-		"photo":                      "",
-		"datasheet":                  "",
-		"description":                "Protects monotonic working hours",
-		"status":                     "ACTIVE",
-		"location":                   "Deck",
-		"assigned_project":           "Project Counter",
-		"maintenance_interval_hours": 500,
+		"name":             "Counter Guard Asset",
+		"photo":            "",
+		"datasheet":        "",
+		"description":      "Protects monotonic working hours",
+		"status":           "ACTIVE",
+		"location":         "Deck",
+		"assigned_project": "Project Counter",
 	}), "asset_id")
 
 	performJSONRequest(t, h.router, h.adminToken, http.MethodPatch, "/v1/asset/"+assetID+"/working-hours", map[string]any{
@@ -584,7 +479,7 @@ func TestWorkingHoursCannotDecrease(t *testing.T) {
 		"working_hours": 199,
 		"note":          "Invalid lower reading",
 	}, http.StatusBadRequest))
-	assertField(t, body, "error", "working hours cannot be lower than the current counter")
+	assertField(t, body, "error", "Working hours cannot be lower than the current counter")
 }
 
 func TestDeleteAsset(t *testing.T) {
@@ -1990,7 +1885,15 @@ TRUNCATE TABLE
   hr_admin_persons,
   hr_admin_vehicles,
   hr_admin_companies,
-  asset_maintenance_events,
+  maintenance_quarantine_orders,
+  maintenance_quarantines,
+  maintenance_work_orders,
+  maintenance_plans,
+  maintenance_stock_changes,
+  maintenance_part_usage,
+  maintenance_stock,
+  maintenance_parts,
+  maintenance_stores,
   certificate_upload_audit,
   certificate_issuances,
   certificate_number_counters,
@@ -2021,8 +1924,8 @@ RESTART IDENTITY CASCADE;
 		t.Fatalf("failed to reset test database: %v", err)
 	}
 
-	if _, err := pool.Exec(context.Background(), "ALTER SEQUENCE IF EXISTS asset_maintenance_event_display_id_seq RESTART WITH 1"); err != nil {
-		t.Fatalf("failed to reset asset maintenance event display sequence: %v", err)
+	if _, err := pool.Exec(context.Background(), "INSERT INTO maintenance_stores (project_id) VALUES (NULL)"); err != nil {
+		t.Fatalf("failed to recreate the test warehouse: %v", err)
 	}
 }
 

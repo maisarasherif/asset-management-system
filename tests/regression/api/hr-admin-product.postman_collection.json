@@ -3074,7 +3074,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const now = new Date();",
+                  "const now = new Date(Date.now() + 4 * 60 * 60 * 1000);",
                   "const issue = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0));",
                   "const expiry = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 30, 0, 0, 0));",
                   "pm.collectionVariables.set('scheduler_issue_date', issue.toISOString());",

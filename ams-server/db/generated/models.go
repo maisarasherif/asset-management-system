@@ -12,39 +12,21 @@ import (
 )
 
 type Asset struct {
-	Name                          string     `json:"name"`
-	Photo                         string     `json:"photo"`
-	Datasheet                     string     `json:"datasheet"`
-	Description                   string     `json:"description"`
-	Status                        string     `json:"status"`
-	Location                      string     `json:"location"`
-	AssignedProject               string     `json:"assigned_project"`
-	CreatedAt                     time.Time  `json:"created_at"`
-	UpdatedAt                     time.Time  `json:"updated_at"`
-	AssetID                       uuid.UUID  `json:"asset_id"`
-	DisplayID                     string     `json:"display_id"`
-	TemplateID                    *uuid.UUID `json:"template_id"`
-	WorkingHours                  int64      `json:"working_hours"`
-	WorkingHoursNote              string     `json:"working_hours_note"`
-	MaintenanceIntervalHours      int64      `json:"maintenance_interval_hours"`
-	NextMaintenanceDueHours       int64      `json:"next_maintenance_due_hours"`
-	MaintenanceRequiredAt         *time.Time `json:"maintenance_required_at"`
-	LastMaintenanceCompletedAt    *time.Time `json:"last_maintenance_completed_at"`
-	LastMaintenanceCompletedHours int64      `json:"last_maintenance_completed_hours"`
-	AssetKind                     string     `json:"asset_kind"`
-}
-
-type AssetMaintenanceEvent struct {
-	MaintenanceEventID  uuid.UUID  `json:"maintenance_event_id"`
-	DisplayID           string     `json:"display_id"`
-	AssetID             uuid.UUID  `json:"asset_id"`
-	DueAtHours          int64      `json:"due_at_hours"`
-	TriggeredAtHours    int64      `json:"triggered_at_hours"`
-	PreviousAssetStatus string     `json:"previous_asset_status"`
-	Status              string     `json:"status"`
-	CompletedAt         *time.Time `json:"completed_at"`
-	CompletionNotes     string     `json:"completion_notes"`
-	CreatedAt           time.Time  `json:"created_at"`
+	Name             string     `json:"name"`
+	Photo            string     `json:"photo"`
+	Datasheet        string     `json:"datasheet"`
+	Description      string     `json:"description"`
+	Status           string     `json:"status"`
+	Location         string     `json:"location"`
+	AssignedProject  string     `json:"assigned_project"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	AssetID          uuid.UUID  `json:"asset_id"`
+	DisplayID        string     `json:"display_id"`
+	TemplateID       *uuid.UUID `json:"template_id"`
+	WorkingHours     int64      `json:"working_hours"`
+	WorkingHoursNote string     `json:"working_hours_note"`
+	AssetKind        string     `json:"asset_kind"`
 }
 
 type AssetTemplate struct {
@@ -417,6 +399,97 @@ type MainCategory struct {
 	MainCategoryID   uuid.UUID `json:"main_category_id"`
 	DisplayID        string    `json:"display_id"`
 	SortOrder        int32     `json:"sort_order"`
+}
+
+type MaintenancePart struct {
+	PartID     uuid.UUID `json:"part_id"`
+	PartNumber string    `json:"part_number"`
+	Name       string    `json:"name"`
+}
+
+type MaintenancePartUsage struct {
+	UsageID     uuid.UUID  `json:"usage_id"`
+	WorkOrderID uuid.UUID  `json:"work_order_id"`
+	StoreID     uuid.UUID  `json:"store_id"`
+	PartID      uuid.UUID  `json:"part_id"`
+	Quantity    int64      `json:"quantity"`
+	Version     int64      `json:"version"`
+	RecordedBy  *uuid.UUID `json:"recorded_by"`
+	RecordedAt  time.Time  `json:"recorded_at"`
+}
+
+type MaintenancePlan struct {
+	PlanID            uuid.UUID   `json:"plan_id"`
+	AssetID           uuid.UUID   `json:"asset_id"`
+	ComponentID       *uuid.UUID  `json:"component_id"`
+	Title             string      `json:"title"`
+	IntervalHours     *int64      `json:"interval_hours"`
+	IntervalMonths    *int32      `json:"interval_months"`
+	NextDueHours      *int64      `json:"next_due_hours"`
+	NextDueDate       pgtype.Date `json:"next_due_date"`
+	QuarantineWhenDue bool        `json:"quarantine_when_due"`
+	Active            bool        `json:"active"`
+}
+
+type MaintenanceQuarantine struct {
+	QuarantineID uuid.UUID  `json:"quarantine_id"`
+	AssetID      uuid.UUID  `json:"asset_id"`
+	ComponentID  *uuid.UUID `json:"component_id"`
+	Reason       string     `json:"reason"`
+	TaggedBy     *uuid.UUID `json:"tagged_by"`
+	TaggedAt     time.Time  `json:"tagged_at"`
+	ReleasedBy   *uuid.UUID `json:"released_by"`
+	ReleasedAt   *time.Time `json:"released_at"`
+	ReleaseNotes string     `json:"release_notes"`
+}
+
+type MaintenanceQuarantineOrder struct {
+	QuarantineID uuid.UUID `json:"quarantine_id"`
+	WorkOrderID  uuid.UUID `json:"work_order_id"`
+}
+
+type MaintenanceStock struct {
+	StoreID  uuid.UUID `json:"store_id"`
+	PartID   uuid.UUID `json:"part_id"`
+	Quantity int64     `json:"quantity"`
+	Version  int64     `json:"version"`
+}
+
+type MaintenanceStockChange struct {
+	ChangeID         uuid.UUID  `json:"change_id"`
+	UsageID          *uuid.UUID `json:"usage_id"`
+	StoreID          uuid.UUID  `json:"store_id"`
+	PartID           uuid.UUID  `json:"part_id"`
+	PreviousQuantity int64      `json:"previous_quantity"`
+	Quantity         int64      `json:"quantity"`
+	ResultingUsage   *int64     `json:"resulting_usage"`
+	Reason           string     `json:"reason"`
+	ChangedBy        *uuid.UUID `json:"changed_by"`
+	ChangedAt        time.Time  `json:"changed_at"`
+}
+
+type MaintenanceStore struct {
+	StoreID   uuid.UUID  `json:"store_id"`
+	ProjectID *uuid.UUID `json:"project_id"`
+}
+
+type MaintenanceWorkOrder struct {
+	WorkOrderID     uuid.UUID   `json:"work_order_id"`
+	DisplayID       string      `json:"display_id"`
+	PlanID          *uuid.UUID  `json:"plan_id"`
+	AssetID         uuid.UUID   `json:"asset_id"`
+	ComponentID     *uuid.UUID  `json:"component_id"`
+	Title           string      `json:"title"`
+	Description     string      `json:"description"`
+	Status          string      `json:"status"`
+	AssigneeID      *uuid.UUID  `json:"assignee_id"`
+	CreatedBy       *uuid.UUID  `json:"created_by"`
+	CreatedAt       time.Time   `json:"created_at"`
+	DueHours        *int64      `json:"due_hours"`
+	DueDate         pgtype.Date `json:"due_date"`
+	ClosedBy        *uuid.UUID  `json:"closed_by"`
+	ClosedAt        *time.Time  `json:"closed_at"`
+	CompletionNotes string      `json:"completion_notes"`
 }
 
 type NotificationDelivery struct {

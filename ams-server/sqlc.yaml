@@ -54,20 +54,6 @@ sql:
           go_type: "time.Time"
         - column: "assets.updated_at"
           go_type: "time.Time"
-        - column: "assets.maintenance_required_at"
-          go_type:
-            type: "time.Time"
-            pointer: true
-        - column: "assets.last_maintenance_completed_at"
-          go_type:
-            type: "time.Time"
-            pointer: true
-        - column: "asset_maintenance_events.created_at"
-          go_type: "time.Time"
-        - column: "asset_maintenance_events.completed_at"
-          go_type:
-            type: "time.Time"
-            pointer: true
         - column: "components.created_at"
           go_type: "time.Time"
         - column: "components.updated_at"
@@ -192,3 +178,24 @@ sql:
           go_type: "time.Time"
         - column: "compliance_record_versions.updated_at"
           go_type: "time.Time"
+
+        - column: "maintenance_plans.interval_hours"
+          go_type:
+            type: "int64"
+            pointer: true
+        - column: "maintenance_plans.interval_months"
+          go_type:
+            type: "int32"
+            pointer: true
+        - column: "maintenance_plans.next_due_hours"
+          go_type:
+            type: "int64"
+            pointer: true
+        - column: "maintenance_work_orders.due_hours"
+          go_type:
+            type: "int64"
+            pointer: true
+        - column: "maintenance_stock_changes.resulting_usage"
+          go_type:
+            type: "int64"
+            pointer: true

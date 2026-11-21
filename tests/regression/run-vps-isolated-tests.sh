@@ -24,15 +24,19 @@ FRONTEND_PORT="${FRONTEND_PORT:-14175}"
 KEEP_DB="${KEEP_DB:-0}"
 RECLAIM_TEST_PORTS="${RECLAIM_TEST_PORTS:-0}"
 RUN_GO_REGRESSION="${RUN_GO_REGRESSION:-${RUN_REGRESSION:-0}}"
+VERIFY_MAINTENANCE_UPGRADE="${VERIFY_MAINTENANCE_UPGRADE:-0}"
 RUN_NEWMAN="${RUN_NEWMAN:-1}"
-NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json tests/regression/api/hr-admin-product.postman_collection.json tests/regression/api/generated-renewal-certificates.postman_collection.json}"
+NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/spare-parts-inventory.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json tests/regression/api/hr-admin-product.postman_collection.json tests/regression/api/generated-renewal-certificates.postman_collection.json}"
 RUN_PLAYWRIGHT="${RUN_PLAYWRIGHT:-1}"
 E2E_PROFILE="${E2E_PROFILE:-default}"
 DEFAULT_E2E_SPECS="../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/hr-admin-product.spec.ts ../tests/regression/e2e/generated-renewal-certificates.spec.ts"
 case "$E2E_PROFILE" in
   default) ;;
-  certificates-final)
+  certificates-final|maintenance-final)
     DEFAULT_E2E_SPECS+=" ../tests/regression/e2e/client-asset-certificates.spec.ts ../tests/regression/e2e/single-asset-equipment.spec.ts ../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/template-catalog.spec.ts ../tests/regression/e2e/user-management-permissions.spec.ts ../tests/regression/e2e/scheduler-management.spec.ts ../tests/regression/e2e/auth-cookie-session.spec.ts ../tests/regression/e2e/api-auth-smoke.spec.ts"
+    if [[ "$E2E_PROFILE" == "maintenance-final" ]]; then
+      DEFAULT_E2E_SPECS+=" ../tests/regression/e2e/spare-parts-inventory.spec.ts"
+    fi
     ;;
   *) echo "ERROR: unknown E2E_PROFILE: $E2E_PROFILE" >&2; exit 2 ;;
 esac
@@ -183,13 +187,16 @@ with open(path, "wb") as handle:
 PY
 }
 
-prepare_database() {
+create_test_database() {
   echo "Creating isolated PostgreSQL database: $DATABASE_NAME"
   run_sql "$MAINTENANCE_DATABASE_URL" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DATABASE_NAME';"
   run_sql "$MAINTENANCE_DATABASE_URL" "DROP DATABASE IF EXISTS $QUOTED_DATABASE_NAME;"
   run_sql "$MAINTENANCE_DATABASE_URL" "CREATE DATABASE $QUOTED_DATABASE_NAME;"
   DATABASE_CREATED=1
+}
 
+prepare_database() {
+  create_test_database
   echo "Applying migrations to isolated database"
   (cd "$SERVER_DIR" && migrate -path db/migrations -database "$TEST_DATABASE_URL" up)
 }
@@ -455,6 +462,17 @@ printf 'APP_ENV=test\nDATABASE_URL=%q\nAMS_TEST_STORAGE_PREFIX=%q\nAMS_TEST_STOR
 (cd "$SERVER_DIR" && go build -buildvcs=false -o "$STORAGE_CLEANUP_BINARY" ./cmd/test-storage-cleanup)
 echo "Run evidence: $RUN_DIR"
 echo "Test storage prefix: $AMS_TEST_STORAGE_PREFIX"
+
+if [[ "$VERIFY_MAINTENANCE_UPGRADE" == "1" ]]; then
+  create_test_database
+  (
+    cd "$SERVER_DIR"
+    migrate -path db/migrations -database "$TEST_DATABASE_URL" goto 56
+    psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$SCRIPT_DIR/fixtures/maintenance-upgrade-seed.sql"
+    migrate -path db/migrations -database "$TEST_DATABASE_URL" up
+    psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$SCRIPT_DIR/fixtures/maintenance-upgrade-verify.sql"
+  ) 2>&1 | tee "$RUN_DIR/maintenance-upgrade.log"
+fi
 
 prepare_database
 

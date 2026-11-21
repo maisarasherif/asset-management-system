@@ -3,7 +3,6 @@ import type {
   ClientComponent,
   Asset,
   AssetInput,
-  AssetMaintenanceEvent,
   AssetMaintenanceUpdateResponse,
   AssetWorkingHoursInput,
   AssetTemplateInput,
@@ -39,7 +38,6 @@ import type {
 	  PatchCertificateInput,
   ConfigureTemplateInput,
   ComponentInput,
-  CompleteAssetMaintenanceInput,
   CreateUserInput,
   Project,
   ProjectInput,
@@ -569,29 +567,6 @@ export function updateAssetWorkingHours(assetId: string, payload: AssetWorkingHo
     method: "PATCH",
     body: JSON.stringify(payload),
   });
-}
-
-export function searchAssetRoutineMaintenance(assetId: string, query: ListQuery) {
-  return apiRequest<PaginatedResponse<AssetMaintenanceEvent>>(
-    `/v1/asset/${assetId}/routine-maintenance/events?${listQueryString(query)}`
-  );
-}
-
-export function listAssetRoutineMaintenance(assetId: string) {
-  return apiRequest<AssetMaintenanceEvent[]>(`/v1/asset/${assetId}/routine-maintenance`);
-}
-
-export function completeAssetRoutineMaintenance(
-  assetId: string,
-  payload: CompleteAssetMaintenanceInput
-) {
-  return apiRequest<AssetMaintenanceUpdateResponse>(
-    `/v1/asset/${assetId}/routine-maintenance/complete`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }
-  );
 }
 
 export function getSingleAssetEquipment(assetId: string) {

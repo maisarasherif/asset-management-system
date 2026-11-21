@@ -12,11 +12,7 @@ SELECT
     a.assigned_project,
     a.working_hours,
     a.working_hours_note,
-    a.maintenance_interval_hours,
-    a.next_maintenance_due_hours,
-    a.maintenance_required_at,
-    a.last_maintenance_completed_at,
-    a.last_maintenance_completed_hours,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) AS quarantined,
     a.template_id,
     a.created_at,
     a.updated_at
@@ -45,11 +41,7 @@ SELECT DISTINCT
     a.assigned_project,
     a.working_hours,
     a.working_hours_note,
-    a.maintenance_interval_hours,
-    a.next_maintenance_due_hours,
-    a.maintenance_required_at,
-    a.last_maintenance_completed_at,
-    a.last_maintenance_completed_hours,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) AS quarantined,
     a.template_id,
     a.created_at,
     a.updated_at
@@ -63,7 +55,7 @@ WHERE upa.user_id = sqlc.arg(user_id)
   AND u.status = 'ACTIVE'
   AND strpos(lower(concat_ws(' ', a.display_id, a.name, a.description, a.location, a.assigned_project)), lower(sqlc.arg(search_text)::text)) > 0
   AND (sqlc.arg(filter_project)::text = '' OR lower(a.assigned_project) = lower(sqlc.arg(filter_project)))
-  AND (sqlc.arg(filter_status)::text = '' OR lower(a.status) = lower(sqlc.arg(filter_status)))
+  AND (sqlc.arg(filter_status)::text = '' OR CASE WHEN sqlc.arg(filter_status) = 'QUARANTINED' THEN EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) ELSE lower(a.status) = lower(sqlc.arg(filter_status)) AND NOT EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) END)
 ORDER BY a.created_at DESC, a.asset_id
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
@@ -79,7 +71,7 @@ WHERE upa.user_id = sqlc.arg(user_id)
   AND u.status = 'ACTIVE'
   AND strpos(lower(concat_ws(' ', a.display_id, a.name, a.description, a.location, a.assigned_project)), lower(sqlc.arg(search_text)::text)) > 0
   AND (sqlc.arg(filter_project)::text = '' OR lower(a.assigned_project) = lower(sqlc.arg(filter_project)))
-  AND (sqlc.arg(filter_status)::text = '' OR lower(a.status) = lower(sqlc.arg(filter_status)));
+  AND (sqlc.arg(filter_status)::text = '' OR CASE WHEN sqlc.arg(filter_status) = 'QUARANTINED' THEN EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) ELSE lower(a.status) = lower(sqlc.arg(filter_status)) AND NOT EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = a.asset_id AND q.component_id IS NULL AND q.released_at IS NULL) END);
 
 -- name: GetClientComponentsByAsset :many
 SELECT
@@ -104,6 +96,7 @@ SELECT
     c.created_at,
     c.updated_at,
     c.location,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = c.asset_id AND (q.component_id IS NULL OR q.component_id = c.component_id) AND q.released_at IS NULL) AS quarantined,
     c.assigned_project
 FROM components c
 LEFT JOIN categories cat ON cat.category_id = c.category_id
@@ -278,6 +271,7 @@ SELECT
     c.created_at,
     c.updated_at,
     c.location,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = c.asset_id AND (q.component_id IS NULL OR q.component_id = c.component_id) AND q.released_at IS NULL) AS quarantined,
     c.assigned_project
 FROM components c
 LEFT JOIN categories cat ON cat.category_id = c.category_id

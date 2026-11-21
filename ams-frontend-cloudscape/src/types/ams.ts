@@ -1,10 +1,11 @@
+import type { WorkOrder } from "./maintenance";
 export type Role = "SUPER_ADMIN" | "ADMIN" | "USER" | "CLIENT";
 export type ProductKey = "AMS" | "HR_ADMIN";
 export type ProductRole = "ADMIN" | "USER" | "VIEWER" | "CLIENT";
 export type UserStatus = "ACTIVE" | "SUSPENDED";
 export type ProjectStatus = "ACTIVE" | "ARCHIVED";
 export type ProjectAccessStatus = "ACTIVE" | "SUSPENDED";
-export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE";
+export type AssetStatus = "ACTIVE" | "INACTIVE";
 export type AssetKind = "COMPONENTIZED" | "SINGLE_EQUIPMENT";
 export type CertificateStatus = "VALID" | "EXPIRING_SOON" | "EXPIRED" | "PENDING";
 export type SafetyCritical = "YES" | "NO";
@@ -280,6 +281,7 @@ export interface MessageResponse {
 }
 
 export interface Asset {
+  quarantined: boolean;
   asset_id: string;
   display_id: string;
   name: string;
@@ -292,46 +294,13 @@ export interface Asset {
   assigned_project: string;
   working_hours: number;
   working_hours_note: string;
-  maintenance_interval_hours: number;
-  next_maintenance_due_hours: number;
-  maintenance_required_at: string | null;
-  last_maintenance_completed_at: string | null;
-  last_maintenance_completed_hours: number;
   template_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type AssetMaintenanceStatus = "REQUIRED" | "COMPLETED" | "CANCELLED";
-
-export interface AssetMaintenanceNotificationDelivery {
-  delivery_id: string;
-  maintenance_event_id: string;
-  channel: NotificationChannel;
-  status: NotificationStatus;
-  external_id: string;
-  error_message: string;
-  created_at: string;
-  updated_at: string;
-  sent_at: string | null;
-  failed_at: string | null;
-}
-
-export interface AssetMaintenanceEvent {
-  maintenance_event_id: string;
-  display_id: string;
-  asset_id: string;
-  due_at_hours: number;
-  triggered_at_hours: number;
-  previous_asset_status: string;
-  status: AssetMaintenanceStatus;
-  completed_at: string | null;
-  completion_notes: string;
-  created_at: string;
-  notifications: AssetMaintenanceNotificationDelivery[];
-}
-
 export interface ComponentRecord {
+  quarantined?: boolean;
   component_id: string;
   display_id: string;
   asset_id: string;
@@ -667,7 +636,6 @@ export interface AssetInput {
   asset_kind: AssetKind;
   location: string;
   assigned_project: string;
-  maintenance_interval_hours: number;
   template_id: string | null;
   single_equipment?: {
     equipment_type_id: string;
@@ -680,13 +648,9 @@ export interface AssetWorkingHoursInput {
   note: string;
 }
 
-export interface CompleteAssetMaintenanceInput {
-  completion_notes: string;
-}
-
 export interface AssetMaintenanceUpdateResponse {
   asset: Asset;
-  maintenance_event: AssetMaintenanceEvent | null;
+  work_orders: WorkOrder[];
 }
 
 export interface ComponentInput {
@@ -946,6 +910,7 @@ export interface ClientCertificate {
 }
 
 export interface ClientComponent {
+  quarantined?: boolean;
   component_id: string;
   display_id: string;
   asset_id: string;

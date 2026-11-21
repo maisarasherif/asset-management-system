@@ -29,7 +29,7 @@ import {
   getSingleAssetEquipment,
   listAllCatalogScopeCategories,
   listCatalogScopes,
-  searchAssetRoutineMaintenance,
+
   listCertificatesByComponent,
   listComponentsByAsset,
   getComponent,
@@ -40,7 +40,7 @@ import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type {
   Asset,
-  AssetMaintenanceEvent,
+
   CatalogScopeCategory,
   Certificate,
   ComponentRecord,
@@ -48,7 +48,8 @@ import type {
   TestType,
 } from "../../types/ams";
 import { formatDate, formatRenewalDuration, humanizeEnum } from "../../utils/format";
-import { assetStatusType, certificateStatusType } from "../../utils/status";
+import { Availability, EquipmentMaintenanceSummary } from "../maintenance/EquipmentMaintenanceSummary";
+import { certificateStatusType } from "../../utils/status";
 
 type ComponentGroupSection = {
   key: string;
@@ -81,11 +82,11 @@ type AssetWorkspaceViewProps = {
   groupedComponents: ComponentGroupSection[];
   isAdmin: boolean;
   isSingleEquipment: boolean;
-  maintenanceConfigured: boolean;
-  maintenanceRemaining: number;
+
+
   navigate: ReturnType<typeof useNavigate>;
   onComponentSelect: (componentId: string) => void;
-  openMaintenanceEvent: AssetMaintenanceEvent | null;
+
   selectedComponent: ComponentRecord | null;
   setCollapsedGroups: Dispatch<SetStateAction<Record<string, boolean>>>;
 };
@@ -175,11 +176,6 @@ export function AssetWorkspacePage() {
     enabled: Boolean(catalogScopesQuery.data?.length),
   });
 
-  const maintenanceQuery = useQuery({
-    queryKey: ["routine-maintenance", assetId],
-    queryFn: () => searchAssetRoutineMaintenance(assetId!, { limit: 1, status: "REQUIRED" }),
-    enabled: Boolean(assetId),
-  });
 
   const testTypesQuery = useQuery({
     queryKey: ["test-types"],
@@ -440,11 +436,6 @@ export function AssetWorkspacePage() {
   const componentCount = isSingleEquipment ? 1 : componentTotal.data?.meta.total ?? 0;
   const certificateItems = certificatesQuery.data?.data ?? [];
   const certificateCount = certificatesQuery.data?.meta.total ?? 0;
-  const openMaintenanceEvent = maintenanceQuery.data?.data[0] ?? null;
-  const maintenanceConfigured = assetQuery.data.maintenance_interval_hours > 0;
-  const maintenanceRemaining = maintenanceConfigured
-    ? assetQuery.data.next_maintenance_due_hours - assetQuery.data.working_hours
-    : 0;
   const handleComponentSelect = (componentId: string) => {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("component", componentId);
@@ -474,11 +465,11 @@ export function AssetWorkspacePage() {
       groupedComponents={groupedComponents}
       isAdmin={isAdmin}
       isSingleEquipment={isSingleEquipment}
-      maintenanceConfigured={maintenanceConfigured}
-      maintenanceRemaining={maintenanceRemaining}
+
+
       navigate={navigate}
       onComponentSelect={handleComponentSelect}
-      openMaintenanceEvent={openMaintenanceEvent}
+
       selectedComponent={selectedComponent}
       setCollapsedGroups={setCollapsedGroups}
     />
@@ -511,8 +502,8 @@ function AssetWorkspaceHeader({
           <div className="app-header-actions__desktop">
             <SpaceBetween direction="horizontal" size="xs">
               <Button variant="primary" onClick={() => navigate("/dashboard")}>Open dashboard</Button>
-              <Button onClick={() => navigate(`/assets/${assetId}/routine-maintenance`)}>
-                Open maintenance
+              <Button onClick={() => navigate(`/maintenance?asset_id=${assetId}`)}>
+                View maintenance history
               </Button>
               <Button disabled={!asset.datasheet} href={asset.datasheet || undefined} target="_blank">
                 Open datasheet
@@ -529,14 +520,14 @@ function AssetWorkspaceHeader({
             <Button variant="primary" onClick={() => navigate("/dashboard")}>Open dashboard</Button>
             <ButtonDropdown
               items={[
-                { id: "maintenance", text: "Open maintenance" },
+                { id: "maintenance", text: "View maintenance history" },
                 { id: "datasheet", text: "Open datasheet", disabled: !asset.datasheet },
                 ...(isAdmin ? [{ id: "edit-asset", text: "Edit asset" }] : []),
                 ...(isAdmin && !isSingleEquipment ? [{ id: "add-component", text: "Add component" }] : []),
               ]}
               onItemClick={({ detail }) => {
                 if (detail.id === "maintenance") {
-                  navigate(`/assets/${assetId}/routine-maintenance`);
+                  navigate(`/maintenance?asset_id=${assetId}`);
                 }
                 if (detail.id === "datasheet" && asset.datasheet) {
                   window.open(asset.datasheet, "_blank", "noopener,noreferrer");
@@ -683,6 +674,7 @@ function ComponentListItem({
         <div className="component-list-item__meta">
           <span>{component.serial_number || "No serial"}</span>
           <span>{humanizeEnum(component.safety_critical)}</span>
+          {component.quarantined && <Availability quarantined />}
         </div>
       </SpaceBetween>
     </button>
@@ -694,9 +686,9 @@ function AssetContextStrip({
   componentCount,
   equipment,
   isSingleEquipment,
-  maintenanceConfigured,
-  maintenanceRemaining,
-  openMaintenanceEvent,
+
+
+
 }: AssetWorkspaceViewProps) {
   return (
     <div className="asset-workspace-grid__summary">
@@ -704,9 +696,7 @@ function AssetContextStrip({
         <div className="asset-context-strip">
           <div className="asset-context-strip__item">
             <Box variant="awsui-key-label">Status</Box>
-            <StatusIndicator type={assetStatusType(asset.status)}>
-              {humanizeEnum(asset.status)}
-            </StatusIndicator>
+            <Availability quarantined={asset.quarantined} status={asset.status} />
           </div>
           <div className="asset-context-strip__item">
             <Box variant="awsui-key-label">Location</Box>
@@ -722,13 +712,7 @@ function AssetContextStrip({
           </div>
           <div className="asset-context-strip__item">
             <Box variant="awsui-key-label">Routine maintenance</Box>
-            {openMaintenanceEvent ? (
-              <StatusIndicator type="warning">Required</StatusIndicator>
-            ) : maintenanceConfigured ? (
-              <Box>{Math.max(maintenanceRemaining, 0).toLocaleString()} h remaining</Box>
-            ) : (
-              <Box>Not configured</Box>
-            )}
+            <EquipmentMaintenanceSummary asset={asset} />
           </div>
         </div>
       </Container>

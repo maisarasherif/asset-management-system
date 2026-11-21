@@ -33,11 +33,6 @@ export const AssetWorkspacePage = lazy(() =>
   }))
 );
 
-export const AssetRoutineMaintenancePage = lazy(() =>
-  import("../features/assets/AssetRoutineMaintenancePage").then((module) => ({
-    default: module.AssetRoutineMaintenancePage,
-  }))
-);
 
 export const ComponentFormPage = lazy(() =>
   import("../features/assets/ComponentFormPage").then((module) => ({
@@ -312,3 +307,10 @@ export function GuestOnly({ children }: { children: ReactNode }) {
 
   return children;
 }
+
+export const WorkOrdersPage = lazy(() => import("../features/maintenance/WorkOrdersPage").then((module) => ({ default: module.WorkOrdersPage })));
+export const WorkOrderDetailPage = lazy(() => import("../features/maintenance/WorkOrderDetailPage").then((module) => ({ default: module.WorkOrderDetailPage })));
+export const RoutinePlansPage = lazy(() => import("../features/maintenance/RoutinePlansPage").then((module) => ({ default: module.RoutinePlansPage })));
+export const QuarantineZonePage = lazy(() => import("../features/maintenance/QuarantineZonePage").then((module) => ({ default: module.QuarantineZonePage })));
+export const SparePartsPage = lazy(() => import("../features/maintenance/SparePartsPage").then((module) => ({ default: module.SparePartsPage })));
+export const PartsUsagePage = lazy(() => import("../features/maintenance/PartsUsagePage").then((module) => ({ default: module.PartsUsagePage })));

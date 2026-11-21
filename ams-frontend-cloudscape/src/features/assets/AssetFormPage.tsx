@@ -37,6 +37,7 @@ import type { AssetInput, AssetStatus, AssetTemplate, EquipmentType, Project, Te
 import { formatRenewalDuration, humanizeEnum } from "../../utils/format";
 
 type AssetFormViewProps = {
+  quarantined: boolean;
   assetId: string | undefined;
   errorMessage: string;
   form: AssetInput;
@@ -72,14 +73,12 @@ const DEFAULT_FORM: AssetInput = {
   asset_kind: "COMPONENTIZED",
   location: "",
   assigned_project: "",
-  maintenance_interval_hours: 0,
   template_id: null,
 };
 
 const STATUS_OPTIONS: SelectProps.Option[] = [
   { label: "Active", value: "ACTIVE" },
   { label: "Inactive", value: "INACTIVE" },
-  { label: "Maintenance", value: "MAINTENANCE" },
 ];
 
 const ASSET_KIND_OPTIONS: SelectProps.Option[] = [
@@ -138,7 +137,6 @@ export function AssetFormPage() {
       asset_kind: assetQuery.data.asset_kind,
       location: assetQuery.data.location || "",
       assigned_project: assetQuery.data.assigned_project || "",
-      maintenance_interval_hours: assetQuery.data.maintenance_interval_hours || 0,
       template_id: assetQuery.data.template_id,
     }
     : DEFAULT_FORM;
@@ -232,10 +230,6 @@ export function AssetFormPage() {
       setErrorMessage("Asset name is required.");
       return;
     }
-    if (form.maintenance_interval_hours < 0) {
-      setErrorMessage("Maintenance interval cannot be negative.");
-      return;
-    }
     if (isSingleEquipment && !isEditing) {
       if (!form.single_equipment?.equipment_type_id) {
         setErrorMessage("Choose an equipment type for this asset.");
@@ -255,7 +249,6 @@ export function AssetFormPage() {
       description: form.description.trim(),
       location: form.location.trim(),
       assigned_project: form.assigned_project.trim(),
-      maintenance_interval_hours: Number(form.maintenance_interval_hours) || 0,
       photo: form.photo.trim(),
       datasheet: form.datasheet.trim(),
     });
@@ -264,6 +257,7 @@ export function AssetFormPage() {
   return (
     <AssetFormView
       assetId={assetId}
+      quarantined={Boolean(assetQuery.data?.quarantined)}
       errorMessage={errorMessage}
       form={form}
       isEditing={isEditing}
@@ -404,7 +398,7 @@ function AssetInformation(props: AssetFormViewProps) {
                 />
               </div>
             </FormField>
-            <FormField label="Assigned project">
+            <FormField label="Assigned project" description={props.quarantined ? "Red-tagged equipment can be removed from a project. Release it before assigning it to a new project." : undefined}>
               <PagedSelect label="Assigned project" queryKey={["projects", "asset-assignment"]}
                 allLabel="No project - warehouse" load={(page, search) => searchProjects({ page, search, limit: 20 })}
                 getOption={toProjectOption} selected={selectedAssignedProjectOption}
@@ -417,19 +411,6 @@ function AssetInformation(props: AssetFormViewProps) {
               <Input
                 value={form.location}
                 onChange={({ detail }) => onFormChange((current) => ({ ...current, location: detail.value }))}
-              />
-            </FormField>
-            <FormField label="Maintenance interval (hours)">
-              <Input
-                inputMode="numeric"
-                type="number"
-                value={String(form.maintenance_interval_hours)}
-                onChange={({ detail }) =>
-                  onFormChange((current) => ({
-                    ...current,
-                    maintenance_interval_hours: Number(detail.value) || 0,
-                  }))
-                }
               />
             </FormField>
           </ColumnLayout>
@@ -582,14 +563,6 @@ function WorkspaceImpact({
         <div className="summary-row">
           <Box variant="awsui-key-label">Status preview</Box>
           <Box>{humanizeEnum(form.status)}</Box>
-        </div>
-        <div className="summary-row">
-          <Box variant="awsui-key-label">Routine maintenance</Box>
-          <Box>
-            {form.maintenance_interval_hours > 0
-              ? `Every ${form.maintenance_interval_hours.toLocaleString()} hours`
-              : "Not configured"}
-          </Box>
         </div>
       </SpaceBetween>
     </Container>

@@ -47,11 +47,11 @@ function createMockState() {
     assigned_project: "North Field",
     working_hours: 1200,
     working_hours_note: "",
-    maintenance_interval_hours: 1500,
-    next_maintenance_due_hours: 1500,
-    maintenance_required_at: null,
-    last_maintenance_completed_at: null,
-    last_maintenance_completed_hours: 0,
+
+
+
+
+
     template_id: "tpl-1",
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-02T00:00:00.000Z",
@@ -258,21 +258,6 @@ function createMockState() {
     tests: null,
   };
 
-  const maintenanceEvent = {
-    maintenance_event_id: "maint-1",
-    display_id: "RM-001",
-    asset_id: "asset-1",
-    due_at_hours: 1500,
-    triggered_at_hours: 1500,
-    previous_asset_status: "ACTIVE",
-    status: "REQUIRED",
-    clickup_task_id: "CU-1",
-    notification_error: "",
-    notified_at: "2026-01-03T00:00:00.000Z",
-    completed_at: null,
-    completion_notes: "",
-    created_at: "2026-01-03T00:00:00.000Z",
-  };
 
   const project = {
     project_id: "project-1",
@@ -396,7 +381,6 @@ function createMockState() {
     component,
     equipmentTypes: [equipmentType],
     mainCategories: [mainCategory],
-    maintenanceEvents: [maintenanceEvent],
     projects: [project],
     recorded: [] as RecordedRequest[],
     selfComponent,
@@ -515,10 +499,8 @@ async function installMockApi(page: Page) {
       if (/^\/certificate\/[^/]+\/generated-signers\/search$/.test(path)) {
         return fulfillJson(route, paginated([]));
       }
-      if (/^\/asset\/[^/]+\/routine-maintenance\/events$/.test(path)) {
-        const events = path.includes("/asset-1/") ? state.maintenanceEvents : [];
-        const status = url.searchParams.get("status");
-        return fulfillJson(route, paginated(events.filter((event) => !status || event.status === status).map((event) => ({ ...event, notifications: [] }))));
+      if (path === "/maintenance/plans" || path === "/maintenance/work-orders") {
+        return fulfillJson(route, paginated([]));
       }
       if (/^\/asset\/[^/]+\/certificate-summary$/.test(path)) {
         const single = path.includes("/asset-single/");
@@ -605,46 +587,7 @@ async function installMockApi(page: Page) {
       };
       return fulfillJson(route, {
         asset: state.asset,
-        maintenance_event: state.maintenanceEvents[0],
-      });
-    }
-
-    if (path === "/asset/asset-1/routine-maintenance" && method === "GET") {
-      return fulfillJson(route, state.maintenanceEvents);
-    }
-
-    if (
-      path === "/asset/asset-created/routine-maintenance" &&
-      method === "GET"
-    ) {
-      return fulfillJson(route, []);
-    }
-
-    if (
-      path === "/asset/asset-single/routine-maintenance" &&
-      method === "GET"
-    ) {
-      return fulfillJson(route, []);
-    }
-
-    if (
-      path === "/asset/asset-1/routine-maintenance/complete" &&
-      method === "POST"
-    ) {
-      const payload = request.body as { completion_notes: string };
-      state.maintenanceEvents = state.maintenanceEvents.map((event) =>
-        event.maintenance_event_id === "maint-1"
-          ? {
-              ...event,
-              status: "COMPLETED",
-              completion_notes: payload.completion_notes,
-              completed_at: "2026-01-04T00:00:00.000Z",
-            }
-          : event,
-      );
-      return fulfillJson(route, {
-        asset: state.asset,
-        maintenance_event: state.maintenanceEvents[0],
+        work_orders: [],
       });
     }
 
@@ -1951,64 +1894,22 @@ test.describe("mocked refactored page smoke coverage", () => {
     await expectNoUnexpectedApi(state);
   });
 
-  test("AssetRoutineMaintenancePage preserves hour update and completion flows", async ({
-    page,
-  }) => {
-    const state = await bootMockedAdmin(
-      page,
-      "/assets/asset-1/routine-maintenance",
-    );
-
-    await expect(
-      page.getByRole("heading", { name: "Routine maintenance" }),
-    ).toBeVisible();
-    await expect(page.getByText("Required").first()).toBeVisible();
-
-    await page.getByRole("button", { name: "Update hours" }).click();
-    const hoursDialog = page.getByRole("dialog", {
-      name: "Update working hours",
-    });
-    await expect(hoursDialog).toBeVisible();
-    await hoursDialog.getByLabel("Working hours").fill("1550");
-    await hoursDialog.getByLabel("Note").fill("  diver shift log  ");
-    await hoursDialog.getByRole("button", { name: "Save hours" }).click();
-
-    expect(
-      latestRequest(state, "PATCH", "/v1/asset/asset-1/working-hours").body,
-    ).toMatchObject({
+  test("Asset workspace saves working hours and links to the central register", async ({ page }) => {
+    const state = await bootMockedAdmin(page, "/assets/asset-1");
+    await page.getByRole("button", { name: "Update working hours" }).click();
+    const dialog = page.getByRole("dialog", { name: "Update working hours" });
+    await dialog.getByLabel("Working hours").fill("1550");
+    await dialog.getByLabel("Meter note").fill("Diver shift log");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    expect(latestRequest(state, "PATCH", "/v1/asset/asset-1/working-hours").body).toMatchObject({
       working_hours: 1550,
-      note: "  diver shift log  ",
+      note: "Diver shift log",
     });
-    await expect(hoursDialog).toHaveCount(0);
-    await expect(page.getByText("Routine maintenance required")).toBeVisible();
-    await expect(page.getByText("1,550 h")).toBeVisible();
-
-    await page
-      .getByRole("button", { name: "Complete maintenance" })
-      .first()
-      .click();
-    const completeDialog = page.getByRole("dialog", {
-      name: "Complete routine maintenance",
-    });
-    await completeDialog
-      .getByLabel("Completion notes")
-      .fill("Completed after inspection.");
-    await completeDialog.getByRole("button", { name: "Complete" }).click();
-
-    expect(
-      latestRequest(
-        state,
-        "POST",
-        "/v1/asset/asset-1/routine-maintenance/complete",
-      ).body,
-    ).toMatchObject({
-      completion_notes: "Completed after inspection.",
-    });
-    await expect(completeDialog).toHaveCount(0);
-    await expect(page.getByText("Routine maintenance completed")).toBeVisible();
-    await expect(
-      page.getByRole("row", { name: /RM-001 Completed/ }),
-    ).toBeVisible();
+    await expect(page.getByText("1,550 working hours", { exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "View maintenance history" }).click();
+    await expect(page).toHaveURL(/\/maintenance\?asset_id=asset-1$/);
+    await expect(page.getByRole("heading", { name: "Maintenance work orders" })).toBeVisible();
     await expectNoUnexpectedApi(state);
   });
 
@@ -2072,7 +1973,6 @@ test.describe("mocked refactored page smoke coverage", () => {
 
     await page.getByLabel("Asset name").fill("  Single Lift Bag  ");
     await page.getByLabel("Location").fill("  Deck B  ");
-    await page.getByLabel("Maintenance interval (hours)").fill("750");
     await page.getByLabel("Description").fill("  Single equipment asset  ");
     await page
       .getByLabel("Photo URL")
@@ -2109,7 +2009,7 @@ test.describe("mocked refactored page smoke coverage", () => {
       template_id: null,
       location: "Deck B",
       description: "Single equipment asset",
-      maintenance_interval_hours: 750,
+
       photo: "https://example.test/photo.jpg",
       datasheet: "https://example.test/datasheet.pdf",
       single_equipment: {
@@ -2134,21 +2034,15 @@ test.describe("mocked refactored page smoke coverage", () => {
         exact: false,
       }),
     ).toHaveCount(0);
-    await page.getByLabel("Maintenance interval (hours)").fill("-1");
+    await page.getByLabel("Asset name").fill("");
     await page.getByRole("button", { name: "Save asset" }).click();
-    await expect(
-      page.getByText("Maintenance interval cannot be negative."),
-    ).toBeVisible();
-    expect(
-      state.recorded.filter(
-        (request) =>
-          request.method === "PUT" && request.path === "/v1/asset/asset-1",
-      ),
-    ).toHaveLength(0);
+    await expect(page.getByText("Asset name is required.")).toBeVisible();
+    expect(state.recorded.filter(
+      (request) => request.method === "PUT" && request.path === "/v1/asset/asset-1",
+    )).toHaveLength(0);
 
     await page.getByLabel("Asset name").fill("  Updated Lift Bag  ");
     await page.getByLabel("Location").fill("  Deck C  ");
-    await page.getByLabel("Maintenance interval (hours)").fill("1800");
     await page.getByLabel("Description").fill("  Updated asset description  ");
     await page.getByRole("button", { name: "Save asset" }).click();
 
@@ -2159,7 +2053,7 @@ test.describe("mocked refactored page smoke coverage", () => {
       template_id: "tpl-1",
       location: "Deck C",
       description: "Updated asset description",
-      maintenance_interval_hours: 1800,
+
     });
     expect(
       (updateRequest.body as { single_equipment?: unknown }).single_equipment,

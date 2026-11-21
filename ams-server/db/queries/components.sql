@@ -20,6 +20,7 @@ SELECT
     created_at,
     updated_at,
     location,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = components.asset_id AND (q.component_id IS NULL OR q.component_id = components.component_id) AND q.released_at IS NULL) AS quarantined,
     assigned_project
 FROM components
 ORDER BY created_at DESC
@@ -50,9 +51,10 @@ SELECT
     created_at,
     updated_at,
     location,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = components.asset_id AND (q.component_id IS NULL OR q.component_id = components.component_id) AND q.released_at IS NULL) AS quarantined,
     assigned_project
 FROM components
-WHERE asset_id = sqlc.arg(asset_id)
+WHERE components.asset_id = sqlc.arg(asset_id)
   AND strpos(lower(concat_ws(' ', display_id, name, serial_number, manufacturer, model, description)), lower(sqlc.arg(search_text)::text)) > 0
   AND (sqlc.arg(filter_category)::uuid = '00000000-0000-0000-0000-000000000000' OR category_id = sqlc.arg(filter_category) OR scope_category_id = sqlc.arg(filter_category))
   AND (sqlc.arg(filter_kind)::text = '' OR lower(component_kind) = lower(sqlc.arg(filter_kind)))
@@ -62,7 +64,7 @@ LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 -- name: CountComponentsByAssetID :one
 SELECT COUNT(*)
 FROM components
-WHERE asset_id = sqlc.arg(asset_id)
+WHERE components.asset_id = sqlc.arg(asset_id)
   AND strpos(lower(concat_ws(' ', display_id, name, serial_number, manufacturer, model, description)), lower(sqlc.arg(search_text)::text)) > 0
   AND (sqlc.arg(filter_category)::uuid = '00000000-0000-0000-0000-000000000000' OR category_id = sqlc.arg(filter_category) OR scope_category_id = sqlc.arg(filter_category))
   AND (sqlc.arg(filter_kind)::text = '' OR lower(component_kind) = lower(sqlc.arg(filter_kind)));
@@ -89,9 +91,10 @@ SELECT
     created_at,
     updated_at,
     location,
+    EXISTS (SELECT 1 FROM maintenance_quarantines q WHERE q.asset_id = components.asset_id AND (q.component_id IS NULL OR q.component_id = components.component_id) AND q.released_at IS NULL) AS quarantined,
     assigned_project
 FROM components
-WHERE component_id = $1
+WHERE components.component_id = $1
 LIMIT 1;
 
 -- name: CountComponentsByCategoryID :one
@@ -242,7 +245,7 @@ SET category_id = sqlc.arg(category_id),
 WHERE component_id = sqlc.arg(component_id);
 
 -- name: DeleteComponent :execrows
-DELETE FROM components WHERE component_id = $1;
+DELETE FROM components WHERE components.component_id = $1;
 
 -- name: SearchAssetComponentCategories :many
 SELECT

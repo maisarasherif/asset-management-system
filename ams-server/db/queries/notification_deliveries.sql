@@ -111,7 +111,7 @@ FROM notification_deliveries nd
 LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
 LEFT JOIN components comp ON comp.component_id = cert.component_id
 LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
-LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN maintenance_work_orders ame ON nd.source_type = 'routine_maintenance' AND ame.work_order_id = nd.source_id
 LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
 LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
 LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
@@ -131,7 +131,7 @@ FROM notification_deliveries nd
 LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
 LEFT JOIN components comp ON comp.component_id = cert.component_id
 LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
-LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN maintenance_work_orders ame ON nd.source_type = 'routine_maintenance' AND ame.work_order_id = nd.source_id
 LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
 LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
 LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
@@ -249,7 +249,7 @@ FROM notification_deliveries nd
 LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
 LEFT JOIN components comp ON comp.component_id = cert.component_id
 LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
-LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN maintenance_work_orders ame ON nd.source_type = 'routine_maintenance' AND ame.work_order_id = nd.source_id
 LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
 LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
 LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
@@ -270,7 +270,7 @@ FROM notification_deliveries nd
 LEFT JOIN certificates cert ON nd.source_type = 'certificate_expiry' AND cert.certificate_id = nd.source_id
 LEFT JOIN components comp ON comp.component_id = cert.component_id
 LEFT JOIN assets cert_asset ON cert_asset.asset_id = comp.asset_id
-LEFT JOIN asset_maintenance_events ame ON nd.source_type = 'routine_maintenance' AND ame.maintenance_event_id = nd.source_id
+LEFT JOIN maintenance_work_orders ame ON nd.source_type = 'routine_maintenance' AND ame.work_order_id = nd.source_id
 LEFT JOIN assets maintenance_asset ON maintenance_asset.asset_id = ame.asset_id
 LEFT JOIN compliance_records hrcr ON nd.source_type = 'hr_admin_compliance_expiry' AND hrcr.record_id = nd.source_id
 LEFT JOIN compliance_record_types hrcrt ON hrcrt.record_type_id = hrcr.record_type_id
@@ -344,22 +344,3 @@ WHERE nd.source_type = 'hr_admin_compliance_expiry'
   AND (sqlc.arg(filter_source)::text = '' OR lower(nd.source_type) = lower(sqlc.arg(filter_source)))
   AND (sqlc.arg(filter_channel)::text = '' OR lower(nd.channel) = lower(sqlc.arg(filter_channel)))
   AND (sqlc.arg(filter_status)::text = '' OR lower(nd.status) = lower(sqlc.arg(filter_status)));
-
--- name: GetRoutineMaintenanceNotificationDeliveriesForAsset :many
-SELECT
-    nd.delivery_id,
-    nd.source_id AS maintenance_event_id,
-    nd.channel,
-    nd.status,
-    nd.external_id,
-    nd.error_message,
-    nd.created_at,
-    nd.updated_at,
-    nd.sent_at,
-    nd.failed_at
-FROM notification_deliveries nd
-JOIN asset_maintenance_events ame ON ame.maintenance_event_id = nd.source_id
-WHERE nd.source_type = 'routine_maintenance'
-  AND ame.asset_id = sqlc.arg(asset_id)
-  AND ame.maintenance_event_id = ANY(sqlc.arg(event_ids)::uuid[])
-ORDER BY COALESCE(nd.sent_at, nd.failed_at, nd.updated_at, nd.created_at) DESC;

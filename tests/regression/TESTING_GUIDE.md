@@ -42,9 +42,10 @@ The regression role must connect to the maintenance database (`postgres`), creat
 | `FRONTEND_PORT` | `14175` | Test frontend: `http://127.0.0.1:14175`. |
 | `RECLAIM_TEST_PORTS` | `0` | Fail on occupied ports. Explicit `1` permits stopping existing listeners on the configured test ports. |
 | `KEEP_DB` | `0` | Set `1` to retain the last database state at exit. |
-| `NEWMAN_COLLECTIONS` | Seven below | Space-separated repository-relative paths. |
+| `NEWMAN_COLLECTIONS` | Eight below | Space-separated repository-relative paths. |
 | `E2E_SPECS` | Three below | Space-separated spec paths relative to the frontend directory. |
-| `E2E_PROFILE` | `default` | `certificates-final` selects 11 related browser specs unless explicit `E2E_SPECS` overrides it. |
+| `E2E_PROFILE` | `default` | `certificates-final` selects 11 browser specs. `maintenance-final` adds the spare parts inventory spec to that selection. Explicit `E2E_SPECS` overrides either profile. |
+| `VERIFY_MAINTENANCE_UPGRADE` | `0` | Set `1` to rehearse the upgrade from migration 000056 before the fresh install. |
 
 The runner still builds/starts the API and checks login for a Go-only invocation; it checks both test ports even with Playwright disabled. Flags select test layers, not a minimal infrastructure mode.
 
@@ -54,6 +55,7 @@ Default Newman collections:
 tests/regression/api/system-api-smoke.postman_collection.json
 tests/regression/api/admin-surface-regression.postman_collection.json
 tests/regression/api/routine-maintenance.postman_collection.json
+tests/regression/api/spare-parts-inventory.postman_collection.json
 tests/regression/api/client-asset-certificates.postman_collection.json
 tests/regression/api/single-asset-equipment.postman_collection.json
 tests/regression/api/hr-admin-product.postman_collection.json
@@ -69,6 +71,28 @@ Default Playwright specs:
 ```
 
 Other feature-specific and mocked specs are opt-in through `E2E_SPECS`. The whole-app spec covers route health and selected behavior, not every feature workflow. Mocked page tests do not replace real end-to-end feature checks.
+
+### Central maintenance and spare parts verification
+
+Run the focused gate from the repository root. Use the maintained Fedora test checkout for release verification. The Windows runner is available through Git Bash for local verification.
+
+```bash
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+VERIFY_MAINTENANCE_UPGRADE=1 \
+NEWMAN_COLLECTIONS='tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/spare-parts-inventory.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/spare-parts-inventory.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+The SQL fixtures exercise the upgrade from `000056` to the current schema on the runner's disposable database. The rehearsal checks the empty work-order and usage registers, carried-forward meters and due thresholds, active quarantine holds, the seeded warehouse, and cleanup scoped to legacy maintenance deliveries and queued jobs. Review `maintenance-upgrade.log` in the run evidence. The runner recreates the database for the regular fresh-install gates. The existing maintenance Playwright flag enables both maintenance specs. The backend tests cover staff and admin boundaries, plan evaluation, release, simultaneous last-unit consumption, corrections, and request retries.
+
+The dedicated test files are `ams-server/maintenance_integration_test.go`, the two selected Newman collections, and the two selected Playwright specs. The runner registers the inventory collection and the `maintenance-final` profile.
+
+For the broader gate, set `E2E_PROFILE=maintenance-final`, clear both selection overrides, and keep all three layers enabled. This adds the maintenance and inventory journeys to coverage for client access, single equipment, scheduler, and permissions. For supplemental asset-page mocks, select `E2E_SPECS='../tests/regression/e2e/refactored-pages-mocked.spec.ts --grep Asset(FormPage|WorkspacePage|.workspace)'` or run the complete spec.
+
+Before production cutover, take a verified database backup and stop the old application writers and queue workers. Apply migrations, reconcile meters and quarantine, then start the new API and scanner. Restoring discarded test entries requires the backup. Collect pass, fail, and skip counts, cleanup and exit status, and the evidence directory.
+
+**Local Windows evidence, 22 November 2026.** In `run.VDP4vL`, the populated upgrade rehearsal and all 209 Go tests passed with zero failures or skips. The subsequent Newman stage exposed an HR/Admin fixture that calculated Dubai renewal dates from the UTC day. After fixing that fixture, `run.ZErsie` passed all eight Newman collections with 556 assertions and all 25 browser tests. Both runs dropped their disposable databases. Storage cleanup deleted 25 and 52 journaled test objects respectively. The combined API and browser rerun exited with status 0. The supplemental asset-page mock run `run.RKPmYl` passed all five cases, dropped its disposable database, and exited with status 0.
 
 ### App-wide search and filtering
 
@@ -92,6 +116,10 @@ bash tests/regression/run-vps-isolated-tests.sh
 ```
 
 Keep each run's counts, cleanup outcomes, exit status, and evidence path. After both gates pass, use the normal deployment command and smoke-check the HR/Admin, AMS and client lists. The search update uses the existing database schema.
+
+Focused VPS evidence from 20 November 2026. Newman passed and all 10 Playwright tests passed in 2.4 minutes. Go was skipped. Storage cleanup deleted 1 journaled object, the runner dropped `ams_e2e_20261120111734`, and the run exited with status 0. Evidence is in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.LqJkoc`.
+
+Extended VPS evidence from 20 November 2026. All 203 Go tests passed with zero failures or skips, Newman passed, and all 22 Playwright tests passed in 5.5 minutes. Storage cleanup deleted 75 journaled objects, the runner dropped `ams_e2e_20261120112213`, and the run exited with status 0. Evidence is in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.lk0TSB`. Certificate request timings are in `certificate-latency-summary.json` in that directory. Both isolated VPS gates passed. Production deployment and smoke checks are pending.
 
 ### Step 8 final certificate regression and timing evidence
 

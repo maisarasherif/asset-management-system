@@ -57,30 +57,6 @@ func CertificateExpiryEmailMessage(recipientName, assetName, componentName, cert
 	return subject, body
 }
 
-func RoutineMaintenanceEmailMessage(recipientName, assetName, assetDisplayID string, workingHours, dueAtHours int64) (string, string) {
-	subject := "Routine Maintenance Required - " + assetName
-	body := fmt.Sprintf(`
-		<html>
-		<body>
-			<h2>Routine Maintenance Required</h2>
-			<p>Dear %s,</p>
-			<p>This is an automated notification that the following asset has reached its routine maintenance target:</p>
-			<ul>
-				<li><strong>Asset:</strong> %s</li>
-				<li><strong>Asset ID:</strong> %s</li>
-				<li><strong>Current Working Hours:</strong> %d</li>
-				<li><strong>Maintenance Due At:</strong> %d</li>
-			</ul>
-			<p>Please arrange routine maintenance and complete the maintenance record in the Asset Management System.</p>
-			<br>
-			<p>Best regards,<br>Asset Management System</p>
-		</body>
-		</html>
-	`, recipientName, assetName, assetDisplayID, workingHours, dueAtHours)
-
-	return subject, body
-}
-
 func SendHTMLMail(recipientEmail, subject, body string) error {
 	smtpHost := os.Getenv("SMTP_HOST")
 	smtpPortStr := os.Getenv("SMTP_PORT")

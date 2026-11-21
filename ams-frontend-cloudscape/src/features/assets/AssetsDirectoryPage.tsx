@@ -8,7 +8,6 @@ import {
   Header,
   Modal,
   SpaceBetween,
-  StatusIndicator,
 } from "@cloudscape-design/components";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -19,8 +18,8 @@ import { deleteAsset, getAssetCertificateSummary, listAssets } from "../../lib/a
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import type { Asset } from "../../types/ams";
-import { formatDate, humanizeEnum } from "../../utils/format";
-import { assetStatusType } from "../../utils/status";
+import { formatDate } from "../../utils/format";
+import { Availability } from "../maintenance/EquipmentMaintenanceSummary";
 
 export function AssetsDirectoryPage() {
   const navigate = useNavigate();
@@ -97,7 +96,7 @@ export function AssetsDirectoryPage() {
 
           <ListFilters controls={controls} label="Search assets" facets={[{ key: "status", label: "Status", options: [
             { value: "ACTIVE", label: "Active" }, { value: "INACTIVE", label: "Inactive" },
-            { value: "MAINTENANCE", label: "Maintenance" },
+            { value: "QUARANTINED", label: "Quarantined" },
           ] }]}>
             <TextFacet key={controls.filters.project} label="Project" value={controls.filters.project}
               onApply={(project) => controls.setFilters({ project })} />
@@ -139,9 +138,7 @@ export function AssetsDirectoryPage() {
                           </RouterLink>
                           <Box color="text-body-secondary">{asset.display_id}</Box>
                         </div>
-                        <StatusIndicator type={assetStatusType(asset.status)}>
-                          {humanizeEnum(asset.status)}
-                        </StatusIndicator>
+                        <Availability quarantined={asset.quarantined} status={asset.status} />
                       </div>
 
                       <div className="asset-directory-card__meta">
@@ -175,9 +172,7 @@ export function AssetsDirectoryPage() {
                         <div className="asset-directory-card__stat">
                           <Box variant="awsui-key-label">Routine hours</Box>
                           <Box>
-                            {asset.maintenance_interval_hours > 0
-                              ? `${asset.working_hours.toLocaleString()} / ${asset.next_maintenance_due_hours.toLocaleString()} h`
-                              : "Not configured"}
+                            {"Not configured"}
                           </Box>
                         </div>
                       </div>

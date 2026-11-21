@@ -1,12 +1,18 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { RouteErrorPage } from "../components/shared/RouteErrorPage";
+import { MaintenanceAccess } from "../features/maintenance/shared";
 import { LoginPage } from "../features/auth/LoginPage";
 import {
   AccountPage,
   AdministrationPage,
   AppChrome,
   AssetFormPage,
-  AssetRoutineMaintenancePage,
+  WorkOrdersPage,
+  WorkOrderDetailPage,
+  RoutinePlansPage,
+  QuarantineZonePage,
+  SparePartsPage,
+  PartsUsagePage,
   AssetWorkspacePage,
   AssetsDirectoryPage,
   CatalogPage,
@@ -142,12 +148,16 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: "assets/:assetId/routine-maintenance",
-        element: (
-          <RouteSuspense>
-            <AssetRoutineMaintenancePage />
-          </RouteSuspense>
-        ),
+        path: "maintenance",
+        element: <MaintenanceAccess />,
+        children: [
+          { index: true, element: <RouteSuspense><WorkOrdersPage /></RouteSuspense> },
+          { path: "work-orders/:orderId", element: <RouteSuspense><WorkOrderDetailPage /></RouteSuspense> },
+          { path: "plans", element: <RouteSuspense><RoutinePlansPage /></RouteSuspense> },
+          { path: "quarantine", element: <RouteSuspense><QuarantineZonePage /></RouteSuspense> },
+          { path: "inventory", element: <RouteSuspense><SparePartsPage /></RouteSuspense> },
+          { path: "usage", element: <RouteSuspense><PartsUsagePage /></RouteSuspense> },
+        ],
       },
       {
         path: "assets/:assetId/edit",

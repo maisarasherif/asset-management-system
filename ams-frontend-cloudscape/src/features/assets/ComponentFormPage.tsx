@@ -303,6 +303,7 @@ export function ComponentFormPage() {
 
   return renderComponentFormPage({
     asset: assetQuery.data,
+    quarantined: Boolean(assetQuery.data?.quarantined || componentQuery.data?.quarantined),
     assetId,
     errorMessage,
     form,
@@ -319,6 +320,7 @@ export function ComponentFormPage() {
 }
 
 interface ComponentFormPageViewProps {
+  quarantined: boolean;
   asset: Asset | undefined;
   assetId: string;
   errorMessage: string;
@@ -336,6 +338,7 @@ interface ComponentFormPageViewProps {
 
 function renderComponentFormPage({
   asset,
+  quarantined,
   errorMessage,
   form,
   isEditing,
@@ -466,7 +469,7 @@ function renderComponentFormPage({
                 </FormField>
               </ColumnLayout>
 
-              <FormField label="Assigned project">
+              <FormField label="Assigned project" description={quarantined ? "Red-tagged equipment can be removed from a project. Release it before assigning it to a new project." : undefined}>
                 <Input
                   value={form.assigned_project}
                   onChange={({ detail }) => onFormChange({ assigned_project: detail.value })}

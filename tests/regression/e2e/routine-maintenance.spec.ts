@@ -1,167 +1,121 @@
-import {
-  expect,
-  request as playwrightRequest,
-  test,
-  type APIRequestContext,
-} from "@playwright/test";
 
-const API_BASE_URL = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8080/v1";
-const ADMIN_EMAIL = process.env.PLAYWRIGHT_ADMIN_EMAIL;
-const ADMIN_PASSWORD = process.env.PLAYWRIGHT_ADMIN_PASSWORD;
-const RUN_NOTIFICATION_TRIGGER =
-  process.env.PLAYWRIGHT_RUN_ROUTINE_MAINTENANCE_TRIGGER === "1";
+import { expect, test } from "@playwright/test";
+import { chooseOption, maintenanceEnabled, requestMaintenance, signInForMaintenance } from "../support/maintenance-playwright";
 
-interface Asset {
-  asset_id: string;
-  name: string;
-  working_hours: number;
-  maintenance_interval_hours: number;
-  next_maintenance_due_hours: number;
-}
+test.describe("Central routine and non-routine maintenance", () => {
+  test.skip(!maintenanceEnabled, "Run against the isolated maintenance stack");
 
-async function loginApi(request: APIRequestContext) {
-  if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
-    throw new Error(
-      "PLAYWRIGHT_ADMIN_EMAIL and PLAYWRIGHT_ADMIN_PASSWORD must be set to run E2E tests."
-    );
-  }
+  test("records working hours, completes two jobs, and releases the red tag", async ({ page, request }) => {
+    const token = await signInForMaintenance(page);
+    const suffix = Date.now();
+    const equipment = `Service compressor ${suffix}`;
+    const asset = await requestMaintenance<{ asset_id: string }>(request, token, "/asset", {
+      method: "POST", status: 201, data: { name: equipment, status: "ACTIVE" },
+    });
 
-  const response = await request.post(`${API_BASE_URL}/login`, {
-    data: {
-      email: ADMIN_EMAIL,
-      password: ADMIN_PASSWORD,
-    },
+    await page.goto(`/maintenance/plans?asset_id=${asset.asset_id}`);
+    await page.getByRole("button", { name: "Add routine plan" }).click();
+    const plan = page.getByRole("dialog", { name: "Add routine plan" });
+    await plan.getByRole("textbox", { name: "Plan name" }).fill("Oil service");
+    await plan.getByRole("textbox", { name: "Interval in hours" }).fill("100");
+    await plan.getByText("Red-tag equipment when due", { exact: true }).click();
+    await plan.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(plan).toBeHidden();
+    await expect(page.getByRole("row", { name: /Oil service/ })).toContainText("100 h");
+
+    await page.goto(`/assets/${asset.asset_id}`);
+    await page.getByRole("button", { name: "Update working hours" }).click();
+    const meter = page.getByRole("dialog", { name: "Update working hours" });
+    await meter.getByRole("textbox", { name: "Working hours" }).fill("125");
+    await meter.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(meter).toBeHidden();
+    await expect(page.getByText("Red tag · Quarantined", { exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "View maintenance history" }).click();
+    await expect(page).toHaveURL(new RegExp("/maintenance\\?asset_id=" + asset.asset_id));
+    await expect(page.getByRole("row", { name: /Oil service/ })).toBeVisible();
+
+    await page.getByRole("button", { name: "Raise work order" }).click();
+    const raise = page.getByRole("dialog", { name: "Raise non-routine work order" });
+    await raise.getByRole("textbox", { name: "Title" }).fill("Air leak");
+    await raise.getByRole("textbox", { name: "Fault or work required" }).fill("Air hose leaked during inspection");
+    await raise.getByText("Red-tag and block deployment", { exact: true }).click();
+    await raise.getByRole("button", { name: "Raise work order" }).click();
+    await expect(page.getByRole("heading", { name: "Air leak" })).toBeVisible();
+    await page.getByRole("button", { name: "Complete work order" }).click();
+    const fault = page.getByRole("dialog", { name: "Complete work order" });
+    await fault.getByRole("textbox", { name: "Work performed" }).fill("Replaced the air hose");
+    await fault.getByRole("button", { name: "Complete work order" }).click();
+    await expect(fault).toBeHidden();
+    await expect(page.getByText("Replaced the air hose", { exact: true })).toBeVisible();
+
+    await page.goto(`/maintenance/quarantine?asset_id=${asset.asset_id}`);
+    await page.getByRole("button", { name: /1 blocking work order/ }).click();
+    const hold = page.getByRole("dialog", { name: "Quarantine details" });
+    await expect(hold.getByRole("button", { name: "Green-tag equipment" })).toBeDisabled();
+    await hold.getByRole("link", { name: /Oil service/ }).click();
+    await page.getByRole("button", { name: "Complete work order" }).click();
+    const routine = page.getByRole("dialog", { name: "Complete work order" });
+    await routine.getByRole("textbox", { name: "Work performed" }).fill("Changed the service oil");
+    await routine.getByRole("button", { name: "Complete work order" }).click();
+    await expect(routine).toBeHidden();
+
+    await page.goto(`/maintenance/quarantine?asset_id=${asset.asset_id}`);
+    await page.getByRole("button", { name: "Release equipment" }).click();
+    const release = page.getByRole("dialog", { name: "Release equipment" });
+    await release.getByRole("textbox", { name: "Release notes" }).fill("Verified service and leak repair");
+    await release.getByRole("button", { name: "Green-tag equipment" }).click();
+    await expect(release).toBeHidden();
+    await page.goto(`/assets/${asset.asset_id}`);
+    await expect(page.getByText("Green tag · Available", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Oil service due at 225 h/)).toBeVisible();
   });
 
-  expect(response.ok()).toBeTruthy();
-
-  const body = (await response.json()) as { token: string };
-  return body.token;
-}
-
-async function createAsset(request: APIRequestContext, token: string, name: string, projectName: string) {
-  const response = await request.post(`${API_BASE_URL}/asset`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {
-      name,
-      photo: "",
-      datasheet: "",
-      description: "Created by Playwright to verify routine maintenance.",
-      status: "ACTIVE",
-      location: "E2E Yard",
-      assigned_project: projectName,
-      maintenance_interval_hours: 100,
-      template_id: null,
-    },
-  });
-
-  expect(response.ok(), `create maintenance asset: ${response.status()} ${await response.text()}`).toBeTruthy();
-  return (await response.json()) as Asset;
-}
-
-async function deleteAsset(request: APIRequestContext, token: string, assetId: string) {
-  const response = await request.delete(`${API_BASE_URL}/asset/${assetId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    timeout: 10_000,
-  });
-
-  expect([200, 404]).toContain(response.status());
-}
-
-test.describe("routine maintenance browser flow", () => {
-  test.skip(
-    !ADMIN_EMAIL || !ADMIN_PASSWORD,
-    "Set PLAYWRIGHT_ADMIN_EMAIL and PLAYWRIGHT_ADMIN_PASSWORD to run E2E tests."
-  );
-
-  test.skip(
-    !RUN_NOTIFICATION_TRIGGER,
-    "Set PLAYWRIGHT_RUN_ROUTINE_MAINTENANCE_TRIGGER=1 in a test environment to verify the threshold-trigger flow."
-  );
-
-  test("admin can update hours, trigger maintenance, and complete the cycle", async ({
-    page,
-  }) => {
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const assetName = `PW Maintenance Asset ${suffix}`;
-    const cleanupRequest = await playwrightRequest.newContext();
-    let token = await loginApi(cleanupRequest);
-    let assetId: string | null = null;
-    let projectId: string | null = null;
-    let failed = false;
-
-    try {
-      const projectResponse = await cleanupRequest.post(`${API_BASE_URL}/project`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { project_name: `PW Maintenance Project ${suffix}`, description: "Routine maintenance fixture", status: "ACTIVE" },
-      });
-      expect(projectResponse.status(), await projectResponse.text()).toBe(201);
-      const project = await projectResponse.json();
-      projectId = project.project_id;
-      const asset = await createAsset(cleanupRequest, token, assetName, project.project_name);
-      assetId = asset.asset_id;
-      await page.goto("/login");
-
-      await page.getByLabel("Email").fill(ADMIN_EMAIL!);
-      await page.getByLabel("Password").fill(ADMIN_PASSWORD!);
-      const browserLogin = page.waitForResponse(response => response.url() === `${API_BASE_URL}/login` && response.request().method() === "POST");
-      await page.getByRole("button", { name: "Sign in" }).click();
-      const loginResponse = await browserLogin;
-      expect(loginResponse.status()).toBe(200);
-      token = (await loginResponse.json()).token;
-      expect(token, "current browser login token for fixture requests").toBeTruthy();
-
-      await expect(page).toHaveURL(/\/dashboard$/);
-
-      await page.goto(`/assets/${asset.asset_id}/routine-maintenance`);
-      await expect(page.getByRole("heading", { name: "Routine maintenance" })).toBeVisible();
-      await expect(page.getByText(assetName, { exact: true })).toBeVisible();
-      await expect(page.getByText("100 h").first()).toBeVisible();
-      await expect(page.getByText("Not configured")).toHaveCount(0);
-
-      await page.getByRole("button", { name: "Update hours" }).click();
-      const hoursDialog = page.getByRole("dialog", { name: "Update working hours" });
-      await hoursDialog.getByLabel("Working hours").fill("80");
-      await hoursDialog.getByLabel("Note").fill("E2E below-threshold reading");
-      await hoursDialog.getByRole("button", { name: "Save hours" }).click();
-
-      await expect(page.getByText("Working hours updated")).toBeVisible();
-      await expect(page.getByText("80 h").first()).toBeVisible();
-      await expect(page.getByText("20 h").first()).toBeVisible();
-
-      await page.getByRole("button", { name: "Update hours" }).click();
-      await hoursDialog.getByLabel("Working hours").fill("100");
-      await hoursDialog.getByLabel("Note").fill("E2E threshold reading");
-      await hoursDialog.getByRole("button", { name: "Save hours" }).click();
-
-      await expect(page.getByText("Routine maintenance required")).toBeVisible();
-      await expect(page.getByText("Required", { exact: true }).first()).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "Complete maintenance" }).first()
-      ).toBeVisible();
-
-      await page.getByRole("button", { name: "Complete maintenance" }).first().click();
-      const completeDialog = page.getByRole("dialog", { name: "Complete routine maintenance" });
-      await completeDialog.getByLabel("Completion notes").fill("E2E maintenance completed.");
-      await completeDialog.getByRole("button", { name: "Complete" }).click();
-
-      await expect(page.getByText("Routine maintenance completed")).toBeVisible();
-      await expect(page.getByText("On schedule")).toBeVisible();
-      await expect(page.getByText("200 h").first()).toBeVisible();
-      await expect(page.getByText("Completed", { exact: true }).first()).toBeVisible();
-    } catch (failure) {
-      failed = true; throw failure;
-    } finally {
-      try {
-        if (assetId) await deleteAsset(cleanupRequest, token, assetId);
-        if (projectId) {
-          const response = await cleanupRequest.delete(`${API_BASE_URL}/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10_000 });
-          expect([200, 404]).toContain(response.status());
-        }
-      } catch (failure) {
-        await test.info().attach("fixture-cleanup-error", { body: String(failure), contentType: "text/plain" });
-        if (!failed) throw failure;
-      } finally { await cleanupRequest.dispose(); }
+  test("shows a filtered equipment register across supported viewport widths", async ({ page, request }) => {
+    const token = await signInForMaintenance(page);
+    const asset = await requestMaintenance<{ asset_id: string }>(request, token, "/asset", {
+      method: "POST", status: 201, data: { name: "Maintenance viewport fixture " + Date.now(), status: "ACTIVE" },
+    });
+    await page.goto(`/maintenance?asset_id=${asset.asset_id}`);
+    for (const width of [320, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.getByRole("heading", { name: "Maintenance work orders" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Raise work order" })).toBeVisible();
     }
+    await page.getByRole("button", { name: "Raise work order" }).click();
+    const raise = page.getByRole("dialog", { name: "Raise non-routine work order" });
+    await chooseOption(page, raise.getByRole("button", { name: /Equipment/ }), /Maintenance viewport fixture/);
+    await expect(raise.getByRole("textbox", { name: "Fault or work required" })).toBeVisible();
   });
+  test("a technician can red-tag equipment and only an admin can release it", async ({ page, request, browser, baseURL }) => {
+    const token = await signInForMaintenance(page);
+    const equipment = "Technician quarantine fixture " + Date.now();
+    const asset = await requestMaintenance<{ asset_id: string }>(request, token, "/asset", {
+      method: "POST", status: 201, data: { name: equipment, status: "ACTIVE" },
+    });
+    const credentials = { email: `maint-${Date.now()}@example.test`, password: "Maintenance-Test-2026" };
+    await requestMaintenance(request, token, "/user", {
+      method: "POST", status: 201, data: { ...credentials, first_name: "Test", last_name: "Technician", role: "USER" },
+    });
+    const staffContext = await browser.newContext({ baseURL });
+    try {
+      const staff = await staffContext.newPage();
+      await signInForMaintenance(staff, credentials);
+      await staff.goto(`/maintenance/quarantine?asset_id=${asset.asset_id}`);
+      await staff.getByRole("button", { name: "Red-tag equipment" }).click();
+      const tag = staff.getByRole("dialog", { name: "Red-tag equipment" });
+      await tag.getByRole("textbox", { name: "Quarantine reason" }).fill("Inspection requested");
+      await tag.getByRole("button", { name: "Red-tag equipment" }).click();
+      await expect(tag).toBeHidden();
+      await staff.getByRole("button", { name: "View hold" }).click();
+      await expect(staff.getByRole("button", { name: "Green-tag equipment" })).toBeDisabled();
+    } finally {
+      await staffContext.close();
+    }
+    await page.goto(`/maintenance/quarantine?asset_id=${asset.asset_id}`);
+    await expect(page.getByRole("button", { name: "Release equipment" })).toBeVisible();
+    await page.goto(`/assets/${asset.asset_id}/routine-maintenance`);
+    await expect(page.getByRole("heading", { name: "Page error" })).toBeVisible();
+    await expect(page.getByText("Not Found", { exact: true })).toBeVisible();
+  });
+
 });
