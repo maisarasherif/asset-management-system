@@ -339,17 +339,7 @@ export function AppShellLayout() {
           label: "Compliance",
           items: [{ href: "/hr-admin/records", text: "Records" }],
         },
-        {
-        label: "Maintenance",
-        items: [
-          { href: "/maintenance", text: "Work orders" },
-          { href: "/maintenance/plans", text: "Routine plans" },
-          { href: "/maintenance/quarantine", text: "Quarantine Zone" },
-          { href: "/maintenance/inventory", text: "Spare parts inventory" },
-          { href: "/maintenance/usage", text: "Parts usage" },
-        ],
-      },
-    ];
+      ];
 
       if (hrAdminRole === "ADMIN") {
         groups[2].items.push({ href: "/hr-admin/record-types", text: "Record types" });
@@ -381,6 +371,16 @@ export function AppShellLayout() {
         items: [
           { href: "/dashboard", text: "Dashboard" },
           { href: "/assets", text: "Asset Directory" },
+        ],
+      },
+      {
+        label: "Maintenance",
+        items: [
+          { href: "/maintenance", text: "Work orders" },
+          { href: "/maintenance/plans", text: "Routine plans" },
+          { href: "/maintenance/quarantine", text: "Quarantine Zone" },
+          { href: "/maintenance/inventory", text: "Spare parts inventory" },
+          { href: "/maintenance/usage", text: "Parts usage" },
         ],
       },
     ];
@@ -443,7 +443,9 @@ export function AppShellLayout() {
               ? "/scheduler"
               : location.pathname.startsWith("/administration")
                 ? "/administration"
-                : location.pathname;
+                : location.pathname.startsWith("/maintenance/work-orders/")
+                  ? "/maintenance"
+                  : location.pathname;
   const sideNavigationItems = useMemo<SideNavigationProps.Item[]>(
     () =>
       navigationGroups.map((group) => ({

@@ -7,6 +7,20 @@ test.describe("Central routine and non-routine maintenance", () => {
 
   test("records working hours, completes two jobs, and releases the red tag", async ({ page, request }) => {
     const token = await signInForMaintenance(page);
+    await page.getByRole("link", { name: "Work orders", exact: true }).click();
+    await expect(page).toHaveURL(/\/maintenance$/);
+    await expect(page.getByRole("heading", { name: "Maintenance work orders" })).toBeVisible();
+    for (const [label, path] of [
+      ["Routine plans", "/maintenance/plans"],
+      ["Quarantine Zone", "/maintenance/quarantine"],
+      ["Spare parts inventory", "/maintenance/inventory"],
+      ["Parts usage", "/maintenance/usage"],
+    ]) {
+      await expect(page.getByRole("link", { name: label, exact: true })).toHaveAttribute("href", path);
+    }
+    await page.goto("/hr-admin");
+    await expect(page.getByRole("link", { name: "HR/Admin overview" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Work orders", exact: true })).toHaveCount(0);
     const suffix = Date.now();
     const equipment = `Service compressor ${suffix}`;
     const asset = await requestMaintenance<{ asset_id: string }>(request, token, "/asset", {
@@ -100,6 +114,8 @@ test.describe("Central routine and non-routine maintenance", () => {
     try {
       const staff = await staffContext.newPage();
       await signInForMaintenance(staff, credentials);
+      await staff.getByRole("link", { name: "Quarantine Zone", exact: true }).click();
+      await expect(staff).toHaveURL(/\/maintenance\/quarantine$/);
       await staff.goto(`/maintenance/quarantine?asset_id=${asset.asset_id}`);
       await staff.getByRole("button", { name: "Red-tag equipment" }).click();
       const tag = staff.getByRole("dialog", { name: "Red-tag equipment" });
