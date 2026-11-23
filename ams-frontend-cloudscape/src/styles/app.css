@@ -1202,7 +1202,17 @@ body {
 }
 
 .overview-certificate-pie {
-  block-size: clamp(224px, 76vw, 312px);
+  block-size: clamp(200px, 62vw, 380px);
+}
+
+.overview-certificate-legend,
+.overview-hours-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
 .overview-work-orders {
@@ -1231,8 +1241,7 @@ body {
   border-top: 1px solid #eaeded;
 }
 
-.overview-hours-chart,
-.overview-hours-values {
+.overview-operating-hours {
   --overview-hours-reading: #ce3f31;
   --overview-hours-threshold: #0972d3;
 }
@@ -1258,6 +1267,22 @@ body {
   background: repeating-linear-gradient(to top, transparent 0 calc(25% - 1px), #eaeded calc(25% - 1px) 25%);
 }
 
+.overview-hours-chart__trigger {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.overview-hours-chart__trigger:focus-visible {
+  outline: 2px solid var(--overview-hours-threshold);
+  outline-offset: 2px;
+}
+
 .overview-hours-chart__reading,
 .overview-hours-chart__threshold {
   position: absolute;
@@ -1279,14 +1304,7 @@ body {
   background: var(--overview-hours-reading);
 }
 
-.overview-hours-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  margin: 0;
-}
-
-.overview-hours-values dt::before {
+.overview-hours-series-label::before {
   content: "";
   display: inline-block;
   width: 10px;
@@ -1295,17 +1313,54 @@ body {
   border-radius: 2px;
 }
 
-.overview-hours-values__reading dt::before {
+.overview-hours-series-label[data-series="reading"]::before {
   background: var(--overview-hours-reading);
 }
 
-.overview-hours-values__threshold dt::before {
+.overview-hours-series-label[data-series="threshold"]::before {
   background: var(--overview-hours-threshold);
 }
 
-.overview-hours-values dd {
-  margin-inline-start: 16px;
+.overview-hours-tooltip {
+  display: none;
+  box-sizing: border-box;
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+  inline-size: max-content;
+  max-inline-size: min(240px, calc(100% - 16px));
+  padding: 8px 12px;
+  border: 1px solid #d5dbdb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #16191f;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+  overflow-wrap: anywhere;
+}
+
+.overview-hours-chart__plot:not([data-dismissed]):is(:hover, :focus-within) .overview-hours-tooltip {
+  display: block;
+}
+
+.overview-hours-tooltip dl {
+  margin: 0;
+}
+
+.overview-hours-tooltip dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.overview-hours-tooltip dd {
+  margin: 0;
+  white-space: nowrap;
   font-weight: 700;
+}
+
+.overview-hours-tooltip__service {
+  margin-block-start: 6px;
 }
 
 .overview-asset-details {

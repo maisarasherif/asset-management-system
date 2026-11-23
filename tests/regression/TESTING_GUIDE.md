@@ -182,7 +182,20 @@ E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-**Status.** The frontend build, lint, and discovery of the two Overview Playwright tests passed locally. The focused Fedora browser run is pending.
+**Status.** The frontend build, lint, and discovery of the two Overview Playwright tests passed locally. Fedora run `run.EG08Ym` passed both Overview Playwright tests in 21.6 seconds. Storage cleanup passed, the runner dropped `ams_e2e_20261123180619`, and the exit status was 0. Evidence is in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.EG08Ym`. The focused check for this layout fix is complete.
+
+#### Overview chart hover details
+
+The focused Playwright run covers the certificate callouts, label-only legends, and hover and keyboard details for both charts. It also checks the operating-hours values after a meter update and for assets without an hour-based service threshold. Run as `ams_test_runner` from the Fedora testing checkout.
+
+```bash
+cd /home/pms/ams-testing/asset-management-system
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+**Status.** The frontend build, lint on the dashboard components, and discovery of both Overview Playwright tests passed locally. The focused Fedora browser run is pending for this chart update.
 
 ### App-wide search and filtering
 

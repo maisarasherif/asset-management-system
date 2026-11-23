@@ -7,7 +7,12 @@ import type { Asset } from "../../types/ams";
 import type { RoutinePlan } from "../../types/maintenance";
 import { Availability, MeterDialog } from "../maintenance/EquipmentMaintenanceSummary";
 import { workOrderDue } from "../maintenance/workOrderPresentation";
+import { DashboardOperatingHours } from "./DashboardOperatingHours";
 import { DashboardWorkOrders } from "./DashboardWorkOrders";
+
+function certificateCount(count: number) {
+  return `${count.toLocaleString()} ${count === 1 ? "certificate" : "certificates"}`;
+}
 
 function CertificateStatus({ summary }: { summary: AssetCertificateSummary }) {
   const statuses = useMemo(() => [
@@ -29,74 +34,20 @@ function CertificateStatus({ summary }: { summary: AssetCertificateSummary }) {
               data={statuses.filter(({ value }) => value > 0)}
               hideFilter
               hideLegend
-              hideTitles
-              hideDescriptions
+              size="small"
               fitHeight
+              segmentDescription={({ value }) => `${certificateCount(value)}, ${Math.round(value * 100 / total)}%`}
+              detailPopoverFooter={() => <Box color="text-body-secondary">{certificateCount(total)} with a validity status</Box>}
               i18nStrings={{ detailsValue: "Count" }}
             />
           </div>
-          <ColumnLayout columns={3} minColumnWidth={105} variant="text-grid">
-            {statuses.map(({ title, type, value }) => (
-              <div key={title}>
-                <StatusIndicator type={type}>{title}</StatusIndicator>
-                <Box color="text-body-secondary">{value.toLocaleString()} ({Math.round(value * 100 / total)}%)</Box>
-              </div>
+          <ul className="overview-certificate-legend" aria-label="Certificate status legend">
+            {statuses.map(({ title, type }) => (
+              <li key={title}><StatusIndicator type={type}>{title}</StatusIndicator></li>
             ))}
-          </ColumnLayout>
+          </ul>
         </SpaceBetween>
       )}
-    </Container>
-  );
-}
-
-function OperatingHours({ hours, nextService, planStatus, retry }: {
-  hours: number;
-  nextService: RoutinePlan | undefined;
-  planStatus: "pending" | "error" | "success";
-  retry: () => void;
-}) {
-  const dueHours = nextService?.next_due_hours;
-  const chartMax = Math.max(hours, dueHours ?? 0, 1);
-  return (
-    <Container header={<Header variant="h2">Operating hours</Header>}>
-      <SpaceBetween size="s">
-        <div className="overview-hours-chart" aria-hidden="true">
-          <div className="overview-hours-chart__scale">
-            <span>{chartMax.toLocaleString()} h</span>
-            <span>0 h</span>
-          </div>
-          <div className="overview-hours-chart__plot">
-            {dueHours != null && (
-              <div className="overview-hours-chart__threshold" style={{ height: `${dueHours / chartMax * 100}%` }} />
-            )}
-            <div className="overview-hours-chart__reading" style={{ height: `${hours / chartMax * 100}%` }} />
-          </div>
-        </div>
-        <dl className="overview-hours-values">
-          <div className="overview-hours-values__reading">
-            <dt>Current reading</dt>
-            <dd>{hours.toLocaleString()} h</dd>
-          </div>
-          {dueHours != null && (
-            <div className="overview-hours-values__threshold">
-              <dt>Next service</dt>
-              <dd>{dueHours.toLocaleString()} h</dd>
-            </div>
-          )}
-        </dl>
-        {planStatus === "pending" ? (
-          <Box color="text-body-secondary">Loading hour-based service threshold</Box>
-        ) : planStatus === "error" ? (
-          <Button variant="inline-link" onClick={retry}>Retry loading hour-based service threshold</Button>
-        ) : nextService && dueHours != null ? (
-          <Box>
-            {nextService.title} due at {dueHours.toLocaleString()} h
-            {" · "}{hours < dueHours ? `${(dueHours - hours).toLocaleString()} h remaining` : "Threshold reached"}
-          </Box>
-        ) : (
-          <Box color="text-body-secondary">No hour-based service threshold</Box>
-        )}
-      </SpaceBetween>
     </Container>
   );
 }
@@ -201,7 +152,7 @@ export function DashboardOverview({ asset, summary }: { asset: Asset; summary: A
     <div className="ams-overview-grid">
       <CertificateStatus summary={summary} />
       <DashboardWorkOrders assetId={asset.asset_id} />
-      <OperatingHours hours={asset.working_hours} nextService={nextHours} planStatus={hours.status} retry={() => void hours.refetch()} />
+      <DashboardOperatingHours hours={asset.working_hours} nextService={nextHours} planStatus={hours.status} retry={() => void hours.refetch()} />
       <AssetDetails
         asset={asset}
         plans={plans}
