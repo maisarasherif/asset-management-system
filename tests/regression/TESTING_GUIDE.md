@@ -195,7 +195,22 @@ E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-**Status.** The frontend build, lint on the dashboard components, and discovery of both Overview Playwright tests passed locally. The focused Fedora browser run is pending for this chart update.
+**Status.** The frontend build, lint on the dashboard components, and discovery of both Overview Playwright tests passed locally. Fedora run `run.B1CYra` passed both Overview Playwright tests in 22.8 seconds. Storage cleanup passed, the runner dropped `ams_e2e_20261123203925`, and the exit status was 0. Evidence is in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.B1CYra`. The focused check for this chart update is complete.
+
+**Certificate popup footer follow-up.** The focused command above now checks that the whole-chart total is absent when opening a certificate slice by mouse or keyboard. The frontend build, lint, and discovery of both Overview Playwright tests passed locally. The focused Fedora browser run is pending for the footer fix.
+
+#### Operating hours Cloudscape bar chart
+
+The Overview Playwright spec checks the red meter reading and blue service remainder in one Cloudscape stack, the native legend and details popup, and the threshold line after the meter reaches its service value. It also checks the chart for an asset without a service threshold. Run as `ams_test_runner` from the Fedora testing checkout.
+
+```bash
+cd /home/pms/ams-testing/asset-management-system
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+**Status.** The frontend build, lint on the chart component, and discovery of both Overview Playwright tests passed locally. The focused Fedora browser run is pending for the chart replacement and also covers the certificate popup footer fix.
 
 ### App-wide search and filtering
 

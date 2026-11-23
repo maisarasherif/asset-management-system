@@ -1205,8 +1205,7 @@ body {
   block-size: clamp(200px, 62vw, 380px);
 }
 
-.overview-certificate-legend,
-.overview-hours-values {
+.overview-certificate-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 24px;
@@ -1239,128 +1238,6 @@ body {
 
 .overview-work-orders tbody tr {
   border-top: 1px solid #eaeded;
-}
-
-.overview-operating-hours {
-  --overview-hours-reading: #ce3f31;
-  --overview-hours-threshold: #0972d3;
-}
-
-.overview-hours-chart {
-  display: flex;
-  gap: 8px;
-}
-
-.overview-hours-chart__scale {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  text-align: end;
-}
-
-.overview-hours-chart__plot {
-  flex: 1;
-  block-size: 160px;
-  position: relative;
-  border-inline-start: 1px solid #d5dbdb;
-  border-block: 1px solid #d5dbdb;
-  background: repeating-linear-gradient(to top, transparent 0 calc(25% - 1px), #eaeded calc(25% - 1px) 25%);
-}
-
-.overview-hours-chart__trigger {
-  position: absolute;
-  inset: 0;
-  display: block;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.overview-hours-chart__trigger:focus-visible {
-  outline: 2px solid var(--overview-hours-threshold);
-  outline-offset: 2px;
-}
-
-.overview-hours-chart__reading,
-.overview-hours-chart__threshold {
-  position: absolute;
-  inset-block-end: 0;
-  inset-inline: 0;
-  margin-inline: auto;
-  border-start-start-radius: 4px;
-  border-start-end-radius: 4px;
-}
-
-.overview-hours-chart__threshold {
-  width: min(60%, 148px);
-  min-block-size: 2px;
-  background: var(--overview-hours-threshold);
-}
-
-.overview-hours-chart__reading {
-  width: min(36%, 88px);
-  background: var(--overview-hours-reading);
-}
-
-.overview-hours-series-label::before {
-  content: "";
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin-inline-end: 6px;
-  border-radius: 2px;
-}
-
-.overview-hours-series-label[data-series="reading"]::before {
-  background: var(--overview-hours-reading);
-}
-
-.overview-hours-series-label[data-series="threshold"]::before {
-  background: var(--overview-hours-threshold);
-}
-
-.overview-hours-tooltip {
-  display: none;
-  box-sizing: border-box;
-  position: absolute;
-  z-index: 1;
-  inset-block-start: 8px;
-  inset-inline-end: 8px;
-  inline-size: max-content;
-  max-inline-size: min(240px, calc(100% - 16px));
-  padding: 8px 12px;
-  border: 1px solid #d5dbdb;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #16191f;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
-  overflow-wrap: anywhere;
-}
-
-.overview-hours-chart__plot:not([data-dismissed]):is(:hover, :focus-within) .overview-hours-tooltip {
-  display: block;
-}
-
-.overview-hours-tooltip dl {
-  margin: 0;
-}
-
-.overview-hours-tooltip dl > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.overview-hours-tooltip dd {
-  margin: 0;
-  white-space: nowrap;
-  font-weight: 700;
-}
-
-.overview-hours-tooltip__service {
-  margin-block-start: 6px;
 }
 
 .overview-asset-details {

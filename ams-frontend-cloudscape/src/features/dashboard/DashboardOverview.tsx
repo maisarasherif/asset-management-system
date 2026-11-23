@@ -37,7 +37,6 @@ function CertificateStatus({ summary }: { summary: AssetCertificateSummary }) {
               size="small"
               fitHeight
               segmentDescription={({ value }) => `${certificateCount(value)}, ${Math.round(value * 100 / total)}%`}
-              detailPopoverFooter={() => <Box color="text-body-secondary">{certificateCount(total)} with a validity status</Box>}
               i18nStrings={{ detailsValue: "Count" }}
             />
           </div>
