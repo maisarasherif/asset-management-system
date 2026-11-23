@@ -33,10 +33,12 @@ SELECT q.*, a.name AS asset_name, COALESCE(c.name,'') AS component_name,
 FROM maintenance_quarantines q JOIN assets a USING (asset_id) LEFT JOIN components c USING (component_id)
 LEFT JOIN users t ON t.user_id = q.tagged_by LEFT JOIN users r ON r.user_id = q.released_by
 WHERE (sqlc.arg(include_released)::boolean OR q.released_at IS NULL)
+  AND (NOT sqlc.arg(whole_asset_only)::boolean OR q.component_id IS NULL)
   AND (sqlc.narg(filter_asset)::uuid IS NULL OR q.asset_id = sqlc.narg(filter_asset))
 ORDER BY q.tagged_at DESC, q.quarantine_id LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountMaintenanceQuarantines :one
 SELECT count(*) FROM maintenance_quarantines q
 WHERE (sqlc.arg(include_released)::boolean OR q.released_at IS NULL)
+  AND (NOT sqlc.arg(whole_asset_only)::boolean OR q.component_id IS NULL)
   AND (sqlc.narg(filter_asset)::uuid IS NULL OR q.asset_id = sqlc.narg(filter_asset));

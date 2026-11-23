@@ -9,7 +9,7 @@ export function workOrderType(order: WorkOrderDetail) {
   return order.work_type === "INSPECTION" ? "Inspection" : "Maintenance";
 }
 
-export function workOrderDue(order: WorkOrderDetail) {
+export function workOrderDue(order: { due_hours: number | null; due_date: string | null }) {
   const thresholds = [];
   if (order.due_hours != null) thresholds.push(`${order.due_hours.toLocaleString()} h`);
   if (order.due_date) thresholds.push(dueDateFormat.format(new Date(order.due_date)));

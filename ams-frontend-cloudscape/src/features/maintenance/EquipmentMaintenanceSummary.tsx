@@ -37,7 +37,7 @@ export function EquipmentMaintenanceSummary({ asset }: { asset: Asset }) {
   </SpaceBetween>;
 }
 
-function MeterDialog({ asset, close }: { asset: Asset; close: () => void }) {
+export function MeterDialog({ asset, close }: { asset: Asset; close: () => void }) {
   const [hours, setHours] = useState(String(asset.working_hours));
   const [note, setNote] = useState(asset.working_hours_note);
   return <Dialog title="Update working hours" close={close} disabled={!wholeUnits(hours, asset.working_hours)}

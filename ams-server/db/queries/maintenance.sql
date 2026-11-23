@@ -30,7 +30,9 @@ SELECT p.*, a.name AS asset_name, COALESCE(c.name, '') AS component_name, a.work
 FROM maintenance_plans p JOIN assets a USING (asset_id) LEFT JOIN components c USING (component_id)
 WHERE (sqlc.narg(filter_asset)::uuid IS NULL OR p.asset_id = sqlc.narg(filter_asset))
   AND (NOT sqlc.arg(active_only)::boolean OR p.active)
-ORDER BY p.title, p.plan_id LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+ORDER BY CASE WHEN sqlc.arg(sort_by)::text = 'next_due_hours' THEN p.next_due_hours END ASC NULLS LAST,
+         CASE WHEN sqlc.arg(sort_by)::text = 'next_due_date' THEN p.next_due_date END ASC NULLS LAST,
+         p.title, p.plan_id LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountMaintenancePlans :one
 SELECT count(*) FROM maintenance_plans
@@ -85,6 +87,9 @@ WHERE (sqlc.narg(filter_asset)::uuid IS NULL OR w.asset_id = sqlc.narg(filter_as
        OR (w.work_type = 'MAINTENANCE' AND
            ((sqlc.arg(filter_type) = 'ROUTINE' AND w.plan_id IS NOT NULL)
             OR (sqlc.arg(filter_type) = 'NON_ROUTINE' AND w.plan_id IS NULL))))
+  AND (sqlc.arg(due_window)::text = ''
+       OR (sqlc.arg(due_window) = 'OVERDUE' AND w.due_date < sqlc.arg(as_of)::text::date)
+       OR (sqlc.arg(due_window) = 'DUE_SOON' AND w.due_date BETWEEN sqlc.arg(as_of)::text::date AND sqlc.arg(as_of)::text::date + 30))
   AND (sqlc.narg(from_date)::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date >= sqlc.narg(from_date))
   AND (sqlc.narg(to_date)::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date <= sqlc.narg(to_date))
   AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, w.asset_number, w.asset_name, w.component_name)), lower(sqlc.arg(search)::text)) > 0
@@ -102,6 +107,9 @@ WHERE (sqlc.narg(filter_asset)::uuid IS NULL OR w.asset_id = sqlc.narg(filter_as
        OR (w.work_type = 'MAINTENANCE' AND
            ((sqlc.arg(filter_type) = 'ROUTINE' AND w.plan_id IS NOT NULL)
             OR (sqlc.arg(filter_type) = 'NON_ROUTINE' AND w.plan_id IS NULL))))
+  AND (sqlc.arg(due_window)::text = ''
+       OR (sqlc.arg(due_window) = 'OVERDUE' AND w.due_date < sqlc.arg(as_of)::text::date)
+       OR (sqlc.arg(due_window) = 'DUE_SOON' AND w.due_date BETWEEN sqlc.arg(as_of)::text::date AND sqlc.arg(as_of)::text::date + 30))
   AND (sqlc.narg(from_date)::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date >= sqlc.narg(from_date))
   AND (sqlc.narg(to_date)::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date <= sqlc.narg(to_date))
   AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, w.asset_number, w.asset_name, w.component_name)), lower(sqlc.arg(search)::text)) > 0;

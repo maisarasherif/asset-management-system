@@ -26,7 +26,7 @@ RECLAIM_TEST_PORTS="${RECLAIM_TEST_PORTS:-0}"
 RUN_GO_REGRESSION="${RUN_GO_REGRESSION:-${RUN_REGRESSION:-0}}"
 VERIFY_MAINTENANCE_UPGRADE="${VERIFY_MAINTENANCE_UPGRADE:-0}"
 RUN_NEWMAN="${RUN_NEWMAN:-1}"
-NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/spare-parts-inventory.postman_collection.json tests/regression/api/shared-work-orders.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json tests/regression/api/hr-admin-product.postman_collection.json tests/regression/api/generated-renewal-certificates.postman_collection.json}"
+NEWMAN_COLLECTIONS="${NEWMAN_COLLECTIONS:-tests/regression/api/system-api-smoke.postman_collection.json tests/regression/api/admin-surface-regression.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/spare-parts-inventory.postman_collection.json tests/regression/api/shared-work-orders.postman_collection.json tests/regression/api/ams-overview.postman_collection.json tests/regression/api/client-asset-certificates.postman_collection.json tests/regression/api/single-asset-equipment.postman_collection.json tests/regression/api/hr-admin-product.postman_collection.json tests/regression/api/generated-renewal-certificates.postman_collection.json}"
 RUN_PLAYWRIGHT="${RUN_PLAYWRIGHT:-1}"
 E2E_PROFILE="${E2E_PROFILE:-default}"
 DEFAULT_E2E_SPECS="../tests/regression/e2e/whole-app-regression.spec.ts ../tests/regression/e2e/hr-admin-product.spec.ts ../tests/regression/e2e/generated-renewal-certificates.spec.ts"
@@ -35,7 +35,7 @@ case "$E2E_PROFILE" in
   certificates-final|maintenance-final)
     DEFAULT_E2E_SPECS+=" ../tests/regression/e2e/client-asset-certificates.spec.ts ../tests/regression/e2e/single-asset-equipment.spec.ts ../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/template-catalog.spec.ts ../tests/regression/e2e/user-management-permissions.spec.ts ../tests/regression/e2e/scheduler-management.spec.ts ../tests/regression/e2e/auth-cookie-session.spec.ts ../tests/regression/e2e/api-auth-smoke.spec.ts"
     if [[ "$E2E_PROFILE" == "maintenance-final" ]]; then
-      DEFAULT_E2E_SPECS+=" ../tests/regression/e2e/spare-parts-inventory.spec.ts ../tests/regression/e2e/shared-work-orders.spec.ts"
+      DEFAULT_E2E_SPECS+=" ../tests/regression/e2e/spare-parts-inventory.spec.ts ../tests/regression/e2e/shared-work-orders.spec.ts ../tests/regression/e2e/ams-overview.spec.ts"
     fi
     ;;
   *) echo "ERROR: unknown E2E_PROFILE: $E2E_PROFILE" >&2; exit 2 ;;

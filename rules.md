@@ -13,6 +13,7 @@
 
 ## Regression File Updates
 
+- After every feature update or fix, include a testing handoff in the final chat response and in a named feature or fix section of `tests/regression/TESTING_GUIDE.md`. Put the exact copy-paste commands, where to run them, and any focused or broader checks still required directly in chat. Report what already passed and link straight to the matching guide section. When there is no remaining command, state that the applicable checks are complete.
 - After every feature update, automatically update the relevant regression test files to reflect the new or changed feature behavior.
 - Every new feature and every change to an existing feature must create or update dedicated feature-specific test files for all three layers: Go regression, Newman/Postman, and Playwright. Deliver these tests with the feature, not as later follow-up work.
 - Use a feature-specific Go `_test.go` file in the appropriate backend package, `tests/regression/api/<feature>.postman_collection.json`, and `tests/regression/e2e/<feature>.spec.ts`. Reuse and extend the existing dedicated files when changing that feature. Shared smoke or whole-app tests supplement these files; they do not replace them.

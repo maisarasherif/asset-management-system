@@ -91,9 +91,12 @@ WHERE ($1::uuid IS NULL OR w.asset_id = $1)
        OR (w.work_type = 'MAINTENANCE' AND
            (($5 = 'ROUTINE' AND w.plan_id IS NOT NULL)
             OR ($5 = 'NON_ROUTINE' AND w.plan_id IS NULL))))
-  AND ($6::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date >= $6)
-  AND ($7::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date <= $7)
-  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, w.asset_number, w.asset_name, w.component_name)), lower($8::text)) > 0
+  AND ($6::text = ''
+       OR ($6 = 'OVERDUE' AND w.due_date < $7::text::date)
+       OR ($6 = 'DUE_SOON' AND w.due_date BETWEEN $7::text::date AND $7::text::date + 30))
+  AND ($8::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date >= $8)
+  AND ($9::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date <= $9)
+  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, w.asset_number, w.asset_name, w.component_name)), lower($10::text)) > 0
 `
 
 type CountMaintenanceWorkOrdersParams struct {
@@ -102,6 +105,8 @@ type CountMaintenanceWorkOrdersParams struct {
 	FilterStatus    string      `json:"filter_status"`
 	OpenOnly        bool        `json:"open_only"`
 	FilterType      string      `json:"filter_type"`
+	DueWindow       string      `json:"due_window"`
+	AsOf            string      `json:"as_of"`
 	FromDate        pgtype.Date `json:"from_date"`
 	ToDate          pgtype.Date `json:"to_date"`
 	Search          string      `json:"search"`
@@ -114,6 +119,8 @@ func (q *Queries) CountMaintenanceWorkOrders(ctx context.Context, arg CountMaint
 		arg.FilterStatus,
 		arg.OpenOnly,
 		arg.FilterType,
+		arg.DueWindow,
+		arg.AsOf,
 		arg.FromDate,
 		arg.ToDate,
 		arg.Search,
@@ -334,12 +341,15 @@ SELECT p.plan_id, p.asset_id, p.component_id, p.title, p.interval_hours, p.inter
 FROM maintenance_plans p JOIN assets a USING (asset_id) LEFT JOIN components c USING (component_id)
 WHERE ($1::uuid IS NULL OR p.asset_id = $1)
   AND (NOT $2::boolean OR p.active)
-ORDER BY p.title, p.plan_id LIMIT $4 OFFSET $3
+ORDER BY CASE WHEN $3::text = 'next_due_hours' THEN p.next_due_hours END ASC NULLS LAST,
+         CASE WHEN $3::text = 'next_due_date' THEN p.next_due_date END ASC NULLS LAST,
+         p.title, p.plan_id LIMIT $5 OFFSET $4
 `
 
 type ListMaintenancePlansParams struct {
 	FilterAsset *uuid.UUID `json:"filter_asset"`
 	ActiveOnly  bool       `json:"active_only"`
+	SortBy      string     `json:"sort_by"`
 	PageOffset  int32      `json:"page_offset"`
 	PageLimit   int32      `json:"page_limit"`
 }
@@ -364,6 +374,7 @@ func (q *Queries) ListMaintenancePlans(ctx context.Context, arg ListMaintenanceP
 	rows, err := q.db.Query(ctx, listMaintenancePlans,
 		arg.FilterAsset,
 		arg.ActiveOnly,
+		arg.SortBy,
 		arg.PageOffset,
 		arg.PageLimit,
 	)
@@ -454,11 +465,14 @@ WHERE ($1::uuid IS NULL OR w.asset_id = $1)
        OR (w.work_type = 'MAINTENANCE' AND
            (($5 = 'ROUTINE' AND w.plan_id IS NOT NULL)
             OR ($5 = 'NON_ROUTINE' AND w.plan_id IS NULL))))
-  AND ($6::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date >= $6)
-  AND ($7::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date <= $7)
-  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, w.asset_number, w.asset_name, w.component_name)), lower($8::text)) > 0
+  AND ($6::text = ''
+       OR ($6 = 'OVERDUE' AND w.due_date < $7::text::date)
+       OR ($6 = 'DUE_SOON' AND w.due_date BETWEEN $7::text::date AND $7::text::date + 30))
+  AND ($8::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date >= $8)
+  AND ($9::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date <= $9)
+  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, w.asset_number, w.asset_name, w.component_name)), lower($10::text)) > 0
 ORDER BY CASE WHEN $4::boolean THEN w.due_date END ASC NULLS LAST,
-         w.created_at DESC, w.work_order_id LIMIT $10 OFFSET $9
+         w.created_at DESC, w.work_order_id LIMIT $12 OFFSET $11
 `
 
 type ListMaintenanceWorkOrdersParams struct {
@@ -467,6 +481,8 @@ type ListMaintenanceWorkOrdersParams struct {
 	FilterStatus    string      `json:"filter_status"`
 	OpenOnly        bool        `json:"open_only"`
 	FilterType      string      `json:"filter_type"`
+	DueWindow       string      `json:"due_window"`
+	AsOf            string      `json:"as_of"`
 	FromDate        pgtype.Date `json:"from_date"`
 	ToDate          pgtype.Date `json:"to_date"`
 	Search          string      `json:"search"`
@@ -481,6 +497,8 @@ func (q *Queries) ListMaintenanceWorkOrders(ctx context.Context, arg ListMainten
 		arg.FilterStatus,
 		arg.OpenOnly,
 		arg.FilterType,
+		arg.DueWindow,
+		arg.AsOf,
 		arg.FromDate,
 		arg.ToDate,
 		arg.Search,

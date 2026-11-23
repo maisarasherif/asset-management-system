@@ -25,11 +25,11 @@ test("Dashboard and AMS sidebar open the shared inspection and maintenance regis
   await expect(page.getByRole("heading", { name: "Shared equipment " + suffix })).toBeVisible();
   await page.getByRole("link", { name: "Dashboard", exact: true }).click();
   await expect(page.getByRole("heading", { name: /Work Orders/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: testName, exact: true })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Open work orders" }).getByRole("link", { name: testName, exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Repair gauge housing", exact: true })).toBeVisible();
   await expect(page.getByText("Inspection and Maintenance", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Asset Directory", exact: true })).toHaveAttribute("href", "/assets");
-  await page.getByRole("button", { name: "View work orders", exact: true }).click();
+  await page.getByRole("link", { name: "View all open work orders", exact: true }).click();
   await expect(page).toHaveURL(new RegExp("/work-orders\\?asset_id=" + equipment.asset_id));
 
   await chooseOption(page, page.getByRole("button", { name: /^Type/ }), "Inspection");

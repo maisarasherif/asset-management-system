@@ -17,7 +17,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
-import { CertificateDonut } from "../../components/shared/CertificateDonut";
+import { RouterLink } from "../../components/shared/RouterLink";
 import { TableCellText } from "../../components/shared/TableCells";
 import {
   getAssetComponentCertificateSheet,
@@ -29,8 +29,7 @@ import {
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
 import { formatDate } from "../../utils/format";
-import { Availability, EquipmentMaintenanceSummary } from "../maintenance/EquipmentMaintenanceSummary";
-import { DashboardWorkOrders } from "./DashboardWorkOrders";
+import { DashboardOverview } from "./DashboardOverview";
 
 function filenameSegment(value: string | null | undefined) {
   return (value || "asset")
@@ -139,7 +138,13 @@ export function DashboardPage() {
       header: "Certificate",
       width: "28%",
       minWidth: 220,
-      cell: (item) => <TableCellText title={item.certificate_name}>{item.certificate_name}</TableCellText>,
+      cell: (item) => (
+        <TableCellText title={item.certificate_name}>
+          <RouterLink to={`/assets/${item.asset_id}/components/${item.component_id}/certificates/${item.certificate_id}`}>
+            {item.certificate_name}
+          </RouterLink>
+        </TableCellText>
+      ),
     },
     {
       id: "component",
@@ -174,8 +179,6 @@ export function DashboardPage() {
       ),
     },
   ];
-
-  const componentCount = dashboard.summary.component_count;
 
   return (
     <ContentLayout
@@ -238,53 +241,9 @@ export function DashboardPage() {
       }
     >
       <SpaceBetween direction="vertical" size="l">
-        <DashboardWorkOrders assetId={dashboard.asset.asset_id} />
+        <DashboardOverview key={dashboard.asset.asset_id} asset={dashboard.asset} summary={dashboard.summary} />
 
-        <div className="dashboard-top-grid">
-          <Container header={<Header variant="h2">Certificate overview</Header>}>
-            <CertificateDonut
-              expired={dashboard.summary.expired}
-              expiringSoon={dashboard.summary.expiring_soon}
-              valid={dashboard.summary.valid}
-            />
-          </Container>
-          <Container header={<Header variant="h2">Asset details</Header>}>
-            <SpaceBetween direction="vertical" size="xs">
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Status</Box>
-                <Availability quarantined={dashboard.asset.quarantined} status={dashboard.asset.status} />
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Assigned project</Box>
-                <Box>{dashboard.asset.assigned_project || "Not set"}</Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Location</Box>
-                <Box>{dashboard.asset.location || "Not set"}</Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Datasheet</Box>
-                <Button
-                  disabled={!dashboard.asset.datasheet}
-                  href={dashboard.asset.datasheet || undefined}
-                  target="_blank"
-                >
-                  Open datasheet
-                </Button>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Components</Box>
-                <Box>{componentCount}</Box>
-              </div>
-              <div className="summary-row">
-                <Box variant="awsui-key-label">Routine maintenance</Box>
-                <EquipmentMaintenanceSummary asset={dashboard.asset} />
-              </div>
-            </SpaceBetween>
-          </Container>
-        </div>
-
-        <Container header={<Header variant="h2">Latest certificates in this asset</Header>}>
+        <Container header={<Header variant="h2">Compliance Certificates Quick Navigation</Header>}>
           <Table
             columnDefinitions={latestColumns}
             empty={<Box color="text-body-secondary">No certificate data is available for this asset.</Box>}

@@ -572,7 +572,11 @@ test.describe("whole app regression", () => {
 
       await expectRoute(page, "/dashboard", [
         fixture.assetName,
-        "Certificate overview",
+        "Certificate status",
+        "Work Orders",
+        "Operating hours",
+        "Asset details",
+        "Compliance Certificates Quick Navigation",
       ]);
       await expectRoute(page, "/assets", [
         "Assets directory",

@@ -135,6 +135,7 @@ func (h MaintenanceController) WorkOrders(c *gin.Context) {
 	filters := utils.ReadListFilters(c)
 	status := filters.Enum("status", "OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED")
 	kind := filters.Enum("type", "INSPECTION", "MAINTENANCE", "ROUTINE", "NON_ROUTINE")
+	dueWindow := filters.Enum("due_window", "OVERDUE", "DUE_SOON")
 	if !filters.Valid() {
 		return
 	}
@@ -145,14 +146,15 @@ func (h MaintenanceController) WorkOrders(c *gin.Context) {
 		return
 	}
 	search := filters.Text("search")
+	asOf := utils.DubaiDocumentDate(time.Now())
 	rows, err := q.ListMaintenanceWorkOrders(ctx, db.ListMaintenanceWorkOrdersParams{
 		FilterAsset: asset, FilterComponent: component, FilterStatus: status, FilterType: kind, OpenOnly: c.Query("open_only") == "true",
-		FromDate: from, ToDate: to, Search: search, PageLimit: limit, PageOffset: offset,
+		DueWindow: dueWindow, AsOf: asOf, FromDate: from, ToDate: to, Search: search, PageLimit: limit, PageOffset: offset,
 	})
 	maintenancePage(c, rows, err, page, func() (int64, error) {
 		return q.CountMaintenanceWorkOrders(ctx, db.CountMaintenanceWorkOrdersParams{
 			FilterAsset: asset, FilterComponent: component, FilterStatus: status, FilterType: kind, OpenOnly: c.Query("open_only") == "true",
-			FromDate: from, ToDate: to, Search: search,
+			DueWindow: dueWindow, AsOf: asOf, FromDate: from, ToDate: to, Search: search,
 		})
 	})
 }
@@ -237,6 +239,11 @@ func (h MaintenanceController) Technicians(c *gin.Context) {
 }
 
 func (h MaintenanceController) Plans(c *gin.Context) {
+	filters := utils.ReadListFilters(c)
+	sortBy := filters.Enum("order_by", "next_due_hours", "next_due_date")
+	if !filters.Valid() {
+		return
+	}
 	asset := maintenanceQueryID(c, "asset_id")
 	if c.IsAborted() {
 		return
@@ -244,7 +251,7 @@ func (h MaintenanceController) Plans(c *gin.Context) {
 	ctx := c.Request.Context()
 	q := db.New(h.Service.Pool)
 	limit, offset, page := utils.ParsePagination(c)
-	rows, err := q.ListMaintenancePlans(ctx, db.ListMaintenancePlansParams{FilterAsset: asset, ActiveOnly: c.Query("active_only") == "true", PageLimit: limit, PageOffset: offset})
+	rows, err := q.ListMaintenancePlans(ctx, db.ListMaintenancePlansParams{FilterAsset: asset, SortBy: sortBy, ActiveOnly: c.Query("active_only") == "true", PageLimit: limit, PageOffset: offset})
 	maintenancePage(c, rows, err, page, func() (int64, error) {
 		return q.CountMaintenancePlans(ctx, db.CountMaintenancePlansParams{FilterAsset: asset, ActiveOnly: c.Query("active_only") == "true"})
 	})
@@ -280,11 +287,12 @@ func (h MaintenanceController) Quarantines(c *gin.Context) {
 	q := db.New(h.Service.Pool)
 	limit, offset, page := utils.ParsePagination(c)
 	history := c.Query("include_released") == "true"
+	wholeAssetOnly := c.Query("whole_asset_only") == "true"
 	rows, err := q.ListMaintenanceQuarantines(ctx, db.ListMaintenanceQuarantinesParams{
-		FilterAsset: asset, IncludeReleased: history, PageLimit: limit, PageOffset: offset,
+		FilterAsset: asset, IncludeReleased: history, WholeAssetOnly: wholeAssetOnly, PageLimit: limit, PageOffset: offset,
 	})
 	maintenancePage(c, rows, err, page, func() (int64, error) {
-		return q.CountMaintenanceQuarantines(ctx, db.CountMaintenanceQuarantinesParams{FilterAsset: asset, IncludeReleased: history})
+		return q.CountMaintenanceQuarantines(ctx, db.CountMaintenanceQuarantinesParams{FilterAsset: asset, IncludeReleased: history, WholeAssetOnly: wholeAssetOnly})
 	})
 }
 

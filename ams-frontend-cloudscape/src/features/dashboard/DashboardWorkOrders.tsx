@@ -1,64 +1,83 @@
-
-import { Alert, Box, Button, Container, Header, StatusIndicator, Table } from "@cloudscape-design/components";
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { Alert, Box, Button, Container, Header, Pagination, Select, SpaceBetween } from "@cloudscape-design/components";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { RouterLink } from "../../components/shared/RouterLink";
 import { listWorkOrders } from "../../lib/api/maintenance";
-import { humanizeEnum } from "../../utils/format";
-import { workOrderDue, workOrderType } from "../maintenance/workOrderPresentation";
+import { workOrderDue } from "../maintenance/workOrderPresentation";
+
+const filters = [
+  { label: "All", value: "all", query: {} },
+  { label: "Overdue", value: "overdue", query: { due_window: "OVERDUE" } },
+  { label: "Due soon", value: "due-soon", query: { due_window: "DUE_SOON" } },
+  { label: "Maintenance only", value: "maintenance", query: { type: "MAINTENANCE" } },
+];
 
 export function DashboardWorkOrders({ assetId }: { assetId: string }) {
-  const navigate = useNavigate();
+  const [filter, setFilter] = useState(filters[0]);
+  const [page, setPage] = useState(1);
   const orders = useQuery({
-    queryKey: ["maintenance", "dashboard-open", assetId],
-    queryFn: () => listWorkOrders({ asset_id: assetId, open_only: "true", limit: 8 }),
+    queryKey: ["maintenance", "dashboard-open", assetId, filter.value, page],
+    queryFn: () => listWorkOrders({ asset_id: assetId, open_only: "true", limit: 5, page, ...filter.query }),
+    placeholderData: keepPreviousData,
   });
   const items = orders.data?.data ?? [];
   const total = orders.data?.meta.total;
-  const empty = <Box color="text-body-secondary">No open work orders for this asset.</Box>;
+  const pages = Math.max(1, orders.data?.meta.total_pages ?? 1);
+
+  if (orders.data && !orders.isPlaceholderData && page > pages) setPage(pages);
 
   return (
-    <Container header={
-      <Header variant="h2"
-        description={total != null && total > items.length ? `Showing ${items.length} of ${total} open work orders` : undefined}
-        counter={total == null ? undefined : `(${total})`}
-        actions={<Button onClick={() => navigate(`/work-orders?asset_id=${assetId}&open_only=true`)}>View work orders</Button>}
-      >Work Orders</Header>
-    }>
-      {orders.isError ? (
-        <Alert type="error" action={<Button onClick={() => void orders.refetch()}>Retry</Button>}>
-          {orders.error.message}
-        </Alert>
-      ) : <>
-        <div className="certificate-action-list">
-          {orders.isLoading ? <Box color="text-body-secondary">Loading work orders</Box> : items.length === 0 ? empty :
-            items.map((order) => (
-              <div className="certificate-action-list__item" key={order.work_order_id}>
-                <div className="certificate-action-list__header">
+    <Container
+      header={<Header variant="h2" counter={!orders.isPlaceholderData && total != null ? `(${total})` : undefined}>Work Orders</Header>}
+      footer={<RouterLink to={`/work-orders?asset_id=${assetId}&open_only=true`}>View all open work orders</RouterLink>}
+    >
+      <SpaceBetween size="s">
+        <Select
+          ariaLabel="Filter work orders"
+          options={filters}
+          selectedOption={filter}
+          onChange={({ detail }) => {
+            setFilter(filters.find((option) => option.value === detail.selectedOption.value) ?? filters[0]);
+            setPage(1);
+          }}
+        />
+        {orders.isError ? (
+          <Alert type="error" action={<Button onClick={() => void orders.refetch()}>Retry</Button>}>
+            {orders.error.message}
+          </Alert>
+        ) : orders.isPending || orders.isPlaceholderData ? (
+          <Box color="text-body-secondary">Loading work orders</Box>
+        ) : items.length === 0 ? (
+          <Box color="text-body-secondary">No open work orders match this filter.</Box>
+        ) : (
+          <ul className="overview-work-orders" aria-label="Open work orders">
+            {items.map((order) => {
+              const due = workOrderDue(order);
+              return (
+                <li key={order.work_order_id}>
                   <RouterLink to={`/work-orders/${order.work_order_id}`}>{order.title}</RouterLink>
-                  <StatusIndicator type="info">{humanizeEnum(order.status)}</StatusIndicator>
-                </div>
-                <div className="certificate-action-list__meta">
-                  <span>{workOrderType(order)}</span>
-                  <span>{order.component_name || order.asset_name}</span>
-                  <span>{workOrderDue(order) || "—"}</span>
-                </div>
-              </div>
-            ))}
-        </div>
-        <div className="certificate-action-table">
-          <Table items={items} trackBy="work_order_id" variant="embedded" empty={empty}
-            loading={orders.isLoading} loadingText="Loading work orders"
-            columnDefinitions={[
-              { id: "work", header: "Work required", cell: (order) => <RouterLink to={`/work-orders/${order.work_order_id}`}>{order.title}</RouterLink> },
-              { id: "type", header: "Type", cell: workOrderType },
-              { id: "equipment", header: "Equipment", cell: (order) => order.component_name || order.asset_name },
-              { id: "due", header: "Due", cell: (order) => workOrderDue(order) || "—" },
-              { id: "status", header: "Status", cell: (order) => <StatusIndicator type="info">{humanizeEnum(order.status)}</StatusIndicator> },
-            ]}
+                  <Box color="text-body-secondary" fontSize="body-s">
+                    {order.component_name || order.asset_name}{due && ` · Due ${due}`}
+                  </Box>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {pages > 1 && (
+          <Pagination
+            currentPageIndex={page}
+            pagesCount={pages}
+            onChange={({ detail }) => setPage(detail.currentPageIndex)}
+            ariaLabels={{
+              paginationLabel: "Work Orders pagination",
+              nextPageLabel: "Next page",
+              previousPageLabel: "Previous page",
+              pageLabel: (index) => `Page ${index}`,
+            }}
           />
-        </div>
-      </>}
+        )}
+      </SpaceBetween>
     </Container>
   );
 }

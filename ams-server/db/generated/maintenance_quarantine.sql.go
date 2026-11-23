@@ -15,16 +15,18 @@ import (
 const countMaintenanceQuarantines = `-- name: CountMaintenanceQuarantines :one
 SELECT count(*) FROM maintenance_quarantines q
 WHERE ($1::boolean OR q.released_at IS NULL)
-  AND ($2::uuid IS NULL OR q.asset_id = $2)
+  AND (NOT $2::boolean OR q.component_id IS NULL)
+  AND ($3::uuid IS NULL OR q.asset_id = $3)
 `
 
 type CountMaintenanceQuarantinesParams struct {
 	IncludeReleased bool       `json:"include_released"`
+	WholeAssetOnly  bool       `json:"whole_asset_only"`
 	FilterAsset     *uuid.UUID `json:"filter_asset"`
 }
 
 func (q *Queries) CountMaintenanceQuarantines(ctx context.Context, arg CountMaintenanceQuarantinesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countMaintenanceQuarantines, arg.IncludeReleased, arg.FilterAsset)
+	row := q.db.QueryRow(ctx, countMaintenanceQuarantines, arg.IncludeReleased, arg.WholeAssetOnly, arg.FilterAsset)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -180,12 +182,14 @@ SELECT q.quarantine_id, q.asset_id, q.component_id, q.reason, q.tagged_by, q.tag
 FROM maintenance_quarantines q JOIN assets a USING (asset_id) LEFT JOIN components c USING (component_id)
 LEFT JOIN users t ON t.user_id = q.tagged_by LEFT JOIN users r ON r.user_id = q.released_by
 WHERE ($1::boolean OR q.released_at IS NULL)
-  AND ($2::uuid IS NULL OR q.asset_id = $2)
-ORDER BY q.tagged_at DESC, q.quarantine_id LIMIT $4 OFFSET $3
+  AND (NOT $2::boolean OR q.component_id IS NULL)
+  AND ($3::uuid IS NULL OR q.asset_id = $3)
+ORDER BY q.tagged_at DESC, q.quarantine_id LIMIT $5 OFFSET $4
 `
 
 type ListMaintenanceQuarantinesParams struct {
 	IncludeReleased bool       `json:"include_released"`
+	WholeAssetOnly  bool       `json:"whole_asset_only"`
 	FilterAsset     *uuid.UUID `json:"filter_asset"`
 	PageOffset      int32      `json:"page_offset"`
 	PageLimit       int32      `json:"page_limit"`
@@ -211,6 +215,7 @@ type ListMaintenanceQuarantinesRow struct {
 func (q *Queries) ListMaintenanceQuarantines(ctx context.Context, arg ListMaintenanceQuarantinesParams) ([]ListMaintenanceQuarantinesRow, error) {
 	rows, err := q.db.Query(ctx, listMaintenanceQuarantines,
 		arg.IncludeReleased,
+		arg.WholeAssetOnly,
 		arg.FilterAsset,
 		arg.PageOffset,
 		arg.PageLimit,
