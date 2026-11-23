@@ -263,6 +263,7 @@ function useCertificateSaveMutation({
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["certificates"] }),
           queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+          queryClient.invalidateQueries({ queryKey: ["maintenance"] }),
           queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary", assetId] }),
         ]);
         onClearUpload();
@@ -280,6 +281,7 @@ function useCertificateSaveMutation({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["certificates"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["maintenance"] }),
         queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary", assetId] }),
         queryClient.invalidateQueries({ queryKey: ["certificate", certificateId] }),
         queryClient.invalidateQueries({ queryKey: ["uploads", certificateId] }),

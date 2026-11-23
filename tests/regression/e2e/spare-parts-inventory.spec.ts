@@ -44,7 +44,7 @@ test.describe("Spare parts inventory", () => {
     await expect(count).toBeHidden();
     const inventoryUrl = page.url();
 
-    await page.goto(`/maintenance/work-orders/${order.work_order_id}`);
+    await page.goto(`/work-orders/${order.work_order_id}`);
     await page.getByRole("button", { name: "Record parts usage" }).click();
     const log = page.getByRole("dialog", { name: "Record parts usage" });
     await chooseOption(page, log.getByRole("button", { name: /^Store/ }), projectName);

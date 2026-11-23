@@ -8,38 +8,42 @@ import { RouterLink } from "../../components/shared/RouterLink";
 import { useListControls } from "../../components/shared/useListControls";
 import { listWorkOrders, maintenanceWrite } from "../../lib/api/maintenance";
 import type { WorkOrder } from "../../types/maintenance";
-import { formatDateTime, humanizeEnum } from "../../utils/format";
+import { humanizeEnum } from "../../utils/format";
+import { workOrderDue, workOrderType } from "./workOrderPresentation";
 import { AssetPicker, ComponentPicker, Dialog, Register } from "./shared";
 
 const statuses = ["OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
 
 export function WorkOrdersPage() {
-  const controls = useListControls("", ["asset_id", "component_id", "status", "type", "from", "to"]);
+  const controls = useListControls("", ["asset_id", "component_id", "status", "type", "from", "to", "open_only"]);
   const orders = useQuery({ queryKey: ["maintenance", "orders", controls.query], queryFn: () => listWorkOrders(controls.query) });
   const [raising, setRaising] = useState(false);
   const navigate = useNavigate();
 
   return (
-    <ContentLayout header={<Header variant="h1" actions={<Button variant="primary" onClick={() => setRaising(true)}>Raise work order</Button>}>Maintenance work orders</Header>}>
+    <ContentLayout header={<Header variant="h1" actions={<Button variant="primary" onClick={() => setRaising(true)}>Raise maintenance work order</Button>}>Work Orders</Header>}>
       <Register query={orders} controls={controls} empty="No work orders found" trackBy="work_order_id"
         filters={<ListFilters controls={controls} label="Search work orders" facets={[
-          { key: "status", label: "Status", options: statuses.map((value) => ({ value, label: humanizeEnum(value) })) },
-          { key: "type", label: "Maintenance type", options: [{ value: "ROUTINE", label: "Routine" }, { value: "NON_ROUTINE", label: "Non-routine" }] },
+          { key: "status", label: "Status", clear: ["open_only"], options: statuses.map((value) => ({ value, label: humanizeEnum(value) })) },
+          { key: "type", label: "Type", options: [{ value: "INSPECTION", label: "Inspection" }, { value: "MAINTENANCE", label: "Maintenance" }, { value: "ROUTINE", label: "Routine maintenance" }, { value: "NON_ROUTINE", label: "Non-routine maintenance" }] },
         ]}>
           <AssetPicker assetId={controls.filters.asset_id} allLabel="All equipment" onChange={(asset_id) => controls.setFilters({ asset_id, component_id: "" })} />
+          <Checkbox checked={controls.filters.open_only === "true"}
+            onChange={({ detail }) => controls.setFilters({ open_only: detail.checked ? "true" : "", status: "" })}>
+            Open work only
+          </Checkbox>
           <FormField label="From date"><DatePicker ariaLabel="From date" value={controls.filters.from} onChange={({ detail }) => controls.setFilters({ from: detail.value })} /></FormField>
           <FormField label="To date"><DatePicker ariaLabel="To date" value={controls.filters.to} onChange={({ detail }) => controls.setFilters({ to: detail.value })} /></FormField>
         </ListFilters>}
         columns={[
-          { id: "order", header: "Work order", cell: (row) => <RouterLink to={`/maintenance/work-orders/${row.work_order_id}`}>{row.display_id} · {row.title}</RouterLink> },
+          { id: "order", header: "Work order", cell: (row) => <RouterLink to={`/work-orders/${row.work_order_id}`}>{row.display_id} · {row.title}</RouterLink> },
           { id: "asset", header: "Equipment", cell: (row) => row.component_name ? `${row.asset_name} / ${row.component_name}` : row.asset_name },
-          { id: "type", header: "Type", cell: (row) => row.plan_id ? "Routine" : "Non-routine" },
+          { id: "type", header: "Type", cell: workOrderType },
           { id: "status", header: "Status", cell: (row) => <StatusIndicator type={row.status === "COMPLETED" ? "success" : "info"}>{humanizeEnum(row.status)}</StatusIndicator> },
-          { id: "assignee", header: "Technician", cell: (row) => row.assignee_name || "Unassigned" },
-          { id: "created", header: "Raised", cell: (row) => formatDateTime(row.created_at) },
+          { id: "due", header: "Due", cell: (row) => workOrderDue(row) || "—" },
         ]} />
       {raising && <RaiseOrder asset={controls.filters.asset_id} component={controls.filters.component_id}
-        close={() => setRaising(false)} onRaised={(id) => navigate(`/maintenance/work-orders/${id}`)} />}
+        close={() => setRaising(false)} onRaised={(id) => navigate(`/work-orders/${id}`)} />}
     </ContentLayout>
   );
 }

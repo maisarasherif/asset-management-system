@@ -56,6 +56,7 @@ export function GeneratedCertificatePreview({ certificateId, signerId, issueDate
       void queryClient.invalidateQueries({ queryKey: ["certificate", certificateId] });
       void queryClient.invalidateQueries({ queryKey: ["certificates"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["maintenance"] });
       void queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary"] });
     }
     void queryClient.invalidateQueries({ queryKey: ["issuances", certificateId] });
@@ -105,6 +106,7 @@ export function GeneratedCertificatePreview({ certificateId, signerId, issueDate
         await queryClient.invalidateQueries({ queryKey: ["certificate", certificateId] });
         await queryClient.invalidateQueries({ queryKey: ["certificates"] });
         await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        await queryClient.invalidateQueries({ queryKey: ["maintenance"] });
         await queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary"] });
       }
       await queryClient.invalidateQueries({ queryKey: ["issuances", certificateId] });

@@ -134,7 +134,7 @@ func (h MaintenanceController) WorkOrders(c *gin.Context) {
 	limit, offset, page := utils.ParsePagination(c)
 	filters := utils.ReadListFilters(c)
 	status := filters.Enum("status", "OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED")
-	kind := filters.Enum("type", "ROUTINE", "NON_ROUTINE")
+	kind := filters.Enum("type", "INSPECTION", "MAINTENANCE", "ROUTINE", "NON_ROUTINE")
 	if !filters.Valid() {
 		return
 	}
@@ -193,9 +193,38 @@ func (h MaintenanceController) OrderAction(action string) gin.HandlerFunc {
 		if action != "start" && !maintenanceInput(c, &input) {
 			return
 		}
-		row, err := h.Service.WorkOrderAction(c.Request.Context(), id, actor, action, input)
+		ctx := c.Request.Context()
+		order, err := db.New(h.Service.Pool).GetMaintenanceWorkOrderDetail(ctx, id)
+		if err != nil {
+			maintenanceResponse(c, http.StatusOK, nil, err)
+			return
+		}
+		if order.WorkType == "INSPECTION" {
+			h.inspectionAction(c, id, action)
+			return
+		}
+		row, err := h.Service.WorkOrderAction(ctx, id, actor, action, input)
 		maintenanceResponse(c, http.StatusOK, row, err)
 	}
+}
+
+func (h MaintenanceController) inspectionAction(c *gin.Context, id uuid.UUID, action string) {
+	if action != "start" {
+		maintenanceResponse(c, http.StatusOK, nil, maintenance.Conflict("Inspection work orders close when the certificate is issued"))
+		return
+	}
+	ctx := c.Request.Context()
+	q := db.New(h.Service.Pool)
+	rows, err := q.StartInspectionWorkOrder(ctx, id)
+	if err == nil && rows == 0 {
+		err = maintenance.Conflict("This work order is closed")
+	}
+	if err != nil {
+		maintenanceResponse(c, http.StatusOK, nil, err)
+		return
+	}
+	order, err := q.GetMaintenanceWorkOrderDetail(ctx, id)
+	maintenanceResponse(c, http.StatusOK, order, err)
 }
 
 func (h MaintenanceController) Technicians(c *gin.Context) {

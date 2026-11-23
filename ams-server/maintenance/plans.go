@@ -152,7 +152,9 @@ func (s Service) evaluate(ctx context.Context, tx pgx.Tx, q *db.Queries, asset d
 }
 
 func (s Service) ScanDue(ctx context.Context) error {
-	ids, err := db.New(s.Pool).MaintenanceDueAssets(ctx, dubaiDate(time.Now()))
+	queries := db.New(s.Pool)
+	inspectionErr := queries.RefreshInspectionWorkOrders(ctx)
+	ids, err := queries.MaintenanceDueAssets(ctx, dubaiDate(time.Now()))
 	if err != nil {
 		return err
 	}
@@ -169,7 +171,7 @@ func (s Service) ScanDue(ctx context.Context) error {
 			failures = errors.Join(failures, fmt.Errorf("asset %s: %w", id, err))
 		}
 	}
-	return failures
+	return errors.Join(inspectionErr, failures)
 }
 
 func (s Service) StartScanner(ctx context.Context) {

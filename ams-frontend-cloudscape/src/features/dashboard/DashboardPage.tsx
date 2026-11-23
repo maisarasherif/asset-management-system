@@ -10,7 +10,6 @@ import {
   ContentLayout,
   Header,
   SpaceBetween,
-  StatusIndicator,
   Table,
   type TableProps,
 } from "@cloudscape-design/components";
@@ -19,7 +18,6 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageEmpty, PageError, PageLoading } from "../../components/shared/PageStates";
 import { CertificateDonut } from "../../components/shared/CertificateDonut";
-import { RouterLink } from "../../components/shared/RouterLink";
 import { TableCellText } from "../../components/shared/TableCells";
 import {
   getAssetComponentCertificateSheet,
@@ -30,67 +28,9 @@ import {
 } from "../../lib/api/ams";
 import { useAuth } from "../../providers/auth-context";
 import { useFlashbar } from "../../providers/flashbar-context";
-import { formatDate, humanizeEnum } from "../../utils/format";
+import { formatDate } from "../../utils/format";
 import { Availability, EquipmentMaintenanceSummary } from "../maintenance/EquipmentMaintenanceSummary";
-import { certificateStatusType } from "../../utils/status";
-
-type DashboardCertificate = import("../../types/ams").CertificateWithContext;
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function daysUntil(expiryDate: string | null | undefined) {
-  if (!expiryDate) {
-    return null;
-  }
-
-  const expiry = new Date(expiryDate);
-  if (Number.isNaN(expiry.getTime())) {
-    return null;
-  }
-
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  const expiryStart = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate()).getTime();
-  return Math.ceil((expiryStart - todayStart) / DAY_MS);
-}
-
-function certificateRiskRank(certificate: DashboardCertificate) {
-  if (certificate.status === "EXPIRED") return 0;
-  if (certificate.status === "EXPIRING_SOON") return 1;
-  if (certificate.status === "PENDING") return 2;
-  return 3;
-}
-
-function certificateTimingLabel(certificate: DashboardCertificate) {
-  const days = daysUntil(certificate.expiry_date);
-
-  if (days === null) {
-    return "Expiry date unavailable";
-  }
-
-  if (days < 0) {
-    return `${Math.abs(days)} d overdue`;
-  }
-
-  if (days === 0) {
-    return "Due today";
-  }
-
-  return `${days} d remaining`;
-}
-
-function sortCertificatesByRisk(certificates: DashboardCertificate[]) {
-  return [...certificates].sort((a, b) => {
-    const riskDelta = certificateRiskRank(a) - certificateRiskRank(b);
-    if (riskDelta !== 0) {
-      return riskDelta;
-    }
-
-    const firstExpiry = a.expiry_date ? new Date(a.expiry_date).getTime() : Number.POSITIVE_INFINITY;
-    const secondExpiry = b.expiry_date ? new Date(b.expiry_date).getTime() : Number.POSITIVE_INFINITY;
-    return firstExpiry - secondExpiry;
-  });
-}
+import { DashboardWorkOrders } from "./DashboardWorkOrders";
 
 function filenameSegment(value: string | null | undefined) {
   return (value || "asset")
@@ -132,13 +72,11 @@ export function DashboardPage() {
     queryKey: ["dashboard", activeAssetId],
     queryFn: async () => {
       const id = activeAssetId!;
-      const [asset, summary, expired, expiring] = await Promise.all([
+      const [asset, summary] = await Promise.all([
         getAsset(id),
         getAssetCertificateSummary(id),
-        listCertificatesWithContext(1, 8, { asset_id: id, status: "EXPIRED" }),
-        listCertificatesWithContext(1, 8, { asset_id: id, status: "EXPIRING_SOON" }),
       ]);
-      return { asset, summary, urgentCertificates: [...expired.data, ...expiring.data] };
+      return { asset, summary };
     },
     enabled: Boolean(activeAssetId),
   });
@@ -195,69 +133,6 @@ export function DashboardPage() {
   }
 
   const dashboard = dashboardQuery.data;
-  const urgentCertificates = sortCertificatesByRisk(dashboard.urgentCertificates).slice(0, 8);
-  const expiredCount = dashboard.summary.expired;
-  const expiringSoonCount = dashboard.summary.expiring_soon;
-  const actionQueueSummary =
-    expiredCount > 0
-      ? `${expiredCount} expired certificate${expiredCount === 1 ? "" : "s"} need action now.`
-      : expiringSoonCount > 0
-        ? `${expiringSoonCount} certificate${expiringSoonCount === 1 ? "" : "s"} expiring soon.`
-        : "No urgent certificate action is needed for this asset.";
-
-  const urgentColumns: TableProps<DashboardCertificate>["columnDefinitions"] = [
-    {
-      id: "certificate",
-      header: "Certificate",
-      width: "34%",
-      minWidth: 240,
-      cell: (item) => (
-        <TableCellText title={item.certificate_name}>
-          <RouterLink
-            to={`/assets/${dashboard.asset.asset_id}/components/${item.component_id}/certificates/${item.certificate_id}`}
-          >
-            {item.certificate_name}
-          </RouterLink>
-        </TableCellText>
-      ),
-    },
-    {
-      id: "component",
-      header: "Component",
-      width: "30%",
-      minWidth: 220,
-      cell: (item) => <TableCellText title={item.component_name}>{item.component_name}</TableCellText>,
-    },
-    {
-      id: "expiry",
-      header: "Expiry",
-      width: 140,
-      minWidth: 130,
-      cell: (item) => formatDate(item.expiry_date),
-    },
-    {
-      id: "timing",
-      header: "Timing",
-      width: 140,
-      minWidth: 130,
-      cell: (item) => (
-        <Box color={item.status === "EXPIRED" ? "text-status-error" : "text-body-secondary"}>
-          {certificateTimingLabel(item)}
-        </Box>
-      ),
-    },
-    {
-      id: "status",
-      header: "Status",
-      width: 150,
-      minWidth: 140,
-      cell: (item) => (
-        <StatusIndicator type={certificateStatusType(item.status)}>
-          {humanizeEnum(item.status)}
-        </StatusIndicator>
-      ),
-    },
-  ];
   const latestColumns: TableProps<import("../../types/ams").CertificateWithContext>["columnDefinitions"] = [
     {
       id: "name",
@@ -363,60 +238,7 @@ export function DashboardPage() {
       }
     >
       <SpaceBetween direction="vertical" size="l">
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description={actionQueueSummary}
-              counter={`(${urgentCertificates.length})`}
-              actions={
-                <Button onClick={() => navigate(`/assets/${dashboard.asset.asset_id}`)}>
-                  Review certificates
-                </Button>
-              }
-            >
-              Certificate action queue
-            </Header>
-          }
-        >
-          <div className="certificate-action-list">
-            {urgentCertificates.length === 0 ? (
-              <Box color="text-body-secondary">No urgent certificates for this asset.</Box>
-            ) : (
-              urgentCertificates.map((certificate) => (
-                <div className="certificate-action-list__item" key={certificate.certificate_id}>
-                  <div className="certificate-action-list__header">
-                    <RouterLink
-                      to={`/assets/${dashboard.asset.asset_id}/components/${certificate.component_id}/certificates/${certificate.certificate_id}`}
-                    >
-                      {certificate.certificate_name}
-                    </RouterLink>
-                    <StatusIndicator type={certificateStatusType(certificate.status)}>
-                      {humanizeEnum(certificate.status)}
-                    </StatusIndicator>
-                  </div>
-                  <div className="certificate-action-list__meta">
-                    <span>{certificate.component_name}</span>
-                    <span>{formatDate(certificate.expiry_date)}</span>
-                  </div>
-                  <Box color={certificate.status === "EXPIRED" ? "text-status-error" : "text-body-secondary"}>
-                    {certificateTimingLabel(certificate)}
-                  </Box>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="certificate-action-table">
-            <Table
-              columnDefinitions={urgentColumns}
-              empty={<Box color="text-body-secondary">No urgent certificates for this asset.</Box>}
-              items={urgentCertificates}
-              loading={false}
-              trackBy="certificate_id"
-              variant="embedded"
-            />
-          </div>
-        </Container>
+        <DashboardWorkOrders assetId={dashboard.asset.asset_id} />
 
         <div className="dashboard-top-grid">
           <Container header={<Header variant="h2">Certificate overview</Header>}>

@@ -20,6 +20,9 @@ export interface WorkOrder extends MaintenanceTarget {
 }
 
 export interface WorkOrderDetail extends WorkOrder {
+  work_type: "INSPECTION" | "MAINTENANCE";
+  certificate_id: string | null;
+  issuance_id: string | null;
   asset_name: string;
   asset_number: string;
   component_name: string;

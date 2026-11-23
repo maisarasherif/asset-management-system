@@ -20,6 +20,7 @@ system-api-smoke.postman_collection.json
 admin-surface-regression.postman_collection.json
 routine-maintenance.postman_collection.json
 spare-parts-inventory.postman_collection.json
+shared-work-orders.postman_collection.json
 client-asset-certificates.postman_collection.json
 single-asset-equipment.postman_collection.json
 hr-admin-product.postman_collection.json
@@ -66,7 +67,7 @@ NEWMAN_COLLECTIONS='' E2E_SPECS='' E2E_PROFILE=certificates-final \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-Run as `ams_test_runner` from the Fedora repository root after reviewing/publishing and synchronizing the changes yourself. See [Step 8 in the authoritative guide](./TESTING_GUIDE.md#step-8-final-certificate-regression-and-timing-evidence) for the three supplemental certificate mock cases, timing artifacts and final PDF review. Default selections include eight collections and three browser specs; explicit `E2E_SPECS` takes precedence over the profile. The wider profile is opt-in to keep normal step runs focused.
+Run as `ams_test_runner` from the Fedora repository root after reviewing/publishing and synchronizing the changes yourself. See [Step 8 in the authoritative guide](./TESTING_GUIDE.md#step-8-final-certificate-regression-and-timing-evidence) for the three supplemental certificate mock cases, timing artifacts and final PDF review. Default selections include nine collections and three browser specs; explicit `E2E_SPECS` takes precedence over the profile. The wider profile is opt-in to keep normal step runs focused.
 
 Step 8 also synchronizes the preview panel after recovery or abandonment from history, clearing obsolete review/error controls. Dedicated Go and Newman status cases and the real-stack recovery journey cover this behavior. The feature collection has 396 requests and the dedicated spec has four journeys. Successful runs retain `certificate-latency-summary.json` with observed preview/issuance/upload/retry durations; browser timing files are attached to the report. Controlled faults are excluded, and no latency threshold is imposed. Static/build checks passed; **Step 8 live regression, measured timings and final PDF review are pending**. Shared Go/API/whole-app baselines need no edits for this UI status change and are included in the final gate. Changes remain uncommitted/unpushed.
 

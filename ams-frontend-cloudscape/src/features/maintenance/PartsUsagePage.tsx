@@ -41,7 +41,7 @@ export function PartsUsageTable({ orderId, editable = false }: { orderId?: strin
         { id: "quantity", header: "Quantity", cell: (row) => row.quantity === 0 ? "0 · Corrected" : row.quantity.toLocaleString() },
         ...(!orderId ? [
           { id: "asset", header: "Equipment", cell: (row: PartUsage) => row.asset_name },
-          { id: "order", header: "Work order", cell: (row: PartUsage) => <RouterLink to={`/maintenance/work-orders/${row.work_order_id}`}>{row.work_order_number}</RouterLink> },
+          { id: "order", header: "Work order", cell: (row: PartUsage) => <RouterLink to={`/work-orders/${row.work_order_id}`}>{row.work_order_number}</RouterLink> },
         ] : []),
         { id: "recorded", header: "Recorded", cell: (row) => <>{formatDateTime(row.recorded_at)}<div>{row.actor_name}</div></> },
         ...(editable ? [{ id: "edit", header: "Actions", cell: (row: PartUsage) => <Button variant="inline-link" onClick={() => setEdit(row)}>Correct usage</Button> }] : []),
@@ -62,7 +62,7 @@ function UsageFilters({ controls }: { controls: ReturnType<typeof useListControl
     <FormField label="Work order">
       <PagedSelect label="Work order" allLabel="All work orders" selected={selectedOrder}
         queryKey={["maintenance", "usage-order-filter", controls.filters.asset_id]}
-        load={(page, search) => listWorkOrders({ page, search, asset_id: controls.filters.asset_id })}
+        load={(page, search) => listWorkOrders({ page, search, asset_id: controls.filters.asset_id, type: "MAINTENANCE" })}
         getOption={(row) => ({ value: row.work_order_id, label: `${row.display_id} · ${row.title}` })}
         onSelect={(option) => { setOrder(option); controls.setFilters({ work_order_id: option?.value ?? "" }); }} />
     </FormField>

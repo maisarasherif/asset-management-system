@@ -54,6 +54,7 @@ export function CertificateIssuanceHistory({ certificateId }: { certificateId: s
         queryClient.invalidateQueries({ queryKey: ["certificate", certificateId] }),
         queryClient.invalidateQueries({ queryKey: ["certificates"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["maintenance"] }),
         queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary"] }),
       ]);
       setBusy(""); setConfirmation(null);

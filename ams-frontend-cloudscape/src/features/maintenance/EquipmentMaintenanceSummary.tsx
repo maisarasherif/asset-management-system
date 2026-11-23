@@ -32,7 +32,7 @@ export function EquipmentMaintenanceSummary({ asset }: { asset: Asset }) {
         plan.next_due_date ? formatDate(plan.next_due_date) : ""].filter(Boolean).join(" or ")}
     </Box>)}
     <RouterLink to={`/maintenance/plans?${filter}`}>View routine plans</RouterLink>
-    <RouterLink to={`/maintenance?${filter}`}>View maintenance history</RouterLink>
+    <RouterLink to={`/work-orders?${filter}`}>View work orders</RouterLink>
     {editing && <MeterDialog asset={asset} close={() => setEditing(false)} />}
   </SpaceBetween>;
 }

@@ -7,11 +7,11 @@ test.describe("Central routine and non-routine maintenance", () => {
 
   test("records working hours, completes two jobs, and releases the red tag", async ({ page, request }) => {
     const token = await signInForMaintenance(page);
-    await page.getByRole("link", { name: "Work orders", exact: true }).click();
-    await expect(page).toHaveURL(/\/maintenance$/);
-    await expect(page.getByRole("heading", { name: "Maintenance work orders" })).toBeVisible();
+    await page.getByRole("link", { name: "Work Orders", exact: true }).click();
+    await expect(page).toHaveURL(/\/work-orders$/);
+    await expect(page.getByRole("heading", { name: "Work Orders" })).toBeVisible();
     for (const [label, path] of [
-      ["Routine plans", "/maintenance/plans"],
+      ["Routine Maintenance Plans", "/maintenance/plans"],
       ["Quarantine Zone", "/maintenance/quarantine"],
       ["Spare parts inventory", "/maintenance/inventory"],
       ["Parts usage", "/maintenance/usage"],
@@ -20,7 +20,7 @@ test.describe("Central routine and non-routine maintenance", () => {
     }
     await page.goto("/hr-admin");
     await expect(page.getByRole("link", { name: "HR/Admin overview" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Work orders", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Work Orders", exact: true })).toHaveCount(0);
     const suffix = Date.now();
     const equipment = `Service compressor ${suffix}`;
     const asset = await requestMaintenance<{ asset_id: string }>(request, token, "/asset", {
@@ -44,11 +44,11 @@ test.describe("Central routine and non-routine maintenance", () => {
     await meter.getByRole("button", { name: "Save", exact: true }).click();
     await expect(meter).toBeHidden();
     await expect(page.getByText("Red tag · Quarantined", { exact: true })).toBeVisible();
-    await page.getByRole("link", { name: "View maintenance history" }).click();
-    await expect(page).toHaveURL(new RegExp("/maintenance\\?asset_id=" + asset.asset_id));
+    await page.getByRole("link", { name: "View work orders" }).click();
+    await expect(page).toHaveURL(new RegExp("/work-orders\\?asset_id=" + asset.asset_id));
     await expect(page.getByRole("row", { name: /Oil service/ })).toBeVisible();
 
-    await page.getByRole("button", { name: "Raise work order" }).click();
+    await page.getByRole("button", { name: "Raise maintenance work order", exact: true }).click();
     const raise = page.getByRole("dialog", { name: "Raise non-routine work order" });
     await raise.getByRole("textbox", { name: "Title" }).fill("Air leak");
     await raise.getByRole("textbox", { name: "Fault or work required" }).fill("Air hose leaked during inspection");
@@ -89,13 +89,13 @@ test.describe("Central routine and non-routine maintenance", () => {
     const asset = await requestMaintenance<{ asset_id: string }>(request, token, "/asset", {
       method: "POST", status: 201, data: { name: "Maintenance viewport fixture " + Date.now(), status: "ACTIVE" },
     });
-    await page.goto(`/maintenance?asset_id=${asset.asset_id}`);
+    await page.goto(`/work-orders?asset_id=${asset.asset_id}`);
     for (const width of [320, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      await expect(page.getByRole("heading", { name: "Maintenance work orders" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Raise work order" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Work Orders" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Raise maintenance work order", exact: true })).toBeVisible();
     }
-    await page.getByRole("button", { name: "Raise work order" }).click();
+    await page.getByRole("button", { name: "Raise maintenance work order", exact: true }).click();
     const raise = page.getByRole("dialog", { name: "Raise non-routine work order" });
     await chooseOption(page, raise.getByRole("button", { name: /Equipment/ }), /Maintenance viewport fixture/);
     await expect(raise.getByRole("textbox", { name: "Fault or work required" })).toBeVisible();

@@ -148,6 +148,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: "work-orders",
+        element: <MaintenanceAccess />,
+        children: [
+          { index: true, element: <RouteSuspense><WorkOrdersPage /></RouteSuspense> },
+          { path: ":orderId", element: <RouteSuspense><WorkOrderDetailPage /></RouteSuspense> },
+        ],
+      },
+      {
         path: "maintenance",
         element: <MaintenanceAccess />,
         children: [

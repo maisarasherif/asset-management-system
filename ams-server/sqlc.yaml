@@ -199,3 +199,17 @@ sql:
           go_type:
             type: "int64"
             pointer: true
+        - column: "shared_work_orders.certificate_id"
+          go_type:
+            import: "github.com/google/uuid"
+            type: "UUID"
+            pointer: true
+        - column: "shared_work_orders.issuance_id"
+          go_type:
+            import: "github.com/google/uuid"
+            type: "UUID"
+            pointer: true
+        - column: "shared_work_orders.due_hours"
+          go_type:
+            type: "int64"
+            pointer: true

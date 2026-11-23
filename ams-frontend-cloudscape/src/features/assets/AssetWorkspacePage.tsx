@@ -502,8 +502,8 @@ function AssetWorkspaceHeader({
           <div className="app-header-actions__desktop">
             <SpaceBetween direction="horizontal" size="xs">
               <Button variant="primary" onClick={() => navigate("/dashboard")}>Open dashboard</Button>
-              <Button onClick={() => navigate(`/maintenance?asset_id=${assetId}`)}>
-                View maintenance history
+              <Button onClick={() => navigate(`/work-orders?asset_id=${assetId}`)}>
+                View work orders
               </Button>
               <Button disabled={!asset.datasheet} href={asset.datasheet || undefined} target="_blank">
                 Open datasheet
@@ -520,14 +520,14 @@ function AssetWorkspaceHeader({
             <Button variant="primary" onClick={() => navigate("/dashboard")}>Open dashboard</Button>
             <ButtonDropdown
               items={[
-                { id: "maintenance", text: "View maintenance history" },
+                { id: "maintenance", text: "View work orders" },
                 { id: "datasheet", text: "Open datasheet", disabled: !asset.datasheet },
                 ...(isAdmin ? [{ id: "edit-asset", text: "Edit asset" }] : []),
                 ...(isAdmin && !isSingleEquipment ? [{ id: "add-component", text: "Add component" }] : []),
               ]}
               onItemClick={({ detail }) => {
                 if (detail.id === "maintenance") {
-                  navigate(`/maintenance?asset_id=${assetId}`);
+                  navigate(`/work-orders?asset_id=${assetId}`);
                 }
                 if (detail.id === "datasheet" && asset.datasheet) {
                   window.open(asset.datasheet, "_blank", "noopener,noreferrer");

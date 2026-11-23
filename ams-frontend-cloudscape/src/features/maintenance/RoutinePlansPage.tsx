@@ -31,7 +31,7 @@ export function RoutinePlansPage() {
         { id: "due", header: "Next due", cell: (row) => [row.next_due_hours == null ? "" : `${row.next_due_hours.toLocaleString()} h`, row.next_due_date ? formatDate(row.next_due_date) : ""].filter(Boolean).join(" or ") },
         { id: "tag", header: "Red tag when due", cell: (row) => row.quarantine_when_due ? "Yes" : "No" },
         { id: "active", header: "Status", cell: (row) => <StatusIndicator type={row.active ? "success" : "stopped"}>{row.active ? "Active" : "Paused"}</StatusIndicator> },
-        { id: "history", header: "History", cell: (row) => <RouterLink to={`/maintenance?asset_id=${row.asset_id}&type=ROUTINE`}>View work orders</RouterLink> },
+        { id: "history", header: "History", cell: (row) => <RouterLink to={`/work-orders?asset_id=${row.asset_id}&type=ROUTINE`}>View work orders</RouterLink> },
       ]} />
     {edit && <PlanDialog plan={edit === "new" ? undefined : edit} initialAsset={controls.filters.asset_id} close={() => setEdit(null)} />}
     {scan && <Dialog title="Check due routine plans" save="Check plans" close={() => setScan(false)}

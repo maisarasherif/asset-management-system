@@ -149,7 +149,10 @@ An operational item tracked in the AMS Product for asset, component, certificate
 _Avoid_: Vehicle, compliance subject
 
 **Work Order**:
-A record of routine or non-routine work against one Asset or one of its components. Technicians assign, start, and complete each Work Order independently and record the Spare Parts used.
+A record of Inspection or Maintenance work against one Asset or component in the shared Work Orders register. Maintenance Work Orders may record Spare Parts used and close when the work is recorded as complete. An Inspection Work Order closes when its linked Certificate Issuance completes.
+
+**Inspection Work Order**:
+A job for a pending test or a certificate due for renewal. The register carries one open Inspection Work Order per Certificate at a time and keeps completed cycles with their Certificate Issuance.
 
 **Routine Maintenance Plan**:
 A recurring service rule for an Asset or a component. An operating-hours threshold, calendar date, or the first of both triggers one open Work Order for the plan.

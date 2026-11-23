@@ -42,9 +42,9 @@ The regression role must connect to the maintenance database (`postgres`), creat
 | `FRONTEND_PORT` | `14175` | Test frontend: `http://127.0.0.1:14175`. |
 | `RECLAIM_TEST_PORTS` | `0` | Fail on occupied ports. Explicit `1` permits stopping existing listeners on the configured test ports. |
 | `KEEP_DB` | `0` | Set `1` to retain the last database state at exit. |
-| `NEWMAN_COLLECTIONS` | Eight below | Space-separated repository-relative paths. |
+| `NEWMAN_COLLECTIONS` | Nine below | Space-separated repository-relative paths. |
 | `E2E_SPECS` | Three below | Space-separated spec paths relative to the frontend directory. |
-| `E2E_PROFILE` | `default` | `certificates-final` selects 11 browser specs. `maintenance-final` adds the spare parts inventory spec to that selection. Explicit `E2E_SPECS` overrides either profile. |
+| `E2E_PROFILE` | `default` | `certificates-final` selects 11 browser specs. `maintenance-final` adds the spare parts inventory and shared work orders specs to that selection. Explicit `E2E_SPECS` overrides either profile. |
 | `VERIFY_MAINTENANCE_UPGRADE` | `0` | Set `1` to rehearse the upgrade from migration 000056 before the fresh install. |
 
 The runner still builds/starts the API and checks login for a Go-only invocation; it checks both test ports even with Playwright disabled. Flags select test layers, not a minimal infrastructure mode.
@@ -56,6 +56,7 @@ tests/regression/api/system-api-smoke.postman_collection.json
 tests/regression/api/admin-surface-regression.postman_collection.json
 tests/regression/api/routine-maintenance.postman_collection.json
 tests/regression/api/spare-parts-inventory.postman_collection.json
+tests/regression/api/shared-work-orders.postman_collection.json
 tests/regression/api/client-asset-certificates.postman_collection.json
 tests/regression/api/single-asset-equipment.postman_collection.json
 tests/regression/api/hr-admin-product.postman_collection.json
@@ -95,6 +96,24 @@ Before production cutover, take a verified database backup and stop the old appl
 **Local Windows evidence, 22 November 2026.** In `run.VDP4vL`, the populated upgrade rehearsal and all 209 Go tests passed with zero failures or skips. The subsequent Newman stage exposed an HR/Admin fixture that calculated Dubai renewal dates from the UTC day. After fixing that fixture, `run.ZErsie` passed all eight Newman collections with 556 assertions and all 25 browser tests. Both runs dropped their disposable databases. Storage cleanup deleted 25 and 52 journaled test objects respectively. The combined API and browser rerun exited with status 0. The supplemental asset-page mock run `run.RKPmYl` passed all five cases, dropped its disposable database, and exited with status 0.
 
 **Focused Fedora VPS evidence.** Run `run.T9WRlD` passed 209 Go tests with zero failures or skips, the selected Newman collections, and all four maintenance and inventory Playwright tests in 39.6 seconds. Storage cleanup deleted 23 journaled objects, the runner dropped `ams_e2e_20261121210317`, and the command exited with status 0. Evidence is in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.T9WRlD`. The pasted summary covers the regression and cleanup stages. Confirm the populated upgrade rehearsal in the run's `maintenance-upgrade.log`.
+
+### Shared inspection and maintenance work orders
+
+Migration `000060` adds Inspection work orders for pending certificate slots and renewals due within 30 days. Publishing a certificate through generated or external approval closes its open Inspection work order. A failed upload or approval leaves that order open. The Dashboard shows the selected asset's open orders and links to the shared register.
+
+Run the focused gate on a disposable database. The existing `maintenance-final` profile includes the new suites in the broader gate.
+
+```bash
+VERIFY_MAINTENANCE_UPGRADE=1 \
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/shared-work-orders.postman_collection.json tests/regression/api/routine-maintenance.postman_collection.json tests/regression/api/spare-parts-inventory.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/shared-work-orders.spec.ts ../tests/regression/e2e/routine-maintenance.spec.ts ../tests/regression/e2e/spare-parts-inventory.spec.ts ../tests/regression/e2e/whole-app-regression.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+The dedicated Go suite is `ams-server/shared_work_orders_integration_test.go`. Newman covers creation, filtering, starting, and rejection of manual completion. Playwright covers navigation from the AMS sidebar and Dashboard, filters, and access to the linked certificate. Go verifies the publication and retry path, renewal cycles, and the scheduled scan. Keep the run results and upgrade evidence before deployment.
+
+**Local isolated evidence, 23 November 2026.** Run `run.us47zr` passed the populated upgrade rehearsal, 211 Go tests with zero skips, 98 Newman assertions across three collections, and all seven live browser tests. Cleanup deleted 23 journaled objects, dropped the disposable database, and exited with status 0. The affected mock passed in `run.bDZVJL` with successful cleanup. A separate disposable 59-to-60 probe backfilled a pending test and a due renewal, skipped a future renewal, and preserved all three certificates during rollback and reapply.
 
 ### App-wide search and filtering
 

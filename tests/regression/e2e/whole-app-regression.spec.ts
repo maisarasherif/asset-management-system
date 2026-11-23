@@ -596,8 +596,8 @@ test.describe("whole app regression", () => {
       ]);
       await expectRoute(
         page,
-        `/maintenance?asset_id=${fixture.assetId}`,
-        ["Maintenance work orders"],
+        `/work-orders?asset_id=${fixture.assetId}`,
+        ["Work Orders"],
       );
       await expectRoute(page, `/assets/${fixture.assetId}/components/new`, [
         "Create component",

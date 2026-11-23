@@ -8,9 +8,10 @@ import { PageError, PageLoading } from "../../components/shared/PageStates";
 import { RouterLink } from "../../components/shared/RouterLink";
 import { getWorkOrder, listTechnicians, maintenanceWrite } from "../../lib/api/maintenance";
 import type { WorkOrderDetail } from "../../types/maintenance";
-import { formatDate, formatDateTime, humanizeEnum } from "../../utils/format";
+import { formatDateTime, humanizeEnum } from "../../utils/format";
 import { Dialog } from "./shared";
 import { PartsUsageTable } from "./PartsUsagePage";
+import { workOrderDue, workOrderType } from "./workOrderPresentation";
 
 type Action = "assign" | "start" | "complete" | "cancel" | "quarantine";
 
@@ -23,13 +24,17 @@ export function WorkOrderDetailPage() {
   if (!orderQuery.data) return <PageError description={orderQuery.error?.message ?? "Work order unavailable"} onRetry={() => void orderQuery.refetch()} />;
 
   const order = orderQuery.data;
+  const inspection = order.work_type === "INSPECTION";
+  const due = workOrderDue(order);
   const open = order.status === "OPEN" || order.status === "IN_PROGRESS";
   return (
     <ContentLayout header={<Header variant="h1" description={`Work order ${order.display_id}`}>
       {order.title}
     </Header>}>
       <SpaceBetween size="l">
-        <Container header={<Header variant="h2" actions={open && <SpaceBetween direction="horizontal" size="xs">
+        <Container header={<Header variant="h2" actions={inspection
+          ? order.status === "OPEN" && <Button onClick={() => setAction("start")}>Start work</Button>
+          : open && <SpaceBetween direction="horizontal" size="xs">
           <Button onClick={() => setAction("assign")}>Assign</Button>
           {order.status === "OPEN" && <Button onClick={() => setAction("start")}>Start work</Button>}
           <Button onClick={() => setAction("quarantine")}>Red-tag equipment</Button>
@@ -42,16 +47,21 @@ export function WorkOrderDetailPage() {
               {order.component_name && <div>{order.component_name}</div>}
             </FormField>
             <FormField label="Status"><StatusIndicator type={order.status === "COMPLETED" ? "success" : "info"}>{humanizeEnum(order.status)}</StatusIndicator></FormField>
-            <FormField label="Technician">{order.assignee_name || "Unassigned"}</FormField>
-            <FormField label="Maintenance type">{order.plan_id ? "Routine" : "Non-routine"}</FormField>
+            <FormField label="Type">{workOrderType(order)}</FormField>
+            {!inspection && <FormField label="Technician">{order.assignee_name || "Unassigned"}</FormField>}
+            {inspection && order.certificate_id && order.component_id && <FormField label="Certificate">
+              <RouterLink to={`/assets/${order.asset_id}/components/${order.component_id}/certificates/${order.certificate_id}`}>
+                Open certificate
+              </RouterLink>
+            </FormField>}
             <FormField label="Raised">{formatDateTime(order.created_at)}</FormField>
-            {order.plan_id && <FormField label="Due">{[order.due_hours == null ? "" : `${order.due_hours.toLocaleString()} h`, order.due_date ? formatDate(order.due_date) : ""].filter(Boolean).join(" or ")}</FormField>}
+            {due && <FormField label="Due">{due}</FormField>}
             {order.description && <FormField label="Fault or work required">{order.description}</FormField>}
             {order.closed_at && <FormField label="Closed">{formatDateTime(order.closed_at)}</FormField>}
             {order.completion_notes && <FormField label="Work performed / closure notes">{order.completion_notes}</FormField>}
           </ColumnLayout>
         </Container>
-        <PartsUsageTable orderId={orderId} editable={open} />
+        {!inspection && <PartsUsageTable orderId={orderId} editable={open} />}
       </SpaceBetween>
       {action && <OrderAction key={action} order={order} action={action} close={() => setAction(null)} />}
     </ContentLayout>

@@ -1907,9 +1907,9 @@ test.describe("mocked refactored page smoke coverage", () => {
       note: "Diver shift log",
     });
     await expect(page.getByText("1,550 working hours", { exact: true })).toBeVisible();
-    await page.getByRole("link", { name: "View maintenance history" }).click();
-    await expect(page).toHaveURL(/\/maintenance\?asset_id=asset-1$/);
-    await expect(page.getByRole("heading", { name: "Maintenance work orders" })).toBeVisible();
+    await page.getByRole("link", { name: "View work orders" }).click();
+    await expect(page).toHaveURL(/\/work-orders\?asset_id=asset-1$/);
+    await expect(page.getByRole("heading", { name: "Work Orders" })).toBeVisible();
     await expectNoUnexpectedApi(state);
   });
 

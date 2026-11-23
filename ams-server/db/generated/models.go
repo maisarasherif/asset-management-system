@@ -391,6 +391,17 @@ type HrAdminVehicle struct {
 	UpdatedAt     time.Time   `json:"updated_at"`
 }
 
+type InspectionWorkOrder struct {
+	WorkOrderID   uuid.UUID   `json:"work_order_id"`
+	DisplayID     string      `json:"display_id"`
+	CertificateID uuid.UUID   `json:"certificate_id"`
+	Status        string      `json:"status"`
+	DueDate       pgtype.Date `json:"due_date"`
+	CreatedAt     time.Time   `json:"created_at"`
+	ClosedAt      *time.Time  `json:"closed_at"`
+	IssuanceID    *uuid.UUID  `json:"issuance_id"`
+}
+
 type MainCategory struct {
 	MainCategoryName string    `json:"main_category_name"`
 	Description      string    `json:"description"`
@@ -547,6 +558,30 @@ type Project struct {
 	Status      string    `json:"status"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type SharedWorkOrder struct {
+	WorkOrderID     uuid.UUID   `json:"work_order_id"`
+	DisplayID       string      `json:"display_id"`
+	PlanID          *uuid.UUID  `json:"plan_id"`
+	AssetID         uuid.UUID   `json:"asset_id"`
+	ComponentID     *uuid.UUID  `json:"component_id"`
+	Title           string      `json:"title"`
+	Description     string      `json:"description"`
+	Status          string      `json:"status"`
+	AssigneeID      *uuid.UUID  `json:"assignee_id"`
+	CreatedAt       time.Time   `json:"created_at"`
+	DueHours        *int64      `json:"due_hours"`
+	DueDate         pgtype.Date `json:"due_date"`
+	ClosedAt        *time.Time  `json:"closed_at"`
+	CompletionNotes string      `json:"completion_notes"`
+	CertificateID   *uuid.UUID  `json:"certificate_id"`
+	IssuanceID      *uuid.UUID  `json:"issuance_id"`
+	WorkType        string      `json:"work_type"`
+	AssetName       string      `json:"asset_name"`
+	AssetNumber     string      `json:"asset_number"`
+	ComponentName   string      `json:"component_name"`
+	AssigneeName    string      `json:"assignee_name"`
 }
 
 type SingleAssetEquipment struct {

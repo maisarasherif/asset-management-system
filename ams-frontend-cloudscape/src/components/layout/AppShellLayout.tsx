@@ -116,10 +116,10 @@ function getHelpPanelContent(pathname: string) {
     };
   }
 
-  if (pathname.startsWith("/maintenance")) {
+  if (pathname.startsWith("/maintenance") || pathname.startsWith("/work-orders")) {
     return {
-      title: "Maintenance",
-      content: "Track work orders, routine service plans, equipment quarantine, and spare parts across stores.",
+      title: "Inspection and Maintenance",
+      content: "Track inspections, maintenance work, equipment quarantine, and spare parts across stores.",
     };
   }
 
@@ -370,14 +370,14 @@ export function AppShellLayout() {
         label: "Overview",
         items: [
           { href: "/dashboard", text: "Dashboard" },
-          { href: "/assets", text: "Asset Directory" },
         ],
       },
       {
-        label: "Maintenance",
+        label: "Inspection and Maintenance",
         items: [
-          { href: "/maintenance", text: "Work orders" },
-          { href: "/maintenance/plans", text: "Routine plans" },
+          { href: "/work-orders", text: "Work Orders" },
+          { href: "/assets", text: "Asset Directory" },
+          { href: "/maintenance/plans", text: "Routine Maintenance Plans" },
           { href: "/maintenance/quarantine", text: "Quarantine Zone" },
           { href: "/maintenance/inventory", text: "Spare parts inventory" },
           { href: "/maintenance/usage", text: "Parts usage" },
@@ -443,8 +443,8 @@ export function AppShellLayout() {
               ? "/scheduler"
               : location.pathname.startsWith("/administration")
                 ? "/administration"
-                : location.pathname.startsWith("/maintenance/work-orders/")
-                  ? "/maintenance"
+                : (location.pathname.startsWith("/work-orders/") || location.pathname.startsWith("/maintenance/work-orders/") || location.pathname === "/maintenance")
+                  ? "/work-orders"
                   : location.pathname;
   const sideNavigationItems = useMemo<SideNavigationProps.Item[]>(
     () =>
@@ -481,7 +481,7 @@ export function AppShellLayout() {
                   <strong>HR/Admin</strong>
                   <span>Compliance registry</span>
                 </div>
-              ) : !location.pathname.startsWith("/maintenance") ? (
+              ) : !location.pathname.startsWith("/maintenance") && !location.pathname.startsWith("/work-orders") ? (
                 <div className="brand-sidebar__asset">
                   <span className="brand-sidebar__asset-label">Current asset</span>
                   <PagedSelect label="Select asset"

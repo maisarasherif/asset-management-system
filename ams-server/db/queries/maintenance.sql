@@ -60,12 +60,7 @@ RETURNING *;
 SELECT * FROM maintenance_work_orders WHERE work_order_id = $1;
 
 -- name: GetMaintenanceWorkOrderDetail :one
-SELECT w.*, a.name AS asset_name, a.display_id AS asset_number,
-    COALESCE(c.name,'') AS component_name,
-    COALESCE(NULLIF(trim(concat(u.first_name,' ',u.last_name)), ''), u.email, '') AS assignee_name
-FROM maintenance_work_orders w JOIN assets a USING (asset_id)
-LEFT JOIN components c USING (component_id) LEFT JOIN users u ON u.user_id = w.assignee_id
-WHERE w.work_order_id = $1;
+SELECT * FROM shared_work_orders WHERE work_order_id = $1;
 
 -- name: LockMaintenanceWorkOrder :one
 SELECT * FROM maintenance_work_orders WHERE work_order_id = $1 FOR UPDATE;
@@ -81,32 +76,35 @@ UPDATE maintenance_work_orders SET status = $2, closed_by = $3, closed_at = now(
 WHERE work_order_id = $1;
 
 -- name: ListMaintenanceWorkOrders :many
-SELECT w.*, a.name AS asset_name, a.display_id AS asset_number,
-    COALESCE(c.name,'') AS component_name,
-    COALESCE(NULLIF(trim(concat(u.first_name,' ',u.last_name)), ''), u.email, '') AS assignee_name
-FROM maintenance_work_orders w JOIN assets a USING (asset_id)
-LEFT JOIN components c USING (component_id) LEFT JOIN users u ON u.user_id = w.assignee_id
+SELECT w.* FROM shared_work_orders w
 WHERE (sqlc.narg(filter_asset)::uuid IS NULL OR w.asset_id = sqlc.narg(filter_asset))
   AND (sqlc.narg(filter_component)::uuid IS NULL OR w.component_id = sqlc.narg(filter_component))
   AND (sqlc.arg(filter_status)::text = '' OR w.status = sqlc.arg(filter_status))
   AND (NOT sqlc.arg(open_only)::boolean OR w.status IN ('OPEN', 'IN_PROGRESS'))
-  AND (sqlc.arg(filter_type)::text = '' OR (w.plan_id IS NOT NULL) = (sqlc.arg(filter_type) = 'ROUTINE'))
+  AND (sqlc.arg(filter_type)::text = '' OR w.work_type = sqlc.arg(filter_type)
+       OR (w.work_type = 'MAINTENANCE' AND
+           ((sqlc.arg(filter_type) = 'ROUTINE' AND w.plan_id IS NOT NULL)
+            OR (sqlc.arg(filter_type) = 'NON_ROUTINE' AND w.plan_id IS NULL))))
   AND (sqlc.narg(from_date)::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date >= sqlc.narg(from_date))
   AND (sqlc.narg(to_date)::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date <= sqlc.narg(to_date))
-  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, a.display_id, a.name, c.name)), lower(sqlc.arg(search)::text)) > 0
-ORDER BY w.created_at DESC, w.work_order_id LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, w.asset_number, w.asset_name, w.component_name)), lower(sqlc.arg(search)::text)) > 0
+ORDER BY CASE WHEN sqlc.arg(open_only)::boolean THEN w.due_date END ASC NULLS LAST,
+         w.created_at DESC, w.work_order_id LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
 -- name: CountMaintenanceWorkOrders :one
 SELECT count(*)
-FROM maintenance_work_orders w JOIN assets a USING (asset_id) LEFT JOIN components c USING (component_id)
+FROM shared_work_orders w
 WHERE (sqlc.narg(filter_asset)::uuid IS NULL OR w.asset_id = sqlc.narg(filter_asset))
   AND (sqlc.narg(filter_component)::uuid IS NULL OR w.component_id = sqlc.narg(filter_component))
   AND (sqlc.arg(filter_status)::text = '' OR w.status = sqlc.arg(filter_status))
   AND (NOT sqlc.arg(open_only)::boolean OR w.status IN ('OPEN', 'IN_PROGRESS'))
-  AND (sqlc.arg(filter_type)::text = '' OR (w.plan_id IS NOT NULL) = (sqlc.arg(filter_type) = 'ROUTINE'))
+  AND (sqlc.arg(filter_type)::text = '' OR w.work_type = sqlc.arg(filter_type)
+       OR (w.work_type = 'MAINTENANCE' AND
+           ((sqlc.arg(filter_type) = 'ROUTINE' AND w.plan_id IS NOT NULL)
+            OR (sqlc.arg(filter_type) = 'NON_ROUTINE' AND w.plan_id IS NULL))))
   AND (sqlc.narg(from_date)::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date >= sqlc.narg(from_date))
   AND (sqlc.narg(to_date)::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date <= sqlc.narg(to_date))
-  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, a.display_id, a.name, c.name)), lower(sqlc.arg(search)::text)) > 0;
+  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, w.asset_number, w.asset_name, w.component_name)), lower(sqlc.arg(search)::text)) > 0;
 
 -- name: ListMaintenanceTechnicians :many
 SELECT user_id, first_name, last_name, email FROM users

@@ -51,7 +51,7 @@ function TagDialog({ initialAsset, close }: { initialAsset: string; close: () =>
     <FormField label="Blocking work order">
       <PagedSelect key={`${assetId}/${componentId}`} label="Blocking work order" allLabel="No linked work order"
         selected={order} disabled={!assetId} queryKey={["maintenance", "blocking-order-picker", assetId, componentId]}
-        load={(page, search) => listWorkOrders({ page, search, asset_id: assetId, component_id: componentId ?? "", open_only: "true" })}
+        load={(page, search) => listWorkOrders({ page, search, asset_id: assetId, component_id: componentId ?? "", open_only: "true", type: "MAINTENANCE" })}
         getOption={(row) => ({ value: row.work_order_id, label: `${row.display_id} · ${row.title}` })} onSelect={setOrder} />
     </FormField>
     <FormField label="Quarantine reason"><Textarea ariaLabel="Quarantine reason" value={reason} onChange={({ detail }) => setReason(detail.value)} /></FormField>
@@ -68,7 +68,7 @@ function ReleaseDialog({ record, isAdmin, close }: { record: QuarantineRecord; i
     {blockers.isLoading && <p>Checking work orders</p>}
     {blockers.isError && <Button onClick={() => void blockers.refetch()}>Retry loading work orders</Button>}
     {Boolean(blockers.data?.length) && <SpaceBetween size="xs">
-      {blockers.data?.map((order) => <RouterLink key={order.work_order_id} to={`/maintenance/work-orders/${order.work_order_id}`}>{order.display_id} · {order.title}</RouterLink>)}
+      {blockers.data?.map((order) => <RouterLink key={order.work_order_id} to={`/work-orders/${order.work_order_id}`}>{order.display_id} · {order.title}</RouterLink>)}
     </SpaceBetween>}
     {eligible && <FormField label="Release notes"><Textarea ariaLabel="Release notes" value={notes} onChange={({ detail }) => setNotes(detail.value)} /></FormField>}
   </Dialog>;

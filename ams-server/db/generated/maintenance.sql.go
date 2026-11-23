@@ -7,7 +7,6 @@ package db
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -83,15 +82,18 @@ func (q *Queries) CountMaintenanceTechnicians(ctx context.Context, search string
 
 const countMaintenanceWorkOrders = `-- name: CountMaintenanceWorkOrders :one
 SELECT count(*)
-FROM maintenance_work_orders w JOIN assets a USING (asset_id) LEFT JOIN components c USING (component_id)
+FROM shared_work_orders w
 WHERE ($1::uuid IS NULL OR w.asset_id = $1)
   AND ($2::uuid IS NULL OR w.component_id = $2)
   AND ($3::text = '' OR w.status = $3)
   AND (NOT $4::boolean OR w.status IN ('OPEN', 'IN_PROGRESS'))
-  AND ($5::text = '' OR (w.plan_id IS NOT NULL) = ($5 = 'ROUTINE'))
+  AND ($5::text = '' OR w.work_type = $5
+       OR (w.work_type = 'MAINTENANCE' AND
+           (($5 = 'ROUTINE' AND w.plan_id IS NOT NULL)
+            OR ($5 = 'NON_ROUTINE' AND w.plan_id IS NULL))))
   AND ($6::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date >= $6)
   AND ($7::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date <= $7)
-  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, a.display_id, a.name, c.name)), lower($8::text)) > 0
+  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, w.asset_number, w.asset_name, w.component_name)), lower($8::text)) > 0
 `
 
 type CountMaintenanceWorkOrdersParams struct {
@@ -284,40 +286,12 @@ func (q *Queries) GetMaintenanceWorkOrder(ctx context.Context, workOrderID uuid.
 }
 
 const getMaintenanceWorkOrderDetail = `-- name: GetMaintenanceWorkOrderDetail :one
-SELECT w.work_order_id, w.display_id, w.plan_id, w.asset_id, w.component_id, w.title, w.description, w.status, w.assignee_id, w.created_by, w.created_at, w.due_hours, w.due_date, w.closed_by, w.closed_at, w.completion_notes, a.name AS asset_name, a.display_id AS asset_number,
-    COALESCE(c.name,'') AS component_name,
-    COALESCE(NULLIF(trim(concat(u.first_name,' ',u.last_name)), ''), u.email, '') AS assignee_name
-FROM maintenance_work_orders w JOIN assets a USING (asset_id)
-LEFT JOIN components c USING (component_id) LEFT JOIN users u ON u.user_id = w.assignee_id
-WHERE w.work_order_id = $1
+SELECT work_order_id, display_id, plan_id, asset_id, component_id, title, description, status, assignee_id, created_at, due_hours, due_date, closed_at, completion_notes, certificate_id, issuance_id, work_type, asset_name, asset_number, component_name, assignee_name FROM shared_work_orders WHERE work_order_id = $1
 `
 
-type GetMaintenanceWorkOrderDetailRow struct {
-	WorkOrderID     uuid.UUID   `json:"work_order_id"`
-	DisplayID       string      `json:"display_id"`
-	PlanID          *uuid.UUID  `json:"plan_id"`
-	AssetID         uuid.UUID   `json:"asset_id"`
-	ComponentID     *uuid.UUID  `json:"component_id"`
-	Title           string      `json:"title"`
-	Description     string      `json:"description"`
-	Status          string      `json:"status"`
-	AssigneeID      *uuid.UUID  `json:"assignee_id"`
-	CreatedBy       *uuid.UUID  `json:"created_by"`
-	CreatedAt       time.Time   `json:"created_at"`
-	DueHours        *int64      `json:"due_hours"`
-	DueDate         pgtype.Date `json:"due_date"`
-	ClosedBy        *uuid.UUID  `json:"closed_by"`
-	ClosedAt        *time.Time  `json:"closed_at"`
-	CompletionNotes string      `json:"completion_notes"`
-	AssetName       string      `json:"asset_name"`
-	AssetNumber     string      `json:"asset_number"`
-	ComponentName   string      `json:"component_name"`
-	AssigneeName    string      `json:"assignee_name"`
-}
-
-func (q *Queries) GetMaintenanceWorkOrderDetail(ctx context.Context, workOrderID uuid.UUID) (GetMaintenanceWorkOrderDetailRow, error) {
+func (q *Queries) GetMaintenanceWorkOrderDetail(ctx context.Context, workOrderID uuid.UUID) (SharedWorkOrder, error) {
 	row := q.db.QueryRow(ctx, getMaintenanceWorkOrderDetail, workOrderID)
-	var i GetMaintenanceWorkOrderDetailRow
+	var i SharedWorkOrder
 	err := row.Scan(
 		&i.WorkOrderID,
 		&i.DisplayID,
@@ -328,13 +302,14 @@ func (q *Queries) GetMaintenanceWorkOrderDetail(ctx context.Context, workOrderID
 		&i.Description,
 		&i.Status,
 		&i.AssigneeID,
-		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.DueHours,
 		&i.DueDate,
-		&i.ClosedBy,
 		&i.ClosedAt,
 		&i.CompletionNotes,
+		&i.CertificateID,
+		&i.IssuanceID,
+		&i.WorkType,
 		&i.AssetName,
 		&i.AssetNumber,
 		&i.ComponentName,
@@ -470,20 +445,20 @@ func (q *Queries) ListMaintenanceTechnicians(ctx context.Context, arg ListMainte
 }
 
 const listMaintenanceWorkOrders = `-- name: ListMaintenanceWorkOrders :many
-SELECT w.work_order_id, w.display_id, w.plan_id, w.asset_id, w.component_id, w.title, w.description, w.status, w.assignee_id, w.created_by, w.created_at, w.due_hours, w.due_date, w.closed_by, w.closed_at, w.completion_notes, a.name AS asset_name, a.display_id AS asset_number,
-    COALESCE(c.name,'') AS component_name,
-    COALESCE(NULLIF(trim(concat(u.first_name,' ',u.last_name)), ''), u.email, '') AS assignee_name
-FROM maintenance_work_orders w JOIN assets a USING (asset_id)
-LEFT JOIN components c USING (component_id) LEFT JOIN users u ON u.user_id = w.assignee_id
+SELECT w.work_order_id, w.display_id, w.plan_id, w.asset_id, w.component_id, w.title, w.description, w.status, w.assignee_id, w.created_at, w.due_hours, w.due_date, w.closed_at, w.completion_notes, w.certificate_id, w.issuance_id, w.work_type, w.asset_name, w.asset_number, w.component_name, w.assignee_name FROM shared_work_orders w
 WHERE ($1::uuid IS NULL OR w.asset_id = $1)
   AND ($2::uuid IS NULL OR w.component_id = $2)
   AND ($3::text = '' OR w.status = $3)
   AND (NOT $4::boolean OR w.status IN ('OPEN', 'IN_PROGRESS'))
-  AND ($5::text = '' OR (w.plan_id IS NOT NULL) = ($5 = 'ROUTINE'))
+  AND ($5::text = '' OR w.work_type = $5
+       OR (w.work_type = 'MAINTENANCE' AND
+           (($5 = 'ROUTINE' AND w.plan_id IS NOT NULL)
+            OR ($5 = 'NON_ROUTINE' AND w.plan_id IS NULL))))
   AND ($6::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date >= $6)
   AND ($7::date IS NULL OR (w.created_at AT TIME ZONE 'Asia/Dubai')::date <= $7)
-  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, a.display_id, a.name, c.name)), lower($8::text)) > 0
-ORDER BY w.created_at DESC, w.work_order_id LIMIT $10 OFFSET $9
+  AND strpos(lower(concat_ws(' ', w.display_id, w.title, w.description, w.asset_number, w.asset_name, w.component_name)), lower($8::text)) > 0
+ORDER BY CASE WHEN $4::boolean THEN w.due_date END ASC NULLS LAST,
+         w.created_at DESC, w.work_order_id LIMIT $10 OFFSET $9
 `
 
 type ListMaintenanceWorkOrdersParams struct {
@@ -499,30 +474,7 @@ type ListMaintenanceWorkOrdersParams struct {
 	PageLimit       int32       `json:"page_limit"`
 }
 
-type ListMaintenanceWorkOrdersRow struct {
-	WorkOrderID     uuid.UUID   `json:"work_order_id"`
-	DisplayID       string      `json:"display_id"`
-	PlanID          *uuid.UUID  `json:"plan_id"`
-	AssetID         uuid.UUID   `json:"asset_id"`
-	ComponentID     *uuid.UUID  `json:"component_id"`
-	Title           string      `json:"title"`
-	Description     string      `json:"description"`
-	Status          string      `json:"status"`
-	AssigneeID      *uuid.UUID  `json:"assignee_id"`
-	CreatedBy       *uuid.UUID  `json:"created_by"`
-	CreatedAt       time.Time   `json:"created_at"`
-	DueHours        *int64      `json:"due_hours"`
-	DueDate         pgtype.Date `json:"due_date"`
-	ClosedBy        *uuid.UUID  `json:"closed_by"`
-	ClosedAt        *time.Time  `json:"closed_at"`
-	CompletionNotes string      `json:"completion_notes"`
-	AssetName       string      `json:"asset_name"`
-	AssetNumber     string      `json:"asset_number"`
-	ComponentName   string      `json:"component_name"`
-	AssigneeName    string      `json:"assignee_name"`
-}
-
-func (q *Queries) ListMaintenanceWorkOrders(ctx context.Context, arg ListMaintenanceWorkOrdersParams) ([]ListMaintenanceWorkOrdersRow, error) {
+func (q *Queries) ListMaintenanceWorkOrders(ctx context.Context, arg ListMaintenanceWorkOrdersParams) ([]SharedWorkOrder, error) {
 	rows, err := q.db.Query(ctx, listMaintenanceWorkOrders,
 		arg.FilterAsset,
 		arg.FilterComponent,
@@ -539,9 +491,9 @@ func (q *Queries) ListMaintenanceWorkOrders(ctx context.Context, arg ListMainten
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListMaintenanceWorkOrdersRow
+	var items []SharedWorkOrder
 	for rows.Next() {
-		var i ListMaintenanceWorkOrdersRow
+		var i SharedWorkOrder
 		if err := rows.Scan(
 			&i.WorkOrderID,
 			&i.DisplayID,
@@ -552,13 +504,14 @@ func (q *Queries) ListMaintenanceWorkOrders(ctx context.Context, arg ListMainten
 			&i.Description,
 			&i.Status,
 			&i.AssigneeID,
-			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.DueHours,
 			&i.DueDate,
-			&i.ClosedBy,
 			&i.ClosedAt,
 			&i.CompletionNotes,
+			&i.CertificateID,
+			&i.IssuanceID,
+			&i.WorkType,
 			&i.AssetName,
 			&i.AssetNumber,
 			&i.ComponentName,

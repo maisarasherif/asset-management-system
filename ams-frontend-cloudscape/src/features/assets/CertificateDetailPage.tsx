@@ -211,6 +211,7 @@ export function CertificateDetailPage() {
           queryKey: ["certificates", componentId],
         }),
         queryClient.invalidateQueries({ queryKey: ["dashboard", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["maintenance"] }),
         queryClient.invalidateQueries({ queryKey: ["certificates"] }),
         queryClient.invalidateQueries({ queryKey: ["asset-certificate-summary", assetId] }),
       ]);
