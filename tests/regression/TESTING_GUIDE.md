@@ -210,7 +210,7 @@ E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-**Status.** The frontend build, lint on the chart component, and discovery of both Overview Playwright tests passed locally. The focused Fedora browser run is pending for the chart replacement and also covers the certificate popup footer fix.
+**Status.** The frontend build, lint on the chart component, and discovery of both Overview Playwright tests passed locally. The first focused Fedora run passed the pagination test and failed the operating-hours mouse-hover assertion after passing the certificate popup checks. The revised spec dismisses the certificate popup and uses chart-relative Playwright hover actions over both bar segments. Playwright discovered both tests locally. The focused Fedora rerun is pending.
 
 ### App-wide search and filtering
 

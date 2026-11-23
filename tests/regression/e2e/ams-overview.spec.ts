@@ -179,6 +179,8 @@ test.describe("AMS Overview", () => {
     await expect(statusCard.getByText("1", { exact: true })).toBeVisible();
     await expect(statusCard.getByText("25%", { exact: true })).toBeVisible();
     await expect(chartTotal).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(keyboardDetails.getByText("25%", { exact: true })).toBeHidden();
 
     const hours = cards.nth(2);
     const details = cards.nth(3);
@@ -192,6 +194,7 @@ test.describe("AMS Overview", () => {
     await expect(reading).toHaveAttribute("fill", "#ce3f31");
     await expect(serviceSegment).toHaveAttribute("fill", "#0972d3");
     await hoursChart.scrollIntoViewIfNeeded();
+    const plotBounds = (await hoursChart.boundingBox())!;
     const readingBounds = (await reading.boundingBox())!;
     const serviceBounds = (await serviceSegment.boundingBox())!;
     expect(readingBounds.x).toBeCloseTo(serviceBounds.x, 0);
@@ -200,7 +203,9 @@ test.describe("AMS Overview", () => {
     expect(readingBounds.height / (readingBounds.height + serviceBounds.height)).toBeCloseTo(0.4);
 
     for (const bar of [readingBounds, serviceBounds]) {
-      await page.mouse.move(bar.x + bar.width / 2, bar.y + bar.height / 2);
+      await hoursChart.hover({
+        position: { x: bar.x - plotBounds.x + bar.width / 2, y: bar.y - plotBounds.y + bar.height / 2 },
+      });
       await expect(hoursTooltip.getByText("40 h", { exact: true })).toBeVisible();
       await expect(hoursTooltip.getByText("100 h", { exact: true })).toBeVisible();
       await expect(hoursTooltip.getByText(/Compressor service.*60 h remaining/)).toBeVisible();
