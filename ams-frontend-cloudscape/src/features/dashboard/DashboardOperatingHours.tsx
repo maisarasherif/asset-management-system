@@ -37,6 +37,7 @@ export function DashboardOperatingHours({ hours, nextService, planStatus, retry 
     <Container header={<Header variant="h2">Operating hours</Header>}>
       <SpaceBetween size="s">
         <BarChart
+          className="overview-operating-hours-chart"
           ariaLabel="Operating hours"
           ariaDescription="Current meter reading compared with the next hour-based service threshold."
           series={series}

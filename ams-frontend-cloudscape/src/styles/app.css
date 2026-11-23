@@ -1240,6 +1240,11 @@ body {
   border-top: 1px solid #eaeded;
 }
 
+/* The native chart's hover handler expects the plot SVG to receive the event. */
+.overview-operating-hours-chart svg[role="application"] line {
+  pointer-events: none;
+}
+
 .overview-asset-details {
   overflow-wrap: anywhere;
 }

@@ -202,6 +202,7 @@ test.describe("AMS Overview", () => {
     expect(serviceBounds.y + serviceBounds.height).toBeLessThanOrEqual(readingBounds.y);
     expect(readingBounds.height / (readingBounds.height + serviceBounds.height)).toBeCloseTo(0.4);
 
+    // The red bar midpoint crosses a gridline that previously intercepted hover.
     for (const bar of [readingBounds, serviceBounds]) {
       await hoursChart.hover({
         position: { x: bar.x - plotBounds.x + bar.width / 2, y: bar.y - plotBounds.y + bar.height / 2 },

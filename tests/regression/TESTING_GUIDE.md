@@ -210,7 +210,7 @@ E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-**Status.** The frontend build, lint on the chart component, and discovery of both Overview Playwright tests passed locally. The first focused Fedora run passed the pagination test and failed the operating-hours mouse-hover assertion after passing the certificate popup checks. The revised spec dismisses the certificate popup and uses chart-relative Playwright hover actions over both bar segments. Playwright discovered both tests locally. The focused Fedora rerun is pending.
+**Status.** The frontend build, lint on the chart component, and discovery of both Overview Playwright tests passed locally. The first two focused Fedora runs passed pagination and the certificate popup checks and failed the operating-hours mouse-hover assertion. A local Chromium reproduction showed that an SVG gridline intercepted the mouse event at the center of the red bar. With pointer events disabled on decorative lines inside this chart, hovering both segments displayed 40 h, 100 h, and 60 h remaining at 1440 px and 320 px. The keyboard popup and Escape dismissal also passed. The focused Fedora rerun is pending.
 
 ### App-wide search and filtering
 
