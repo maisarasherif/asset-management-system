@@ -50,19 +50,24 @@ export function DashboardWorkOrders({ assetId }: { assetId: string }) {
         ) : items.length === 0 ? (
           <Box color="text-body-secondary">No open work orders match this filter.</Box>
         ) : (
-          <ul className="overview-work-orders" aria-label="Open work orders">
-            {items.map((order) => {
-              const due = workOrderDue(order);
-              return (
-                <li key={order.work_order_id}>
-                  <RouterLink to={`/work-orders/${order.work_order_id}`}>{order.title}</RouterLink>
-                  <Box color="text-body-secondary" fontSize="body-s">
-                    {order.component_name || order.asset_name}{due && ` · Due ${due}`}
-                  </Box>
-                </li>
-              );
-            })}
-          </ul>
+          <table className="overview-work-orders" aria-label="Open work orders">
+            <thead>
+              <tr>
+                <th scope="col">Work order</th>
+                <th scope="col">Equipment</th>
+                <th scope="col">Due</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((order) => (
+                <tr key={order.work_order_id}>
+                  <td><RouterLink to={`/work-orders/${order.work_order_id}`}>{order.title}</RouterLink></td>
+                  <td>{order.component_name || order.asset_name}</td>
+                  <td>{workOrderDue(order) || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
         {pages > 1 && (
           <Pagination

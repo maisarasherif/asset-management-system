@@ -1,4 +1,4 @@
-import { BarChart, Box, Button, ColumnLayout, Container, Header, PieChart, SpaceBetween, StatusIndicator } from "@cloudscape-design/components";
+import { Box, Button, ColumnLayout, Container, Header, PieChart, SpaceBetween, StatusIndicator } from "@cloudscape-design/components";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { listPlans, listQuarantine } from "../../lib/api/maintenance";
@@ -22,17 +22,19 @@ function CertificateStatus({ summary }: { summary: AssetCertificateSummary }) {
         <Box color="text-body-secondary" textAlign="center" padding="l">No certificates with a validity status</Box>
       ) : (
         <SpaceBetween size="s">
-          <PieChart
-            key={`${summary.valid}:${summary.expiring_soon}:${summary.expired}`}
-            ariaLabel="Certificate status"
-            data={statuses.filter(({ value }) => value > 0)}
-            hideFilter
-            hideLegend
-            hideTitles
-            hideDescriptions
-            size="medium"
-            i18nStrings={{ detailsValue: "Count" }}
-          />
+          <div className="overview-certificate-pie">
+            <PieChart
+              key={`${summary.valid}:${summary.expiring_soon}:${summary.expired}`}
+              ariaLabel="Certificate status"
+              data={statuses.filter(({ value }) => value > 0)}
+              hideFilter
+              hideLegend
+              hideTitles
+              hideDescriptions
+              fitHeight
+              i18nStrings={{ detailsValue: "Count" }}
+            />
+          </div>
           <ColumnLayout columns={3} minColumnWidth={105} variant="text-grid">
             {statuses.map(({ title, type, value }) => (
               <div key={title}>
@@ -54,25 +56,34 @@ function OperatingHours({ hours, nextService, planStatus, retry }: {
   retry: () => void;
 }) {
   const dueHours = nextService?.next_due_hours;
-  const series = useMemo(() => {
-    const data = [{ x: "Current reading", y: hours }];
-    if (dueHours != null) data.push({ x: "Next service", y: dueHours });
-    return [{ title: "Operating hours", type: "bar" as const, data, valueFormatter: (value: number) => `${value.toLocaleString()} h` }];
-  }, [hours, dueHours]);
+  const chartMax = Math.max(hours, dueHours ?? 0, 1);
   return (
     <Container header={<Header variant="h2">Operating hours</Header>}>
       <SpaceBetween size="s">
-        <BarChart
-          ariaLabel="Operating hours"
-          series={series}
-          xDomain={series[0].data.map(({ x }) => x)}
-          yDomain={[0, Math.max(hours, dueHours ?? 0, 1)]}
-          yTitle="Hours"
-          height={160}
-          hideFilter
-          hideLegend
-        />
-        <Box fontWeight="bold">{hours.toLocaleString()} h current reading</Box>
+        <div className="overview-hours-chart" aria-hidden="true">
+          <div className="overview-hours-chart__scale">
+            <span>{chartMax.toLocaleString()} h</span>
+            <span>0 h</span>
+          </div>
+          <div className="overview-hours-chart__plot">
+            {dueHours != null && (
+              <div className="overview-hours-chart__threshold" style={{ height: `${dueHours / chartMax * 100}%` }} />
+            )}
+            <div className="overview-hours-chart__reading" style={{ height: `${hours / chartMax * 100}%` }} />
+          </div>
+        </div>
+        <dl className="overview-hours-values">
+          <div className="overview-hours-values__reading">
+            <dt>Current reading</dt>
+            <dd>{hours.toLocaleString()} h</dd>
+          </div>
+          {dueHours != null && (
+            <div className="overview-hours-values__threshold">
+              <dt>Next service</dt>
+              <dd>{dueHours.toLocaleString()} h</dd>
+            </div>
+          )}
+        </dl>
         {planStatus === "pending" ? (
           <Box color="text-body-secondary">Loading hour-based service threshold</Box>
         ) : planStatus === "error" ? (
@@ -100,6 +111,7 @@ function AssetDetails({ asset, plans, loadingPlans, planError, retryPlans }: {
   retryPlans: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [failedPhoto, setFailedPhoto] = useState<string>();
   const quarantine = useQuery({
     queryKey: ["maintenance", "dashboard-asset-quarantine", asset.asset_id],
     queryFn: () => listQuarantine({ asset_id: asset.asset_id, whole_asset_only: "true", limit: 1 }),
@@ -107,47 +119,60 @@ function AssetDetails({ asset, plans, loadingPlans, planError, retryPlans }: {
   });
   return (
     <Container header={<Header variant="h2">Asset details</Header>}>
-      <SpaceBetween size="s">
-        <div>
-          <Box variant="awsui-key-label">Availability</Box>
-          <Availability quarantined={asset.quarantined} status={asset.status} />
-          {asset.quarantined && (
-            quarantine.isPending ? <Box color="text-body-secondary">Loading quarantine reason</Box> :
-            quarantine.isError ? (
-              <Button variant="inline-link" onClick={() => void quarantine.refetch()}>Retry loading quarantine reason</Button>
-            ) : <Box>{quarantine.data.data[0]?.reason}</Box>
-          )}
-        </div>
-        <div>
-          <Box variant="awsui-key-label">Assigned project</Box>
-          <Box>{asset.assigned_project || "Unassigned"}</Box>
-        </div>
-        <div>
-          <Box variant="awsui-key-label">Working hours</Box>
-          <Box>{asset.working_hours.toLocaleString()} h</Box>
-          {asset.working_hours_note && <Box>{asset.working_hours_note}</Box>}
-          <Button variant="inline-link" onClick={() => setEditing(true)}>Update working hours</Button>
-        </div>
-        <div>
-          <Box variant="awsui-key-label">Next service</Box>
-          {plans.map((plan) => (
-            <Box key={plan.plan_id}>
-              {plan.title} due at {workOrderDue({ due_hours: plan.next_due_hours, due_date: plan.next_due_date })}
-            </Box>
-          ))}
-          {loadingPlans && <Box color="text-body-secondary">Loading service plans</Box>}
-          {planError && <Button variant="inline-link" onClick={retryPlans}>Retry loading service plans</Button>}
-          {!loadingPlans && !planError && plans.length === 0 && <Box color="text-body-secondary">No upcoming service scheduled</Box>}
-        </div>
-        {asset.description && (
+      <ColumnLayout columns={2} minColumnWidth={168} className="overview-asset-details">
+        <SpaceBetween size="s">
           <div>
-            <Box variant="awsui-key-label">Description</Box>
-            <Box>{asset.description}</Box>
+            <Box variant="awsui-key-label">Availability</Box>
+            <Availability quarantined={asset.quarantined} status={asset.status} />
+            {asset.quarantined && (
+              quarantine.isPending ? <Box color="text-body-secondary">Loading quarantine reason</Box> :
+              quarantine.isError ? (
+                <Button variant="inline-link" onClick={() => void quarantine.refetch()}>Retry loading quarantine reason</Button>
+              ) : <Box>{quarantine.data.data[0]?.reason}</Box>
+            )}
           </div>
-        )}
-        {asset.datasheet && <Button href={asset.datasheet} target="_blank">Open datasheet</Button>}
-        {editing && <MeterDialog asset={asset} close={() => setEditing(false)} />}
-      </SpaceBetween>
+          <div>
+            <Box variant="awsui-key-label">Assigned project</Box>
+            <Box>{asset.assigned_project || "Unassigned"}</Box>
+          </div>
+          <div>
+            <Box variant="awsui-key-label">Working hours</Box>
+            <Box>{asset.working_hours.toLocaleString()} h</Box>
+            {asset.working_hours_note && <Box>{asset.working_hours_note}</Box>}
+            <Button variant="inline-link" onClick={() => setEditing(true)}>Update working hours</Button>
+          </div>
+        </SpaceBetween>
+        <SpaceBetween size="s">
+          {asset.photo && asset.photo !== failedPhoto && (
+            <img
+              className="overview-asset-photo"
+              src={asset.photo}
+              alt={`Photo of ${asset.name}`}
+              loading="lazy"
+              onError={() => setFailedPhoto(asset.photo)}
+            />
+          )}
+          <div>
+            <Box variant="awsui-key-label">Next service</Box>
+            {plans.map((plan) => (
+              <Box key={plan.plan_id}>
+                {plan.title} due at {workOrderDue({ due_hours: plan.next_due_hours, due_date: plan.next_due_date })}
+              </Box>
+            ))}
+            {loadingPlans && <Box color="text-body-secondary">Loading service plans</Box>}
+            {planError && <Button variant="inline-link" onClick={retryPlans}>Retry loading service plans</Button>}
+            {!loadingPlans && !planError && plans.length === 0 && <Box color="text-body-secondary">No upcoming service scheduled</Box>}
+          </div>
+          {asset.description && (
+            <div>
+              <Box variant="awsui-key-label">Description</Box>
+              <Box>{asset.description}</Box>
+            </div>
+          )}
+          {asset.datasheet && <Button href={asset.datasheet} target="_blank">Open datasheet</Button>}
+        </SpaceBetween>
+      </ColumnLayout>
+      {editing && <MeterDialog asset={asset} close={() => setEditing(false)} />}
     </Container>
   );
 }

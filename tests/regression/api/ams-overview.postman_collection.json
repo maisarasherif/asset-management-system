@@ -104,7 +104,7 @@
         "url": "{{baseUrl}}/asset",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"Overview test asset {{$guid}}\",\n  \"status\": \"ACTIVE\",\n  \"assigned_project\": \"{{project}}\"\n}"
+          "raw": "{\n  \"name\": \"Overview test asset {{$guid}}\",\n  \"status\": \"ACTIVE\",\n  \"assigned_project\": \"{{project}}\",\n  \"photo\": \"https://example.com/overview-asset.png\"\n}"
         }
       },
       "event": [
@@ -151,7 +151,8 @@
               "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
               "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); return; }",
               "pm.collectionVariables.set(\"warehouse\", pm.response.json().asset_id);",
-              "pm.test(\"Warehouse asset is unassigned\", () => pm.expect(pm.response.json().assigned_project).to.equal(\"\"));"
+              "pm.test(\"Warehouse asset is unassigned\", () => pm.expect(pm.response.json().assigned_project).to.equal(\"\"));",
+              "pm.test(\"Warehouse equipment has no photo\", () => pm.expect(pm.response.json().photo).to.equal(\"\"));"
             ]
           }
         }
@@ -629,6 +630,8 @@
               "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
               "pm.test(\"Matches, totals and page 1\", () => {",
               "  const result = pm.response.json();",
+              "  const inspection = result.data.find(order => order.title === \"Expired inspection\");",
+              "  pm.expect(inspection).to.include({ component_name: \"Overview test valve\", due_date: pm.collectionVariables.get(\"yesterday\") });",
               "  pm.expect(result.meta).to.include({ page: 1, total: 7, total_pages: 2 });",
               "  pm.expect(result.data.map(order => order.title)).to.have.members([\"Overdue maintenance\",\"Expired inspection\",\"Service due today\",\"Inspection due at thirty days\",\"Beyond thirty days\"]);",
               "  pm.expect(result.data.map(order => order.work_type)).to.have.members([\"MAINTENANCE\",\"INSPECTION\",\"MAINTENANCE\",\"INSPECTION\",\"MAINTENANCE\"]);",
@@ -659,6 +662,10 @@
               "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
               "pm.test(\"Matches, totals and page 2\", () => {",
               "  const result = pm.response.json();",
+              "  const meter = result.data.find(order => order.title === \"Meter-based job\");",
+              "  const repair = result.data.find(order => order.title === \"Undated repair\");",
+              "  pm.expect(meter).to.include({ due_hours: 0, due_date: null });",
+              "  pm.expect(repair).to.include({ due_hours: null, due_date: null });",
               "  pm.expect(result.meta).to.include({ page: 2, total: 7, total_pages: 2 });",
               "  pm.expect(result.data.map(order => order.title)).to.have.members([\"Meter-based job\",\"Undated repair\"]);",
               "});"
@@ -1051,6 +1058,65 @@
               "  pm.expect(result.meta.total).to.equal(1);",
               "  pm.expect(result.data).to.have.lengthOf(1);",
               "  pm.expect(result.data[0]).to.include({ component_id: null, released_at: null, reason: \"Whole asset awaiting workshop clearance\" });",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Save a current meter reading",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/asset/{{asset}}/working-hours",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"working_hours\": 40\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Return the asset photo and current reading",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/asset/{{asset}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"The selected asset includes its overview photo and meter reading\", () => {",
+              "  pm.expect(pm.response.json()).to.include({ photo: \"https://example.com/overview-asset.png\", working_hours: 40 });",
               "});"
             ]
           }

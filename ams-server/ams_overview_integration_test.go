@@ -76,7 +76,19 @@ func TestAMSOverviewWorkOrderFilters(t *testing.T) {
 			assertField(t, meta, "total_pages", check.pages)
 			var titles []string
 			for _, row := range dataArray(t, list) {
-				titles = append(titles, stringField(t, row, "title"))
+				title := stringField(t, row, "title")
+				titles = append(titles, title)
+				switch title {
+				case "Expired certificate":
+					assertField(t, row, "component_name", "Overview winch")
+					assertField(t, row, "due_date", utils.DubaiDocumentDate(today.AddDate(0, 0, -1)))
+				case "Meter service":
+					assertField(t, row, "asset_name", "Overview winch Asset")
+					assertField(t, row, "due_hours", 0)
+				case "Undated repair":
+					assertField(t, row, "due_hours", nil)
+					assertField(t, row, "due_date", nil)
+				}
 			}
 			slices.Sort(titles)
 			slices.Sort(check.titles)
@@ -131,6 +143,14 @@ func TestAMSOverviewNextServiceAndQuarantine(t *testing.T) {
 		}
 		assertField(t, plans[0], "title", check.title)
 	}
+
+	assetPath := "/v1/asset/" + assetID
+	const photo = "https://example.com/overview-asset.png"
+	maintenanceJSON(t, h, h.adminToken, http.MethodPatch, assetPath, map[string]any{"photo": photo}, http.StatusOK)
+	maintenanceJSON(t, h, h.adminToken, http.MethodPatch, assetPath+"/working-hours", map[string]any{"working_hours": 40}, http.StatusOK)
+	asset := maintenanceJSON(t, h, h.adminToken, http.MethodGet, assetPath, nil, http.StatusOK)
+	assertField(t, asset, "photo", photo)
+	assertField(t, asset, "working_hours", 40)
 
 	previous := call("POST", "/quarantine", map[string]any{"asset_id": assetID, "reason": "Released hold"}, 201)
 	call("POST", "/quarantine/"+stringField(t, previous, "quarantine_id")+"/release", map[string]any{"notes": "Cleared"}, 200)

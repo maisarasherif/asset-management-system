@@ -1,7 +1,9 @@
+import { resolve } from "node:path";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { chooseOption, maintenanceEnabled, requestMaintenance, signInForMaintenance } from "../support/maintenance-playwright";
 
 type Equipment = { asset_id: string; display_id: string; name: string };
+const photoUrl = "https://example.com/overview-asset.png";
 const datasheetUrl = "https://example.com/overview-datasheet.pdf";
 const dashboardCards = ["Certificate status", "Work Orders", "Operating hours", "Asset details"];
 
@@ -28,6 +30,10 @@ test.describe("AMS Overview", () => {
   test("shows the selected asset, accessible charts, service details, and certificate links", async ({ page, request }) => {
     const token = await signInForMaintenance(page);
     const suffix = Date.now();
+    await page.route(photoUrl, (route) => route.fulfill({
+      path: resolve(__dirname, "../fixtures/signature-sample.png"),
+      contentType: "image/png",
+    }));
     const project = await requestMaintenance<{ project_name: string }>(request, token, "/project", {
       method: "POST", status: 201, data: { project_name: `Overview project ${suffix}`, status: "ACTIVE" },
     });
@@ -42,7 +48,7 @@ test.describe("AMS Overview", () => {
       method: "POST", status: 201,
       data: {
         name: `Overview compressor ${suffix}`, status: "ACTIVE", asset_kind: "SINGLE_EQUIPMENT",
-        assigned_project: project.project_name, location: "Overview workshop", datasheet: datasheetUrl,
+        assigned_project: project.project_name, location: "Overview workshop", datasheet: datasheetUrl, photo: photoUrl,
         description: "Compressor on standby for workshop commissioning",
         single_equipment: { equipment_type_id: equipmentType.equipment_type_id, test_type_ids: [testType.test_id] },
       },
@@ -74,6 +80,9 @@ test.describe("AMS Overview", () => {
         interval_months: 12, next_due_date: "2099-10-30", active: true,
       },
     });
+    await requestMaintenance(request, token, `/asset/${asset.asset_id}/working-hours`, {
+      method: "PATCH", data: { working_hours: 40 },
+    });
     await requestMaintenance(request, token, "/maintenance/quarantine", {
       method: "POST", status: 201, data: { asset_id: asset.asset_id, reason: "Isolation test awaiting sign-off" },
     });
@@ -84,6 +93,12 @@ test.describe("AMS Overview", () => {
     await expect(page.getByText(`${asset.display_id} - Overview workshop`, { exact: true })).toBeVisible();
 
     const cards = page.locator(".ams-overview-grid > *");
+    const assetPhoto = cards.nth(3).getByRole("img", { name: `Photo of ${asset.name}` });
+    const availability = cards.nth(3).getByText("Availability", { exact: true });
+    await assetPhoto.scrollIntoViewIfNeeded();
+    await expect(assetPhoto).toHaveJSProperty("complete", true);
+    expect(await assetPhoto.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+
     for (const width of [1440, 1024, 768, 360, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       await expect(cards).toHaveCount(4);
@@ -109,6 +124,15 @@ test.describe("AMS Overview", () => {
           expect(positions[index].top).toBeGreaterThanOrEqual(positions[index - 1].bottom);
         }
       }
+      const photoBounds = (await assetPhoto.boundingBox())!;
+      const availabilityBounds = (await availability.boundingBox())!;
+      if (width === 1440) expect(photoBounds.x).toBeGreaterThan(availabilityBounds.x);
+      if (width === 320) expect(photoBounds.y).toBeGreaterThan(availabilityBounds.y);
+      const workOrderTable = cards.nth(1).getByRole("table", { name: "Open work orders" });
+      const workOrderHeaders = workOrderTable.getByRole("columnheader");
+      await expect(workOrderHeaders).toHaveText(["Work order", "Equipment", "Due"]);
+      const tableBounds = (await workOrderTable.boundingBox())!;
+      expect(tableBounds.x + tableBounds.width).toBeLessThanOrEqual(orders.left + orders.width + 1);
       const certificatesHeading = page.getByRole("heading", { name: "Compliance Certificates Quick Navigation" });
       await expect(certificatesHeading).toBeVisible();
       expect((await certificatesHeading.boundingBox())!.y).toBeGreaterThan(details.bottom);
@@ -117,11 +141,13 @@ test.describe("AMS Overview", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     const statusCard = cards.nth(0);
     const chart = statusCard.getByRole("application", { name: "Certificate status" });
-    await expect(chart.getByRole("button", { name: "Valid (2)", exact: true })).toBeVisible();
+    const validSegment = chart.getByRole("button", { name: "Valid (2)", exact: true });
+    await expect(validSegment).toBeVisible();
+    await expect.poll(async () => (await validSegment.boundingBox())!.height).toBeGreaterThan(260);
     await expect(chart.getByRole("button", { name: "Expiring soon (1)", exact: true })).toBeVisible();
     await expect(chart.getByRole("button", { name: "Expired (1)", exact: true })).toBeVisible();
     await expect(statusCard.getByText("Pending", { exact: true })).toHaveCount(0);
-    await chart.getByRole("button", { name: "Valid (2)", exact: true }).hover();
+    await validSegment.hover();
     await expect(statusCard.getByText("Count", { exact: true })).toBeVisible();
     await expect(statusCard.getByText("2", { exact: true })).toBeVisible();
     await expect(statusCard.getByText("50%", { exact: true })).toBeVisible();
@@ -139,8 +165,16 @@ test.describe("AMS Overview", () => {
 
     const hours = cards.nth(2);
     const details = cards.nth(3);
-    await expect(hours.getByRole("application", { name: "Operating hours" })).toBeVisible();
-    await expect(hours.getByText("100 h remaining", { exact: false })).toBeVisible();
+    const reading = hours.locator(".overview-hours-chart__reading");
+    const threshold = hours.locator(".overview-hours-chart__threshold");
+    await expect(reading).toHaveCSS("background-color", "rgb(206, 63, 49)");
+    await expect(threshold).toHaveCSS("background-color", "rgb(9, 114, 211)");
+    const readingBounds = (await reading.boundingBox())!;
+    const thresholdBounds = (await threshold.boundingBox())!;
+    expect(readingBounds.x + readingBounds.width / 2).toBeCloseTo(thresholdBounds.x + thresholdBounds.width / 2, 0);
+    expect(readingBounds.y + readingBounds.height).toBeCloseTo(thresholdBounds.y + thresholdBounds.height, 0);
+    expect(readingBounds.height / thresholdBounds.height).toBeCloseTo(0.4);
+    await expect(hours.getByText("60 h remaining", { exact: false })).toBeVisible();
     await expect(details.getByText("Quarantined", { exact: false })).toBeVisible();
     await expect(details.getByText("Isolation test awaiting sign-off")).toBeVisible();
     await expect(details.getByText(project.project_name, { exact: true })).toBeVisible();
@@ -157,10 +191,13 @@ test.describe("AMS Overview", () => {
     await editor.getByRole("button", { name: "Save", exact: true }).click();
     await expect(editor).toBeHidden();
     await expect(details.getByText("Workshop test reading")).toBeVisible();
-    await expect(hours.getByText("120 h current reading")).toBeVisible();
+    await expect(hours.locator(".overview-hours-values__reading")).toContainText("120 h");
+    await expect(hours.locator(".overview-hours-values__threshold")).toContainText("100 h");
+    await expect.poll(async () => (await reading.boundingBox())!.height).toBeGreaterThan(thresholdBounds.height * 0.9);
+    expect((await reading.boundingBox())!.height).toBeGreaterThan((await threshold.boundingBox())!.height);
     await expect(hours.getByText("Threshold reached", { exact: false })).toBeVisible();
 
-    const certificates = page.getByRole("table");
+    const certificates = page.getByRole("table").filter({ has: page.getByRole("columnheader", { name: "Certificate", exact: true }) });
     await expect(certificates.getByRole("link", { name: "Overview valid A", exact: true })).toHaveAttribute(
       "href", `/assets/${asset.asset_id}/components/${componentId}/certificates/${certificateIds[0]}`,
     );
@@ -198,8 +235,8 @@ test.describe("AMS Overview", () => {
     await selectAsset(page, active);
     const cards = page.locator(".ams-overview-grid > *");
     const work = cards.nth(1);
-    const orders = work.getByRole("list", { name: "Open work orders" });
-    const rows = orders.getByRole("listitem");
+    const orders = work.getByRole("table", { name: "Open work orders" });
+    const rows = orders.locator("tbody").getByRole("row");
     const next = work.getByRole("button", { name: "Next page" });
     const filter = work.getByRole("button", { name: /Filter work orders/ });
     await expect(cards.nth(0).getByText("No certificates with a validity status")).toBeVisible();
@@ -208,7 +245,13 @@ test.describe("AMS Overview", () => {
     await expect(cards.nth(3).getByText("Overdue calendar service due at", { exact: false })).toBeVisible();
     await expect(filter).toContainText("All");
     await expect(rows).toHaveCount(5);
-    await expect(orders.getByRole("link", { name: "Overdue calendar service" })).toBeVisible();
+    const dueRow = rows.filter({ has: page.getByRole("link", { name: "Overdue calendar service", exact: true }) });
+    await expect(dueRow.getByRole("cell").nth(1)).toHaveText(active.name);
+    await expect(dueRow.getByRole("cell").nth(2)).toHaveText(
+      await page.evaluate((date) => new Intl.DateTimeFormat(undefined, {
+        month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+      }).format(new Date(date)), yesterday),
+    );
     await next.click();
     await expect(rows).toHaveCount(3);
     await expect(orders.getByRole("link", { name: "Overdue calendar service" })).toHaveCount(0);
@@ -238,6 +281,8 @@ test.describe("AMS Overview", () => {
     await expect(details.getByText("No upcoming service scheduled")).toBeVisible();
     await expect(details.getByText("Description", { exact: true })).toHaveCount(0);
     await expect(details.getByRole("link", { name: "Open datasheet" })).toHaveCount(0);
+    await expect(details.getByRole("img", { name: `Photo of ${inactive.name}` })).toHaveCount(0);
+    await expect(cards.nth(2).getByText("Next service", { exact: true })).toHaveCount(0);
     await expect(cards.nth(2).getByText("No hour-based service threshold")).toBeVisible();
   });
 });

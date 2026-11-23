@@ -140,7 +140,7 @@ bash tests/regression/run-vps-isolated-tests.sh
 
 Run both commands as the configured test OS account from the Fedora testing checkout at /home/pms/ams-testing/asset-management-system.
 
-**Focused check.** Go verifies the Dubai date boundaries, totals and pagination for all four work-order filters, next-service ordering, and the active whole-asset quarantine reason. Newman exercises the same list contracts. Playwright covers the layouts, chart interactions, meter updates, conditional details, Work Orders pagination and resets, certificate links, and the related Dashboard smoke checks.
+**Focused check.** Go verifies the Dubai date boundaries, totals and pagination for all four work-order filters, next-service ordering, and the active whole-asset quarantine reason. Newman exercises the same list contracts. Playwright covers the larger certificate pie and its hover and keyboard details, the Work Orders columns and pagination, the shared operating-hours scale before and after the threshold is reached, the responsive asset photo and detail layout, certificate links, and the related Dashboard smoke checks. Go and Newman also check the asset photo, meter reading, and work-order fields used in the revised cards.
 
 ```bash
 cd /home/pms/ams-testing/asset-management-system
@@ -161,7 +161,11 @@ bash tests/regression/run-vps-isolated-tests.sh
 
 **Local isolated verification, 23 November 2026.** Go passed 220 tests with zero failures or skips in run.kEfQb6. Newman passed all 45 assertions across 33 requests in run.U20t9z. Both dedicated Playwright journeys passed in run.PmsHtI, including chart hover and keyboard details, meter updates, and certificate links. Shared-register navigation and both whole-app smoke checks passed in run.n7uBE8. Each completed run dropped its isolated database and cleaned up its journaled storage objects.
 
-**Fedora verification.** The focused and broader commands are pending on the VPS.
+**Focused Fedora VPS evidence, 23 November 2026.** Run `run.epFR7G` passed all 220 Go tests with zero failures or skips, the AMS Overview Newman collection, and all five Playwright checks in 1.1 minutes. Cleanup deleted 23 journaled storage objects, dropped `ams_e2e_20261123170237`, and exited with status 0. Evidence is in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.epFR7G`.
+
+**Broader Fedora VPS evidence, 23 November 2026.** Run `run.ruMoFK` passed the `maintenance-final` gate for the AMS Overview update. All 220 Go tests passed with zero failures or skips, Newman passed, and all 28 Playwright checks passed in 6.3 minutes. Cleanup deleted 75 journaled storage objects, dropped `ams_e2e_20261123170609`, and exited with status 0. Run evidence and `certificate-latency-summary.json` are in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.ruMoFK`.
+
+**Overview card layout follow-up.** The frontend build, lint on the changed dashboard files, Go compilation, Newman collection validation, and Playwright discovery of five focused checks passed locally. The focused and broader Fedora commands above are pending for this revision. The runner already includes the dedicated suites through the existing collection selection and the maintenance-final profile.
 
 ### App-wide search and filtering
 
