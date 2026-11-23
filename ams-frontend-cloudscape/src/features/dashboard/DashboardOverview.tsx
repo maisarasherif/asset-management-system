@@ -141,17 +141,6 @@ function AssetDetails({ asset, plans, loadingPlans, planError, retryPlans }: {
             {asset.working_hours_note && <Box>{asset.working_hours_note}</Box>}
             <Button variant="inline-link" onClick={() => setEditing(true)}>Update working hours</Button>
           </div>
-        </SpaceBetween>
-        <SpaceBetween size="s">
-          {asset.photo && asset.photo !== failedPhoto && (
-            <img
-              className="overview-asset-photo"
-              src={asset.photo}
-              alt={`Photo of ${asset.name}`}
-              loading="lazy"
-              onError={() => setFailedPhoto(asset.photo)}
-            />
-          )}
           <div>
             <Box variant="awsui-key-label">Next service</Box>
             {plans.map((plan) => (
@@ -163,13 +152,24 @@ function AssetDetails({ asset, plans, loadingPlans, planError, retryPlans }: {
             {planError && <Button variant="inline-link" onClick={retryPlans}>Retry loading service plans</Button>}
             {!loadingPlans && !planError && plans.length === 0 && <Box color="text-body-secondary">No upcoming service scheduled</Box>}
           </div>
+        </SpaceBetween>
+        <SpaceBetween size="s">
+          {asset.photo && asset.photo !== failedPhoto && (
+            <img
+              className="overview-asset-photo"
+              src={asset.photo}
+              alt={`Photo of ${asset.name}`}
+              loading="lazy"
+              onError={() => setFailedPhoto(asset.photo)}
+            />
+          )}
+          {asset.datasheet && <Button href={asset.datasheet} target="_blank">Open datasheet</Button>}
           {asset.description && (
             <div>
               <Box variant="awsui-key-label">Description</Box>
               <Box>{asset.description}</Box>
             </div>
           )}
-          {asset.datasheet && <Button href={asset.datasheet} target="_blank">Open datasheet</Button>}
         </SpaceBetween>
       </ColumnLayout>
       {editing && <MeterDialog asset={asset} close={() => setEditing(false)} />}

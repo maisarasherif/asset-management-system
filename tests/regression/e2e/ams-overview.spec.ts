@@ -95,6 +95,9 @@ test.describe("AMS Overview", () => {
     const cards = page.locator(".ams-overview-grid > *");
     const assetPhoto = cards.nth(3).getByRole("img", { name: `Photo of ${asset.name}` });
     const availability = cards.nth(3).getByText("Availability", { exact: true });
+    const updateHours = cards.nth(3).getByRole("button", { name: "Update working hours" });
+    const nextService = cards.nth(3).getByText("Next service", { exact: true });
+    const datasheet = cards.nth(3).getByRole("link", { name: "Open datasheet" });
     await assetPhoto.scrollIntoViewIfNeeded();
     await expect(assetPhoto).toHaveJSProperty("complete", true);
     expect(await assetPhoto.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
@@ -126,6 +129,13 @@ test.describe("AMS Overview", () => {
       }
       const photoBounds = (await assetPhoto.boundingBox())!;
       const availabilityBounds = (await availability.boundingBox())!;
+      const updateHoursBounds = (await updateHours.boundingBox())!;
+      const nextServiceBounds = (await nextService.boundingBox())!;
+      const datasheetBounds = (await datasheet.boundingBox())!;
+      expect(nextServiceBounds.x).toBeCloseTo(availabilityBounds.x, 0);
+      expect(nextServiceBounds.y).toBeGreaterThanOrEqual(updateHoursBounds.y + updateHoursBounds.height);
+      expect(datasheetBounds.x).toBeCloseTo(photoBounds.x, 0);
+      expect(datasheetBounds.y).toBeGreaterThanOrEqual(photoBounds.y + photoBounds.height);
       if (width === 1440) expect(photoBounds.x).toBeGreaterThan(availabilityBounds.x);
       if (width === 320) expect(photoBounds.y).toBeGreaterThan(availabilityBounds.y);
       const workOrderTable = cards.nth(1).getByRole("table", { name: "Open work orders" });
@@ -179,12 +189,12 @@ test.describe("AMS Overview", () => {
     await expect(details.getByText("Isolation test awaiting sign-off")).toBeVisible();
     await expect(details.getByText(project.project_name, { exact: true })).toBeVisible();
     await expect(details.getByText("Compressor on standby for workshop commissioning")).toBeVisible();
-    await expect(details.getByRole("link", { name: "Open datasheet" })).toHaveAttribute("href", datasheetUrl);
+    await expect(datasheet).toHaveAttribute("href", datasheetUrl);
     await expect(details.getByText(/Compressor service due at 100 h or/)).toHaveCount(1);
     await expect(details.getByText("Components", { exact: true })).toHaveCount(0);
     await expect(details.getByRole("link", { name: /View work orders|View routine plans/ })).toHaveCount(0);
 
-    await details.getByRole("button", { name: "Update working hours" }).click();
+    await updateHours.click();
     const editor = page.getByRole("dialog", { name: "Update working hours" });
     await editor.getByRole("textbox", { name: "Working hours" }).fill("120");
     await editor.getByRole("textbox", { name: "Meter note" }).fill("Workshop test reading");

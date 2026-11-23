@@ -165,7 +165,24 @@ bash tests/regression/run-vps-isolated-tests.sh
 
 **Broader Fedora VPS evidence, 23 November 2026.** Run `run.ruMoFK` passed the `maintenance-final` gate for the AMS Overview update. All 220 Go tests passed with zero failures or skips, Newman passed, and all 28 Playwright checks passed in 6.3 minutes. Cleanup deleted 75 journaled storage objects, dropped `ams_e2e_20261123170609`, and exited with status 0. Run evidence and `certificate-latency-summary.json` are in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.ruMoFK`.
 
-**Overview card layout follow-up.** The frontend build, lint on the changed dashboard files, Go compilation, Newman collection validation, and Playwright discovery of five focused checks passed locally. The focused and broader Fedora commands above are pending for this revision. The runner already includes the dedicated suites through the existing collection selection and the maintenance-final profile.
+**Overview card layout follow-up.** The frontend build, lint on the changed dashboard files, Go compilation, Newman collection validation, and Playwright discovery of five focused checks passed locally. The runner already includes the dedicated suites through the existing collection selection and the maintenance-final profile.
+
+**Overview card layout focused Fedora evidence, 23 November 2026.** Run `run.VYdGTi` passed all 220 Go tests with zero failures or skips, Newman, and all five Playwright checks in 1.1 minutes. Cleanup deleted 23 journaled storage objects, dropped `ams_e2e_20261123173754`, and exited with status 0. Evidence is in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.VYdGTi`.
+
+**Overview card layout broader Fedora evidence, 23 November 2026.** Run `run.V0ednb` passed the `maintenance-final` gate with 220 Go tests, zero Go failures or skips, Newman, and all 28 Playwright checks in 6.3 minutes. Cleanup deleted 75 journaled storage objects, dropped `ams_e2e_20261123174257`, and exited with status 0. Run evidence and `certificate-latency-summary.json` are in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.V0ednb`.
+
+#### Asset details alignment
+
+The focused Playwright spec checks that Next service sits below Working hours and Open datasheet sits below the asset photo at desktop and narrow widths. Run as `ams_test_runner` from the Fedora testing checkout.
+
+```bash
+cd /home/pms/ams-testing/asset-management-system
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+**Status.** The frontend build, lint, and discovery of the two Overview Playwright tests passed locally. The focused Fedora browser run is pending.
 
 ### App-wide search and filtering
 
