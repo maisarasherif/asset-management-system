@@ -197,7 +197,7 @@ bash tests/regression/run-vps-isolated-tests.sh
 
 **Status.** The frontend build, lint on the dashboard components, and discovery of both Overview Playwright tests passed locally. Fedora run `run.B1CYra` passed both Overview Playwright tests in 22.8 seconds. Storage cleanup passed, the runner dropped `ams_e2e_20261123203925`, and the exit status was 0. Evidence is in `/home/pms/ams-testing/asset-management-system/.vps-test-run/run.B1CYra`. The focused check for this chart update is complete.
 
-**Certificate popup footer follow-up.** The focused command above now checks that the whole-chart total is absent when opening a certificate slice by mouse or keyboard. The frontend build, lint, and discovery of both Overview Playwright tests passed locally. The focused Fedora browser run is pending for the footer fix.
+**Certificate popup footer follow-up.** The focused command above now checks that the whole-chart total is absent when opening a certificate slice by mouse or keyboard. The frontend build, lint, and discovery of both Overview Playwright tests passed locally. The focused Fedora run recorded below also passed the certificate popup footer checks.
 
 #### Operating hours Cloudscape bar chart
 
@@ -210,7 +210,21 @@ E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-**Status.** The frontend build, lint on the chart component, and discovery of both Overview Playwright tests passed locally. The first two focused Fedora runs passed pagination and the certificate popup checks and failed the operating-hours mouse-hover assertion. A local Chromium reproduction showed that an SVG gridline intercepted the mouse event at the center of the red bar. With pointer events disabled on decorative lines inside this chart, hovering both segments displayed 40 h, 100 h, and 60 h remaining at 1440 px and 320 px. The keyboard popup and Escape dismissal also passed. The focused Fedora rerun is pending.
+**Status.** The frontend build, lint on the chart component, and discovery of both Overview Playwright tests passed locally. The first two focused Fedora runs passed pagination and the certificate popup checks and failed the operating-hours mouse-hover assertion. A local Chromium reproduction showed that an SVG gridline intercepted the mouse event at the center of the red bar. With pointer events disabled on decorative lines inside this chart, hovering both segments displayed 40 h, 100 h, and 60 h remaining at 1440 px and 320 px. The keyboard popup and Escape dismissal also passed. The focused Fedora rerun passed both Overview Playwright tests in 22.3 seconds. Storage cleanup passed, the runner dropped `ams_e2e_20261123211749`, and the exit status was 0. The pasted output ended before the run ID. The focused check is complete.
+
+#### Certificate pie chart count and percentage
+
+The dedicated Go test and Newman collection check the validity counts that feed the chart. The Overview Playwright spec checks the singular and plural count-only callouts, the labeled Count and Percentage rows on hover and by keyboard, and dismissal with Escape. Run as `ams_test_runner` from the Fedora testing checkout.
+
+```bash
+cd /home/pms/ams-testing/asset-management-system
+RUN_GO_REGRESSION=1 RUN_NEWMAN=1 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+NEWMAN_COLLECTIONS='tests/regression/api/ams-overview.postman_collection.json' \
+E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+**Status.** Frontend type checking and lint, Go test compilation, Newman collection and script validation, and discovery of both Overview Playwright tests passed locally. The focused Fedora run is pending. The existing `maintenance-final` profile already includes these tests. The focused run is sufficient for this change.
 
 ### App-wide search and filtering
 

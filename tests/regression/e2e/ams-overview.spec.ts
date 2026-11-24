@@ -160,27 +160,27 @@ test.describe("AMS Overview", () => {
     const certificateLegend = statusCard.getByRole("list", { name: "Certificate status legend" });
     await expect(certificateLegend.getByRole("listitem")).toHaveText(["Valid", "Expiring soon", "Expired"]);
     await expect(chart.locator("line").first()).toBeVisible();
-    await expect(chart.getByText("2 certificates, 50%", { exact: true }).filter({ visible: true })).toBeVisible();
+    await expect(chart.getByText("2 certificates", { exact: true }).filter({ visible: true })).toBeVisible();
+    await expect(chart.getByText("1 certificate", { exact: true }).filter({ visible: true })).toHaveCount(2);
+    await expect(chart.getByText(/\d+%/)).toHaveCount(0);
+
+    const certificateDetails = statusCard.getByRole("tooltip");
+    const certificateDetailsRows = certificateDetails.getByRole("listitem");
     await validSegment.hover();
-    await expect(statusCard.getByText("Count", { exact: true })).toBeVisible();
-    await expect(statusCard.getByText("2", { exact: true })).toBeVisible();
-    await expect(statusCard.getByText("50%", { exact: true })).toBeVisible();
+    await expect(certificateDetails).toBeVisible();
+    await expect(certificateDetailsRows).toHaveText([/^Count\s*2$/, /^Percentage\s*50%$/]);
     const chartTotal = statusCard.getByText("4 certificates with a validity status", { exact: true });
     await expect(chartTotal).toHaveCount(0);
     await page.mouse.move(0, 0);
     await expect(statusCard.getByText("Count", { exact: true })).toBeHidden();
     await chart.focus();
     await page.keyboard.press("Enter");
-    const keyboardDetails = statusCard.getByRole("tooltip");
-    await expect(keyboardDetails.getByText("2", { exact: true })).toBeVisible();
-    await expect(keyboardDetails.getByText("50%", { exact: true })).toBeVisible();
+    await expect(certificateDetailsRows).toHaveText([/^Count\s*2$/, /^Percentage\s*50%$/]);
     await page.keyboard.press("ArrowRight");
-    await expect(statusCard.getByText("Count", { exact: true })).toBeVisible();
-    await expect(statusCard.getByText("1", { exact: true })).toBeVisible();
-    await expect(statusCard.getByText("25%", { exact: true })).toBeVisible();
+    await expect(certificateDetailsRows).toHaveText([/^Count\s*1$/, /^Percentage\s*25%$/]);
     await expect(chartTotal).toHaveCount(0);
     await page.keyboard.press("Escape");
-    await expect(keyboardDetails.getByText("25%", { exact: true })).toBeHidden();
+    await expect(certificateDetails).toBeHidden();
 
     const hours = cards.nth(2);
     const details = cards.nth(3);

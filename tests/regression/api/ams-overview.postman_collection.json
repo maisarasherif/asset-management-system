@@ -386,6 +386,35 @@
       ]
     },
     {
+      "name": "Read certificate counts for the chart",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/asset/{{asset}}/certificate-summary"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"The selected asset contributes two certificates to the chart\", () => {",
+              "  pm.response.to.have.status(200);",
+              "  const { certificate_count, valid, expiring_soon, expired } = pm.response.json();",
+              "  pm.expect(certificate_count).to.equal(2);",
+              "  pm.expect(valid + expiring_soon + expired).to.equal(2);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "Create plan for Overdue maintenance",
       "request": {
         "method": "POST",

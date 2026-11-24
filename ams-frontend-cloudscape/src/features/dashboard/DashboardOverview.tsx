@@ -36,8 +36,8 @@ function CertificateStatus({ summary }: { summary: AssetCertificateSummary }) {
               hideLegend
               size="small"
               fitHeight
-              segmentDescription={({ value }) => `${certificateCount(value)}, ${Math.round(value * 100 / total)}%`}
-              i18nStrings={{ detailsValue: "Count" }}
+              segmentDescription={({ value }) => certificateCount(value)}
+              i18nStrings={{ detailsValue: "Count", detailsPercentage: "Percentage" }}
             />
           </div>
           <ul className="overview-certificate-legend" aria-label="Certificate status legend">

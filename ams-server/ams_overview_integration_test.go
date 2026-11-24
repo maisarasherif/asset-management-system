@@ -34,6 +34,15 @@ func TestAMSOverviewWorkOrderFilters(t *testing.T) {
 		createCertificate(t, h, payload)
 	}
 
+	t.Run("Certificate status totals for the chart", func(t *testing.T) {
+		summary := maintenanceJSON(t, h, h.adminToken, http.MethodGet, "/v1/asset/"+assetID+"/certificate-summary", nil, http.StatusOK)
+		assertField(t, summary, "certificate_count", 2)
+		total := intField(t, summary, "valid") + intField(t, summary, "expiring_soon") + intField(t, summary, "expired")
+		if total != 2 {
+			t.Fatalf("expected two certificates in the chart statuses, got %d in %v", total, summary)
+		}
+	})
+
 	for _, fixture := range []struct {
 		name, dueDate, status string
 		dueHours              *int64
