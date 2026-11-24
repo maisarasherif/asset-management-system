@@ -224,7 +224,20 @@ E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
 bash tests/regression/run-vps-isolated-tests.sh
 ```
 
-**Status.** Frontend type checking and lint, Go test compilation, Newman collection and script validation, and discovery of both Overview Playwright tests passed locally. The focused Fedora run is pending. The existing `maintenance-final` profile already includes these tests. The focused run is sufficient for this change.
+**Status.** Frontend type checking and lint, Go test compilation, Newman collection and script validation, and discovery of both Overview Playwright tests passed locally. The first Fedora browser run passed work-order pagination and failed on the certificate tooltip wrapper's visibility. The failure snapshot showed both tooltip values. The existing `maintenance-final` profile already includes these tests.
+
+#### Certificate tooltip Playwright rerun
+
+The revised test checks both visible rows inside the tooltip after hover and keyboard navigation. It also checks that moving the mouse away or pressing Escape removes the tooltip. Run as `ams_test_runner` from the Fedora testing checkout.
+
+```bash
+cd /home/pms/ams-testing/asset-management-system
+RUN_GO_REGRESSION=0 RUN_NEWMAN=0 RUN_PLAYWRIGHT=1 RECLAIM_TEST_PORTS=0 \
+E2E_SPECS='../tests/regression/e2e/ams-overview.spec.ts' \
+bash tests/regression/run-vps-isolated-tests.sh
+```
+
+**Status.** Local checks matched both revised row assertions against the Fedora snapshot and discovered both Overview Playwright tests. The focused Fedora browser rerun is pending. This correction is confined to the Playwright assertions, and the runner already registers the spec.
 
 ### App-wide search and filtering
 

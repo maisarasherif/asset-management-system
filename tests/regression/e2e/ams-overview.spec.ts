@@ -165,14 +165,14 @@ test.describe("AMS Overview", () => {
     await expect(chart.getByText(/\d+%/)).toHaveCount(0);
 
     const certificateDetails = statusCard.getByRole("tooltip");
-    const certificateDetailsRows = certificateDetails.getByRole("listitem");
+    // Cloudscape positions the visible pop-up inside a zero-size tooltip wrapper.
+    const certificateDetailsRows = certificateDetails.getByRole("listitem").filter({ visible: true });
     await validSegment.hover();
-    await expect(certificateDetails).toBeVisible();
     await expect(certificateDetailsRows).toHaveText([/^Count\s*2$/, /^Percentage\s*50%$/]);
     const chartTotal = statusCard.getByText("4 certificates with a validity status", { exact: true });
     await expect(chartTotal).toHaveCount(0);
     await page.mouse.move(0, 0);
-    await expect(statusCard.getByText("Count", { exact: true })).toBeHidden();
+    await expect(certificateDetails).toHaveCount(0);
     await chart.focus();
     await page.keyboard.press("Enter");
     await expect(certificateDetailsRows).toHaveText([/^Count\s*2$/, /^Percentage\s*50%$/]);
@@ -180,7 +180,7 @@ test.describe("AMS Overview", () => {
     await expect(certificateDetailsRows).toHaveText([/^Count\s*1$/, /^Percentage\s*25%$/]);
     await expect(chartTotal).toHaveCount(0);
     await page.keyboard.press("Escape");
-    await expect(certificateDetails).toBeHidden();
+    await expect(certificateDetails).toHaveCount(0);
 
     const hours = cards.nth(2);
     const details = cards.nth(3);
